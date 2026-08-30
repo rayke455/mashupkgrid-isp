@@ -76,6 +76,11 @@ services:
     ports:
       - "1812:1812/udp"
       - "1813:1813/udp"
+    volumes:
+      # The paired WhatsApp (Baileys) session keys. Without a volume these live in the
+      # container filesystem and are destroyed on every rebuild, forcing a fresh QR scan
+      # after each deploy. Must match WHATSAPP_AUTH_STATE_PATH in .env.production.
+      - whatsapp_auth:/data/whatsapp-auth
     depends_on:
       postgres:
         condition: service_healthy
@@ -101,3 +106,4 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  whatsapp_auth:
