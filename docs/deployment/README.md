@@ -282,11 +282,19 @@ The one-shot `migrate` service runs `prisma migrate deploy` and must exit 0 befo
 docker compose -f docker-compose.prod.yml --env-file .env.production logs migrate
 ```
 
-Seed the first platform super-admin:
+Seed the database. This is **not optional demo data** — it creates the permission catalog and
+the system roles, without which RBAC has no roles to assign and even self-registration fails.
+
+Both accounts default to the password `ChangeMe123!`, which must never reach a public host, so
+generate real ones. This prints them once; save them immediately.
 
 ```bash
+SA=$(openssl rand -base64 18); TO=$(openssl rand -base64 18)
+echo "SUPER ADMIN: superadmin@mashupkgrid.local / $SA"
+echo "DEMO OWNER : owner@demo-isp.local / $TO"
 docker compose -f docker-compose.prod.yml --env-file .env.production run --rm \
-  -w /repo/packages/database migrate pnpm tsx prisma/seed.ts
+  -e SEED_SUPER_ADMIN_PASSWORD="$SA" -e SEED_TENANT_OWNER_PASSWORD="$TO" \
+  -w /repo/packages/database migrate ./node_modules/.bin/tsx prisma/seed.ts
 ```
 
 ---
