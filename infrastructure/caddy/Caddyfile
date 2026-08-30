@@ -14,10 +14,26 @@
     acme_dns cloudflare {env.CLOUDFLARE_API_TOKEN}
 }
 
+# For hosts reached DIRECTLY (Cloudflare grey cloud / DNS-only): api and the tenant wildcard.
+# X-Forwarded-For is REPLACED with the connecting peer, never appended to. Appending would let
+# a client send its own X-Forwarded-For and have it survive as the left-most entry, which is
+# what request.ip resolves to under TRUST_PROXY=true -- spoofing per-IP rate limiting and the
+# maintenance-mode IP allowlist.
 (proxy_headers) {
     header_up Host {host}
     header_up X-Real-IP {remote_host}
     header_up X-Forwarded-For {remote_host}
+    header_up X-Forwarded-Proto {scheme}
+}
+
+# For hosts behind the Cloudflare proxy (orange cloud): the web surface.
+# There, {remote_host} is a Cloudflare edge node, so every visitor would look like Cloudflare.
+# CF-Connecting-IP carries the real client address and is set by Cloudflare's edge, which also
+# strips any client-supplied copy -- so it is trustworthy in a way a raw X-Forwarded-For is not.
+(proxy_headers_cf) {
+    header_up Host {host}
+    header_up X-Real-IP {http.request.header.CF-Connecting-IP}
+    header_up X-Forwarded-For {http.request.header.CF-Connecting-IP}
     header_up X-Forwarded-Proto {scheme}
 }
 
@@ -35,7 +51,7 @@
 mashuphost.tech, www.mashuphost.tech, admin.mashuphost.tech {
     import hardening
     reverse_proxy localhost:3000 {
-        import proxy_headers
+        import proxy_headers_cf
     }
 }
 
@@ -44,7 +60,7 @@ app.mashuphost.tech {
     import hardening
     rewrite * /app{uri}
     reverse_proxy localhost:3000 {
-        import proxy_headers
+        import proxy_headers_cf
     }
 }
 
@@ -53,7 +69,7 @@ wifi.mashuphost.tech, portal.mashuphost.tech {
     import hardening
     rewrite * /vouchers{uri}
     reverse_proxy localhost:3000 {
-        import proxy_headers
+        import proxy_headers_cf
     }
 }
 
