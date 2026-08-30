@@ -30,3 +30,8 @@ packages/database/*.cjs
 
 # Per-machine Claude Code settings.
 .claude/settings.local.json
+
+# One-off hardware-provisioning scratch scripts. Same category as packages/database/*.cjs
+# above: they hardcode router addresses and RADIUS shared secrets typed in by hand during live
+# MikroTik testing, so a routine `git add -A` publishes credentials.
+scratch/
