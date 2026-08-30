@@ -33,6 +33,9 @@ export interface SessionManagerEvents {
    *  `logged_out` means the phone unlinked the device and the saved keys are now dead. */
   onDisconnected?: (tenantId: string, reason: "reconnecting" | "logged_out") => void;
   onMessage?: (tenantId: string, fromJid: string, text: string) => void;
+  /** An 8-character code the operator types into WhatsApp under Link with phone number, the
+   *  alternative to scanning a QR. Emitted once per pairing attempt. */
+  onPairingCode?: (tenantId: string, code: string) => void;
 }
 
 interface TenantSession {
@@ -94,7 +97,10 @@ export class WhatsAppSessionManager {
    * Starts (or restarts) a tenant's session (or platform session if null). Safe to call when one is
    * already live — that's a no-op rather than a second competing socket for the same account.
    */
-  async start(tenantId: string | null | undefined): Promise<void> {
+  async start(
+    tenantId: string | null | undefined,
+    options: { pairWithPhoneNumber?: string } = {}
+  ): Promise<void> {
     const id = normalizeSessionId(tenantId);
     if (this.sessions.get(id)?.socket) return;
 
@@ -107,6 +113,25 @@ export class WhatsAppSessionManager {
 
     const sock = makeWASocket({ version, auth: state, logger: silentLogger });
     sock.ev.on("creds.update", saveCreds);
+
+    // Phone-number pairing is an alternative to the QR, not an addition to it: WhatsApp issues
+    // one or the other per attempt. It is only valid on an unregistered session -- asking for a
+    // code on an already-linked one throws -- and Baileys requires the number as bare digits
+    // with no "+" or separators.
+    if (options.pairWithPhoneNumber && !sock.authState.creds.registered) {
+      const digits = options.pairWithPhoneNumber.replace(/\D/g, "");
+      try {
+        const code = await sock.requestPairingCode(digits);
+        this.events.onPairingCode?.(id, code);
+      } catch (err) {
+        // Surfaced as a normal disconnect so the dashboard shows why instead of hanging on
+        // "connecting" forever with no explanation.
+        const message = err instanceof Error ? err.message : String(err);
+        console.error(`[whatsapp] pairing code request failed for ${id}:`, message);
+        this.events.onDisconnected?.(id, "reconnecting");
+        throw err;
+      }
+    }
 
     sock.ev.on("connection.update", (update) => {
       const { connection, lastDisconnect, qr } = update;

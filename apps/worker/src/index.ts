@@ -280,9 +280,9 @@ async function main() {
       if (job.name === JOB_NAMES.sendWhatsappTenantWelcome) return handleSendWhatsappTenantWelcome(job.data);
 
       if (job.name === JOB_NAMES.whatsappConnect) {
-        const { tenantId } = whatsappConnectJobSchema.parse(job.data);
+        const { tenantId, pairWithPhoneNumber } = whatsappConnectJobSchema.parse(job.data);
         try {
-          await getManager()?.start(tenantId);
+          await getManager()?.start(tenantId, { pairWithPhoneNumber });
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           await setConnectionStatus(tenantId, "DISCONNECTED", { lastError: message });

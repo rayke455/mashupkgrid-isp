@@ -15,6 +15,9 @@ interface WhatsappConnectionView {
   lastError: string | null;
   /** PNG data URL, present only while a pairing QR is live. */
   qr: string | null;
+  /** 8-character code for "link with phone number" pairing. WhatsApp issues either this or a
+   *  QR per attempt, never both. */
+  pairingCode: string | null;
 }
 
 const STATUS_META: Record<
@@ -29,6 +32,7 @@ const STATUS_META: Record<
 
 export default function PlatformWhatsappPage() {
   const queryClient = useQueryClient();
+  const [pairPhoneNumber, setPairPhoneNumber] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [testPhone, setTestPhone] = useState("");
   const [testStatus, setTestStatus] = useState<string | null>(null);
@@ -51,6 +55,20 @@ export default function PlatformWhatsappPage() {
     },
     onError: (err) =>
       setError(err instanceof ApiRequestError ? err.message : "Failed to start the connection"),
+  });
+
+  const pairPhone = useMutation({
+    mutationFn: (phoneNumber: string) =>
+      apiFetch("/api/v1/whatsapp/connection/pair-phone", {
+        method: "POST",
+        body: JSON.stringify({ phoneNumber }),
+      }),
+    onSuccess: () => {
+      setError(null);
+      queryClient.invalidateQueries({ queryKey: ["whatsapp-connection"] });
+    },
+    onError: (err) =>
+      setError(err instanceof ApiRequestError ? err.message : "Failed to request a pairing code"),
   });
 
   const disconnect = useMutation({
@@ -196,7 +214,21 @@ export default function PlatformWhatsappPage() {
 
           {isPairing ? (
             <div className="flex flex-col items-center gap-4 rounded-xl border border-slate-200/80 bg-slate-50 p-6 dark:border-obsidian-800 dark:bg-obsidian-950/60">
-              {connection?.qr ? (
+              {connection?.pairingCode ? (
+                <div className="flex flex-col items-center gap-3 text-center">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                    Enter this code on your phone
+                  </p>
+                  <p className="font-mono text-4xl font-black tracking-[0.3em] text-brand-500">
+                    {connection.pairingCode}
+                  </p>
+                  <p className="max-w-xs text-xs text-slate-500 dark:text-slate-400">
+                    WhatsApp &gt; Settings &gt; Linked Devices &gt;{" "}
+                    <strong className="text-slate-700 dark:text-slate-300">Link with phone number</strong>, then
+                    type the code above.
+                  </p>
+                </div>
+              ) : connection?.qr ? (
                 <div className="rounded-xl bg-white p-3 shadow-md">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={connection.qr} alt="WhatsApp Pairing QR Code" className="h-64 w-64" />
@@ -233,6 +265,37 @@ export default function PlatformWhatsappPage() {
               <HintText>
                 Requires the backend worker container (<code className="font-mono">worker</code>) to be running.
               </HintText>
+
+              <div className="w-full border-t border-slate-200 pt-4 dark:border-obsidian-800">
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
+                  Or link with a phone number
+                </h3>
+                <p className="mt-1 mb-3 text-xs text-slate-500 dark:text-slate-400">
+                  WhatsApp shows an 8-character code to type on the phone instead of scanning.
+                  Useful when you cannot point a camera at this screen.
+                </p>
+                <form
+                  className="flex flex-wrap gap-2"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (pairPhoneNumber.trim()) pairPhone.mutate(pairPhoneNumber.trim());
+                  }}
+                >
+                  <Input
+                    placeholder="e.g. +254712345678"
+                    value={pairPhoneNumber}
+                    onChange={(e) => setPairPhoneNumber(e.target.value)}
+                    className="max-w-xs font-mono text-sm"
+                  />
+                  <Button
+                    type="submit"
+                    variant="outline"
+                    disabled={pairPhone.isPending || !pairPhoneNumber.trim()}
+                  >
+                    {pairPhone.isPending ? "Requesting..." : "Get pairing code"}
+                  </Button>
+                </form>
+              </div>
             </div>
           )}
 

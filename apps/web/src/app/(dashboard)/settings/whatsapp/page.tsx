@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
-import { Button, Card, ErrorText, HintText, Badge, StatusDot } from "@/components/ui";
+import { Button, Card, ErrorText, HintText, Badge, StatusDot, Input } from "@/components/ui";
 import { IconMessage } from "@/components/icons";
 
 type ConnectionStatus = "DISCONNECTED" | "CONNECTING" | "CONNECTED" | "LOGGED_OUT";
@@ -15,6 +15,9 @@ interface WhatsappConnectionView {
   lastError: string | null;
   /** PNG data URL, present only while a pairing QR is live. */
   qr: string | null;
+  /** 8-character code for "link with phone number" pairing. WhatsApp issues either this or a
+   *  QR per attempt, never both. */
+  pairingCode: string | null;
 }
 
 const STATUS_META: Record<ConnectionStatus, { label: string; variant: "success" | "warning" | "danger" | "neutral"; dot: string }> = {
@@ -27,6 +30,7 @@ const STATUS_META: Record<ConnectionStatus, { label: string; variant: "success" 
 export default function WhatsappSettingsPage() {
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
+  const [pairPhoneNumber, setPairPhoneNumber] = useState("");
 
   const { data: connection } = useQuery({
     queryKey: ["whatsapp-connection"],
@@ -47,6 +51,20 @@ export default function WhatsappSettingsPage() {
       queryClient.invalidateQueries({ queryKey: ["whatsapp-connection"] });
     },
     onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to start the connection"),
+  });
+
+  const pairPhone = useMutation({
+    mutationFn: (phoneNumber: string) =>
+      apiFetch("/api/v1/whatsapp/connection/pair-phone", {
+        method: "POST",
+        body: JSON.stringify({ phoneNumber }),
+      }),
+    onSuccess: () => {
+      setError(null);
+      queryClient.invalidateQueries({ queryKey: ["whatsapp-connection"] });
+    },
+    onError: (err) =>
+      setError(err instanceof ApiRequestError ? err.message : "Failed to request a pairing code"),
   });
 
   const disconnect = useMutation({
@@ -119,7 +137,20 @@ export default function WhatsappSettingsPage() {
         </Card>
       ) : (
         <Card className="space-y-4">
-          {isPairing && connection?.qr ? (
+          {isPairing && connection?.pairingCode ? (
+            <div className="space-y-3 text-center">
+              <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                Enter this code on your phone
+              </p>
+              <p className="font-mono text-3xl font-black tracking-[0.3em] text-brand-500">
+                {connection.pairingCode}
+              </p>
+              <p className="text-xs text-slate-500">
+                WhatsApp → Settings → <strong>Linked Devices</strong> →{" "}
+                <strong>Link with phone number</strong>
+              </p>
+            </div>
+          ) : isPairing && connection?.qr ? (
             <div className="space-y-3 text-center">
               <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
                 Scan this from the phone you want to connect
@@ -151,6 +182,37 @@ export default function WhatsappSettingsPage() {
               <Button onClick={() => connect.mutate()} disabled={connect.isPending}>
                 {connect.isPending ? "Starting..." : "Connect WhatsApp"}
               </Button>
+
+              <div className="border-t border-slate-100 pt-3 dark:border-obsidian-800">
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                  Or link with a phone number
+                </p>
+                <p className="mt-0.5 mb-2.5 text-xs text-slate-500 dark:text-slate-400">
+                  WhatsApp gives you an 8-character code to type on the phone, instead of scanning
+                  a QR from this screen.
+                </p>
+                <form
+                  className="flex flex-wrap gap-2"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (pairPhoneNumber.trim()) pairPhone.mutate(pairPhoneNumber.trim());
+                  }}
+                >
+                  <Input
+                    placeholder="e.g. +254712345678"
+                    value={pairPhoneNumber}
+                    onChange={(e) => setPairPhoneNumber(e.target.value)}
+                    className="max-w-xs font-mono text-sm"
+                  />
+                  <Button
+                    type="submit"
+                    variant="secondary"
+                    disabled={pairPhone.isPending || !pairPhoneNumber.trim()}
+                  >
+                    {pairPhone.isPending ? "Requesting..." : "Get pairing code"}
+                  </Button>
+                </form>
+              </div>
             </div>
           )}
 

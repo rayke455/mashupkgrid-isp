@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import { z } from "zod";
 import { getConnectionStatus, setConnectionStatus, clearPairingQr } from "@mashupkgrid/whatsapp";
 import { successResponse } from "@mashupkgrid/shared";
 import { authenticate } from "../plugins/authenticate.js";
@@ -51,6 +52,53 @@ export async function whatsappRoutes(app: FastifyInstance): Promise<void> {
         reply.send(successResponse(await getConnectionStatus(tenantId), request.id));
       } catch (err) {
         request.log.error({ err, tenantId }, "Failed to initiate WhatsApp connection");
+        throw err;
+      }
+    }
+  );
+
+  /** Phone-number pairing: WhatsApp shows an 8-character code to type under
+   *  Linked Devices > Link with phone number, instead of scanning a QR. Useful when the operator
+   *  cannot point a camera at the screen — a remote server console, or a phone that is the only
+   *  device to hand. */
+  app.post(
+    "/connection/pair-phone",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("settings.manage")] },
+    async (request, reply) => {
+      const tenantId = request.user!.tenantId;
+      const { phoneNumber } = z
+        .object({
+          // Digits only once normalised; WhatsApp rejects anything with separators. Validated
+          // here so an obviously wrong number fails with a clear message rather than as an
+          // opaque pairing failure minutes later in the worker.
+          phoneNumber: z
+            .string()
+            .trim()
+            .transform((v) => v.replace(/[^\d]/g, ""))
+            .refine((v) => v.length >= 8 && v.length <= 15, "Enter the number in international format, e.g. +254712345678"),
+        })
+        .parse(request.body);
+
+      try {
+        await setConnectionStatus(tenantId, "CONNECTING", { lastError: null });
+        // Clear any QR left from a previous attempt: WhatsApp issues a QR or a code, never both,
+        // so a stale QR sitting in Redis would render alongside the code and be unusable.
+        await clearPairingQr(tenantId);
+        await enqueueWhatsappConnect({ tenantId, pairWithPhoneNumber: phoneNumber });
+
+        await writeAuditLog({
+          tenantId,
+          actorUserId: request.user!.id,
+          action: "whatsapp_connection.pair_phone_requested",
+          resourceType: "WhatsappConnection",
+          resourceId: tenantId ?? "platform",
+          ipAddress: request.ip,
+          userAgent: request.headers["user-agent"] ?? null,
+        });
+
+        reply.send(successResponse(await getConnectionStatus(tenantId), request.id));
+      } catch (err) {
+        request.log.error({ err, tenantId }, "Failed to request WhatsApp pairing code");
         throw err;
       }
     }

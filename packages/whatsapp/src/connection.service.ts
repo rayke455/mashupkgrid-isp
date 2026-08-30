@@ -17,6 +17,8 @@ import { env } from "@mashupkgrid/config";
  */
 
 const QR_TTL_SECONDS = 60;
+/** Longer than the QR's: a phone-number code is typed by hand, not scanned by a camera. */
+const PAIRING_CODE_TTL_SECONDS = 180;
 
 const redis = new Redis(env.REDIS_URL, { maxRetriesPerRequest: 3 });
 redis.on("error", (err) => console.error("[whatsapp-connection] redis error", err));
@@ -36,6 +38,10 @@ function qrKey(tenantId: ConnectionScope): string {
   return `wa-qr:${scopeKey(tenantId)}`;
 }
 
+function pairingCodeKey(tenantId: ConnectionScope): string {
+  return `wa-pair-code:${scopeKey(tenantId)}`;
+}
+
 /** Stores the pairing QR as a rendered PNG data URL rather than the raw Baileys string, so the
  *  dashboard can show it with a plain `<img src>` and no client-side QR library. */
 export async function publishPairingQr(tenantId: ConnectionScope, rawQr: string): Promise<void> {
@@ -48,7 +54,18 @@ export async function readPairingQr(tenantId: ConnectionScope): Promise<string |
 }
 
 export async function clearPairingQr(tenantId: ConnectionScope): Promise<void> {
-  await redis.del(qrKey(tenantId));
+  await redis.del(qrKey(tenantId), pairingCodeKey(tenantId));
+}
+
+/** The 8-character code shown for "link with phone number" pairing. WhatsApp gives it a short
+ *  life of its own, so this TTL is generous rather than exact -- an expired code simply fails to
+ *  work when typed, and the operator requests another. */
+export async function publishPairingCode(tenantId: ConnectionScope, code: string): Promise<void> {
+  await redis.set(pairingCodeKey(tenantId), code, "EX", PAIRING_CODE_TTL_SECONDS);
+}
+
+export async function readPairingCode(tenantId: ConnectionScope): Promise<string | null> {
+  return redis.get(pairingCodeKey(tenantId));
 }
 
 export async function setConnectionStatus(
@@ -87,14 +104,18 @@ export interface WhatsappConnectionStatusView {
   lastError: string | null;
   /** Present only while pairing — a PNG data URL to render directly. */
   qr: string | null;
+  /** Present only while pairing by phone number — the 8-character code to type into WhatsApp.
+   *  Mutually exclusive with `qr` in practice: WhatsApp issues one or the other per attempt. */
+  pairingCode: string | null;
 }
 
 export async function getConnectionStatus(tenantId: ConnectionScope): Promise<WhatsappConnectionStatusView> {
-  const [row, qr] = await Promise.all([
+  const [row, qr, pairingCode] = await Promise.all([
     tenantId !== null
       ? prisma.whatsappConnection.findUnique({ where: { tenantId } })
       : prisma.whatsappConnection.findFirst({ where: { tenantId: null } }),
     readPairingQr(tenantId),
+    readPairingCode(tenantId),
   ]);
 
   return {
@@ -103,6 +124,7 @@ export async function getConnectionStatus(tenantId: ConnectionScope): Promise<Wh
     lastConnectedAt: row?.lastConnectedAt ?? null,
     lastError: row?.lastError ?? null,
     qr,
+    pairingCode,
   };
 }
 

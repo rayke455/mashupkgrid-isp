@@ -4,6 +4,7 @@ import { env } from "@mashupkgrid/config";
 import {
   WhatsAppSessionManager,
   publishPairingQr,
+  publishPairingCode,
   clearPairingQr,
   setConnectionStatus,
   listTenantsToRestore,
@@ -79,6 +80,13 @@ export async function startWhatsAppRuntime(): Promise<WhatsAppSessionManager> {
   migrateLegacyPlatformSession(basePath);
 
   manager = new WhatsAppSessionManager(basePath, {
+    onPairingCode: (sessionId, code) => {
+      console.log(`[whatsapp] pairing code issued for ${sessionId}`);
+      void publishPairingCode(toScope(sessionId), code).catch((err) =>
+        console.error(`[whatsapp] failed to publish pairing code for ${sessionId}:`, err)
+      );
+    },
+
     onQr: (sessionId, qr) => {
       // The platform QR is now published exactly like a tenant's, so the super-admin page can
       // render it. It used to be suppressed here, which left the connect script over SSH as the

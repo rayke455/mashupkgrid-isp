@@ -92,7 +92,12 @@ export type SendWhatsappTenantWelcomeJob = z.infer<typeof sendWhatsappTenantWelc
 
 /** Pairing is driven from the dashboard but can only happen in the worker (the only process that
  *  holds WhatsApp sockets), so the API asks for it through the queue rather than doing it. */
-export const whatsappConnectJobSchema = z.object({ tenantId: z.string().uuid().nullable() });
+export const whatsappConnectJobSchema = z.object({
+  tenantId: z.string().uuid().nullable(),
+  /** When present, pair by typing a code into WhatsApp instead of scanning a QR. E.164 with or
+   *  without the leading "+"; the session manager strips everything but the digits. */
+  pairWithPhoneNumber: z.string().min(8).max(20).optional(),
+});
 export type WhatsappConnectJob = z.infer<typeof whatsappConnectJobSchema>;
 
 export const whatsappDisconnectJobSchema = z.object({ tenantId: z.string().uuid().nullable() });
