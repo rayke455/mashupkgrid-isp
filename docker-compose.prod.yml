@@ -42,7 +42,7 @@ services:
       dockerfile: infrastructure/docker/api.Dockerfile
     env_file: .env.production
     working_dir: /repo/packages/database
-    command: ["pnpm", "prisma", "migrate", "deploy"]
+    command: ["pnpm", "prisma", "db", "push", "--skip-generate"]
     restart: "no"
     depends_on:
       postgres:
