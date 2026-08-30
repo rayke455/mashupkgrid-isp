@@ -249,6 +249,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       icon: <IconLock size={18} />,
       show: has("tenants.create"),
     },
+    {
+      href: "/platform-whatsapp",
+      label: "Platform WhatsApp",
+      icon: <IconMessage size={18} />,
+      show: has("tenants.create") || !isTenantScoped,
+    },
   ];
 
   const isActive = (href: string) => pathname === href || pathname?.startsWith(`${href}/`);

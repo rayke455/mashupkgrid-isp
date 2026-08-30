@@ -61,6 +61,12 @@ function phoneFromSocket(sock: WASocket): string {
   return digits ? `+${digits}` : "";
 }
 
+export const PLATFORM_SESSION_ID = "platform";
+
+export function normalizeSessionId(tenantId: string | null | undefined): string {
+  return tenantId ?? PLATFORM_SESSION_ID;
+}
+
 export class WhatsAppSessionManager {
   private sessions = new Map<string, TenantSession>();
 
@@ -69,13 +75,14 @@ export class WhatsAppSessionManager {
     private readonly events: SessionManagerEvents = {}
   ) {}
 
-  /** Currently-usable socket for a tenant, or null if it isn't connected right now. Callers must
-   *  re-read this per send rather than caching it: reconnects replace the socket instance. */
-  get(tenantId: string): WASocket | null {
-    return this.sessions.get(tenantId)?.socket ?? null;
+  /** Currently-usable socket for a tenant (or platform if null), or null if it isn't connected right now.
+   *  Callers must re-read this per send rather than caching it: reconnects replace the socket instance. */
+  get(tenantId: string | null | undefined): WASocket | null {
+    const id = normalizeSessionId(tenantId);
+    return this.sessions.get(id)?.socket ?? null;
   }
 
-  isConnected(tenantId: string): boolean {
+  isConnected(tenantId: string | null | undefined): boolean {
     return this.get(tenantId) !== null;
   }
 
@@ -84,18 +91,18 @@ export class WhatsAppSessionManager {
   }
 
   /**
-   * Starts (or restarts) a tenant's session. Safe to call when one is already live — that's a
-   * no-op rather than a second competing socket for the same account, which WhatsApp treats as a
-   * conflicting login and would drop both.
+   * Starts (or restarts) a tenant's session (or platform session if null). Safe to call when one is
+   * already live — that's a no-op rather than a second competing socket for the same account.
    */
-  async start(tenantId: string): Promise<void> {
-    if (this.sessions.get(tenantId)?.socket) return;
+  async start(tenantId: string | null | undefined): Promise<void> {
+    const id = normalizeSessionId(tenantId);
+    if (this.sessions.get(id)?.socket) return;
 
-    const session: TenantSession = this.sessions.get(tenantId) ?? { socket: null, stopping: false };
+    const session: TenantSession = this.sessions.get(id) ?? { socket: null, stopping: false };
     session.stopping = false;
-    this.sessions.set(tenantId, session);
+    this.sessions.set(id, session);
 
-    const { state, saveCreds } = await useMultiFileAuthState(path.join(this.baseAuthPath, tenantId));
+    const { state, saveCreds } = await useMultiFileAuthState(path.join(this.baseAuthPath, id));
     const { version } = await fetchLatestBaileysVersion();
 
     const sock = makeWASocket({ version, auth: state, logger: silentLogger });
@@ -104,11 +111,11 @@ export class WhatsAppSessionManager {
     sock.ev.on("connection.update", (update) => {
       const { connection, lastDisconnect, qr } = update;
 
-      if (qr) this.events.onQr?.(tenantId, qr);
+      if (qr) this.events.onQr?.(id, qr);
 
       if (connection === "open") {
         session.socket = sock;
-        this.events.onReady?.(tenantId, phoneFromSocket(sock));
+        this.events.onReady?.(id, phoneFromSocket(sock));
       }
 
       if (connection === "close") {
@@ -117,13 +124,13 @@ export class WhatsAppSessionManager {
 
         const loggedOut = disconnectStatusCode(lastDisconnect?.error) === DisconnectReason.loggedOut;
         if (loggedOut) {
-          this.events.onDisconnected?.(tenantId, "logged_out");
-          this.sessions.delete(tenantId);
+          this.events.onDisconnected?.(id, "logged_out");
+          this.sessions.delete(id);
           return;
         }
-        this.events.onDisconnected?.(tenantId, "reconnecting");
-        void this.start(tenantId).catch((err) =>
-          console.error(`[whatsapp] reconnect failed for tenant ${tenantId}:`, err)
+        this.events.onDisconnected?.(id, "reconnecting");
+        void this.start(id).catch((err) =>
+          console.error(`[whatsapp] reconnect failed for ${id}:`, err)
         );
       }
     });
@@ -133,16 +140,15 @@ export class WhatsAppSessionManager {
       for (const msg of messages) {
         const from = msg.key.remoteJid;
         const text = msg.message?.conversation ?? msg.message?.extendedTextMessage?.text ?? undefined;
-        if (from && text && !msg.key.fromMe) this.events.onMessage(tenantId, from, text);
+        if (from && text && !msg.key.fromMe) this.events.onMessage(id, from, text);
       }
     });
   }
 
-  /** Closes a tenant's session without reconnecting. Note this does not delete the stored keys —
-   *  removing those (so the next start() needs a fresh QR scan) is the caller's decision, since
-   *  "pause this connection" and "unlink this account entirely" are different intents. */
-  async stop(tenantId: string): Promise<void> {
-    const session = this.sessions.get(tenantId);
+  /** Closes a tenant's session without reconnecting. Note this does not delete the stored keys. */
+  async stop(tenantId: string | null | undefined): Promise<void> {
+    const id = normalizeSessionId(tenantId);
+    const session = this.sessions.get(id);
     if (!session) return;
     session.stopping = true;
     try {
@@ -151,7 +157,7 @@ export class WhatsAppSessionManager {
       // Already dead — nothing to close.
     }
     session.socket = null;
-    this.sessions.delete(tenantId);
+    this.sessions.delete(id);
   }
 
   async stopAll(): Promise<void> {
