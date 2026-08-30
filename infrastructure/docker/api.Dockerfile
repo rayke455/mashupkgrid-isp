@@ -38,4 +38,11 @@ ENV NODE_ENV=production
 COPY --from=build /repo /repo
 WORKDIR /repo/apps/api
 EXPOSE 4000
-CMD ["node", "dist/server.js"]
+# The workspace packages under packages/* are source-only: their package.json "main" points
+# at ./src/index.ts and none of them has a build step. So `node dist/server.js` resolves
+# @mashupkgrid/* to raw TypeScript, Node strips the types, and the relative "./errors.js"
+# specifiers TS emits for NodeNext then fail against the .ts files actually on disk.
+# tsx resolves and compiles those on the fly, which is how the repo is designed to be
+# consumed -- apps/web does the equivalent via Next's transpilePackages.
+# The tsc build above is kept purely as a type check; its dist output is not run.
+CMD ["./node_modules/.bin/tsx", "src/server.ts"]
