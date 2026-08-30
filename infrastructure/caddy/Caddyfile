@@ -1,0 +1,76 @@
+# Caddyfile for mashuphost.tech
+#
+# Certificates are issued over the ACME DNS-01 challenge via Cloudflare. DNS-01 is required
+# (not merely preferred) because of the *.mashuphost.tech wildcard below: Let's Encrypt will
+# not issue a wildcard over HTTP-01. That means Caddy needs the Cloudflare DNS module:
+#
+#   sudo caddy add-package github.com/caddy-dns/cloudflare
+#   sudo systemctl restart caddy
+#
+# and a scoped Cloudflare API token (Zone:DNS:Edit + Zone:Zone:Read on mashuphost.tech only)
+# exposed to the caddy service as CLOUDFLARE_API_TOKEN. See docs/deployment/README.md.
+{
+    email admin@mashuphost.tech
+    acme_dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+}
+
+(proxy_headers) {
+    header_up Host {host}
+    header_up X-Real-IP {remote_host}
+    header_up X-Forwarded-For {remote_host}
+    header_up X-Forwarded-Proto {scheme}
+}
+
+(hardening) {
+    encode zstd gzip
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        -Server
+    }
+}
+
+# 1. Main website, ISP dashboard, and platform admin
+mashuphost.tech, www.mashuphost.tech, admin.mashuphost.tech {
+    import hardening
+    reverse_proxy localhost:3000 {
+        import proxy_headers
+    }
+}
+
+# 2. Customer super app ("FiberConnect")
+app.mashuphost.tech {
+    import hardening
+    rewrite * /app{uri}
+    reverse_proxy localhost:3000 {
+        import proxy_headers
+    }
+}
+
+# 3. Wi-Fi hotspot captive portal
+wifi.mashuphost.tech, portal.mashuphost.tech {
+    import hardening
+    rewrite * /vouchers{uri}
+    reverse_proxy localhost:3000 {
+        import proxy_headers
+    }
+}
+
+# 4. Fastify REST API and M-Pesa callback webhooks.
+# No HSTS preload games here -- Safaricom posts callbacks to this host.
+api.mashuphost.tech {
+    import hardening
+    reverse_proxy localhost:4000 {
+        import proxy_headers
+    }
+}
+
+# 5. Wildcard multi-tenant subdomains. Listed last: Caddy matches the most specific site
+# block first, so the explicit hosts above still win.
+*.mashuphost.tech {
+    import hardening
+    reverse_proxy localhost:3000 {
+        import proxy_headers
+    }
+}

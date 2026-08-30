@@ -1,0 +1,28 @@
+{
+  "name": "mashupkgrid-isp",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "pnpm -r --if-present build",
+    "dev": "pnpm --parallel --filter @mashupkgrid/api --filter @mashupkgrid/web --filter @mashupkgrid/worker dev",
+    "dev:api": "pnpm --filter @mashupkgrid/api dev",
+    "dev:worker": "pnpm --filter @mashupkgrid/worker dev",
+    "dev:web": "pnpm --filter @mashupkgrid/web dev",
+    "test": "pnpm -r --if-present test",
+    "lint": "pnpm -r --if-present lint",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "db:generate": "dotenv -e .env -- pnpm --filter @mashupkgrid/database generate",
+    "db:push": "dotenv -e .env -- pnpm --filter @mashupkgrid/database run db:push",
+    "db:migrate": "dotenv -e .env -- pnpm --filter @mashupkgrid/database migrate",
+    "db:seed": "dotenv -e .env -- pnpm --filter @mashupkgrid/database seed"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "@types/node": "^20.16.10",
+    "vitest": "^2.1.2",
+    "dotenv-cli": "^7.4.2"
+  }
+}

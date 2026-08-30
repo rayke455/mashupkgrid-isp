@@ -1,0 +1,28 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+allowBuilds:
+  '@prisma/client': true
+  '@prisma/engines': true
+  '@whiskeysockets/baileys': true
+  esbuild: true
+  msgpackr-extract: true
+  prisma: true
+  protobufjs: true
+  unrs-resolver: true
+overrides:
+  # @whiskeysockets/baileys lists this git-hosted package under `dependencies` (not
+  # `devDependencies`) in its own package.json, even though it's only their internal ESLint
+  # config — never actually imported by baileys' runtime code. pnpm's supply-chain policy
+  # correctly refuses to install a git-resolved (mutable, unpinned-by-hash) subdependency by
+  # default, so this swaps it for a small, real, zero-dependency npm package purely to satisfy
+  # that check; nothing in this repo ever imports it.
+  '@whiskeysockets/eslint-config': npm:ms@^2.1.3
+# @whiskeysockets/baileys also pulls in `libsignal` (the actual Signal-protocol E2E encryption
+# implementation it needs to function) via a git URL rather than the npm registry — the standard
+# way that package is distributed across the whole Node WhatsApp-Web ecosystem, and unlike
+# eslint-config above this one is genuinely used at runtime, so it can't be swapped for a stand-in.
+# pnpm's default policy blocks any git-resolved subdependency (mutable, unpinned-by-hash) as a
+# supply-chain precaution; disabling it here is a real, informed trade-off specific to this
+# package, not a blanket "don't care about supply chain" choice.
+blockExoticSubdeps: false

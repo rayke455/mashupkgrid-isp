@@ -1,0 +1,31 @@
+# Never ship host-built artifacts or secrets into a build context.
+node_modules
+**/node_modules
+.next
+**/.next
+dist
+**/dist
+build
+**/build
+.turbo
+coverage
+**/coverage
+
+.git
+.env
+.env.local
+.env.*.local
+.env.production
+.whatsapp-auth
+packages/database/*.cjs
+
+android
+*.apk
+data
+scratch
+docs
+*.log
+*.tsbuildinfo
+
+# ...but the customer app download served by the web app must ship.
+!apps/web/public/download/*.apk

@@ -1,0 +1,29 @@
+# Real, runnable FreeRADIUS wired to the app's own Postgres database — not a mock. It reads the
+# `nas`/`radcheck`/`radreply`/`radacct` rows `packages/radius` writes and is the actual AAA server
+# a MikroTik router authenticates PPPoE/hotspot users against (docs/architecture/06). This
+# environment has no Docker available to run or verify it end-to-end (documented gap, same
+# posture as Phase 3's M-Pesa sandbox limitation) — it's provided for a real deployment.
+#
+# Usage: from this directory, `docker compose up`, pointing RADIUS_DB_* at the same Postgres
+# instance/credentials as the app's DATABASE_URL.
+services:
+  freeradius:
+    image: freeradius/freeradius-server:3.2.5
+    ports:
+      - "1812:1812/udp" # Access-Request
+      - "1813:1813/udp" # Accounting-Request
+    environment:
+      RADIUS_DB_HOST: ${RADIUS_DB_HOST:-host.docker.internal}
+      RADIUS_DB_PORT: ${RADIUS_DB_PORT:-5432}
+      RADIUS_DB_NAME: ${RADIUS_DB_NAME:-mashupkgrid_isp}
+      RADIUS_DB_USER: ${RADIUS_DB_USER:-mashupkgrid}
+      RADIUS_DB_PASSWORD: ${RADIUS_DB_PASSWORD:?set RADIUS_DB_PASSWORD}
+    volumes:
+      - ./raddb/mods-available/sql:/etc/freeradius/mods-available/sql:ro
+      - ./raddb/clients.conf:/etc/freeradius/clients.conf:ro
+    # mods-enabled/sql ships disabled by default in the base image — this symlinks it on
+    # container start rather than requiring a second copy of the file to stay in sync with
+    # mods-available/sql.
+    command: >
+      sh -c "ln -sf /etc/freeradius/mods-available/sql /etc/freeradius/mods-enabled/sql &&
+             freeradius -f -l stdout"

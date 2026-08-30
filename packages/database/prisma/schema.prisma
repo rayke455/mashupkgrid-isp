@@ -1,0 +1,1547 @@
+// MASHUPKGRID ISP — Phase 1 (Foundation) + Phase 2 (Core ISP Billing) schema.
+// See docs/architecture/01-database-erd-and-schema.md for Phase 1's design rationale and
+// docs/architecture/04-billing-and-payments.md + 09-phase2-plan.md for Phase 2's.
+// Later phases (Router, RadiusUser, Ticket, Lead, Installation, ...) extend this file further.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  CANCELLED
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  LOCKED
+  PENDING_VERIFICATION
+}
+
+model Tenant {
+  id         String       @id @default(uuid())
+  name       String
+  slug       String       @unique
+  status     TenantStatus @default(ACTIVE)
+  planTier   String       @default("standard")
+  timezone   String       @default("Africa/Nairobi")
+  currency   String       @default("KES")
+  /// White-label branding — a single hex color (e.g. "#2563eb"), expanded into a full Tailwind
+  /// shade scale client-side (apps/web/src/lib/color-scale.ts) rather than storing 11 values.
+  brandColor String?
+  logoUrl    String?
+  /// Set once, at tenant creation (now() + 7 days) — never extended automatically. Null means
+  /// "not on a trial" (e.g. a tenant created before this existed, or one a super admin marked
+  /// as paid/exempt). See apps/worker's expire-trials job for what actually happens when this
+  /// passes, and apps/api's login flow for the countdown a tenant's own staff see.
+  trialEndsAt DateTime?
+  /// A fixed catalog of feature keys (see packages/shared/src/features.ts) a super admin has
+  /// turned OFF for this specific tenant — empty means every feature is available. Deliberately
+  /// a disable-list, not an enable-list: a newly added feature is available to every existing
+  /// tenant by default instead of silently missing until someone remembers to grant it.
+  disabledFeatures String[] @default([])
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
+  deletedAt  DateTime?
+
+  users     User[]
+  roles     Role[]
+  userRoles UserRole[]
+  sessions  Session[]
+  auditLogs AuditLog[]
+  apiKeys   ApiKey[]
+  webhookEndpoints WebhookEndpoint[]
+
+  customers        Customer[]
+  packages         Package[]
+  customerServices CustomerService[]
+  invoices         Invoice[]
+  payments         Payment[]
+  receipts         Receipt[]
+
+  paymentProviderConfigs PaymentProviderConfig[]
+  mpesaStkRequests       MpesaStkRequest[]
+  mpesaC2BTransactions   MpesaC2BTransaction[]
+  paystackTransactions   PaystackTransaction[]
+  smsProviderConfig      SmsProviderConfig?
+  aiAssistantConfig      AiAssistantConfig?
+  liveChatConfig         LiveChatConfig?
+  whatsappConnection     WhatsappConnection?
+  tickets                Ticket[]
+  onboardingFee          TenantOnboardingFee?
+  announcements          PlatformAnnouncement[]
+  domains                Domain[]
+  subscription           TenantSubscription?
+  subscriptionPayments   TenantSubscriptionPayment[]
+
+  routers          Router[]
+  ipPools          IPPool[]
+  ipAddresses      IPAddress[]
+  radiusNas        RadiusNas[]
+  radiusUsers      RadiusUser[]
+  radAccts         RadAcct[]
+  hotspotPackages  HotspotPackage[]
+  hotspotVouchers  HotspotVoucher[]
+  networkSyncTasks NetworkSyncTask[]
+
+  @@index([status])
+  @@map("tenants")
+}
+
+model User {
+  id                  String     @id @default(uuid())
+  tenantId            String?
+  tenant              Tenant?    @relation(fields: [tenantId], references: [id])
+  email               String
+  phone               String?
+  passwordHash        String
+  emailVerifiedAt     DateTime?
+  status              UserStatus @default(PENDING_VERIFICATION)
+  failedLoginCount    Int        @default(0)
+  lockedUntil         DateTime?
+  lastLoginAt         DateTime?
+  totpSecretEncrypted String?
+  totpEnabledAt       DateTime?
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+  deletedAt           DateTime?
+
+  sessions                Session[]
+  userRoles               UserRole[]
+  emailVerificationTokens EmailVerificationToken[]
+  passwordResetTokens     PasswordResetToken[]
+  loginAttempts           LoginAttempt[]
+  auditLogsAsActor        AuditLog[]                @relation("AuditLogActor")
+  customerProfile         Customer?
+  apiKeysCreated          ApiKey[]
+  ticketsAssigned         Ticket[]                  @relation("TicketAssignee")
+  ticketsCreated          Ticket[]                  @relation("TicketCreatedBy")
+  ticketMessages          TicketMessage[]
+
+  // Composite-unique keeps email unique within a tenant. Super-admin rows (tenantId = null)
+  // additionally get a partial unique index on `email` alone via raw SQL migration, since
+  // Postgres treats NULL != NULL and would otherwise allow duplicate super-admin emails.
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@map("users")
+}
+
+model Role {
+  id        String   @id @default(uuid())
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id])
+  name      String
+  isSystem  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  rolePermissions RolePermission[]
+  userRoles       UserRole[]
+
+  @@unique([tenantId, name])
+  @@map("roles")
+}
+
+model Permission {
+  id          String @id @default(uuid())
+  key         String @unique
+  description String
+
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  id        String   @id @default(uuid())
+  userId    String
+  roleId    String
+  tenantId  String?
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  // tenantId = null represents a platform-level (SUPER_ADMIN) role assignment.
+  @@unique([userId, roleId, tenantId])
+  @@index([tenantId, userId])
+  @@map("user_roles")
+}
+
+model Session {
+  id                 String    @id @default(uuid())
+  userId             String
+  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenantId           String?
+  tenant             Tenant?   @relation(fields: [tenantId], references: [id])
+  refreshTokenHash   String    @unique
+  userAgent          String?
+  ipAddress          String?
+  createdAt          DateTime  @default(now())
+  expiresAt          DateTime
+  revokedAt          DateTime?
+  revokedReason      String?
+  lastUsedAt         DateTime  @default(now())
+
+  // Refresh-token rotation chain: each successful refresh revokes this row and creates a new
+  // one pointing back here via previousSessionId. A replay of an already-rotated (revoked)
+  // refresh token is detected because its hash still resolves to a *revoked* row — that is
+  // treated as stolen-token reuse and revokes every session the user holds.
+  previousSessionId String?   @unique
+  previousSession    Session? @relation("SessionRotation", fields: [previousSessionId], references: [id])
+  nextSession        Session? @relation("SessionRotation")
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model EmailVerificationToken {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@map("email_verification_tokens")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@map("password_reset_tokens")
+}
+
+model LoginAttempt {
+  id            String   @id @default(uuid())
+  userId        String?
+  user          User?    @relation(fields: [userId], references: [id])
+  email         String
+  tenantId      String?
+  ipAddress     String
+  userAgent     String?
+  success       Boolean
+  failureReason String?
+  createdAt     DateTime @default(now())
+
+  @@index([email, createdAt])
+  @@index([ipAddress, createdAt])
+  @@map("login_attempts")
+}
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  tenantId     String?
+  tenant       Tenant?  @relation(fields: [tenantId], references: [id])
+  actorUserId  String?
+  actor        User?    @relation("AuditLogActor", fields: [actorUserId], references: [id])
+  action       String
+  resourceType String
+  resourceId   String?
+  before       Json?
+  after        Json?
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+  @@index([resourceType, resourceId])
+  @@map("audit_logs")
+}
+
+/// Every maintenance state change is a new row — the latest row by createdAt is the
+/// authoritative current state. This makes the audit trail free (see docs/architecture/05).
+model MaintenanceEvent {
+  id                  String    @id @default(uuid())
+  enabled             Boolean
+  level               Int
+  message             String?
+  startAt             DateTime?
+  endAt               DateTime?
+  allowLogin          Boolean   @default(true)
+  allowCustomerPortal Boolean   @default(true)
+  allowPayments       Boolean   @default(true)
+  allowWebhooks       Boolean   @default(true)
+  allowApi            Boolean   @default(true)
+  allowedRoles        String[]
+  allowedIps          String[]
+  updatedBy           String
+  createdAt           DateTime  @default(now())
+
+  @@index([createdAt])
+  @@map("maintenance_events")
+}
+
+model ApiKey {
+  id                 String    @id @default(uuid())
+  tenantId           String
+  tenant             Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name               String
+  keyPrefix          String
+  keyHash            String    @unique
+  scopes             String[]
+  rateLimitPerMinute Int       @default(100)
+  /// The staff user whose current role/permissions this key acts as at request time (looked up
+  /// fresh on every use, same as a session — revoking the user's role revokes the key too,
+  /// without a separate expiry mechanism). Nullable only so a user's later deletion doesn't
+  /// cascade-delete keys they issued; such an orphaned key can no longer authenticate.
+  createdByUserId    String?
+  createdBy          User?     @relation(fields: [createdByUserId], references: [id])
+  lastUsedAt         DateTime?
+  revokedAt          DateTime?
+  createdAt          DateTime  @default(now())
+
+  @@index([tenantId])
+  @@map("api_keys")
+}
+
+/// An outbound webhook subscription — real platform events (customer created, invoice
+/// created, payment received) are signed with `secretEncrypted` (HMAC-SHA256, same scheme as
+/// Paystack's inbound webhooks but for our own outbound deliveries) and POSTed to `url` by the
+/// worker's webhook queue, never inline in the request that triggered the event.
+model WebhookEndpoint {
+  id               String    @id @default(uuid())
+  tenantId         String
+  tenant           Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  url              String
+  description      String?
+  secretEncrypted  String
+  events           String[]
+  isActive         Boolean   @default(true)
+  createdByUserId  String?
+  lastTriggeredAt  DateTime?
+  lastStatusCode   Int?
+  consecutiveFailures Int    @default(0)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  deliveries WebhookDelivery[]
+
+  @@index([tenantId])
+  @@map("webhook_endpoints")
+}
+
+model WebhookDelivery {
+  id                String          @id @default(uuid())
+  webhookEndpointId String
+  webhookEndpoint   WebhookEndpoint @relation(fields: [webhookEndpointId], references: [id], onDelete: Cascade)
+  eventType         String
+  payload           Json
+  statusCode        Int?
+  success           Boolean
+  errorMessage       String?
+  attemptedAt       DateTime        @default(now())
+
+  @@index([webhookEndpointId, attemptedAt])
+  @@map("webhook_deliveries")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Phase 2 — Core ISP Billing (docs/architecture/04-billing-and-payments.md, 09-phase2-plan.md)
+// ---------------------------------------------------------------------------------------------
+
+enum CustomerStatus {
+  ACTIVE
+  SUSPENDED
+  PENDING
+  INSTALLATION
+  DISCONNECTED
+  CANCELLED
+  BLACKLISTED
+}
+
+model Customer {
+  id               String         @id @default(uuid())
+  tenantId         String
+  tenant           Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId           String?        @unique
+  user             User?          @relation(fields: [userId], references: [id])
+  customerNumber   String
+  fullName         String
+  email            String?
+  phone            String
+  idNumber         String?
+  address          String?
+  gpsLat           Float?
+  gpsLng           Float?
+  connectionType   String?
+  installationDate DateTime?
+  status           CustomerStatus @default(PENDING)
+  notes            String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  deletedAt        DateTime?
+
+  services CustomerService[]
+  invoices Invoice[]
+  payments Payment[]
+  wallet   Wallet?
+  tickets  Ticket[]
+
+  mpesaStkRequests     MpesaStkRequest[]
+  mpesaC2BTransactions MpesaC2BTransaction[]
+  paystackTransactions PaystackTransaction[]
+
+  radiusUsers RadiusUser[]
+
+  @@unique([tenantId, customerNumber])
+  @@index([tenantId, status])
+  @@map("customers")
+}
+
+enum BillingCycle {
+  DAILY
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+  CUSTOM
+}
+
+model Package {
+  id                   String       @id @default(uuid())
+  tenantId             String
+  tenant               Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name                 String
+  description          String?
+  downloadKbps         Int
+  uploadKbps           Int
+  burstDownloadKbps    Int?
+  burstUploadKbps      Int?
+  dataCapMb            Int?
+  billingCycle         BillingCycle @default(MONTHLY)
+  /// Required and used only when billingCycle = CUSTOM.
+  durationDays         Int?
+  priceMinor           Int
+  currency             String       @default("KES")
+  installationFeeMinor Int          @default(0)
+  activationFeeMinor   Int          @default(0)
+  /// Whole-percent tax rate (16 = 16%) — kept as an integer to avoid floating-point tax math.
+  taxPercent           Int?
+  isActive             Boolean      @default(true)
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+  deletedAt            DateTime?
+
+  customerServices CustomerService[]
+  hotspotVouchers  HotspotVoucher[]
+
+  @@index([tenantId, isActive])
+  @@map("packages")
+}
+
+enum CustomerServiceStatus {
+  ACTIVE
+  SUSPENDED
+  PENDING
+  CANCELLED
+  EXPIRED
+}
+
+/// A customer's subscription to a package — the thing that gets billed, and (Phase 4) the
+/// thing that gets provisioned on network equipment.
+model CustomerService {
+  id                 String                @id @default(uuid())
+  tenantId           String
+  tenant             Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customerId         String
+  customer           Customer              @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  packageId          String
+  package            Package               @relation(fields: [packageId], references: [id])
+  status             CustomerServiceStatus @default(PENDING)
+  /// Overrides Package.priceMinor for this specific subscription (custom-negotiated pricing).
+  priceOverrideMinor Int?
+  startDate          DateTime
+  nextBillingAt      DateTime
+  autoRenew          Boolean               @default(true)
+  cancelledAt        DateTime?
+  createdAt          DateTime              @default(now())
+  updatedAt          DateTime              @updatedAt
+
+  invoices   Invoice[]
+  radiusUser RadiusUser?
+
+  @@index([tenantId, status])
+  @@index([nextBillingAt])
+  @@map("customer_services")
+}
+
+enum InvoiceStatus {
+  DRAFT
+  PENDING
+  PAID
+  PARTIALLY_PAID
+  OVERDUE
+  CANCELLED
+  VOID
+}
+
+model Invoice {
+  id                String           @id @default(uuid())
+  tenantId          String
+  tenant            Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customerId        String
+  customer          Customer         @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customerServiceId String?
+  customerService   CustomerService? @relation(fields: [customerServiceId], references: [id])
+  invoiceNumber     String
+  status            InvoiceStatus    @default(PENDING)
+  subtotalMinor     Int
+  taxMinor          Int              @default(0)
+  discountMinor     Int              @default(0)
+  totalMinor        Int
+  amountPaidMinor   Int              @default(0)
+  currency          String           @default("KES")
+  issuedAt          DateTime         @default(now())
+  dueDate           DateTime
+  paidAt            DateTime?
+  voidedAt          DateTime?
+  notes             String?
+  /// 0 = no dunning notice sent yet, 1 = "due soon" reminder sent, 2 = overdue notice sent,
+  /// 3 = final notice sent (the day before suspendOverdueSubscriptions would act). Monotonic —
+  /// only ever moves forward, so the same invoice never gets the same notice emailed twice.
+  dunningStage      Int              @default(0)
+  lastDunningAt     DateTime?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  items                InvoiceItem[]
+  payments             Payment[]
+  mpesaStkRequests     MpesaStkRequest[]
+  paystackTransactions PaystackTransaction[]
+
+  @@unique([tenantId, invoiceNumber])
+  @@index([tenantId, status])
+  @@index([customerId])
+  @@index([dueDate])
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id             String  @id @default(uuid())
+  invoiceId      String
+  invoice        Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  description    String
+  quantity       Int     @default(1)
+  unitPriceMinor Int
+  totalMinor     Int
+
+  @@map("invoice_items")
+}
+
+model Wallet {
+  id           String   @id @default(uuid())
+  customerId   String   @unique
+  customer     Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  balanceMinor Int      @default(0)
+  currency     String   @default("KES")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  transactions WalletTransaction[]
+
+  @@map("wallets")
+}
+
+enum WalletTransactionType {
+  CREDIT
+  DEBIT
+}
+
+/// Append-only ledger — the source of truth. Wallet.balanceMinor is a cached derived value
+/// that must only ever change alongside a new row here in the same transaction.
+model WalletTransaction {
+  id                String                @id @default(uuid())
+  walletId          String
+  wallet            Wallet                @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  type              WalletTransactionType
+  amountMinor       Int
+  balanceAfterMinor Int
+  reason            String
+  referenceType     String?
+  referenceId       String?
+  createdAt         DateTime              @default(now())
+
+  @@index([walletId, createdAt])
+  @@map("wallet_transactions")
+}
+
+enum PaymentMethod {
+  MANUAL
+  WALLET
+  CASH
+  BANK_TRANSFER
+  MPESA
+  PAYSTACK
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REVERSED
+}
+
+/// Phase 2 shipped manual/staff-recorded payment methods; Phase 3 adds MPESA, produced by the
+/// STK/C2B callback flow instead of a staff form (docs/architecture/04-billing-and-payments.md,
+/// 10-phase3-plan.md). `recordedByUserId` is null for those — there is no human actor, only a
+/// verified Safaricom callback.
+model Payment {
+  id               String        @id @default(uuid())
+  tenantId         String
+  tenant           Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customerId       String
+  customer         Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  invoiceId        String?
+  invoice          Invoice?      @relation(fields: [invoiceId], references: [id])
+  method           PaymentMethod
+  status           PaymentStatus @default(COMPLETED)
+  amountMinor      Int
+  currency         String        @default("KES")
+  reference        String?
+  idempotencyKey   String        @unique
+  recordedByUserId String?
+  reversedAt       DateTime?
+  reversalReason   String?
+  createdAt        DateTime      @default(now())
+
+  receipt              Receipt?
+  mpesaStkRequest      MpesaStkRequest?
+  mpesaC2BTxn          MpesaC2BTransaction?
+  paystackTransaction  PaystackTransaction?
+
+  @@index([tenantId, createdAt])
+  @@index([customerId])
+  @@map("payments")
+}
+
+model Receipt {
+  id            String   @id @default(uuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  paymentId     String   @unique
+  payment       Payment  @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  receiptNumber String
+  issuedAt      DateTime @default(now())
+
+  @@unique([tenantId, receiptNumber])
+  @@map("receipts")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Phase 3 — M-Pesa and Payments (docs/architecture/04-billing-and-payments.md, 10-phase3-plan.md)
+// ---------------------------------------------------------------------------------------------
+
+enum PaymentProviderKind {
+  MPESA
+  PAYSTACK
+}
+
+/// Per-tenant gateway credentials. Sensitive fields are AES-256-GCM-encrypted at rest
+/// (packages/shared's encryptAtRest) and are never returned to the client once set — the read
+/// endpoint only ever reports whether a credential is configured, not its value.
+model PaymentProviderConfig {
+  id                      String              @id @default(uuid())
+  tenantId                String
+  tenant                  Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  provider                PaymentProviderKind
+  isActive                Boolean             @default(false)
+  consumerKeyEncrypted    String?
+  consumerSecretEncrypted String?
+  shortcode               String?
+  passkeyEncrypted        String?
+  /// Generic single-secret credential slot for providers that only need one API key (Paystack,
+  /// and future gateways like IOTEC/ClickPesa/ZenoPay) rather than Daraja's four-part
+  /// consumer-key/secret/shortcode/passkey shape.
+  secretKeyEncrypted      String?
+  /// Public/publishable key counterpart, if the provider has one (Paystack's `pk_...`) — not
+  /// encrypted since it's meant to be visible (e.g. to a client-side checkout widget).
+  publicKey               String?
+  /// "sandbox" | "production" — selects the Daraja API base URL. Paystack itself has no
+  /// separate sandbox host (test/live is determined by which secret key is used), but this
+  /// field is still shown/stored for a consistent config UI across providers.
+  environment             String              @default("sandbox")
+  createdAt               DateTime            @default(now())
+  updatedAt               DateTime            @updatedAt
+
+  @@unique([tenantId, provider])
+  @@map("payment_provider_configs")
+}
+
+/// One SMS gateway config per tenant (Africa's Talking — the standard provider for Kenya/East
+/// Africa) — same encrypted-at-rest shape as PaymentProviderConfig, just a single row per
+/// tenant instead of one per provider since a tenant only ever has one SMS sender identity.
+model SmsProviderConfig {
+  id              String   @id @default(uuid())
+  tenantId        String   @unique
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  isActive        Boolean  @default(false)
+  apiKeyEncrypted String?
+  username        String?
+  senderId        String?
+  /// "sandbox" | "production" — selects the Africa's Talking API host.
+  environment     String   @default("sandbox")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("sms_provider_configs")
+}
+
+/// A tenant's own Anthropic API key for the hotspot-package assistant (packages/ai) — never
+/// this platform's key. The tenant pays for and controls their own usage, same reasoning as
+/// every other per-tenant provider credential in this schema.
+model AiAssistantConfig {
+  id              String   @id @default(uuid())
+  tenantId        String   @unique
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  isActive        Boolean  @default(false)
+  apiKeyEncrypted String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("ai_assistant_configs")
+}
+
+/// Tawk.to live-chat widget config. `widgetId` is the `<propertyId>/<widgetId>` path Tawk.to's
+/// own embed snippet shows you (e.g. "60f1a2.../1abcdefgh") — not a secret, it's meant to sit in
+/// client-side HTML, so unlike AiAssistantConfig's API key this is stored plain. Two independent
+/// placement toggles (not just one master switch) because a tenant asked specifically to be able
+/// to turn each surface on/off on its own, not just everywhere at once.
+model LiveChatConfig {
+  id                   String   @id @default(uuid())
+  tenantId             String   @unique
+  tenant               Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  isActive             Boolean  @default(false)
+  widgetId             String?
+  showOnHotspotPortal  Boolean  @default(true)
+  showOnDashboard      Boolean  @default(true)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@map("live_chat_configs")
+}
+
+enum WhatsappConnectionStatus {
+  /// Never paired, or explicitly unlinked from the dashboard.
+  DISCONNECTED
+  /// Pairing in progress — a QR code is (or is about to be) available for scanning.
+  CONNECTING
+  CONNECTED
+  /// The phone unlinked this device from WhatsApp's own "Linked devices" screen. Distinct from
+  /// DISCONNECTED because the saved credentials are now useless and a fresh QR scan is required —
+  /// nothing the platform can retry its way out of.
+  LOGGED_OUT
+}
+
+/// One tenant's own WhatsApp account link, so each ISP messages its customers from its own
+/// number rather than everyone sharing a single platform-wide line (the arrangement this
+/// replaced, which also forced the inbound bot to ask every customer which ISP they were with).
+/// Deliberately stores no credentials: the Baileys session keys live on disk under
+/// WHATSAPP_AUTH_STATE_PATH/<tenantId>, and this row is the tenant-visible status record the
+/// dashboard reads.
+model WhatsappConnection {
+  id              String                   @id @default(uuid())
+  tenantId        String                   @unique
+  tenant          Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  status          WhatsappConnectionStatus @default(DISCONNECTED)
+  /// The linked WhatsApp number, read back off the session once pairing completes — shown in the
+  /// dashboard so staff can confirm *which* line is connected. Null until first successful pair.
+  phoneNumber     String?
+  lastConnectedAt DateTime?
+  /// Last failure reason, surfaced in the dashboard so a stuck connection is diagnosable without
+  /// reading worker logs.
+  lastError       String?
+  createdAt       DateTime                 @default(now())
+  updatedAt       DateTime                 @updatedAt
+
+  @@map("whatsapp_connections")
+}
+
+/// The platform operator's (MASHUPKGRID's) own Daraja credentials — deliberately separate from
+/// the per-tenant PaymentProviderConfig table: the 450 KSH onboarding fee is money owed *to the
+/// platform*, collected through the platform's own paybill/till, never a tenant's own M-Pesa
+/// config (that would just be an ISP paying itself). A singleton — application code always
+/// reads/writes the single row, there's no tenantId here at all.
+model PlatformMpesaConfig {
+  id                      String   @id @default(uuid())
+  isActive                Boolean  @default(false)
+  consumerKeyEncrypted    String?
+  consumerSecretEncrypted String?
+  shortcode               String?
+  passkeyEncrypted        String?
+  environment             String   @default("sandbox")
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  @@map("platform_mpesa_config")
+}
+
+/// "Sign in with Google" is platform-wide, same reasoning as PlatformMpesaConfig — one OAuth app
+/// registered against this deployment's own fixed domain serves every tenant. Was previously an
+/// env-var-only setting (GOOGLE_OAUTH_CLIENT_ID); moved into the DB once a super admin needed to
+/// toggle/edit it from the dashboard instead of editing .env and restarting the API. `clientId`
+/// is not a secret — it's the OAuth `aud` value, meant to sit in the frontend bundle.
+model PlatformGoogleAuthConfig {
+  id        String   @id @default(uuid())
+  isActive  Boolean  @default(false)
+  clientId  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("platform_google_auth_config")
+}
+
+/// One row per tenant, created alongside it — tracks the one-time 450 KSH onboarding fee
+/// separately from MpesaStkRequest (which is always tenant-scoped billing *within* a tenant,
+/// e.g. a customer paying their ISP) since this is the reverse direction: the tenant paying the
+/// platform. Reuses MpesaTransactionStatus since the state machine is identical.
+model TenantOnboardingFee {
+  id                 String                 @id @default(uuid())
+  tenantId           String                 @unique
+  tenant             Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  amountMinor        Int                    @default(45000)
+  phone              String?
+  status             MpesaTransactionStatus @default(PENDING)
+  merchantRequestId  String?
+  checkoutRequestId  String?                @unique
+  mpesaReceiptNumber String?
+  resultDesc         String?
+  rawCallback        Json?
+  paidAt             DateTime?
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+
+  @@map("tenant_onboarding_fees")
+}
+
+enum SubscriptionStatus {
+  TRIALING
+  ACTIVE
+  PAST_DUE
+  EXPIRED
+  CANCELLED
+}
+
+enum SubscriptionBillingCycle {
+  MONTHLY
+  ANNUAL
+}
+
+/// The platform's sellable subscription catalog — what a super admin offers to ISP tenant
+/// businesses (NOT the ISP's own internet-speed pricing tiers, see the `Package` model for that).
+/// Deliberately named `TenantPlan` rather than bare `Plan` to avoid colliding with that existing,
+/// unrelated concept. `Tenant.planTier` (a decorative, unenforced string) predates this model and
+/// is left untouched — fully superseded by `TenantSubscription` going forward.
+model TenantPlan {
+  id                String                   @id @default(uuid())
+  name              String
+  slug              String                   @unique
+  description       String?
+  monthlyPriceMinor Int
+  annualPriceMinor  Int?
+  /// Replaces the previously-hardcoded TRIAL_DAYS constant — trial length is now per-plan.
+  trialDays         Int                      @default(7)
+  /// Null = unlimited. Only customers/routers are enforced today (see plan-limits.ts) — no
+  /// staff-seat or SMS/month fields here since nothing creates staff or counts SMS yet to check
+  /// a limit against.
+  maxCustomers      Int?
+  maxRouters        Int?
+  /// Subset of packages/shared's TENANT_FEATURES — what this plan includes. Checked alongside
+  /// (not instead of) Tenant.disabledFeatures by requireFeature.
+  features          String[]                 @default([])
+  isDefault         Boolean                  @default(false)
+  isActive          Boolean                  @default(true)
+  sortOrder         Int                      @default(0)
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+
+  subscriptions TenantSubscription[]
+
+  @@map("tenant_plans")
+}
+
+/// One row per tenant — the tenant's current commercial/billing state, distinct from
+/// `Tenant.status` (the actual access-control gate `resolveTenant` checks). The worker's
+/// expire-trials job is what keeps the two in sync (PAST_DUE -> grace period -> Tenant SUSPENDED).
+model TenantSubscription {
+  id                 String                   @id @default(uuid())
+  tenantId           String                   @unique
+  tenant             Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  planId             String
+  plan               TenantPlan               @relation(fields: [planId], references: [id])
+  billingCycle       SubscriptionBillingCycle @default(MONTHLY)
+  status             SubscriptionStatus       @default(TRIALING)
+  currentPeriodStart DateTime                 @default(now())
+  currentPeriodEnd   DateTime
+  /// Set when status flips to PAST_DUE — the worker job suspends the tenant once this passes.
+  gracePeriodEndsAt  DateTime?
+  cancelAtPeriodEnd  Boolean                  @default(false)
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+
+  payments TenantSubscriptionPayment[]
+
+  @@map("tenant_subscriptions")
+}
+
+/// Mirrors TenantOnboardingFee's shape (same state machine, same reused MpesaTransactionStatus
+/// enum) but recurring — one row per billing-period charge attempt, not a single row per tenant.
+model TenantSubscriptionPayment {
+  id                 String                   @id @default(uuid())
+  tenantId           String
+  tenant             Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscriptionId     String
+  subscription       TenantSubscription       @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  amountMinor        Int
+  billingCycle       SubscriptionBillingCycle
+  periodStart        DateTime
+  periodEnd          DateTime
+  phone              String?
+  status             MpesaTransactionStatus   @default(PENDING)
+  merchantRequestId  String?
+  checkoutRequestId  String?                  @unique
+  mpesaReceiptNumber String?
+  resultDesc         String?
+  rawCallback        Json?
+  paidAt             DateTime?
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+
+  @@index([tenantId])
+  @@map("tenant_subscription_payments")
+}
+
+/// A super admin's message to tenant staff — `tenantId` null means platform-wide (every tenant
+/// sees it), set means targeted at one tenant only (e.g. "your trial ends in 2 days"). Shown as
+/// a dashboard banner on next login/page-load; `AnnouncementDismissal` is per-user so dismissing
+/// it doesn't hide it from the tenant's other staff.
+model PlatformAnnouncement {
+  id              String                   @id @default(uuid())
+  tenantId        String?
+  tenant          Tenant?                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  title           String
+  body            String
+  severity        AnnouncementSeverity     @default(INFO)
+  createdByUserId String?
+  createdAt       DateTime                 @default(now())
+  expiresAt       DateTime?
+
+  dismissals AnnouncementDismissal[]
+
+  @@index([tenantId])
+  @@map("platform_announcements")
+}
+
+model AnnouncementDismissal {
+  id             String               @id @default(uuid())
+  announcementId String
+  announcement   PlatformAnnouncement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  userId         String
+  dismissedAt    DateTime             @default(now())
+
+  @@unique([announcementId, userId])
+  @@map("announcement_dismissals")
+}
+
+enum AnnouncementSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+enum DomainStatus {
+  PENDING
+  CHECKING
+  VERIFIED
+  DNS_ERROR
+  SSL_PENDING
+  SSL_ACTIVE
+  SUSPENDED
+  REMOVED
+}
+
+/// A tenant's custom domain (e.g. "billing.mashupnet.co.ke"). Deliberately does NOT represent
+/// the automatic platform subdomain from Tenant.slug — that one needs no row here at all (see
+/// the multi-tenant-domains plan); this table exists purely for domains an ISP connects
+/// themselves. `isPrimary` lives here rather than a `Tenant.primaryDomainId` FK to avoid a
+/// circular relation — at most one row per tenant has it true, enforced in the set-primary
+/// route handler. When no row is primary, the tenant's platform subdomain is the implicit
+/// primary, which is why it must always keep working as a fallback.
+model Domain {
+  id                String       @id @default(uuid())
+  tenantId          String
+  tenant            Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  hostname          String       @unique
+  status            DomainStatus @default(PENDING)
+  isPrimary         Boolean      @default(false)
+  /// Not required for the CNAME-target verification this platform actually does (see
+  /// apps/api's domains route) — stored for a possible future TXT-record verification path.
+  verificationToken String
+  lastCheckedAt     DateTime?
+  lastError         String?
+  verifiedAt        DateTime?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+
+  @@index([tenantId])
+  @@map("domains")
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+/// A support request — from a logged-in subscriber (customerId set), a walk-in hotspot customer
+/// with no account (customerId null, identified only by contactName/Phone/Email), or staff on a
+/// customer's behalf. The `tickets.read`/`tickets.manage` permissions already existed in the RBAC
+/// catalog (packages/shared/src/permissions.ts) with nothing to point them at — this is that.
+model Ticket {
+  id               String          @id @default(uuid())
+  tenantId         String
+  tenant           Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customerId       String?
+  customer         Customer?       @relation(fields: [customerId], references: [id])
+  contactName      String?
+  contactPhone     String?
+  contactEmail     String?
+  subject          String
+  status           TicketStatus    @default(OPEN)
+  priority         TicketPriority  @default(NORMAL)
+  /// Where this ticket came from — lets staff tell a walk-in hotspot report apart from a
+  /// logged-in subscriber's own request at a glance, without parsing contact fields.
+  source           String          @default("STAFF")
+  assignedToUserId String?
+  assignedToUser   User?           @relation("TicketAssignee", fields: [assignedToUserId], references: [id])
+  createdByUserId  String?
+  createdByUser    User?           @relation("TicketCreatedBy", fields: [createdByUserId], references: [id])
+  resolvedAt       DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  messages TicketMessage[]
+
+  @@index([tenantId, status])
+  @@map("tickets")
+}
+
+/// A ticket's message thread. `isInternalNote` messages never leave the staff dashboard — the
+/// customer-facing routes (both /me/tickets and the public hotspot one) filter them out entirely
+/// rather than trusting the frontend not to render them, the same "scoping is the security
+/// boundary" principle me.ts already documents for customer-owned records.
+model TicketMessage {
+  id             String   @id @default(uuid())
+  ticketId       String
+  ticket         Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorUserId   String?
+  authorUser     User?    @relation(fields: [authorUserId], references: [id])
+  /// Display name for a message from someone with no User row (a walk-in hotspot contact) —
+  /// authorUserId is null in exactly that case.
+  authorLabel    String?
+  body           String
+  isInternalNote Boolean  @default(false)
+  createdAt      DateTime @default(now())
+
+  @@index([ticketId])
+  @@map("ticket_messages")
+}
+
+enum MpesaTransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+/// One row per Lipa na M-Pesa Online (STK Push) request. Created PENDING at initiation; only
+/// the verified callback (or a server-initiated status query) may move it to
+/// COMPLETED/FAILED/CANCELLED — never the initiating request itself (project instruction §13).
+model MpesaStkRequest {
+  id                 String                 @id @default(uuid())
+  tenantId           String
+  tenant             Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customerId         String?
+  customer           Customer?              @relation(fields: [customerId], references: [id])
+  invoiceId          String?
+  invoice            Invoice?               @relation(fields: [invoiceId], references: [id])
+  hotspotPackageId   String?
+  hotspotPackage     HotspotPackage?        @relation(fields: [hotspotPackageId], references: [id])
+  hotspotVoucherCode String?
+  initiatedByUserId  String?
+  phone              String
+  amountMinor        Int
+  merchantRequestId  String
+  checkoutRequestId  String                 @unique
+  status             MpesaTransactionStatus @default(PENDING)
+  resultCode         Int?
+  resultDesc         String?
+  mpesaReceiptNumber String?                @unique
+  paymentId          String?                @unique
+  payment            Payment?               @relation(fields: [paymentId], references: [id])
+  /// The raw callback payload, stored verbatim before any business logic runs — the source
+  /// record survives even if a processing bug loses the parsed result.
+  rawCallback        Json?
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+
+  @@index([tenantId, status])
+  @@map("mpesa_stk_requests")
+}
+
+/// One row per C2B (Paybill) confirmation Safaricom sends us. `matchedCustomerId`/`paymentId`
+/// are null until reconciliation (automatic by BillRefNumber, or manual in the admin UI)
+/// resolves which customer/invoice the payment belongs to.
+model MpesaC2BTransaction {
+  id                String    @id @default(uuid())
+  tenantId          String
+  tenant            Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  transactionId     String    @unique
+  shortcode         String
+  amountMinor       Int
+  msisdn            String
+  billRefNumber     String?
+  transactionTime   DateTime
+  matchedCustomerId String?
+  matchedCustomer   Customer? @relation(fields: [matchedCustomerId], references: [id])
+  paymentId         String?   @unique
+  payment           Payment?  @relation(fields: [paymentId], references: [id])
+  rawPayload        Json
+  reconciled        Boolean   @default(false)
+  createdAt         DateTime  @default(now())
+
+  @@index([tenantId, reconciled])
+  @@map("mpesa_c2b_transactions")
+}
+
+enum PaystackTransactionStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  ABANDONED
+}
+
+/// Mirrors MpesaStkRequest's shape: a row created PENDING the moment we initiate a Paystack
+/// transaction, only ever moved to COMPLETED/FAILED by a verified webhook or an explicit
+/// verify-transaction call — never by the initiating request returning successfully.
+model PaystackTransaction {
+  id                 String                    @id @default(uuid())
+  tenantId           String
+  tenant             Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customerId         String?
+  customer           Customer?                 @relation(fields: [customerId], references: [id])
+  invoiceId          String?
+  invoice            Invoice?                  @relation(fields: [invoiceId], references: [id])
+  hotspotPackageId   String?
+  hotspotPackage     HotspotPackage?           @relation(fields: [hotspotPackageId], references: [id])
+  hotspotVoucherCode String?
+  /// The router's own `link-login-only` URL, captured from the captive-portal page at purchase
+  /// time — Paystack's checkout is a full off-site redirect, so it's the only way the browser
+  /// still knows where to POST the voucher back to once it returns (see /return in
+  /// apps/api/src/routes/paystack.ts). Null for a non-hotspot Paystack transaction.
+  hotspotLinkLoginOnly String?
+  /// The email actually charged for a guest hotspot purchase (Paystack requires one, but until
+  /// now nothing persisted it) — without this a Paystack-paid hotspot customer has no identity
+  /// on the transaction row at all, unlike M-Pesa's `phone`. Null for a non-hotspot transaction,
+  /// where the buyer is always a known `Customer` via `customerId` instead.
+  hotspotEmail       String?
+  /// The phone the guest gave at checkout. Already collected by the purchase form and passed
+  /// into initiatePaystackHotspotPurchase all along, but previously discarded — it's what the
+  /// voucher's WhatsApp delivery is addressed to, the same role MpesaStkRequest.phone plays for
+  /// the M-Pesa path. Null for a non-hotspot transaction.
+  hotspotPhone       String?
+  initiatedByUserId  String?
+  reference          String                    @unique
+  amountMinor        Int
+  currency           String                    @default("KES")
+  status             PaystackTransactionStatus @default(PENDING)
+  authorizationUrl   String?
+  gatewayResponse    String?
+  paymentId          String?                   @unique
+  payment            Payment?                  @relation(fields: [paymentId], references: [id])
+  /// The raw webhook/verify payload, stored verbatim before any business logic runs — same
+  /// "source record survives a processing bug" rationale as MpesaStkRequest.rawCallback.
+  rawWebhook         Json?
+  createdAt          DateTime                  @default(now())
+  updatedAt          DateTime                  @updatedAt
+
+  @@index([tenantId, status])
+  @@map("paystack_transactions")
+}
+
+// ---------------------------------------------------------------------------------------------
+// Phase 4 — Network: MikroTik, RADIUS/AAA, IPAM (docs/architecture/06-network-mikrotik-radius.md,
+// 13-phase4-plan.md)
+// ---------------------------------------------------------------------------------------------
+
+enum RouterVendor {
+  MIKROTIK
+}
+
+enum RouterStatus {
+  UNKNOWN
+  ONLINE
+  WARNING
+  DOWN
+}
+
+/// Router credentials are AES-256-GCM encrypted at rest — decrypted only in-process by
+/// apps/api / apps/worker, never sent to apps/web (docs/architecture/06).
+model Router {
+  id                String       @id @default(uuid())
+  tenantId          String
+  tenant            Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name              String
+  vendor            RouterVendor @default(MIKROTIK)
+  /// Null until the router either calls home (see provisionTokenHash) or an admin fills it in
+  /// manually — a row can exist "pending" with generated credentials but no known address yet.
+  host              String?
+  apiPort           Int          @default(8728)
+  useTls            Boolean      @default(false)
+  usernameEncrypted String
+  passwordEncrypted String
+  /// Hash of the one-time token embedded in the paste-and-run provisioning script — the router
+  /// itself presents this token when it calls back to /routers/provision/:token/callback, which
+  /// is how `host` above gets populated without an admin ever typing an IP. Null for routers
+  /// linked the old manual-entry way (host/credentials filled in directly).
+  provisionTokenHash String?     @unique
+  provisionedAt      DateTime?
+  /// WireGuard remote access — lets the platform reach this router's API even when it has no
+  /// public IP / is behind NAT (the common case for a real customer-premises router), instead
+  /// of requiring `host` to already be directly reachable. Once set, `host` is updated to this
+  /// tunnel IP so every existing host-based feature (test-connection, hotspot script, live
+  /// sessions) keeps working unchanged — nothing else in the app needs to know VPN exists.
+  vpnRegisterTokenHash String?   @unique
+  vpnPublicKey         String?
+  vpnIp                String?
+  vpnConfiguredAt      DateTime?
+  status            RouterStatus @default(UNKNOWN)
+  lastSeenAt        DateTime?
+  lastError         String?
+  cpuLoadPercent    Int?
+  memoryUsedBytes   BigInt?
+  memoryTotalBytes  BigInt?
+  uptimeSeconds     Int?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  deletedAt         DateTime?
+
+  ipPools     IPPool[]
+  radiusNas   RadiusNas[]
+  syncTasks   NetworkSyncTask[]
+
+  @@index([tenantId, status])
+  @@map("routers")
+}
+
+enum IpVersion {
+  IPV4
+  IPV6
+}
+
+/// A pool of addresses to hand out (matches MikroTik's `/ip pool` and FreeRADIUS's
+/// `Framed-Pool` reply attribute). Dual-stack from the start (project instruction §21) —
+/// `version` distinguishes an IPv4 pool from a delegated IPv6 prefix pool.
+model IPPool {
+  id         String    @id @default(uuid())
+  tenantId   String
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  routerId   String?
+  router     Router?   @relation(fields: [routerId], references: [id])
+  name       String
+  version    IpVersion @default(IPV4)
+  cidr       String
+  gateway    String?
+  dnsServers String[]
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  addresses IPAddress[]
+
+  @@unique([tenantId, name])
+  @@map("ip_pools")
+}
+
+enum IPAddressStatus {
+  AVAILABLE
+  RESERVED
+  ASSIGNED
+}
+
+model IPAddress {
+  id         String          @id @default(uuid())
+  tenantId   String
+  tenant     Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  poolId     String
+  pool       IPPool          @relation(fields: [poolId], references: [id], onDelete: Cascade)
+  address    String
+  status     IPAddressStatus @default(AVAILABLE)
+  assignedToRadiusUserId String? @unique
+  assignedToRadiusUser   RadiusUser? @relation(fields: [assignedToRadiusUserId], references: [id])
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+
+  @@unique([poolId, address])
+  @@index([tenantId, status])
+  @@map("ip_addresses")
+}
+
+/// FreeRADIUS's `nas` table shape (nasname/shortname/type/secret) — a real FreeRADIUS
+/// instance's rlm_sql module reads this directly. The shared `secret` column is intentionally
+/// plaintext, matching stock FreeRADIUS schema: the AAA server has no way to decrypt an
+/// application-level ciphertext, the same reason `nas.secret` is plaintext in every real
+/// FreeRADIUS deployment (access is controlled at the DB layer, not by app-side encryption).
+model RadiusNas {
+  id        Int      @id @default(autoincrement())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  routerId  String?
+  router    Router?  @relation(fields: [routerId], references: [id])
+  nasname   String
+  shortname String
+  type      String   @default("other")
+  ports     Int?
+  secret    String
+  createdAt DateTime @default(now())
+
+  @@unique([nasname])
+  @@index([tenantId])
+  @@map("nas")
+}
+
+enum RadiusUserStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+/// Our application's view of a PPPoE/Hotspot account — owns the relationship to
+/// Customer/CustomerService/Tenant that bare `radcheck` rows can't express. Kept in sync with
+/// `RadCheck`/`RadReply` by packages/radius's provisioning service (docs/architecture/06).
+model RadiusUser {
+  id                  String            @id @default(uuid())
+  tenantId            String
+  tenant              Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customerId          String
+  customer            Customer          @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customerServiceId   String            @unique
+  customerService     CustomerService   @relation(fields: [customerServiceId], references: [id], onDelete: Cascade)
+  username            String            @unique
+  /// AES-256-GCM at rest in *this* table; the provisioning service decrypts it once to mirror
+  /// the plaintext into `RadCheck` (Cleartext-Password), which is what FreeRADIUS actually
+  /// reads — see the RadiusNas.secret comment for why that mirror can't itself be encrypted.
+  passwordEncrypted   String
+  status              RadiusUserStatus  @default(ACTIVE)
+  connectionType      String            @default("PPPOE")
+  staticIp            String?
+  downloadKbps        Int?
+  uploadKbps          Int?
+  simultaneousUse     Int               @default(1)
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  assignedIp   IPAddress?
+  syncTasks    NetworkSyncTask[]
+
+  @@index([tenantId, status])
+  @@map("radius_users")
+}
+
+/// FreeRADIUS `radcheck` — one row per (username, attribute). The provisioning service always
+/// writes a `Cleartext-Password` row, and (for suspension) an `Auth-Type := Reject` row rather
+/// than deleting the account, which is the standard FreeRADIUS idiom for "account exists but
+/// may not authenticate" (preserves accounting history / avoids an "unknown user" reject).
+model RadCheck {
+  id        Int    @id @default(autoincrement())
+  username  String
+  attribute String
+  op        String @default("==")
+  value     String
+
+  @@index([username])
+  @@map("radcheck")
+}
+
+/// FreeRADIUS `radreply` — reply attributes on Access-Accept: rate limit (Mikrotik-Rate-Limit),
+/// static/pool IP assignment (Framed-IP-Address / Framed-Pool), session timeout, etc.
+model RadReply {
+  id        Int    @id @default(autoincrement())
+  username  String
+  attribute String
+  op        String @default("=")
+  value     String
+
+  @@index([username])
+  @@map("radreply")
+}
+
+/// FreeRADIUS `radacct` — accounting (session) records. A practical subset of the full stock
+/// column set (documented in docs/architecture/13-phase4-plan.md as a scope note, not a claim
+/// of 100% upstream schema parity). This is the highest-volume table in the system and is a
+/// declared range-partitioning candidate by month once real accounting volume exists — see
+/// docs/architecture/01-database-erd-and-schema.md's indexing note; not partitioned yet since
+/// Phase 4 has no live traffic to partition.
+model RadAcct {
+  radacctId          BigInt    @id @default(autoincrement()) @map("radacctid")
+  tenantId           String
+  tenant             Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  acctSessionId      String    @map("acctsessionid")
+  acctUniqueId       String    @unique @map("acctuniqueid")
+  username           String
+  nasIpAddress       String    @map("nasipaddress")
+  nasPortId          String?   @map("nasportid")
+  nasPortType        String?   @map("nasporttype")
+  acctStartTime      DateTime? @map("acctstarttime")
+  acctUpdateTime     DateTime? @map("acctupdatetime")
+  acctStopTime       DateTime? @map("acctstoptime")
+  acctSessionTime    Int?      @map("acctsessiontime")
+  acctInputOctets    BigInt?   @map("acctinputoctets")
+  acctOutputOctets   BigInt?   @map("acctoutputoctets")
+  calledStationId    String?   @map("calledstationid")
+  callingStationId   String?   @map("callingstationid")
+  acctTerminateCause String?   @map("acctterminatecause")
+  framedProtocol     String?   @map("framedprotocol")
+  framedIpAddress    String?   @map("framedipaddress")
+  framedIpv6Address  String?   @map("framedipv6address")
+
+  @@index([tenantId, username])
+  @@index([acctStartTime])
+  @@map("radacct")
+}
+
+enum VoucherStatus {
+  UNUSED
+  ACTIVE
+  EXPIRED
+  USED
+}
+
+model HotspotPackage {
+  id              String           @id @default(uuid())
+  tenantId        String
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name            String
+  description     String?
+  priceMinor      Int
+  currency        String           @default("KES")
+  durationMinutes Int
+  dataCapMb       Int?
+  downloadKbps    Int?
+  uploadKbps      Int?
+  isPopular       Boolean          @default(false)
+  badge           String?
+  isActive        Boolean          @default(true)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  hotspotVouchers      HotspotVoucher[]
+  mpesaStkRequests     MpesaStkRequest[]
+  paystackTransactions PaystackTransaction[]
+
+  @@index([tenantId, isActive])
+  @@map("hotspot_packages")
+}
+
+/// Hotspot voucher — a self-contained, single-use RADIUS user (its own `RadCheck` row) rather
+/// than something tied to a CustomerService, since a voucher is bought anonymously at the
+/// hotspot, not provisioned against an existing subscription.
+model HotspotVoucher {
+  id               String          @id @default(uuid())
+  tenantId         String
+  tenant           Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  code             String
+  hotspotPackageId String?
+  hotspotPackage   HotspotPackage? @relation(fields: [hotspotPackageId], references: [id])
+  packageId        String?
+  package          Package?        @relation(fields: [packageId], references: [id])
+  durationMinutes  Int?
+  dataCapMb        Int?
+  downloadKbps     Int?
+  uploadKbps       Int?
+  status           VoucherStatus   @default(UNUSED)
+  activatedAt      DateTime?
+  expiresAt        DateTime?
+  /// Cumulative usage as of the last RADIUS accounting packet (Interim-Update or Stop) the
+  /// embedded/FreeRADIUS server received for this voucher's code — see radius-server.ts's
+  /// enforceDataCap, which updates these on the same packets it already parses for cap
+  /// enforcement. Null until the voucher's first accounting packet arrives (i.e., before the
+  /// router has reported anything yet), not necessarily before the session starts.
+  bytesIn          BigInt?
+  bytesOut         BigInt?
+  usageUpdatedAt   DateTime?
+  createdByUserId  String?
+  createdAt        DateTime        @default(now())
+
+  @@unique([tenantId, code])
+  @@map("hotspot_vouchers")
+}
+
+enum SyncTaskStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
+/// RADIUS-authenticated PPPoE needs no local `/ppp secret` on the router at all — RouterOS's
+/// PPP AAA forwards auth to FreeRADIUS directly, and radcheck/radreply (see those models'
+/// comments) already govern accept/reject and rate limits. The only router-side action that's
+/// ever actually needed is kicking an already-active session after a suspend, since a RADIUS
+/// reject only blocks the *next* auth attempt, not a session already established.
+enum SyncTaskAction {
+  DISCONNECT_USER
+}
+
+/// A router-side operation that couldn't be applied synchronously (router unreachable, or the
+/// operation is deliberately queued) — retried by a worker job rather than the caller pretending
+/// the change already took effect (docs/architecture/06, "Failure mode: router offline").
+model NetworkSyncTask {
+  id           String         @id @default(uuid())
+  tenantId     String
+  tenant       Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  routerId     String
+  router       Router         @relation(fields: [routerId], references: [id], onDelete: Cascade)
+  radiusUserId String?
+  radiusUser   RadiusUser?    @relation(fields: [radiusUserId], references: [id])
+  action       SyncTaskAction
+  status       SyncTaskStatus @default(PENDING)
+  attempts     Int            @default(0)
+  lastError    String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([tenantId, status])
+  @@map("network_sync_tasks")
+}

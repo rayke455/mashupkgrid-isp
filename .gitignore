@@ -1,0 +1,32 @@
+node_modules/
+dist/
+build/
+.next/
+coverage/
+*.log
+.env
+.env.local
+.env.*.local
+.DS_Store
+Thumbs.db
+.turbo/
+uploads/
+prisma/dev.db
+*.tsbuildinfo
+
+# One-off hardware-debugging scratch scripts (packages/database/*.cjs) — these hardcode real
+# secrets copied from .env for convenience during live router testing (encryption key, RADIUS
+# shared secret, router credentials). .env itself is gitignored above; these scripts weren't,
+# which would otherwise let a routine `git add -A` commit those same secrets to history via a
+# different file. Not deleted outright since they're still useful hands-on debugging tools.
+packages/database/*.cjs
+
+# WhatsApp (Baileys) paired-session auth keys — effectively equivalent to a login session for a
+# real phone number, must never be committed.
+.whatsapp-auth/
+
+# Production secrets live only on the server.
+.env.production
+
+# Per-machine Claude Code settings.
+.claude/settings.local.json

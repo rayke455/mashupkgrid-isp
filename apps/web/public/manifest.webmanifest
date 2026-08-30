@@ -1,0 +1,46 @@
+{
+  "name": "Mashupkgrid ISP Console",
+  "short_name": "Mashupkgrid",
+  "description": "Carrier-grade MikroTik RouterOS & FreeRADIUS ISP billing and field operations console.",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#090d16",
+  "theme_color": "#0ea5e9",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/logo.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo.jpg",
+      "sizes": "512x512",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Active Sessions",
+      "url": "/sessions",
+      "description": "View live PPPoE and Hotspot sessions"
+    },
+    {
+      "name": "M-Pesa Ledger",
+      "url": "/mpesa",
+      "description": "Inspect Safaricom C2B and STK transactions"
+    },
+    {
+      "name": "Generate Vouchers",
+      "url": "/vouchers",
+      "description": "Generate bulk Wi-Fi vouchers"
+    },
+    {
+      "name": "Core Routers",
+      "url": "/routers",
+      "description": "MikroTik RouterOS telemetry"
+    }
+  ]
+}

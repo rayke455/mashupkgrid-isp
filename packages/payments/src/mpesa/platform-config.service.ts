@@ -1,0 +1,70 @@
+import { prisma } from "@mashupkgrid/database";
+import { encryptAtRest, decryptAtRest, ValidationError, NotFoundError } from "@mashupkgrid/shared";
+import { env } from "@mashupkgrid/config";
+import type { MpesaCredentials } from "./config.service.js";
+
+/** Singleton row — there is exactly one platform M-Pesa config, never per-tenant (see the
+ *  PlatformMpesaConfig schema comment). A fixed, well-known id keeps the singleton pattern
+ *  explicit rather than relying on "just take the first row" (which would silently tolerate a
+ *  second row ever getting created by mistake). */
+const SINGLETON_ID = "platform";
+
+export interface SetPlatformMpesaConfigInput {
+  consumerKey: string;
+  consumerSecret: string;
+  shortcode: string;
+  passkey: string;
+  environment: "sandbox" | "production";
+  isActive?: boolean;
+}
+
+export async function setPlatformMpesaConfig(input: SetPlatformMpesaConfigInput) {
+  const data = {
+    consumerKeyEncrypted: encryptAtRest(input.consumerKey, env.ENCRYPTION_KEY),
+    consumerSecretEncrypted: encryptAtRest(input.consumerSecret, env.ENCRYPTION_KEY),
+    shortcode: input.shortcode,
+    passkeyEncrypted: encryptAtRest(input.passkey, env.ENCRYPTION_KEY),
+    environment: input.environment,
+    isActive: input.isActive ?? true,
+  };
+  return prisma.platformMpesaConfig.upsert({
+    where: { id: SINGLETON_ID },
+    update: data,
+    create: { id: SINGLETON_ID, ...data },
+  });
+}
+
+export async function getPlatformMpesaCredentials(): Promise<MpesaCredentials> {
+  const config = await prisma.platformMpesaConfig.findUnique({ where: { id: SINGLETON_ID } });
+  if (!config || !config.isActive) {
+    throw new NotFoundError("Platform M-Pesa configuration");
+  }
+  if (!config.consumerKeyEncrypted || !config.consumerSecretEncrypted || !config.shortcode || !config.passkeyEncrypted) {
+    throw new ValidationError("Platform M-Pesa configuration is incomplete");
+  }
+  return {
+    consumerKey: decryptAtRest(config.consumerKeyEncrypted, env.ENCRYPTION_KEY),
+    consumerSecret: decryptAtRest(config.consumerSecretEncrypted, env.ENCRYPTION_KEY),
+    shortcode: config.shortcode,
+    passkey: decryptAtRest(config.passkeyEncrypted, env.ENCRYPTION_KEY),
+    environment: config.environment === "production" ? "production" : "sandbox",
+  };
+}
+
+export interface PlatformMpesaConfigStatus {
+  configured: boolean;
+  isActive: boolean;
+  shortcode: string | null;
+  environment: string;
+}
+
+export async function getPlatformMpesaConfigStatus(): Promise<PlatformMpesaConfigStatus> {
+  const config = await prisma.platformMpesaConfig.findUnique({ where: { id: SINGLETON_ID } });
+  if (!config) return { configured: false, isActive: false, shortcode: null, environment: "sandbox" };
+  return {
+    configured: Boolean(config.consumerKeyEncrypted && config.consumerSecretEncrypted && config.passkeyEncrypted),
+    isActive: config.isActive,
+    shortcode: config.shortcode,
+    environment: config.environment,
+  };
+}

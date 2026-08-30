@@ -1,0 +1,167 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light dark;
+
+  /* Default brand palette (the same blue that shipped before white-labeling existed) — R G B
+     triplets, not hex, because Tailwind's `<alpha-value>` opacity-modifier support requires it.
+     <TenantThemeStyle> overrides these on a wrapping element for a tenant with a saved brand
+     color; unset tenants render this default with zero extra markup. */
+  --brand-50: 239 246 255;
+  --brand-100: 219 234 254;
+  --brand-200: 191 219 254;
+  --brand-300: 147 197 253;
+  --brand-400: 96 165 250;
+  --brand-500: 59 130 246;
+  --brand-600: 37 99 235;
+  --brand-700: 29 78 216;
+  --brand-800: 30 64 175;
+  --brand-900: 30 58 138;
+  --brand-950: 15 23 42;
+}
+
+body {
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+}
+
+/* Custom scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: #94a3b8;
+}
+
+@media (prefers-color-scheme: dark) {
+  ::-webkit-scrollbar-thumb {
+    background-color: #334155;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: #475569;
+  }
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background-color: #334155;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background-color: #475569;
+}
+
+/* Utility background patterns */
+.bg-grid-pattern {
+  background-size: 32px 32px;
+  background-image: 
+    linear-gradient(to right, rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
+}
+
+@media (prefers-color-scheme: dark) {
+  .bg-grid-pattern {
+    background-image: 
+      linear-gradient(to right, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+  }
+}
+
+.dark .bg-grid-pattern {
+  background-image: 
+    linear-gradient(to right, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+}
+
+.bg-radial-glow {
+  background: radial-gradient(circle at 50% 0%, rgba(37, 99, 235, 0.12) 0%, transparent 70%);
+}
+
+@media (prefers-color-scheme: dark) {
+  .bg-radial-glow {
+    background: radial-gradient(circle at 50% 0%, rgba(37, 99, 235, 0.22) 0%, transparent 70%);
+  }
+}
+
+.dark .bg-radial-glow {
+  background: radial-gradient(circle at 50% 0%, rgba(37, 99, 235, 0.22) 0%, transparent 70%);
+}
+
+/* Custom styled range input */
+input[type="range"] {
+  accent-color: rgb(37 99 235);
+}
+
+@keyframes pulse-subtle {
+  0%, 100% { opacity: 0.2; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(1.03); }
+}
+
+.animate-pulse-subtle {
+  animation: pulse-subtle 4s ease-in-out infinite;
+}
+
+/* ========================================================================= */
+/* FIBER OPTIC WIRE & ETHERNET ANIMATIONS */
+/* ========================================================================= */
+@keyframes fiber-laser-flow {
+  0% { stroke-dashoffset: 300; }
+  100% { stroke-dashoffset: 0; }
+}
+
+.animate-fiber-laser {
+  stroke-dasharray: 28 14;
+  animation: fiber-laser-flow 1.4s linear infinite;
+}
+
+.animate-fiber-laser-fast {
+  stroke-dasharray: 18 12;
+  animation: fiber-laser-flow 0.8s linear infinite;
+}
+
+.animate-fiber-laser-reverse {
+  stroke-dasharray: 22 14;
+  animation: fiber-laser-flow 1.1s linear infinite reverse;
+}
+
+@keyframes ethernet-pulse {
+  0% { stroke-dashoffset: 200; }
+  100% { stroke-dashoffset: 0; }
+}
+
+.animate-ethernet-pulse {
+  stroke-dasharray: 8 18;
+  animation: ethernet-pulse 0.9s linear infinite;
+}
+
+@keyframes led-blink-fast {
+  0%, 100% { opacity: 1; }
+  30% { opacity: 0.2; }
+  45% { opacity: 0.9; }
+  65% { opacity: 0.15; }
+  80% { opacity: 1; }
+}
+
+.animate-led-blink {
+  animation: led-blink-fast 0.5s ease-in-out infinite;
+}
+
+@keyframes photonic-glow {
+  0%, 100% { filter: drop-shadow(0 0 6px rgba(6, 182, 212, 0.7)); }
+  50% { filter: drop-shadow(0 0 16px rgba(6, 182, 212, 1)) drop-shadow(0 0 28px rgba(59, 130, 246, 0.8)); }
+}
+
+.animate-photonic-glow {
+  animation: photonic-glow 2.2s ease-in-out infinite;
+}

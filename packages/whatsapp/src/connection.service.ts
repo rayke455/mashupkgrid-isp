@@ -1,0 +1,94 @@
+import QRCode from "qrcode";
+import { Redis } from "ioredis";
+import { prisma, type WhatsappConnection, type WhatsappConnectionStatus } from "@mashupkgrid/database";
+import { env } from "@mashupkgrid/config";
+
+/**
+ * Shared state for a tenant's WhatsApp link, split across two stores on purpose:
+ *
+ *  - Postgres (`WhatsappConnection`) holds the durable, tenant-visible facts — is it linked, to
+ *    which number, when, and what went wrong last. This is what the dashboard reads.
+ *  - Redis holds the pairing QR code, which is short-lived (WhatsApp rotates it every ~20s) and
+ *    worthless once scanned. It also crosses a process boundary: the QR is produced by the worker
+ *    (which owns the socket) but has to be rendered by the browser, which only talks to the API.
+ *
+ * Storing a rotating QR in Postgres would mean a write every 20 seconds per pairing tenant for
+ * data that is garbage a moment later; a Redis key with a matching TTL expires itself.
+ */
+
+const QR_TTL_SECONDS = 60;
+
+const redis = new Redis(env.REDIS_URL, { maxRetriesPerRequest: 3 });
+redis.on("error", (err) => console.error("[whatsapp-connection] redis error", err));
+
+function qrKey(tenantId: string): string {
+  return `wa-qr:${tenantId}`;
+}
+
+/** Stores the pairing QR as a rendered PNG data URL rather than the raw Baileys string, so the
+ *  dashboard can show it with a plain `<img src>` and no client-side QR library. */
+export async function publishPairingQr(tenantId: string, rawQr: string): Promise<void> {
+  const dataUrl = await QRCode.toDataURL(rawQr, { margin: 1, width: 320 });
+  await redis.set(qrKey(tenantId), dataUrl, "EX", QR_TTL_SECONDS);
+}
+
+export async function readPairingQr(tenantId: string): Promise<string | null> {
+  return redis.get(qrKey(tenantId));
+}
+
+export async function clearPairingQr(tenantId: string): Promise<void> {
+  await redis.del(qrKey(tenantId));
+}
+
+export async function setConnectionStatus(
+  tenantId: string,
+  status: WhatsappConnectionStatus,
+  fields: { phoneNumber?: string | null; lastError?: string | null } = {}
+): Promise<WhatsappConnection> {
+  const data = {
+    status,
+    ...(fields.phoneNumber !== undefined ? { phoneNumber: fields.phoneNumber } : {}),
+    ...(fields.lastError !== undefined ? { lastError: fields.lastError } : {}),
+    ...(status === "CONNECTED" ? { lastConnectedAt: new Date(), lastError: null } : {}),
+  };
+  return prisma.whatsappConnection.upsert({
+    where: { tenantId },
+    update: data,
+    create: { tenantId, ...data },
+  });
+}
+
+export interface WhatsappConnectionStatusView {
+  status: WhatsappConnectionStatus;
+  phoneNumber: string | null;
+  lastConnectedAt: Date | null;
+  lastError: string | null;
+  /** Present only while pairing — a PNG data URL to render directly. */
+  qr: string | null;
+}
+
+export async function getConnectionStatus(tenantId: string): Promise<WhatsappConnectionStatusView> {
+  const [row, qr] = await Promise.all([
+    prisma.whatsappConnection.findUnique({ where: { tenantId } }),
+    readPairingQr(tenantId),
+  ]);
+
+  return {
+    status: row?.status ?? "DISCONNECTED",
+    phoneNumber: row?.phoneNumber ?? null,
+    lastConnectedAt: row?.lastConnectedAt ?? null,
+    lastError: row?.lastError ?? null,
+    qr,
+  };
+}
+
+/** Tenants the worker should bring back up on boot: anything that was linked before the restart.
+ *  LOGGED_OUT is excluded deliberately — those credentials are dead and retrying them just
+ *  produces a QR nobody is watching for. */
+export async function listTenantsToRestore(): Promise<string[]> {
+  const rows = await prisma.whatsappConnection.findMany({
+    where: { status: { in: ["CONNECTED", "CONNECTING"] } },
+    select: { tenantId: true },
+  });
+  return rows.map((r) => r.tenantId);
+}

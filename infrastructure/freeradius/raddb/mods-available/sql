@@ -1,0 +1,32 @@
+# rlm_sql connection to the MASHUPKGRID ISP Postgres database. Deliberately minimal: the query
+# set is FreeRADIUS's own stock postgresql dialect (pulled in via the $INCLUDE below, shipped
+# inside the freeradius/freeradius-server image at
+# /etc/freeradius/mods-config/sql/main/postgresql/queries.conf) — our `nas`/`radcheck`/`radreply`/
+# `radacct` tables (packages/database/prisma/schema.prisma) were deliberately named and shaped to
+# match that stock schema via Prisma's `@@map`, specifically so this file only has to be a
+# connection block, not a rewritten query set.
+sql {
+	driver = "rlm_sql_postgresql"
+	dialect = "postgresql"
+
+	server = "${env:RADIUS_DB_HOST}"
+	port = ${env:RADIUS_DB_PORT}
+	login = "${env:RADIUS_DB_USER}"
+	password = "${env:RADIUS_DB_PASSWORD}"
+	radius_db = "${env:RADIUS_DB_NAME}"
+
+	acct_table1 = "radacct"
+	acct_table2 = "radacct"
+	postauth_table = "radpostauth"
+	authcheck_table = "radcheck"
+	groupcheck_table = "radgroupcheck"
+	authreply_table = "radreply"
+	groupreply_table = "radgroupreply"
+	usergroup_table = "radusergroup"
+
+	read_groups = yes
+	read_clients = no
+	client_table = "nas"
+
+	$INCLUDE ${modconfdir}/${.:name}/main/${dialect}/queries.conf
+}
