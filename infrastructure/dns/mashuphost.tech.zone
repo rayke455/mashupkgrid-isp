@@ -1,0 +1,23 @@
+;; BIND zone file for mashuphost.tech
+;; Import via Cloudflare: DNS > Records > Import and Export > Import
+;;
+;; IMPORTANT: on the import screen, leave "Proxy imported DNS records" UNCHECKED.
+;; Every record here must stay DNS-only (grey cloud):
+;;   - Caddy obtains its own Let's Encrypt certificates; Cloudflare's proxy would
+;;     terminate TLS itself and fight it.
+;;   - Proxied wildcard records are an Enterprise-plan feature; *.mashuphost.tech
+;;     only works on the Free plan when it is DNS-only.
+;;
+;; TTL 1 means "Automatic" in Cloudflare.
+;; Target: Azure VM mashuphost-vm, resource group mashuphost-rg (static public IP).
+;; Re-check the address after any VM rebuild:
+;;   az vm show -d -g mashuphost-rg -n mashuphost-vm --query publicIps -o tsv
+
+mashuphost.tech.		1	IN	A	68.210.187.104
+www.mashuphost.tech.		1	IN	A	68.210.187.104
+api.mashuphost.tech.		1	IN	A	68.210.187.104
+app.mashuphost.tech.		1	IN	A	68.210.187.104
+admin.mashuphost.tech.		1	IN	A	68.210.187.104
+wifi.mashuphost.tech.		1	IN	A	68.210.187.104
+portal.mashuphost.tech.		1	IN	A	68.210.187.104
+*.mashuphost.tech.		1	IN	A	68.210.187.104
