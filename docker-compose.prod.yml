@@ -92,6 +92,7 @@ services:
       args:
         # Baked into the browser bundle at build time -- rebuild web if this ever changes.
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?set NEXT_PUBLIC_API_URL in .env.production}
+        NEXT_PUBLIC_PLATFORM_BASE_DOMAIN: ${PLATFORM_BASE_DOMAIN:?set PLATFORM_BASE_DOMAIN in .env.production}
     restart: unless-stopped
     env_file: .env.production
     ports:

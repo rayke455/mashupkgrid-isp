@@ -53,6 +53,17 @@ const HEARD_ABOUT_OPTIONS = [
   "Other",
 ];
 
+/** Baked in at build time by Next, so it must be supplied as a build arg (see web.Dockerfile).
+ *  Falls back to the current host's parent domain when unset, which keeps local dev working. */
+const PLATFORM_BASE_DOMAIN =
+  process.env.NEXT_PUBLIC_PLATFORM_BASE_DOMAIN ??
+  (typeof window !== "undefined" ? window.location.hostname.split(".").slice(-2).join(".") : "");
+
+function tenantDomain(slug: string): string {
+  const base = PLATFORM_BASE_DOMAIN || "your-platform-domain";
+  return `${slug || "yourcompany"}.${base}`;
+}
+
 export function IspRegistrationWizard() {
   const router = useRouter();
   const { refresh } = useAuth();
@@ -415,7 +426,16 @@ export function IspRegistrationWizard() {
 
       if (res.accessToken) {
         await refresh();
-        router.push("/dashboard");
+        // Send them to their own subdomain, which is the address they will use from now on and
+        // the one the welcome WhatsApp names. It is a different origin, so this is a full
+        // navigation rather than a client-side route change -- the session is restored there
+        // from the refresh cookie, which the API issues for the shared parent domain.
+        const created = res.tenant?.slug ?? slug.trim().toLowerCase();
+        if (PLATFORM_BASE_DOMAIN && created) {
+          window.location.href = `https://${created}.${PLATFORM_BASE_DOMAIN}/dashboard`;
+        } else {
+          router.push("/dashboard");
+        }
       }
     } catch (err) {
       setIsSubmitting(false);
@@ -860,7 +880,7 @@ export function IspRegistrationWizard() {
                 </div>
                 <div className="flex justify-between items-center text-slate-400">
                   <span>Subdomain:</span>
-                  <span className="text-cyan-400 font-bold">{slug}.mashupkgrid.com</span>
+                  <span className="text-cyan-400 font-bold">{tenantDomain(slug)}</span>
                 </div>
               </div>
 

@@ -371,7 +371,9 @@ export async function registerIspTenant(
     ownerName: body.name.trim(),
     companyName: tenant.name,
     username: cleanEmail,
-    dashboardUrl: `${env.APP_WEB_URL}/login`,
+    // The tenant's own subdomain, not the platform apex. This is the address the ISP will use
+    // from now on, and the welcome message is the first and often only place they are told it.
+    dashboardUrl: `https://${tenant.slug}.${env.PLATFORM_BASE_DOMAIN}/login`,
     portalUrl: `${env.APP_WEB_URL}/hotspot/${tenant.slug}`,
   }).catch((err) => console.error("[auth] failed to enqueue tenant welcome WhatsApp:", err));
 

@@ -67,7 +67,7 @@ export async function handleSendWhatsappTenantWelcome(payload: unknown): Promise
     `*${data.companyName}* is now live on MASHUPKGRID ISP.`,
     "",
     `👤 Username: ${data.username}`,
-    `🔗 Dashboard: ${data.dashboardUrl}`,
+    `🔗 Your dashboard: ${data.dashboardUrl}`,
     `🌐 Your captive portal: ${data.portalUrl}`,
     "",
     "🔐 Sign in with the password you just created. For your security we never send passwords over WhatsApp — use \"Forgot password\" on the sign-in page if you ever need to reset it.",

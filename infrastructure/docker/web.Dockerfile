@@ -34,6 +34,10 @@ COPY . .
 # as a build arg -- setting it only at runtime leaves the browser bundle pointing at localhost.
 ARG NEXT_PUBLIC_API_URL=http://localhost:4000
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+# Used to build tenant subdomain URLs (acme.example.com). Inlined at build time like the API
+# URL above, so changing it requires rebuilding web, not just restarting it.
+ARG NEXT_PUBLIC_PLATFORM_BASE_DOMAIN=localhost
+ENV NEXT_PUBLIC_PLATFORM_BASE_DOMAIN=$NEXT_PUBLIC_PLATFORM_BASE_DOMAIN
 RUN pnpm --filter @mashupkgrid/web build
 
 FROM base AS runtime
