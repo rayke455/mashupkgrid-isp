@@ -132,18 +132,20 @@ API, which get.tech's own DNS panel does not offer. Hence Cloudflare — the fre
    shows two nameservers, e.g. `ana.ns.cloudflare.com` / `bob.ns.cloudflare.com`.
 2. In the **get.tech** control panel → your domain → **Nameservers** → *Custom*, replace both
    entries with Cloudflare's. Propagation is usually minutes, occasionally up to 24 h.
-3. In Cloudflare **DNS → Records**, add (replace `<VM_IP>`):
+3. In Cloudflare **DNS → Records**, add all eight. `68.210.187.104` is the Azure VM's static
+   public IP — re-check it with `az vm show -d -g mashuphost-rg -n mashuphost-vm --query
+   publicIps -o tsv` if the VM is ever rebuilt.
 
-   | Type | Name     | Content   | Proxy status |
-   |------|----------|-----------|--------------|
-   | A    | `@`      | `<VM_IP>` | DNS only     |
-   | A    | `www`    | `<VM_IP>` | DNS only     |
-   | A    | `api`    | `<VM_IP>` | DNS only     |
-   | A    | `app`    | `<VM_IP>` | DNS only     |
-   | A    | `admin`  | `<VM_IP>` | DNS only     |
-   | A    | `wifi`   | `<VM_IP>` | DNS only     |
-   | A    | `portal` | `<VM_IP>` | DNS only     |
-   | A    | `*`      | `<VM_IP>` | DNS only     |
+   | Type | Name     | Content           | Proxy status | TTL  |
+   |------|----------|-------------------|--------------|------|
+   | A    | `@`      | `68.210.187.104`  | DNS only     | Auto |
+   | A    | `www`    | `68.210.187.104`  | DNS only     | Auto |
+   | A    | `api`    | `68.210.187.104`  | DNS only     | Auto |
+   | A    | `app`    | `68.210.187.104`  | DNS only     | Auto |
+   | A    | `admin`  | `68.210.187.104`  | DNS only     | Auto |
+   | A    | `wifi`   | `68.210.187.104`  | DNS only     | Auto |
+   | A    | `portal` | `68.210.187.104`  | DNS only     | Auto |
+   | A    | `*`      | `68.210.187.104`  | DNS only     | Auto |
 
    **Set every record to "DNS only" (grey cloud), not proxied (orange cloud), for the first
    deploy.** Cloudflare's proxy terminates TLS itself, which fights Caddy for certificate
