@@ -32,7 +32,7 @@ az login
 
 RG=mashuphost-rg
 LOC=southafricanorth        # lowest-latency Azure region for Kenya
-VM=mashuphost-vm
+VM=mashup-vm                 # confirm: az vm list -o table
 
 az group create --name $RG --location $LOC
 
@@ -133,7 +133,7 @@ API, which get.tech's own DNS panel does not offer. Hence Cloudflare — the fre
 2. In the **get.tech** control panel → your domain → **Nameservers** → *Custom*, replace both
    entries with Cloudflare's. Propagation is usually minutes, occasionally up to 24 h.
 3. In Cloudflare **DNS → Records**, add all eight. `68.210.187.104` is the Azure VM's static
-   public IP — re-check it with `az vm show -d -g mashuphost-rg -n mashuphost-vm --query
+   public IP — re-check it with `az vm show -d -g mashuphost-rg -n mashup-vm --query
    publicIps -o tsv` if the VM is ever rebuilt.
 
    | Type | Name     | Content           | Proxy status | TTL  |
