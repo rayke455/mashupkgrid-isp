@@ -41,7 +41,7 @@ az vm create \
   --name $VM \
   --image Ubuntu2404 \
   --size Standard_B2s \
-  --admin-username azureuser \
+  --admin-username mashupadmin \
   --generate-ssh-keys \
   --public-ip-sku Standard \
   --public-ip-address-allocation static \
@@ -147,11 +147,20 @@ API, which get.tech's own DNS panel does not offer. Hence Cloudflare — the fre
    | A    | `portal` | `68.210.187.104`  | DNS only     | Auto |
    | A    | `*`      | `68.210.187.104`  | DNS only     | Auto |
 
-   **Set every record to "DNS only" (grey cloud), not proxied (orange cloud), for the first
-   deploy.** Cloudflare's proxy terminates TLS itself, which fights Caddy for certificate
-   issuance and hides the real client IP from the API's rate limiter. You can turn the proxy on
-   for the web hosts later — but leave `api` unproxied, so M-Pesa callbacks reach Fastify
-   untouched.
+   **Import with the proxy checkbox UNCHECKED, then turn the orange cloud on for the six web
+   hosts only.** Final state: `@ www admin app wifi portal` proxied; **`api` and `*` DNS-only.**
+   `api` stays direct so Cloudflare's WAF and Bot Fight Mode can never challenge a Safaricom
+   M-Pesa callback — a challenged callback means the customer paid and the invoice stays open.
+   `*` has no choice: proxied wildcards are an Enterprise-plan feature.
+
+   The proxied hosts require **SSL/TLS → Overview → Full (strict)**. On the default "Flexible",
+   Cloudflare speaks HTTP to the origin, Caddy redirects to HTTPS, and the result is an infinite
+   redirect loop behind a valid-looking padlock. The Caddyfile reads `CF-Connecting-IP` on those
+   hosts so `request.ip` stays the real visitor rather than a Cloudflare edge node.
+
+   Note this leaves the origin IP public via `api.mashuphost.tech`, so Cloudflare hides traffic,
+   not the server. Closing that would need ports 80/443 restricted to Cloudflare ranges, which is
+   impossible while `api` must accept Safaricom on the same ports.
 
 4. Create the API token Caddy will use: **My Profile → API Tokens → Create Token → Custom**
    - Permissions: `Zone` → `DNS` → `Edit`, **and** `Zone` → `Zone` → `Read`
@@ -199,7 +208,7 @@ cat ~/.ssh/id_ed25519.pub    # → GitHub repo → Settings → Deploy keys → 
 
 ## 4. Server — provision and deploy
 
-SSH in as `azureuser`, then:
+SSH in as `mashupadmin`, then:
 
 ### 4.1 Dependencies
 
