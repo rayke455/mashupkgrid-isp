@@ -115,13 +115,24 @@ export default function LoginPage({
         </Link>
 
         <div className="flex items-center gap-3 text-xs">
-          <span className="text-slate-400 hidden sm:inline">New to Mashupkgrid?</span>
-          <Link
-            href="/register"
-            className="px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800/80 font-medium text-white hover:bg-slate-700 transition-colors"
-          >
-            Create Account
-          </Link>
+          {detectedTenant ? (
+            <Link
+              href={`/register?tenant=${encodeURIComponent(detectedTenant)}`}
+              className="px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800/80 font-medium text-white hover:bg-slate-700 transition-colors"
+            >
+              Subscriber Sign Up
+            </Link>
+          ) : (
+            <>
+              <span className="text-slate-400 hidden sm:inline">New to Mashupkgrid?</span>
+              <Link
+                href="/register"
+                className="px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800/80 font-medium text-white hover:bg-slate-700 transition-colors"
+              >
+                Create Account
+              </Link>
+            </>
+          )}
         </div>
       </header>
 
@@ -343,10 +354,27 @@ export default function LoginPage({
 
               {/* Footer Switcher */}
               <div className="mt-6 border-t border-slate-800/80 pt-4 text-center text-xs text-slate-400">
-                Need a new ISP tenant or customer account?{" "}
-                <Link href="/register" className="font-semibold text-brand-400 hover:text-brand-300 transition-colors">
-                  Create an account
-                </Link>
+                {detectedTenant ? (
+                  <>
+                    Are you a subscriber?{" "}
+                    <Link
+                      href={`/register?tenant=${encodeURIComponent(detectedTenant)}`}
+                      className="font-semibold text-brand-400 hover:text-brand-300 transition-colors"
+                    >
+                      Register customer account
+                    </Link>
+                  </>
+                ) : (
+                  <>
+                    Need a new ISP tenant or customer account?{" "}
+                    <Link
+                      href="/register"
+                      className="font-semibold text-brand-400 hover:text-brand-300 transition-colors"
+                    >
+                      Create an account
+                    </Link>
+                  </>
+                )}
               </div>
             </Card>
           </div>
