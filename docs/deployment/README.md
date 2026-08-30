@@ -40,7 +40,7 @@ az vm create \
   --resource-group $RG \
   --name $VM \
   --image Ubuntu2404 \
-  --size Standard_B2ms \
+  --size Standard_B2s \
   --admin-username azureuser \
   --generate-ssh-keys \
   --public-ip-sku Standard \
@@ -48,14 +48,30 @@ az vm create \
   --os-disk-size-gb 64
 ```
 
-**Size:** `Standard_B2ms` (2 vCPU / 8 GB). Do not go below this — the Next.js production build
-runs inside Docker and reliably OOMs on 4 GB. If you must use `Standard_B2s`, add swap first:
+**Size:** `Standard_B2ms` (2 vCPU / 8 GB) is the comfortable choice — the Next.js production
+build runs inside Docker and OOMs on 4 GB of RAM with no swap.
+
+**On an Azure for Students subscription, use `Standard_B2s` (2 vCPU / 4 GB) plus swap instead.**
+Students gives a fixed $100 credit with no payment method attached; at roughly $60/month a
+B2ms burns through it in about six weeks, and when the credit runs out Azure deallocates the
+VM — billing, RADIUS, and M-Pesa callbacks all stop at once. B2s is roughly half that, and with
+4 GB of swap the Docker build completes (slowly — expect 20–30 min on the first run).
 
 ```bash
 sudo fallocate -l 4G /swapfile && sudo chmod 600 /swapfile
 sudo mkswap /swapfile && sudo swapon /swapfile
 echo '/swapfile none swap sw 0 0' | sudo tee -a /etc/fstab
+free -h    # confirm swap is live BEFORE the first docker build
 ```
+
+> **Before onboarding real customers, move to Pay-As-You-Go.** A student credit is fine for
+> getting the platform up and testing against the M-Pesa sandbox. It is not a footing for a
+> system that holds customer records and takes live payments: the credit expires, and the
+> subscription carries quota caps and no SLA. Migrating later is a subscription transfer, not a
+> rebuild — but do it before the first paying customer, not after.
+
+Check remaining credit any time at
+[Cost Management → Credits](https://portal.azure.com/#view/Microsoft_Azure_GTM/ModernBillingMenuBlade).
 
 **The static IP is not optional.** A dynamic public IP changes whenever the VM is deallocated,
 and every DNS record below would silently break.
@@ -65,7 +81,10 @@ and every DNS record below would silently break.
 UFW on the VM is not enough — the Azure NSG sits in front of it and denies by default.
 
 ```bash
-NSG=${VM}NSG
+# The NSG name depends on how the VM was created: `az vm create` makes "<vm>NSG", the portal
+# makes "<vm>-nsg". Confirm rather than guess:
+#   az network nsg list -g $RG --query "[].name" -o tsv
+NSG=mashuphost-vm-nsg
 
 az network nsg rule create -g $RG --nsg-name $NSG -n allow-http   --priority 1001 \
   --destination-port-ranges 80  --protocol Tcp --access Allow
