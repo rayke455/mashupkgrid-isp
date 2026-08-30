@@ -2,6 +2,7 @@
   "name": "mashupkgrid-isp",
   "version": "0.1.0",
   "private": true,
+  "packageManager": "pnpm@11.24.0",
   "engines": {
     "node": ">=20"
   },
