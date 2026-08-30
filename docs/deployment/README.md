@@ -82,9 +82,9 @@ UFW on the VM is not enough — the Azure NSG sits in front of it and denies by 
 
 ```bash
 # The NSG name depends on how the VM was created: `az vm create` makes "<vm>NSG", the portal
-# makes "<vm>-nsg". Confirm rather than guess:
-#   az network nsg list -g $RG --query "[].name" -o tsv
-NSG=mashuphost-vm-nsg
+# makes "<vm>-nsg". Look it up rather than guessing.
+NSG=$(az network nsg list -g $RG --query "[0].name" -o tsv)
+echo "NSG: $NSG"
 
 az network nsg rule create -g $RG --nsg-name $NSG -n allow-http   --priority 1001 \
   --destination-port-ranges 80  --protocol Tcp --access Allow
