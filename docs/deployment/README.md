@@ -271,21 +271,21 @@ First build takes 10–20 minutes.
 ```bash
 cd /opt/mashuphost
 docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
-docker compose -f docker-compose.prod.yml ps
-docker compose -f docker-compose.prod.yml logs -f api
+docker compose -f docker-compose.prod.yml --env-file .env.production ps
+docker compose -f docker-compose.prod.yml --env-file .env.production logs -f api
 ```
 
 The one-shot `migrate` service runs `prisma migrate deploy` and must exit 0 before `api` and
 `worker` start. If they never come up, read its log first:
 
 ```bash
-docker compose -f docker-compose.prod.yml logs migrate
+docker compose -f docker-compose.prod.yml --env-file .env.production logs migrate
 ```
 
 Seed the first platform super-admin:
 
 ```bash
-docker compose -f docker-compose.prod.yml run --rm \
+docker compose -f docker-compose.prod.yml --env-file .env.production run --rm \
   -w /repo/packages/database migrate pnpm tsx prisma/seed.ts
 ```
 
@@ -324,7 +324,7 @@ at build time, so changing it at runtime alone does nothing.
 ### Backups
 
 ```bash
-docker compose -f docker-compose.prod.yml exec -T postgres \
+docker compose -f docker-compose.prod.yml --env-file .env.production exec -T postgres \
   pg_dump -U mashupkgrid mashupkgrid_isp | gzip > ~/backup-$(date +%F).sql.gz
 ```
 
