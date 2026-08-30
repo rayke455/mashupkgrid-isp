@@ -31,23 +31,28 @@ export async function whatsappRoutes(app: FastifyInstance): Promise<void> {
     async (request, reply) => {
       const tenantId = request.user!.tenantId;
 
-      // Flip to CONNECTING immediately rather than waiting for the worker to pick the job up, so
-      // the dashboard shows "waiting for QR" the moment the button is pressed instead of looking
-      // like nothing happened.
-      await setConnectionStatus(tenantId, "CONNECTING", { lastError: null });
-      await enqueueWhatsappConnect({ tenantId });
+      try {
+        // Flip to CONNECTING immediately rather than waiting for the worker to pick the job up, so
+        // the dashboard shows "waiting for QR" the moment the button is pressed instead of looking
+        // like nothing happened.
+        await setConnectionStatus(tenantId, "CONNECTING", { lastError: null });
+        await enqueueWhatsappConnect({ tenantId });
 
-      await writeAuditLog({
-        tenantId,
-        actorUserId: request.user!.id,
-        action: "whatsapp_connection.connect_requested",
-        resourceType: "WhatsappConnection",
-        resourceId: tenantId ?? "platform",
-        ipAddress: request.ip,
-        userAgent: request.headers["user-agent"] ?? null,
-      });
+        await writeAuditLog({
+          tenantId,
+          actorUserId: request.user!.id,
+          action: "whatsapp_connection.connect_requested",
+          resourceType: "WhatsappConnection",
+          resourceId: tenantId ?? "platform",
+          ipAddress: request.ip,
+          userAgent: request.headers["user-agent"] ?? null,
+        });
 
-      reply.send(successResponse(await getConnectionStatus(tenantId), request.id));
+        reply.send(successResponse(await getConnectionStatus(tenantId), request.id));
+      } catch (err) {
+        request.log.error({ err, tenantId }, "Failed to initiate WhatsApp connection");
+        throw err;
+      }
     }
   );
 
@@ -57,21 +62,26 @@ export async function whatsappRoutes(app: FastifyInstance): Promise<void> {
     async (request, reply) => {
       const tenantId = request.user!.tenantId;
 
-      await enqueueWhatsappDisconnect({ tenantId });
-      await clearPairingQr(tenantId);
-      await setConnectionStatus(tenantId, "DISCONNECTED", { lastError: null });
+      try {
+        await enqueueWhatsappDisconnect({ tenantId });
+        await clearPairingQr(tenantId);
+        await setConnectionStatus(tenantId, "DISCONNECTED", { lastError: null });
 
-      await writeAuditLog({
-        tenantId,
-        actorUserId: request.user!.id,
-        action: "whatsapp_connection.disconnected",
-        resourceType: "WhatsappConnection",
-        resourceId: tenantId ?? "platform",
-        ipAddress: request.ip,
-        userAgent: request.headers["user-agent"] ?? null,
-      });
+        await writeAuditLog({
+          tenantId,
+          actorUserId: request.user!.id,
+          action: "whatsapp_connection.disconnected",
+          resourceType: "WhatsappConnection",
+          resourceId: tenantId ?? "platform",
+          ipAddress: request.ip,
+          userAgent: request.headers["user-agent"] ?? null,
+        });
 
-      reply.send(successResponse(await getConnectionStatus(tenantId), request.id));
+        reply.send(successResponse(await getConnectionStatus(tenantId), request.id));
+      } catch (err) {
+        request.log.error({ err, tenantId }, "Failed to disconnect WhatsApp");
+        throw err;
+      }
     }
   );
 }
