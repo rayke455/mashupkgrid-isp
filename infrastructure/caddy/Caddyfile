@@ -58,7 +58,12 @@ mashuphost.tech, www.mashuphost.tech, admin.mashuphost.tech {
 # 2. Customer super app ("FiberConnect")
 app.mashuphost.tech {
     import hardening
-    rewrite * /app{uri}
+    # Guard against double-prefixing. An unguarded `rewrite * /app{uri}` turns "/" into
+    # "/app/", Next.js 308-redirects that to "/app", and the browser's follow-up request
+    # gets rewritten again into "/app/app". Skipping the rewrite when the path is already
+    # under /app lets that redirect land.
+    @needs_prefix not path /app /app/*
+    rewrite @needs_prefix /app{uri}
     reverse_proxy localhost:3000 {
         import proxy_headers_cf
     }
@@ -67,7 +72,10 @@ app.mashuphost.tech {
 # 3. Wi-Fi hotspot captive portal
 wifi.mashuphost.tech, portal.mashuphost.tech {
     import hardening
-    rewrite * /vouchers{uri}
+    # Same double-prefix guard as the app subdomain above -- without it these hosts 404,
+    # because "/vouchers" gets rewritten a second time into "/vouchers/vouchers".
+    @needs_prefix not path /vouchers /vouchers/*
+    rewrite @needs_prefix /vouchers{uri}
     reverse_proxy localhost:3000 {
         import proxy_headers_cf
     }
