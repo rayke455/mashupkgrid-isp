@@ -27,6 +27,12 @@ import { handleIncomingWhatsAppMessage } from "./whatsapp-bot.js";
  *  this can never collide with a tenant's directory. */
 export const PLATFORM_SESSION_ID = "platform";
 
+/** The session manager keys the platform line by PLATFORM_SESSION_ID; the connection service
+ *  keys it by a null tenantId, matching the database row. This maps between the two. */
+function toScope(sessionId: string): string | null {
+  return sessionId === PLATFORM_SESSION_ID ? null : sessionId;
+}
+
 /**
  * The platform session originally lived directly in WHATSAPP_AUTH_STATE_PATH, before sessions
  * were per-tenant subdirectories. Moving those files into the "platform" subdirectory on first
@@ -73,35 +79,35 @@ export async function startWhatsAppRuntime(): Promise<WhatsAppSessionManager> {
   migrateLegacyPlatformSession(basePath);
 
   manager = new WhatsAppSessionManager(basePath, {
-    onQr: (tenantId, qr) => {
-      if (tenantId === PLATFORM_SESSION_ID) {
-        console.log("[whatsapp] platform session needs pairing — run the connect script to scan it");
-        return;
-      }
-      void publishPairingQr(tenantId, qr).catch((err) =>
-        console.error(`[whatsapp] failed to publish QR for tenant ${tenantId}:`, err)
+    onQr: (sessionId, qr) => {
+      // The platform QR is now published exactly like a tenant's, so the super-admin page can
+      // render it. It used to be suppressed here, which left the connect script over SSH as the
+      // only way to pair the platform line -- nobody without shell access could restore it.
+      void publishPairingQr(toScope(sessionId), qr).catch((err) =>
+        console.error(`[whatsapp] failed to publish QR for ${sessionId}:`, err)
       );
     },
 
-    onReady: (tenantId, phoneNumber) => {
-      console.log(`[whatsapp] connected: ${tenantId}${phoneNumber ? ` (${phoneNumber})` : ""}`);
-      if (tenantId === PLATFORM_SESSION_ID) return;
-      void clearPairingQr(tenantId).catch(() => {});
-      void setConnectionStatus(tenantId, "CONNECTED", { phoneNumber }).catch((err) =>
-        console.error(`[whatsapp] failed to record CONNECTED for tenant ${tenantId}:`, err)
+    onReady: (sessionId, phoneNumber) => {
+      console.log(`[whatsapp] connected: ${sessionId}${phoneNumber ? ` (${phoneNumber})` : ""}`);
+      const scope = toScope(sessionId);
+      void clearPairingQr(scope).catch(() => {});
+      void setConnectionStatus(scope, "CONNECTED", { phoneNumber }).catch((err) =>
+        console.error(`[whatsapp] failed to record CONNECTED for ${sessionId}:`, err)
       );
     },
 
-    onDisconnected: (tenantId, reason) => {
-      console.log(`[whatsapp] ${tenantId} disconnected (${reason})`);
-      if (tenantId === PLATFORM_SESSION_ID) return;
-      // A transient drop keeps the row CONNECTING (the manager is already reconnecting behind it);
-      // a logout is terminal until someone rescans, and says so.
+    onDisconnected: (sessionId, reason) => {
+      console.log(`[whatsapp] ${sessionId} disconnected (${reason})`);
+      // A transient drop keeps the row CONNECTING (the manager is already reconnecting behind
+      // it); a logout is terminal until someone re-pairs, and says so.
       const status = reason === "logged_out" ? "LOGGED_OUT" : "CONNECTING";
       const lastError =
-        reason === "logged_out" ? "This device was unlinked from WhatsApp — scan a new QR code to reconnect." : null;
-      void setConnectionStatus(tenantId, status, { lastError }).catch((err) =>
-        console.error(`[whatsapp] failed to record disconnect for tenant ${tenantId}:`, err)
+        reason === "logged_out"
+          ? "This device was unlinked from WhatsApp - pair it again to reconnect."
+          : null;
+      void setConnectionStatus(toScope(sessionId), status, { lastError }).catch((err) =>
+        console.error(`[whatsapp] failed to record disconnect for ${sessionId}:`, err)
       );
     },
 

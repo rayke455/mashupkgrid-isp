@@ -767,8 +767,12 @@ enum WhatsappConnectionStatus {
 /// dashboard reads.
 model WhatsappConnection {
   id              String                   @id @default(uuid())
-  tenantId        String                   @unique
-  tenant          Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// Null identifies the single platform-level line — the one that sends ISP-registration OTPs,
+  /// which go out before the tenant that could own a session exists. Postgres treats NULLs as
+  /// distinct in a unique index, so @unique alone would allow unlimited platform rows; the
+  /// migration adds a partial unique index that pins it to exactly one.
+  tenantId        String?                  @unique
+  tenant          Tenant?                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   status          WhatsappConnectionStatus @default(DISCONNECTED)
   /// The linked WhatsApp number, read back off the session once pairing completes â€” shown in the
   /// dashboard so staff can confirm *which* line is connected. Null until first successful pair.
