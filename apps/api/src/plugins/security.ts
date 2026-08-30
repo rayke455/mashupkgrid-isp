@@ -34,8 +34,46 @@ export async function registerSecurity(app: FastifyInstance): Promise<void> {
     );
   }
 
+  // Tenants are served on wildcard subdomains of PLATFORM_BASE_DOMAIN (acme.mashuphost.tech),
+  // which a fixed allowlist can never enumerate — a tenant signing up today would be blocked by
+  // CORS tomorrow. The browser then aborts the request before it is sent, and the web app sees a
+  // network error rather than an API response, which the login page reports as "Invalid
+  // credentials" — a genuinely misleading symptom for what is a CORS rejection.
+  //
+  // This stays narrower than the "*" the guard above refuses: it admits exactly one extra shape,
+  // an https origin that is a single-label subdomain of our own base domain. Every subdomain
+  // there resolves to this deployment (the wildcard DNS record points at this host), so those
+  // origins are ours, whereas "*" would hand this API's cookies to any site on the internet.
+  const baseDomain = env.PLATFORM_BASE_DOMAIN.trim().toLowerCase();
+
+  function isOwnTenantSubdomain(origin: string): boolean {
+    let url: URL;
+    try {
+      url = new URL(origin);
+    } catch {
+      return false;
+    }
+    // Never relax this over plaintext outside dev: an http origin can be forged in transit.
+    if (!isDevelopment && url.protocol !== "https:") return false;
+    const host = url.hostname.toLowerCase();
+    // The leading dot is what makes this a subdomain test rather than a suffix test — without
+    // it "evil-mashuphost.tech" would match, and an attacker could register exactly that.
+    if (!host.endsWith(`.${baseDomain}`)) return false;
+    const label = host.slice(0, -(baseDomain.length + 1));
+    // One label only. "a.b.mashuphost.tech" is not a tenant host and is not covered by the
+    // single-level wildcard certificate either.
+    return label.length > 0 && !label.includes(".");
+  }
+
   await app.register(cors, {
-    origin: allowedOrigins,
+    origin(origin, cb) {
+      // No Origin header at all: same-origin navigations and non-browser callers such as
+      // Safaricom's M-Pesa webhooks. CORS is not what guards those.
+      if (!origin) return cb(null, true);
+      if (allowedOrigins.includes(origin)) return cb(null, true);
+      if (isOwnTenantSubdomain(origin)) return cb(null, true);
+      cb(null, false);
+    },
     credentials: true,
   });
 }
