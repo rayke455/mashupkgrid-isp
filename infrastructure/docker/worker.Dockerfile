@@ -1,4 +1,9 @@
-FROM node:22-alpine AS base
+FROM node:22-slim AS base
+# Prisma's query and schema engines link against OpenSSL. The -slim images omit it, and
+# without it engine loading fails with a non-JSON error that surfaces as the unhelpful
+# "Could not parse schema engine response". Alpine hits the same class of problem through
+# musl, which is why this is Debian rather than alpine.
+RUN apt-get update  && apt-get install -y --no-install-recommends openssl ca-certificates  && rm -rf /var/lib/apt/lists/*
 RUN corepack enable
 WORKDIR /repo
 
