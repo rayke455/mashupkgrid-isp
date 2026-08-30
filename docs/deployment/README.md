@@ -136,21 +136,23 @@ API, which get.tech's own DNS panel does not offer. Hence Cloudflare — the fre
 
 ## 3. GitHub — push the repo
 
-The repo starts with **no commits and no remote**. From your workstation:
+The initial commit already exists locally (512 files, no secrets — `.env`, `.env.production`,
+`.whatsapp-auth/` and `packages/database/*.cjs` are all gitignored). Only the remote is missing.
+
+`gh` is not installed on this workstation, so create the repo in the browser: github.com → **New
+repository** → name `mashupkgrid-isp` → **Private** → *do not* add a README, .gitignore or
+licence (the repo already has them). Then:
 
 ```bash
-gh repo create mashupkgrid-isp --private --source=. --remote=origin
-git add -A
-git commit -m "Initial commit: MashupHost ISP platform"
+git remote add origin https://github.com/<you>/mashupkgrid-isp.git
 git push -u origin master
 ```
 
-Before pushing, confirm nothing secret is staged — `.env`, `.env.production`, `.whatsapp-auth/`
-and `packages/database/*.cjs` are all gitignored:
+To re-verify before pushing:
 
 ```bash
-git status --porcelain | grep -E '\.env$|\.env\.production|whatsapp-auth|database/.*\.cjs' \
-  && echo "STOP: secret file staged" || echo "clean"
+git ls-files | grep -E '(^|/)\.env$|\.env\.production$|whatsapp-auth|database/[^/]*\.cjs' \
+  && echo "STOP: secret file tracked" || echo "clean"
 ```
 
 > The earlier `.env.production.example` committed real 32-byte hex values for
