@@ -48,8 +48,15 @@ az vm create \
   --os-disk-size-gb 64
 ```
 
-**Size:** `Standard_B2ms` (2 vCPU / 8 GB) is the comfortable choice — the Next.js production
-build runs inside Docker and OOMs on 4 GB of RAM with no swap.
+**Never enable Azure Spot.** The portal's create wizard offers a "Run with Azure Spot discount"
+checkbox, and the discount is real — but a Spot VM is evicted whenever Azure wants the capacity
+back. For this platform that means RADIUS auth failing for live customers, M-Pesa callbacks
+arriving at a dead host (Safaricom retries, then stops, leaving paid-but-unmarked invoices), and
+missed hourly billing jobs. `az vm create` does not use Spot unless you pass `--priority Spot`,
+so the CLI path above is safe by default.
+
+**Size:** `Standard_B2as_v2` or `Standard_B2ms` (both 2 vCPU / 8 GB) are the comfortable
+choices — the Next.js production build runs inside Docker and OOMs on 4 GB of RAM with no swap.
 
 **On an Azure for Students subscription, use `Standard_B2s` (2 vCPU / 4 GB) plus swap instead.**
 Students gives a fixed $100 credit with no payment method attached; at roughly $60/month a
