@@ -21,7 +21,7 @@ function setRefreshCookie(reply: FastifyReply, token: string): void {
   reply.setCookie(REFRESH_COOKIE, token, {
     httpOnly: true,
     secure: isProduction,
-    sameSite: "strict",
+    sameSite: "lax",
     path: REFRESH_COOKIE_PATH,
     maxAge: 30 * 24 * 60 * 60,
   });

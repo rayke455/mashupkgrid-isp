@@ -1,11 +1,33 @@
 export function getApiBaseUrl(): string {
-  if (typeof window !== "undefined") {
-    const port = process.env.NEXT_PUBLIC_API_URL
-      ? new URL(process.env.NEXT_PUBLIC_API_URL, window.location.origin).port || "4000"
-      : "4000";
-    return `${window.location.protocol}//${window.location.hostname}:${port}`;
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    if (typeof window !== "undefined") {
+      try {
+        const configuredUrl = new URL(process.env.NEXT_PUBLIC_API_URL, window.location.origin);
+        // Only rewrite hostname if we are strictly in local development on a LAN IP
+        if (
+          (configuredUrl.hostname === "localhost" || configuredUrl.hostname === "127.0.0.1") &&
+          window.location.hostname !== "localhost" &&
+          window.location.hostname !== "127.0.0.1" &&
+          /^\d{1,3}(\.\d{1,3}){3}$/.test(window.location.hostname)
+        ) {
+          const port = configuredUrl.port || "4000";
+          return `${window.location.protocol}//${window.location.hostname}:${port}`;
+        }
+      } catch {
+        // fallback to NEXT_PUBLIC_API_URL
+      }
+    }
+    return process.env.NEXT_PUBLIC_API_URL;
   }
-  return process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+  if (typeof window !== "undefined") {
+    if (window.location.hostname === "localhost" || /^\d{1,3}(\.\d{1,3}){3}$/.test(window.location.hostname)) {
+      return `${window.location.protocol}//${window.location.hostname}:4000`;
+    }
+    const parts = window.location.hostname.split(".");
+    const baseDomain = parts.slice(-2).join(".");
+    return `${window.location.protocol}//api.${baseDomain}`;
+  }
+  return "http://localhost:4000";
 }
 
 export interface ApiSuccess<T> {
