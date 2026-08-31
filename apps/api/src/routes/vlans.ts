@@ -12,7 +12,9 @@ import {
   describeVlanTagRisk,
   MIN_VLAN_TAG,
   MAX_VLAN_TAG,
+  createAdapterForRouter,
 } from "@mashupkgrid/network";
+import { prisma } from "@mashupkgrid/database";
 import { successResponse, ConflictError } from "@mashupkgrid/shared";
 import { authenticate } from "../plugins/authenticate.js";
 import { resolveTenant } from "../plugins/tenant.js";
@@ -138,6 +140,122 @@ export async function vlanRoutes(app: FastifyInstance): Promise<void> {
       const tenantId = requireTenant(request.user!.tenantId);
       const { vlanId } = idParamsSchema.parse(request.params);
       reply.send(successResponse(await listVlanCustomers(tenantId, vlanId), request.id));
+    }
+  );
+
+  /**
+   * Live usage for one VLAN (spec section 13).
+   *
+   * Section 13 is explicit that statistics must never be fabricated, and that unavailable data
+   * must say so. Two things therefore hold here:
+   *
+   * The subscriber counts come from this database and are always answerable. The traffic figures
+   * come from the router's own live session counters and frequently are NOT: MikroTik reports
+   * bytes-in/bytes-out for hotspot sessions but does not expose the same per-session counters for
+   * PPPoE. When the device cannot tell us, the response says `available: false` with the reason
+   * rather than returning zeros, which a dashboard would render as "no traffic" — a confident,
+   * wrong answer.
+   */
+  app.get(
+    "/:vlanId/usage",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("vlans.read")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const { vlanId } = idParamsSchema.parse(request.params);
+      const vlan = await getVlanOrThrow(tenantId, vlanId);
+
+      const subscribers = await prisma.customerService.count({
+        where: { tenantId, package: { vlanId } },
+      });
+      const activeSubscribers = await prisma.customerService.count({
+        where: { tenantId, package: { vlanId }, status: "ACTIVE" },
+      });
+
+      const base = { vlanTag: vlan.vlanTag, subscribers, activeSubscribers };
+
+      if (!vlan.routerId) {
+        return reply.send(
+          successResponse(
+            { ...base, traffic: { available: false, reason: "This VLAN is not assigned to a router yet." } },
+            request.id
+          )
+        );
+      }
+
+      const router = await prisma.router.findFirst({ where: { id: vlan.routerId, tenantId, deletedAt: null } });
+      if (!router?.host) {
+        return reply.send(
+          successResponse(
+            { ...base, traffic: { available: false, reason: "The assigned router has never checked in." } },
+            request.id
+          )
+        );
+      }
+
+      const adapter = createAdapterForRouter({ ...router, host: router.host });
+      try {
+        await adapter.connect();
+        const sessions = await adapter.getActiveSessions();
+
+        // Only sessions whose usernames belong to THIS VLAN's subscribers count toward it.
+        const usernames = new Set(
+          (
+            await prisma.radiusUser.findMany({
+              where: { tenantId, customerService: { package: { vlanId } } },
+              select: { username: true },
+            })
+          ).map((u) => u.username)
+        );
+        const mine = sessions.filter((s) => usernames.has(s.username));
+
+        // The vendor populates these only for session kinds that track them. Reporting a total
+        // built from sessions that reported nothing would understate real usage while looking
+        // authoritative, so partial data is declared as partial.
+        const withCounters = mine.filter((s) => s.bytesIn !== undefined || s.bytesOut !== undefined);
+
+        reply.send(
+          successResponse(
+            {
+              ...base,
+              activeSessions: mine.length,
+              traffic:
+                withCounters.length === 0
+                  ? {
+                      available: false,
+                      reason:
+                        mine.length === 0
+                          ? "No active sessions on this VLAN right now."
+                          : "This router does not report per-session traffic counters for these sessions (MikroTik exposes them for hotspot, not PPPoE).",
+                    }
+                  : {
+                      available: true,
+                      measuredSessions: withCounters.length,
+                      totalSessions: mine.length,
+                      partial: withCounters.length < mine.length,
+                      downloadBytes: withCounters.reduce((n, s) => n + (s.bytesOut ?? 0), 0),
+                      uploadBytes: withCounters.reduce((n, s) => n + (s.bytesIn ?? 0), 0),
+                    },
+            },
+            request.id
+          )
+        );
+      } catch (err) {
+        // A router that is down is not zero traffic. Say which it is.
+        reply.send(
+          successResponse(
+            {
+              ...base,
+              traffic: {
+                available: false,
+                reason: `Could not reach router "${router.name}": ${err instanceof Error ? err.message : String(err)}`,
+              },
+            },
+            request.id
+          )
+        );
+      } finally {
+        await adapter.disconnect().catch(() => {});
+      }
     }
   );
 

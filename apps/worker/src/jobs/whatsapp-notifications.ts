@@ -1,6 +1,7 @@
 import {
   sendWhatsappVoucherJobSchema,
   sendWhatsappTenantWelcomeJobSchema,
+  sendWhatsappServiceStatusJobSchema,
 } from "@mashupkgrid/shared";
 import { sendWhatsAppMessage, type WASocket } from "@mashupkgrid/whatsapp";
 import { resolveSocket } from "../lib/whatsapp-runtime.js";
@@ -76,4 +77,77 @@ export async function handleSendWhatsappTenantWelcome(payload: unknown): Promise
   ].join("\n");
 
   await sendWhatsAppMessage(socket, data.phone, message);
+}
+
+/** Kbps -> the "20 Mbps" an ISP actually advertises. Integer division on purpose: a plan is sold
+ *  in whole megabits and "19.53 Mbps" would just look like a mistake to the customer. */
+function formatSpeed(kbps: number | null): string | null {
+  if (!kbps) return null;
+  return `${Math.round(kbps / 1000)} Mbps`;
+}
+
+/**
+ * Tells a subscriber what happened to their service (spec section 20).
+ *
+ * Only ever called once a provisioning job reached a terminal state, so every message here
+ * describes something a device confirmed. The FAILED case deliberately does NOT tell the customer
+ * their internet is on or off — the honest thing to say is that something went wrong and a human
+ * is needed, since at that point the system genuinely does not know what state the router is in.
+ */
+export async function handleSendWhatsappServiceStatus(payload: unknown): Promise<void> {
+  const data = sendWhatsappServiceStatusJobSchema.parse(payload);
+  const socket = requireSocket(data.tenantId);
+
+  const speed = formatSpeed(data.downloadKbps);
+  const plan = data.packageName ? `${data.packageName}${speed ? ` (${speed})` : ""}` : speed;
+  const lines: string[] = [];
+
+  switch (data.event) {
+    case "ACTIVATED":
+      lines.push(
+        `✅ Hi ${data.customerName}, your internet is now *active*.`,
+        "",
+        ...(plan ? [`📦 Plan: ${plan}`, ""] : []),
+        `Thank you for choosing *${data.tenantName}*. Enjoy your browsing! 🚀`
+      );
+      break;
+    case "RESTORED":
+      lines.push(
+        `✅ Hi ${data.customerName}, your payment is confirmed and your internet is *back on*.`,
+        "",
+        ...(plan ? [`📦 Plan: ${plan}`, ""] : []),
+        `Thank you from *${data.tenantName}*.`
+      );
+      break;
+    case "SUSPENDED":
+      lines.push(
+        `⚠️ Hi ${data.customerName}, your internet has been *suspended* because your subscription has expired.`,
+        "",
+        "Your account and settings are safe — renewing restores your service automatically.",
+        "",
+        `— *${data.tenantName}*`
+      );
+      break;
+    case "DEPROVISIONED":
+      lines.push(
+        `Hi ${data.customerName}, your internet service with *${data.tenantName}* has been closed.`,
+        "",
+        "Your account details are retained should you wish to return.",
+        ...(data.supportPhone ? ["", `Questions? Call ${data.supportPhone}.`] : [])
+      );
+      break;
+    case "FAILED":
+      // Never claims a state. The router did not confirm anything, so neither does this.
+      lines.push(
+        `⚠️ Hi ${data.customerName}, we hit a problem setting up your internet connection.`,
+        "",
+        "Our team has been alerted and is looking into it.",
+        ...(data.supportPhone ? ["", `Need it urgently? Call ${data.supportPhone}.`] : []),
+        "",
+        `— *${data.tenantName}*`
+      );
+      break;
+  }
+
+  await sendWhatsAppMessage(socket, data.phone, lines.join("\n"));
 }

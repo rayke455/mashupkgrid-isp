@@ -30,6 +30,7 @@ import { handleSendWhatsappOtp } from "./jobs/send-whatsapp-otp.js";
 import {
   handleSendWhatsappVoucher,
   handleSendWhatsappTenantWelcome,
+  handleSendWhatsappServiceStatus,
 } from "./jobs/whatsapp-notifications.js";
 import { startRadiusServer } from "@mashupkgrid/radius";
 import { whatsappConnectJobSchema, whatsappDisconnectJobSchema } from "@mashupkgrid/shared";
@@ -289,6 +290,7 @@ async function main() {
       if (job.name === JOB_NAMES.sendWhatsappOtp) return handleSendWhatsappOtp(job.data);
       if (job.name === JOB_NAMES.sendWhatsappVoucher) return handleSendWhatsappVoucher(job.data);
       if (job.name === JOB_NAMES.sendWhatsappTenantWelcome) return handleSendWhatsappTenantWelcome(job.data);
+      if (job.name === JOB_NAMES.sendWhatsappServiceStatus) return handleSendWhatsappServiceStatus(job.data);
 
       if (job.name === JOB_NAMES.whatsappConnect) {
         const { tenantId, pairWithPhoneNumber } = whatsappConnectJobSchema.parse(job.data);
