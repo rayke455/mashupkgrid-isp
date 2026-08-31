@@ -71,6 +71,17 @@ export async function buildApp(): Promise<FastifyInstance> {
   registerErrorHandler(app);
   registerRawBodyCapture(app);
 
+  app.get("/", async (_request, reply) => {
+    reply.send({
+      success: true,
+      data: {
+        name: "MASHUPKGRID ISP Platform API",
+        status: "OPERATIONAL",
+        version: "1.0.0",
+      },
+    });
+  });
+
   await app.register(healthRoutes, { prefix: "/health" });
   await app.register(authRoutes, { prefix: "/api/v1/auth" });
   await app.register(sessionRoutes, { prefix: "/api/v1/sessions" });

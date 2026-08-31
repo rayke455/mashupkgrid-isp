@@ -567,6 +567,15 @@ function getClientIp(request: { headers: Record<string, string | string[] | unde
   // silently fail to link just because maintenance mode is on) and carries no staff auth, since
   // RouterOS cannot send our bearer tokens. The provisioning token in the URL *is* the auth: it
   // was generated per-router and is only ever known to whoever pasted the script. -------------
+  app.get("/provision/:token/callback", { config: { audience: "system-critical" } }, async (request, reply) => {
+    const remoteIp = getClientIp(request);
+    reply.status(200).send({
+      success: true,
+      message: "Provisioning callback is online and active.",
+      clientIp: remoteIp,
+    });
+  });
+
   app.post("/provision/:token/callback", { config: { audience: "system-critical" } }, async (request, reply) => {
     const { token } = provisionCallbackParamsSchema.parse(request.params);
     const remoteIp = getClientIp(request);
