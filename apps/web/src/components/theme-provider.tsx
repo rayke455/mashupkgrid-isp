@@ -28,9 +28,20 @@ export function ThemeProvider({
   storageKey = 'vite-ui-theme',
   ...props
 }: ThemeProviderProps) {
-  const [theme, setTheme] = useState<Theme>(
-    () => (localStorage.getItem(storageKey) as Theme) || defaultTheme
-  );
+  // Reading localStorage directly in the initializer throws "localStorage is not defined" during
+  // Next's server render of this client component, and mismatches the server HTML on the client
+  // even when it doesn't. Start from the default on both sides, then adopt the stored value in an
+  // effect, which only ever runs in the browser.
+  const [theme, setTheme] = useState<Theme>(defaultTheme);
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(storageKey) as Theme | null;
+      if (stored === 'light' || stored === 'dark' || stored === 'system') setTheme(stored);
+    } catch {
+      // Storage blocked (private mode / disabled site data) — keep the default.
+    }
+  }, [storageKey]);
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -52,7 +63,11 @@ export function ThemeProvider({
   const value = {
     theme,
     setTheme: (theme: Theme) => {
-      localStorage.setItem(storageKey, theme);
+      try {
+        localStorage.setItem(storageKey, theme);
+      } catch {
+        // Storage blocked — the theme still applies for this page view.
+      }
       setTheme(theme);
     },
   };

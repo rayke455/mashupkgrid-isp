@@ -11,8 +11,11 @@ import {
   initiatePesapalHotspotPurchase,
   verifyAndReconcilePesapalTransaction,
 } from "@mashupkgrid/payments";
-import { successResponse, ConflictError, NotFoundError, ValidationError } from "@mashupkgrid/shared";
+import { successResponse, ConflictError, ForbiddenError, NotFoundError, ValidationError } from "@mashupkgrid/shared";
 import { env } from "@mashupkgrid/config";
+import { authenticate } from "../plugins/authenticate.js";
+import { resolveTenant } from "../plugins/tenant.js";
+import { requirePermission } from "../plugins/authorize.js";
 import { checkMaintenance } from "../plugins/maintenance.js";
 import { hotspotLoginRateLimitConfig } from "../plugins/rate-limit.js";
 import { resolveTenantBySlug } from "../services/auth.service.js";
@@ -81,7 +84,12 @@ function getStoragePath(tenantSlug: string): string {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
-  return path.join(dir, `${tenantSlug.toLowerCase().replace(/[^a-z0-9_-]/g, "")}.json`);
+  // The character allowlist is what keeps a slug from escaping this directory (`../`, absolute
+  // paths, NUL). A slug that sanitizes down to nothing would produce a bare ".json" shared by
+  // every such caller, so it's rejected outright rather than silently collapsed into one file.
+  const safeSlug = tenantSlug.toLowerCase().replace(/[^a-z0-9_-]/g, "");
+  if (!safeSlug) throw new ValidationError("Invalid tenant slug");
+  return path.join(dir, `${safeSlug}.json`);
 }
 
 function loadTenantCaptiveConfig(tenantSlug: string, tenantName?: string): CaptivePortalConfig {
@@ -112,22 +120,26 @@ function saveTenantCaptiveConfig(tenantSlug: string, config: Partial<CaptivePort
   return updated;
 }
 
+// Every field is length-bounded: this config is written verbatim to a JSON file on disk and
+// rendered straight onto the public captive portal, so an unbounded string here is both an
+// unbounded disk write and an unbounded payload served to every visitor of that portal.
 const updateConfigSchema = z.object({
-  phone: z.string().optional(),
-  supportPhone: z.string().optional(),
-  brandName: z.string().optional(),
-  welcomeTitle: z.string().optional(),
-  bannerSubtitle: z.string().optional(),
-  activeThemeId: z.string().optional(),
-  installationFee: z.string().optional(),
+  phone: z.string().max(40).optional(),
+  supportPhone: z.string().max(40).optional(),
+  brandName: z.string().max(80).optional(),
+  welcomeTitle: z.string().max(120).optional(),
+  bannerSubtitle: z.string().max(200).optional(),
+  activeThemeId: z.string().max(64).optional(),
+  installationFee: z.string().max(40).optional(),
   fiberRates: z
     .array(
       z.object({
-        speed: z.string(),
-        price: z.string(),
-        subtitle: z.string().optional(),
+        speed: z.string().max(40),
+        price: z.string().max(40),
+        subtitle: z.string().max(80).optional(),
       })
     )
+    .max(24)
     .optional(),
 });
 
@@ -176,13 +188,35 @@ export async function hotspotRoutes(app: FastifyInstance): Promise<void> {
     }
   );
 
+  /**
+   * The one WRITE on this otherwise-public router, and the only route in this file that is not
+   * meant for an anonymous visitor. It previously carried `audience: "public"` and no preHandler
+   * at all, which made every tenant's captive-portal branding world-writable: anyone on the
+   * internet could PUT a new support phone number, brand name, and price list onto any ISP's
+   * portal — a ready-made phishing page served from the ISP's own address, plus an unbounded
+   * write of a `<slug>.json` file for tenant slugs that don't even exist. Staff auth, tenant
+   * ownership, and `settings.manage` are all required now; the slug in the path must be the
+   * caller's own tenant, so a signed-in staff member of tenant A still can't rewrite tenant B.
+   */
   app.put(
     "/:tenantSlug/config",
-    { config: { audience: "public" }, preHandler: [checkMaintenance] },
+    {
+      config: { audience: "staff" },
+      preHandler: [authenticate, resolveTenant, checkMaintenance, requirePermission("settings.manage")],
+    },
     async (request, reply) => {
       const { tenantSlug } = tenantParamsSchema.parse(request.params);
       const body = updateConfigSchema.parse(request.body);
-      const updated = saveTenantCaptiveConfig(tenantSlug, body);
+
+      const callerSlug = request.tenantCtx?.slug;
+      if (!callerSlug) {
+        throw new ConflictError("Platform administration has no captive portal of its own");
+      }
+      if (callerSlug.toLowerCase() !== tenantSlug.toLowerCase()) {
+        throw new ForbiddenError("You can only edit your own tenant's captive portal");
+      }
+
+      const updated = saveTenantCaptiveConfig(callerSlug, body);
       reply.send(successResponse(updated, request.id));
     }
   );

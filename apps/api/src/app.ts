@@ -1,7 +1,7 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import cookie from "@fastify/cookie";
 import { randomUUID } from "node:crypto";
-import { env, isDevelopment } from "@mashupkgrid/config";
+import { env, isDevelopment, isProduction } from "@mashupkgrid/config";
 import "./types.js";
 import { registerErrorHandler } from "./plugins/error-handler.js";
 import { registerSecurity } from "./plugins/security.js";
@@ -104,7 +104,23 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(planRoutes, { prefix: "/api/v1/platform/plans" });
   await app.register(tenantBillingRoutes, { prefix: "/api/v1/billing" });
   await app.register(landingContentRoutes, { prefix: "/api/v1/landing-content" });
-  await app.register(customerPortalRoutes, { prefix: "/api/v1/portal" });
+  // apps/api/src/routes/customer-portal.ts is still an unimplemented demo surface: it serves one
+  // hardcoded customer's details to any caller, accepts "123456" (and, before the fix in that
+  // file, literally any 4+ character string) as a phone OTP, hands back a fabricated
+  // `portal_jwt_mock_token_<timestamp>` that nothing ever verifies, and reports every payment as
+  // SUCCESS without touching a payment provider. Mounted in production that is an unauthenticated
+  // data-disclosure and free-service bug, not a stub. It stays available in development so the
+  // FiberConnect client can keep being built against it, and is refused outright in production
+  // until it is backed by real auth and real payments.
+  if (isProduction) {
+    app.log.warn(
+      "[SECURITY] /api/v1/portal (customer super-app demo routes) is NOT mounted in production — " +
+        "it is mock-only: hardcoded OTP, fabricated session token, and always-SUCCESS payment status. " +
+        "Implement it against real auth/payments before serving it to customers."
+    );
+  } else {
+    await app.register(customerPortalRoutes, { prefix: "/api/v1/portal" });
+  }
 
   return app;
 }

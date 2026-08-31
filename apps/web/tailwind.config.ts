@@ -53,7 +53,10 @@ const config: Config = {
         },
       },
       boxShadow: {
-        glow: "0 0 20px -5px rgba(37, 99, 235, 0.35)",
+        // Same reason the brand color scale above resolves a CSS variable: `shadow-glow` is the
+        // accent glow under primary buttons and active nav, so baking the default blue in meant
+        // it stayed blue no matter what brand color a tenant picked.
+        glow: "0 0 20px -5px rgb(var(--brand-600) / 0.35)",
         "glow-emerald": "0 0 20px -5px rgba(16, 185, 129, 0.35)",
         subtle: "0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.04)",
         card: "0 4px 6px -1px rgba(0, 0, 0, 0.04), 0 2px 4px -2px rgba(0, 0, 0, 0.04)",

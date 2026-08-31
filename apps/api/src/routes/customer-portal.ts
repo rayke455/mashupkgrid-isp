@@ -4,6 +4,19 @@ import { prisma } from "@mashupkgrid/database";
 import { successResponse, NotFoundError } from "@mashupkgrid/shared";
 import { checkMaintenance } from "../plugins/maintenance.js";
 
+/**
+ * ⚠ DEVELOPMENT-ONLY MOCK SURFACE — NOT PRODUCTION CODE.
+ *
+ * Every handler below returns fixed demo data. There is no authentication, no OTP delivery, no
+ * payment provider, and the "token" it issues is a string nothing ever verifies. buildApp()
+ * (apps/api/src/app.ts) therefore refuses to mount this router when NODE_ENV=production. Before
+ * that guard is lifted, each route needs: a real OTP issued/verified through
+ * apps/api/src/lib/whatsapp-otp.ts (or the SMS equivalent), a real session from
+ * @mashupkgrid/auth's createSession, customer data read from the caller's OWN Customer row the
+ * way apps/api/src/routes/me.ts does it, and payments routed through @mashupkgrid/payments.
+ */
+const MOCK_OTP_CODES = new Set(["123456", "000000"]);
+
 const tenantParamsSchema = z.object({
   tenantSlug: z.string().min(1),
 });
@@ -285,7 +298,11 @@ export async function customerPortalRoutes(app: FastifyInstance): Promise<void> 
     { config: { audience: "customer" }, preHandler: [checkMaintenance] },
     async (request, reply) => {
       const body = z.object({ phone: z.string().min(8), otp: z.string().min(4) }).parse(request.body);
-      if (body.otp !== "123456" && body.otp !== "000000" && body.otp.length < 4) {
+      // The original condition was `otp !== "123456" && otp !== "000000" && otp.length < 4`, which
+      // can never be true for a value Zod already required to be 4+ characters — so every string
+      // was accepted, including in the branch meant to reject one. Even as a dev stub, a check
+      // that silently passes everything is worse than no check: it reads as if it validates.
+      if (!MOCK_OTP_CODES.has(body.otp)) {
         return reply.status(400).send({ success: false, error: { message: "Invalid OTP entered" } });
       }
 

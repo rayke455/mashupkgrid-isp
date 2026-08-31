@@ -22,6 +22,7 @@ import {
   ValidationError,
   hashPassword,
   generateSecureToken,
+  isReservedSubdomain,
 } from "@mashupkgrid/shared";
 import { env } from "@mashupkgrid/config";
 import { getPlatformGoogleAuthConfig } from "./google-auth-config.service.js";
@@ -284,6 +285,25 @@ export async function registerIspTenant(
 ): Promise<{ tenant: Tenant; user: User; session: IssuedTokens }> {
   const cleanSlug = body.slug.trim().toLowerCase().replace(/[^a-z0-9-]/g, "");
   const cleanEmail = body.email.trim().toLowerCase();
+
+  // Re-validate the sanitized slug rather than trusting the request schema's regex: the strip
+  // above can shorten a slug past the 3-character minimum, and a slug of only hyphens passes the
+  // regex but is not a usable hostname label.
+  if (cleanSlug.length < 3 || cleanSlug.length > 30 || !/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(cleanSlug)) {
+    throw new ValidationError(
+      "Choose an address of 3-30 letters, numbers, or dashes, starting and ending with a letter or number."
+    );
+  }
+
+  // The public /isp-registration/check-slug endpoint refused reserved names, but this — the
+  // endpoint that actually creates the tenant — did not, so the check was advisory only: a
+  // caller who skipped the wizard could register `api`, `admin`, `portal`, or `support` directly
+  // and be handed that subdomain of the platform's own domain. See RESERVED_SUBDOMAINS for why
+  // that is a phishing/CORS problem, not a cosmetic one. The super-admin tenant-creation route
+  // (apps/api/src/routes/tenants.ts) already enforced this; this path now matches it.
+  if (isReservedSubdomain(cleanSlug)) {
+    throw new ConflictError(`The address "${cleanSlug}" is reserved by the platform. Please pick another name.`);
+  }
 
   // Check if tenant slug already exists
   const existingTenant = await prisma.tenant.findUnique({ where: { slug: cleanSlug } });

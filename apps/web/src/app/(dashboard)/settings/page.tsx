@@ -146,9 +146,9 @@ export default function SettingsPage() {
       try {
         localStorage.setItem("mkg_hotspot_captive_config", JSON.stringify(captivePayload));
       } catch {}
+      // Staff write — must carry the bearer token; only the matching GET is public.
       await apiFetch(`/api/v1/hotspot/${tenantSlug}/config`, {
         method: "PUT",
-        skipAuth: true,
         body: JSON.stringify(captivePayload),
       });
     },

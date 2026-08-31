@@ -13,7 +13,12 @@ export function CustomCodeInjector({
   useEffect(() => {
     if (!jsConfig.enabled || !jsConfig.executeOnLoad || !jsConfig.jsContent) return;
     try {
-      // Safe sandboxed script execution
+      // NOT a sandbox. `new Function` compiles this string in the page's own realm with full
+      // access to the DOM, cookies, and every API this origin has — it is exactly as privileged
+      // as a <script> tag. That is acceptable only because jsContent is authored by the tenant's
+      // own staff for the tenant's own captive portal (the same trust level as pasting a script
+      // into their site), and must never be fed a value that reaches this component from an
+      // unauthenticated request. The previous "safe sandboxed" comment invited exactly that.
       const scriptFn = new Function(jsConfig.jsContent);
       scriptFn();
     } catch (err) {
