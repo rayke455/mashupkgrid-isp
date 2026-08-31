@@ -248,18 +248,21 @@ export function buildMikrotikVpnStartScript(router: Router, callbackUrl: string,
   return `# MASHUPKGRID ISP — remote access (WireGuard) setup, step 1 of 2, for router "${sanitizeForScript(router.name)}"
 # Requires RouterOS v7+ (WireGuard has no v6 equivalent). Paste into the router's terminal, run it.
 
-# 1. Clean up any previous WireGuard interface and create fresh interface
-/interface wireguard remove [find name=mkg-wg]
-/interface wireguard add name=mkg-wg listen-port=${listenPort}
-:delay 1s
+{
+  # 1. Clean up any previous WireGuard interface and create fresh interface
+  /interface wireguard remove [find name=mkg-wg]
+  /interface wireguard add name=mkg-wg listen-port=${listenPort}
+  :delay 2s
 
-# 2. Read back the public key and register it with the cloud platform
-:local pubkey [/interface wireguard get [find name=mkg-wg] public-key]
-/tool fetch url="${callbackUrl}?pubkey=$pubkey" http-method=post http-data=$pubkey keep-result=no
+  # 2. Read back the public key and register it with the cloud platform
+  :local pubkey [/interface wireguard get [find name=mkg-wg] public-key]
+  :put ("Generated WireGuard Public Key: " . $pubkey)
+  /tool fetch url="${callbackUrl}?pubkey=$pubkey" http-method=post http-data=$pubkey keep-result=no
 
-:put "========================================================="
-:put "  Step 1 complete! Click 'Finish Remote Access' on web   "
-:put "========================================================="
+  :put "========================================================="
+  :put "  Step 1 complete! Click 'Finish Remote Access' on web   "
+  :put "========================================================="
+}
 `;
 }
 

@@ -594,7 +594,7 @@ function getClientIp(request: { headers: Record<string, string | string[] | unde
       });
       return;
     }
-    const cleanKey = pubkey.replace(/["'\r\n\s]/g, "").trim();
+    const cleanKey = pubkey.replace(/["'\r\n]/g, "").trim().replace(/ /g, "+");
     try {
       const router = await completeVpnRegistration(token, cleanKey);
       reply.status(200).send({ registered: true, vpnIp: router.vpnIp });
@@ -613,7 +613,7 @@ function getClientIp(request: { headers: Record<string, string | string[] | unde
     if (!publicKey && typeof request.query === "object" && request.query && "pubkey" in request.query) {
       publicKey = String((request.query as Record<string, unknown>).pubkey || "");
     }
-    publicKey = publicKey.replace(/["'\r\n\s]/g, "").trim();
+    publicKey = publicKey.replace(/["'\r\n]/g, "").trim().replace(/ /g, "+");
     if (!publicKey) {
       reply.status(400).send({ registered: false, error: "Missing WireGuard public key in request body or query" });
       return;
