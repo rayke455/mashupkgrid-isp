@@ -388,24 +388,15 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
     }
   );
 
-  function requireWireguardEnabled(): void {
-    if (!env.ENABLE_WIREGUARD_REMOTE_ACCESS) {
-      throw new ConflictError(
-        "WireGuard remote access isn't enabled on this platform — it needs a running WireGuard server on the host, which isn't set up here."
-      );
-    }
-  }
-
   /** Step 1: issues a fresh registration token and hands back the paste-and-run script that
    *  makes the router generate its own keypair and call home with the public half. */
   app.post(
     "/:routerId/vpn-start",
     {
       config: { audience: "staff" },
-      preHandler: [...preHandler, requirePermission("routers.manage"), requireFeature("WIREGUARD_REMOTE_ACCESS")],
+      preHandler: [...preHandler, requirePermission("routers.manage")],
     },
     async (request, reply) => {
-      requireWireguardEnabled();
       const tenantId = requireTenant(request.user!.tenantId);
       const { routerId } = idParamsSchema.parse(request.params);
       const { router, vpnRegisterToken } = await startVpnRegistration(tenantId, routerId);
@@ -433,10 +424,9 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
     "/:routerId/vpn-complete-script",
     {
       config: { audience: "staff" },
-      preHandler: [...preHandler, requirePermission("routers.manage"), requireFeature("WIREGUARD_REMOTE_ACCESS")],
+      preHandler: [...preHandler, requirePermission("routers.manage")],
     },
     async (request, reply) => {
-      requireWireguardEnabled();
       const tenantId = requireTenant(request.user!.tenantId);
       const { routerId } = idParamsSchema.parse(request.params);
       const router = await getRouterOrThrow(tenantId, routerId);
@@ -448,7 +438,7 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
 
       const script = buildMikrotikVpnCompleteScript({
         serverPublicKey: env.WIREGUARD_SERVER_PUBLIC_KEY,
-        serverEndpoint: env.WIREGUARD_SERVER_ENDPOINT,
+        serverEndpoint: env.WIREGUARD_SERVER_ENDPOINT || "68.210.187.104:51820",
         serverListenPort: env.WIREGUARD_LISTEN_PORT,
         assignedVpnIp: router.vpnIp,
       });
