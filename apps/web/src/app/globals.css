@@ -3,7 +3,14 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: light dark;
+  /* Follows the app's OWN theme (the `dark` class Tailwind's darkMode: "class" keys off, set on
+     <html> in app/layout.tsx), never the operating system's. `color-scheme: light dark` here
+     handed that decision to the OS instead: on a build whose surfaces are always dark, a visitor
+     whose OS is set to light got light-rendered native chrome on top of them — white select
+     dropdowns, light date/time pickers, a light scrollbar gutter, and the browser's own pale
+     autofill highlight on every login and payment field. Splitting the declaration across
+     :root/.dark keeps native controls matching whichever theme is actually rendered. */
+  color-scheme: light;
 
   /* Default brand palette (the same blue that shipped before white-labeling existed) — R G B
      triplets, not hex, because Tailwind's `<alpha-value>` opacity-modifier support requires it.
@@ -20,6 +27,10 @@
   --brand-800: 30 64 175;
   --brand-900: 30 58 138;
   --brand-950: 15 23 42;
+}
+
+.dark {
+  color-scheme: dark;
 }
 
 body {
@@ -45,15 +56,6 @@ body {
   background-color: #94a3b8;
 }
 
-@media (prefers-color-scheme: dark) {
-  ::-webkit-scrollbar-thumb {
-    background-color: #334155;
-  }
-  ::-webkit-scrollbar-thumb:hover {
-    background-color: #475569;
-  }
-}
-
 .dark ::-webkit-scrollbar-thumb {
   background-color: #334155;
 }
@@ -70,37 +72,28 @@ body {
     linear-gradient(to bottom, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
 }
 
-@media (prefers-color-scheme: dark) {
-  .bg-grid-pattern {
-    background-image: 
-      linear-gradient(to right, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
-  }
-}
-
 .dark .bg-grid-pattern {
   background-image: 
     linear-gradient(to right, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
     linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
 }
 
+/* These three resolve --brand-600 rather than repeating the default blue as a literal. This is a
+   white-label product: <TenantThemeStyle> rewrites --brand-* per tenant, so a hardcoded
+   rgb(37 99 235) left an emerald- or amber-branded ISP with a blue ambient glow behind their own
+   hero and blue slider thumbs on their own forms. Tenants who set no brand color are unaffected
+   — --brand-600 is that exact blue by default (see :root above). */
 .bg-radial-glow {
-  background: radial-gradient(circle at 50% 0%, rgba(37, 99, 235, 0.12) 0%, transparent 70%);
-}
-
-@media (prefers-color-scheme: dark) {
-  .bg-radial-glow {
-    background: radial-gradient(circle at 50% 0%, rgba(37, 99, 235, 0.22) 0%, transparent 70%);
-  }
+  background: radial-gradient(circle at 50% 0%, rgb(var(--brand-600) / 0.12) 0%, transparent 70%);
 }
 
 .dark .bg-radial-glow {
-  background: radial-gradient(circle at 50% 0%, rgba(37, 99, 235, 0.22) 0%, transparent 70%);
+  background: radial-gradient(circle at 50% 0%, rgb(var(--brand-600) / 0.22) 0%, transparent 70%);
 }
 
 /* Custom styled range input */
 input[type="range"] {
-  accent-color: rgb(37 99 235);
+  accent-color: rgb(var(--brand-600));
 }
 
 @keyframes pulse-subtle {

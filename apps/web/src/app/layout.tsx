@@ -9,7 +9,9 @@ export const viewport: Viewport = {
   themeColor: "#090d16",
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
+  // No maximumScale: 1. Pinch-to-zoom is how a low-vision customer reads a voucher code or an
+  // invoice line on a phone, and locking it out fails WCAG 1.4.4. iOS's "zooms on focus" quirk
+  // that this is usually reached for is already avoided by the app's 16px form-field sizing.
 };
 
 export const metadata: Metadata = {
