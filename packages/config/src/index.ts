@@ -98,6 +98,10 @@ const envSchema = z.object({
     .transform((v) => v === "true"),
   WIREGUARD_INTERFACE: z.string().default("wg0"),
   WIREGUARD_SERVER_PUBLIC_KEY: z.string().optional().default(""),
+  /** The private half of the pair above. Only the container's entrypoint uses it, to bring the
+   *  interface up; nothing in application code reads it, and it must never be logged or returned
+   *  by an endpoint — a router only ever needs WIREGUARD_SERVER_PUBLIC_KEY. */
+  WIREGUARD_SERVER_PRIVATE_KEY: z.string().optional().default(""),
   /** Host:port other peers (routers) dial to reach this server — must be a real, internet- or
    *  LAN-reachable address once WireGuard is actually enabled. */
   WIREGUARD_SERVER_ENDPOINT: z.string().optional().default(""),

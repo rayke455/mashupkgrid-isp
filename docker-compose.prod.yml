@@ -56,6 +56,17 @@ services:
     env_file: .env.production
     ports:
       - "127.0.0.1:4000:4000"
+      # The WireGuard listen port must be reachable from the public internet -- routers behind
+      # CGNAT dial in, so this is the one direction that can work. Bound to 0.0.0.0 unlike the
+      # API port above, and UDP. Must match WIREGUARD_LISTEN_PORT and the host firewall rule.
+      - "51820:51820/udp"
+    # NET_ADMIN lets this container create and configure its own wg0 (see api-entrypoint.sh).
+    # This is a real privilege increase for an internet-facing service and is only meaningful
+    # when ENABLE_WIREGUARD_REMOTE_ACCESS=true; with the flag off the capability is unused.
+    # Deliberately NOT network_mode: host -- that would take the API off the compose network,
+    # and postgres/redis publish no host ports, so it would lose both.
+    cap_add:
+      - NET_ADMIN
     depends_on:
       postgres:
         condition: service_healthy

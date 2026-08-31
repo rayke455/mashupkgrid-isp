@@ -212,6 +212,38 @@ export async function updateRouter(tenantId: string, routerId: string, patch: Up
   });
 }
 
+/** Re-adds every VPN-linked router as a peer on the platform's WireGuard interface, and reports
+ *  how many were restored.
+ *
+ *  A WireGuard peer table lives only in the kernel's copy of the interface, so it is emptied
+ *  every time that interface is recreated — which, now that the interface is brought up inside
+ *  the API container, is *every deploy and every restart*. The routers themselves reconnect on
+ *  their own (their side holds the tunnel open with persistent-keepalive), but the server would
+ *  refuse them, so remote access to every router would silently go dead after a routine redeploy
+ *  and only come back if someone re-ran the registration by hand. The durable record is
+ *  Router.vpnPublicKey/vpnIp in Postgres; this replays it onto the fresh interface at boot.
+ *
+ *  Best-effort by design: a deployment with WireGuard switched off, or one where the interface
+ *  isn't up yet, must not stop the API from starting. */
+export async function syncWireguardPeersFromDatabase(): Promise<number> {
+  if (!env.ENABLE_WIREGUARD_REMOTE_ACCESS) return 0;
+  const linked = await prisma.router.findMany({
+    where: { deletedAt: null, vpnPublicKey: { not: null }, vpnIp: { not: null } },
+    select: { vpnPublicKey: true, vpnIp: true },
+  });
+
+  let restored = 0;
+  for (const router of linked) {
+    try {
+      await registerWireguardPeer(env.WIREGUARD_INTERFACE, router.vpnPublicKey!, router.vpnIp!);
+      restored++;
+    } catch {
+      // One unreachable peer shouldn't abort the rest of the replay.
+    }
+  }
+  return restored;
+}
+
 export async function deleteRouter(tenantId: string, routerId: string): Promise<void> {
   const router = await getRouterOrThrow(tenantId, routerId);
   if (router.vpnPublicKey) {

@@ -3,7 +3,12 @@ FROM node:22-slim AS base
 # without it engine loading fails with a non-JSON error that surfaces as the unhelpful
 # "Could not parse schema engine response". Alpine hits the same class of problem through
 # musl, which is why this is Debian rather than alpine.
-RUN apt-get update  && apt-get install -y --no-install-recommends openssl ca-certificates  && rm -rf /var/lib/apt/lists/*
+# wireguard-tools (the `wg` CLI) and iproute2 (`ip link`) are needed only when
+# ENABLE_WIREGUARD_REMOTE_ACCESS is on, but they are installed unconditionally: they are a few
+# hundred KB, and building a second image variant just to omit them would mean the VPN path was
+# never exercised by the image that actually ships. The WireGuard data plane itself is the host
+# kernel module -- these are only the userspace tools that configure it.
+RUN apt-get update  && apt-get install -y --no-install-recommends openssl ca-certificates wireguard-tools iproute2  && rm -rf /var/lib/apt/lists/*
 RUN corepack enable
 WORKDIR /repo
 
@@ -45,4 +50,9 @@ EXPOSE 4000
 # tsx resolves and compiles those on the fly, which is how the repo is designed to be
 # consumed -- apps/web does the equivalent via Next's transpilePackages.
 # The tsc build above is kept purely as a type check; its dist output is not run.
+# chmod explicitly rather than relying on the checked-in mode bit: this repo is developed on
+# Windows, where git does not reliably carry the executable bit through to the build context.
+COPY infrastructure/docker/api-entrypoint.sh /usr/local/bin/api-entrypoint.sh
+RUN chmod +x /usr/local/bin/api-entrypoint.sh
+ENTRYPOINT ["/usr/local/bin/api-entrypoint.sh"]
 CMD ["./node_modules/.bin/tsx", "src/server.ts"]
