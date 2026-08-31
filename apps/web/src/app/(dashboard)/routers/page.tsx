@@ -79,9 +79,19 @@ export default function RoutersPage() {
     },
   });
 
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const deleteRouter = useMutation({
-    mutationFn: (routerId: string) => apiFetch(`/api/v1/routers/${routerId}`, { method: "DELETE" }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["routers"] }),
+    mutationFn: (routerId: string) => {
+      setDeletingId(routerId);
+      return apiFetch(`/api/v1/routers/${routerId}`, { method: "DELETE" });
+    },
+    onSuccess: () => {
+      setActionSuccess("🗑️ Router removed successfully.");
+      setTimeout(() => setActionSuccess(null), 5000);
+      queryClient.invalidateQueries({ queryKey: ["routers"] });
+    },
+    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to remove router"),
+    onSettled: () => setDeletingId(null),
   });
 
   const [kickingId, setKickingId] = useState<string | null>(null);
@@ -356,8 +366,9 @@ export default function RoutersPage() {
                       onClick={() => {
                         if (confirm(`Remove router "${router.name}"?`)) deleteRouter.mutate(router.id);
                       }}
+                      disabled={deletingId === router.id}
                     >
-                      Remove
+                      {deletingId === router.id ? "Removing..." : "Remove"}
                     </Button>
                   </div>
                 </div>

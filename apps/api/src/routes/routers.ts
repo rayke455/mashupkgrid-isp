@@ -284,7 +284,7 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
         userAgent: request.headers["user-agent"] ?? null,
       });
 
-      reply.status(204).send();
+      reply.send(successResponse({ deleted: true }, request.id));
     }
   );
 

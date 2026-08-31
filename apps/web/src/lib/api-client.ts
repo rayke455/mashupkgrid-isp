@@ -91,13 +91,17 @@ async function doFetch<T>(path: string, options: RequestInit & { skipAuth?: bool
     credentials: "include",
   });
 
+  if (response.status === 204) {
+    return {} as T;
+  }
+
   const body = (await response.json().catch(() => null)) as ApiSuccess<T> | ApiError | null;
 
   if (!response.ok || !body || body.success === false) {
     if (body && body.success === false) throw new ApiRequestError(response.status, body);
     throw new ApiRequestError(response.status, {
       success: false,
-      error: { code: "UNKNOWN_ERROR", message: response.statusText, requestId: "unknown" },
+      error: { code: "UNKNOWN_ERROR", message: response.statusText || "Request failed", requestId: "unknown" },
     });
   }
 
