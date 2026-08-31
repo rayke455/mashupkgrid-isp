@@ -114,11 +114,11 @@ function parseRouterUptime(uptimeStr: string): number {
   if (/^\d+$/.test(trimmed)) return Number(trimmed);
   let totalSeconds = 0;
   const weeks = trimmed.match(/(\d+)w/);
-  if (weeks) totalSeconds += parseInt(weeks[1], 10) * 7 * 86400;
+  if (weeks && weeks[1]) totalSeconds += parseInt(weeks[1], 10) * 7 * 86400;
   const days = trimmed.match(/(\d+)d/);
-  if (days) totalSeconds += parseInt(days[1], 10) * 86400;
+  if (days && days[1]) totalSeconds += parseInt(days[1], 10) * 86400;
   const timeMatch = trimmed.match(/(?:^|[a-z])(\d{1,2}):(\d{2}):(\d{2})$/);
-  if (timeMatch) {
+  if (timeMatch && timeMatch[1] && timeMatch[2] && timeMatch[3]) {
     totalSeconds += parseInt(timeMatch[1], 10) * 3600 + parseInt(timeMatch[2], 10) * 60 + parseInt(timeMatch[3], 10);
   }
   return totalSeconds > 0 ? totalSeconds : 60;
@@ -599,6 +599,8 @@ function getClientIp(request: { headers: Record<string, string | string[] | unde
       message: "Provisioning callback is online and active.",
       clientIp: remoteIp,
     });
+  });
+
   app.post("/provision/:token/callback", { config: { audience: "system-critical" } }, async (request, reply) => {
     const { token } = provisionCallbackParamsSchema.parse(request.params);
     const remoteIp = getClientIp(request);

@@ -12,10 +12,13 @@ import { createAdapterForRouter } from "./factory.js";
 import type { DeviceHealth, DeviceSession } from "./adapter.interface.js";
 import { allocateNextVpnIp, registerWireguardPeer, removeWireguardPeer } from "./wireguard-peer.service.js";
 
-/** The RouterOS user this platform creates on every router it links via the call-home flow
- *  (packages/radius/src/setup-script.ts embeds `/user add name=${MANAGED_API_USERNAME} ...` in
- *  the provisioning script) — a fixed, recognizable name rather than a per-router random one,
- *  since it only ever needs to be unique within that one router's own user list. */
+export interface RouterHeartbeatMetrics {
+  cpuLoadPercent?: number;
+  uptimeSeconds?: number;
+  memoryUsedBytes?: bigint;
+  memoryTotalBytes?: bigint;
+}
+
 export const MANAGED_API_USERNAME = "mashupkgrid-api";
 
 export interface CreateRouterInput {
@@ -349,8 +352,8 @@ export async function testRouterConnection(tenantId: string, routerId: string): 
             reachable: true,
             cpuLoadPercent: router.cpuLoadPercent ?? undefined,
             uptimeSeconds: router.uptimeSeconds ?? undefined,
-            memoryUsedBytes: router.memoryUsedBytes ? Number(router.memoryUsedBytes) : undefined,
-            memoryTotalBytes: router.memoryTotalBytes ? Number(router.memoryTotalBytes) : undefined,
+            memoryUsedBytes: router.memoryUsedBytes ?? undefined,
+            memoryTotalBytes: router.memoryTotalBytes ?? undefined,
           };
         } else {
           health = { reachable: false, error: err instanceof Error ? err.message : String(err) };
@@ -361,8 +364,8 @@ export async function testRouterConnection(tenantId: string, routerId: string): 
             reachable: true,
             cpuLoadPercent: router.cpuLoadPercent ?? undefined,
             uptimeSeconds: router.uptimeSeconds ?? undefined,
-            memoryUsedBytes: router.memoryUsedBytes ? Number(router.memoryUsedBytes) : undefined,
-            memoryTotalBytes: router.memoryTotalBytes ? Number(router.memoryTotalBytes) : undefined,
+            memoryUsedBytes: router.memoryUsedBytes ?? undefined,
+            memoryTotalBytes: router.memoryTotalBytes ?? undefined,
           };
         } else {
           health = { reachable: false, error: err instanceof Error ? err.message : String(err) };
@@ -373,8 +376,8 @@ export async function testRouterConnection(tenantId: string, routerId: string): 
         reachable: true,
         cpuLoadPercent: router.cpuLoadPercent ?? undefined,
         uptimeSeconds: router.uptimeSeconds ?? undefined,
-        memoryUsedBytes: router.memoryUsedBytes ? Number(router.memoryUsedBytes) : undefined,
-        memoryTotalBytes: router.memoryTotalBytes ? Number(router.memoryTotalBytes) : undefined,
+        memoryUsedBytes: router.memoryUsedBytes ?? undefined,
+        memoryTotalBytes: router.memoryTotalBytes ?? undefined,
       };
     } else {
       health = { reachable: false, error: err instanceof Error ? err.message : String(err) };
