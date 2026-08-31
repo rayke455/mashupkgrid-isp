@@ -284,7 +284,7 @@ export default function ThemesPage() {
 
               {/* Suntech Blue Banner Card Preview */}
               <div className="max-w-md mx-auto rounded-2xl bg-white text-slate-900 shadow-xl overflow-hidden border-2 border-sky-400 p-3.5 space-y-2">
-                <div className="grid grid-cols-12 gap-2 items-center">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-12 sm:items-center">
                   <div className="col-span-7 space-y-1">
                     <div className="inline-block border-2 border-blue-900 rounded-full px-2.5 py-0.5">
                       <span className="text-[10px] font-black text-blue-950">{brandName || "SUNTECH FIBRE"}</span>

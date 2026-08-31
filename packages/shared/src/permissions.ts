@@ -33,6 +33,14 @@ export const PERMISSIONS = [
   "routers.read",
   "routers.manage",
 
+  // VLAN management and automated network provisioning. Split three ways on purpose: a support
+  // agent must be able to SEE network state and re-run a failed provisioning job without being
+  // able to alter VLAN configuration, which is the distinction the spec draws between a support
+  // agent and a network administrator.
+  "vlans.read",
+  "vlans.manage",
+  "provisioning.retry",
+
   "radius.manage",
 
   "tickets.read",
@@ -105,6 +113,9 @@ const TENANT_SCOPED_PERMISSIONS = [
   "wallet.manage",
   "routers.read",
   "routers.manage",
+  "vlans.read",
+  "vlans.manage",
+  "provisioning.retry",
   "radius.manage",
   "tickets.read",
   "tickets.manage",
@@ -141,6 +152,9 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<string, readonly PermissionKey[]> =
     "wallet.manage",
     "routers.read",
     "routers.manage",
+    "vlans.read",
+    "vlans.manage",
+    "provisioning.retry",
     "radius.manage",
     "tickets.read",
     "tickets.manage",
@@ -170,6 +184,9 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<string, readonly PermissionKey[]> =
   NETWORK_ADMIN: [
     "routers.read",
     "routers.manage",
+    "vlans.read",
+    "vlans.manage",
+    "provisioning.retry",
     "radius.manage",
     "customers.read",
     "customer_services.read",
@@ -179,6 +196,10 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<string, readonly PermissionKey[]> =
   SUPPORT: [
     "customers.read",
     "customer_services.read",
+    // Deliberately vlans.read + provisioning.retry WITHOUT vlans.manage: an agent can diagnose a
+    // customer's network problem and re-run a failed job, but cannot alter VLAN configuration.
+    "vlans.read",
+    "provisioning.retry",
     "billing.read",
     "wallet.read",
     "tickets.read",
@@ -202,7 +223,13 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<string, readonly PermissionKey[]> =
     "reports.read",
     "sessions.manage_own",
   ],
-  TECHNICIAN: ["customers.read", "customer_services.read", "routers.read", "sessions.manage_own"],
+  TECHNICIAN: [
+    "customers.read",
+    "customer_services.read",
+    "routers.read",
+    "vlans.read",
+    "sessions.manage_own",
+  ],
   RESELLER: [
     "customers.read",
     "customers.create",

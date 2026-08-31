@@ -351,7 +351,7 @@ export default function CaptiveCustomizerPage() {
                 <span>🎨 Colors &amp; Gradients</span>
               </h3>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-1">Primary Color</label>
                 <div className="flex items-center gap-2">
@@ -431,7 +431,7 @@ export default function CaptiveCustomizerPage() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-1">Border Radius (px)</label>
                 <input
@@ -521,7 +521,7 @@ export default function CaptiveCustomizerPage() {
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-1">Particle Density</label>
                 <input
@@ -999,7 +999,7 @@ export default function CaptiveCustomizerPage() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3 pt-2">
+            <div className="grid grid-cols-1 gap-3 pt-2 sm:grid-cols-2">
               <button
                 type="button"
                 onClick={() => portalSoundEngine.playClick(state.sound.masterVolume)}
@@ -1044,7 +1044,7 @@ export default function CaptiveCustomizerPage() {
             Allow hotspot subscribers to switch between English and Kiswahili seamlessly.
           </p>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="block text-xs font-semibold text-slate-400 mb-1">Default Language</label>
               <select

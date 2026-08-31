@@ -81,7 +81,7 @@ function ResetPasswordForm() {
   return (
     <main className="relative flex min-h-screen items-center justify-center px-4 bg-obsidian-950 text-slate-100 font-sans selection:bg-brand-500 selection:text-white">
       {/* Ambient Glow */}
-      <div className="fixed inset-0 pointer-events-none z-0">
+      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
         <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-brand-500/15 blur-[140px] rounded-full" />
         <div className="absolute bottom-10 right-10 w-[600px] h-[400px] bg-emerald-500/10 blur-[130px] rounded-full" />
         <div className="absolute inset-0 bg-grid-pattern opacity-50" />

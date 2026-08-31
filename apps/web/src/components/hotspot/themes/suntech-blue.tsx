@@ -173,7 +173,7 @@ export function SuntechBlueTheme({
   return (
     <div className="min-h-screen bg-[#0284c7] text-white relative overflow-x-hidden font-sans pb-24 select-none">
       {/* Rich Denim Texture & Ambient Background */}
-      <div className="fixed inset-0 pointer-events-none z-0 opacity-40 bg-[radial-gradient(#0369a1_1px,transparent_1px)] [background-size:16px_16px]" />
+      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0 opacity-40 bg-[radial-gradient(#0369a1_1px,transparent_1px)] [background-size:16px_16px]" />
 
       <div className="relative z-10 max-w-lg mx-auto px-3.5 pt-3">
         {/* Top Header Card matching Suntech Fibre Screenshot */}

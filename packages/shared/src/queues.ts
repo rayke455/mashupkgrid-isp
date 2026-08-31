@@ -90,6 +90,27 @@ export const sendWhatsappTenantWelcomeJobSchema = z.object({
 });
 export type SendWhatsappTenantWelcomeJob = z.infer<typeof sendWhatsappTenantWelcomeJobSchema>;
 
+/**
+ * Tells a subscriber what just happened to their internet (spec section 20). Sent only AFTER a
+ * provisioning job reached a terminal state, so the message reflects what a device actually did
+ * rather than what was intended — telling someone "your internet is active" while the router
+ * rejected the configuration is worse than saying nothing.
+ */
+export const sendWhatsappServiceStatusJobSchema = z.object({
+  tenantId: z.string().uuid(),
+  phone: z.string(),
+  customerName: z.string(),
+  /** The ISP's own company name. The customer buys from them, not from this platform. */
+  tenantName: z.string(),
+  event: z.enum(["ACTIVATED", "SUSPENDED", "RESTORED", "DEPROVISIONED", "FAILED"]),
+  packageName: z.string().nullable(),
+  downloadKbps: z.number().int().nullable(),
+  uploadKbps: z.number().int().nullable(),
+  /** Support contact for a FAILED event, where the customer needs a human, not a status line. */
+  supportPhone: z.string().nullable(),
+});
+export type SendWhatsappServiceStatusJob = z.infer<typeof sendWhatsappServiceStatusJobSchema>;
+
 /** Pairing is driven from the dashboard but can only happen in the worker (the only process that
  *  holds WhatsApp sockets), so the API asks for it through the queue rather than doing it. */
 export const whatsappConnectJobSchema = z.object({
@@ -130,6 +151,7 @@ export const JOB_NAMES = {
   pollPendingStkRequests: "poll-pending-stk-requests",
   // Phase 4 — network/MikroTik/RADIUS (docs/architecture/13-phase4-plan.md).
   retryPendingSyncTasks: "retry-pending-sync-tasks",
+  runProvisioningJobs: "run-provisioning-jobs",
   pollRouterHealth: "poll-router-health",
   expireOverdueVouchers: "expire-overdue-vouchers",
   // Dunning — escalating payment reminders ahead of suspendOverdueCustomers, not just the
@@ -144,6 +166,7 @@ export const JOB_NAMES = {
   sendWhatsappOtp: "send-whatsapp-otp",
   sendWhatsappVoucher: "send-whatsapp-voucher",
   sendWhatsappTenantWelcome: "send-whatsapp-tenant-welcome",
+  sendWhatsappServiceStatus: "send-whatsapp-service-status",
   whatsappConnect: "whatsapp-connect",
   whatsappDisconnect: "whatsapp-disconnect",
 } as const;

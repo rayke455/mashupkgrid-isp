@@ -469,7 +469,8 @@ export default function DeveloperSettingsPage() {
                 {deliveriesFor === hook.id && (
                   <div className="mt-3 border-t border-slate-100 pt-3 dark:border-obsidian-800">
                     {deliveries && deliveries.length > 0 ? (
-                      <table className="w-full text-left text-xs">
+                      <div className="-mx-1 overflow-x-auto px-1">
+                      <table className="w-full min-w-[32rem] text-left text-xs">
                         <thead className="text-slate-500 dark:text-slate-400">
                           <tr>
                             <th className="py-1 font-medium">Event</th>
@@ -497,6 +498,7 @@ export default function DeveloperSettingsPage() {
                           ))}
                         </tbody>
                       </table>
+                      </div>
                     ) : (
                       <p className="text-xs text-slate-500">No deliveries yet.</p>
                     )}

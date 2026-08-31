@@ -452,7 +452,7 @@ export function IspRegistrationWizard() {
   return (
     <div className="relative min-h-screen bg-[#070b14] text-slate-100 flex flex-col justify-between overflow-x-hidden font-sans selection:bg-brand-500 selection:text-white">
       {/* High-Tech Animated Mesh & Constellation SVG */}
-      <div className="fixed inset-0 pointer-events-none z-0">
+      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
         {/* Radial Glow */}
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[500px] bg-gradient-to-tr from-brand-600/15 via-cyan-500/10 to-purple-600/15 blur-[140px] rounded-full" />
         <div className="absolute inset-0 bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:24px_24px] opacity-40" />

@@ -111,7 +111,7 @@ export function CustomerRegistrationForm({ tenantSlug }: CustomerRegistrationFor
   return (
     <main className="min-h-screen bg-slate-900 text-slate-100 selection:bg-brand-500 selection:text-white font-sans antialiased flex flex-col justify-between">
       {/* Ambient background */}
-      <div className="fixed inset-0 pointer-events-none z-0">
+      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
         <div className="absolute -top-40 left-1/3 w-[800px] h-[500px] bg-brand-600/15 blur-[140px] rounded-full" />
         <div className="absolute bottom-10 right-10 w-[600px] h-[500px] bg-indigo-500/10 blur-[140px] rounded-full" />
         <div className="absolute inset-0 bg-grid-pattern opacity-60" />

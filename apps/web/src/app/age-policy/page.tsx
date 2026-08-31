@@ -8,7 +8,7 @@ export default function AgePolicyPage() {
   return (
     <main className="min-h-screen bg-slate-900 text-slate-100 selection:bg-brand-500 selection:text-white font-sans antialiased">
       {/* Ambient background */}
-      <div className="fixed inset-0 pointer-events-none z-0">
+      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
         <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[1000px] h-[400px] bg-sky-600/10 blur-[140px] rounded-full" />
         <div className="absolute inset-0 bg-grid-pattern opacity-50" />
       </div>

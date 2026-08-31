@@ -6,3 +6,4 @@ export * from "./wireguard-peer.service.js";
 export * from "./mikrotik/protocol.js";
 export * from "./mikrotik/routeros-client.js";
 export * from "./mikrotik/mikrotik.adapter.js";
+export * from "./vlan.service.js";

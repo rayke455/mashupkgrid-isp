@@ -6,7 +6,7 @@ export default function NotFound() {
   return (
     <main className="relative flex min-h-screen items-center justify-center px-6 bg-obsidian-950 text-slate-100 font-sans selection:bg-brand-500 selection:text-white">
       {/* Ambient Glow & Grid */}
-      <div className="fixed inset-0 pointer-events-none z-0">
+      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
         <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-brand-600/15 blur-[140px] rounded-full" />
         <div className="absolute bottom-10 left-10 w-[500px] h-[400px] bg-rose-500/10 blur-[130px] rounded-full" />
         <div className="absolute inset-0 bg-grid-pattern opacity-50" />

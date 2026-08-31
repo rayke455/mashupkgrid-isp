@@ -1,3 +1,4 @@
+import { handleRunProvisioningJobs } from "./jobs/run-provisioning-jobs.js";
 import { Worker, Queue } from "bullmq";
 import { env } from "@mashupkgrid/config";
 import { QUEUE_NAMES, JOB_NAMES } from "@mashupkgrid/shared";
@@ -29,6 +30,7 @@ import { handleSendWhatsappOtp } from "./jobs/send-whatsapp-otp.js";
 import {
   handleSendWhatsappVoucher,
   handleSendWhatsappTenantWelcome,
+  handleSendWhatsappServiceStatus,
 } from "./jobs/whatsapp-notifications.js";
 import { startRadiusServer } from "@mashupkgrid/radius";
 import { whatsappConnectJobSchema, whatsappDisconnectJobSchema } from "@mashupkgrid/shared";
@@ -124,6 +126,8 @@ async function main() {
       switch (job.name) {
         case JOB_NAMES.retryPendingSyncTasks:
           return handleRetryPendingSyncTasks();
+        case JOB_NAMES.runProvisioningJobs:
+          return handleRunProvisioningJobs();
         case JOB_NAMES.expireOverdueVouchers:
           return handleExpireOverdueVouchers();
         case JOB_NAMES.pollRouterHealth:
@@ -249,6 +253,14 @@ async function main() {
   // Every 60 seconds: routers are polled far more often than the billing/mpesa jobs since
   // "is the router still up" is what the dashboard's live status badge reflects — the web UI
   // polls the routers list every few seconds, so this is the freshness bound on what it shows.
+  // Every 20 seconds: this is the delay between a customer paying and their internet coming back
+  // on, so it is deliberately the tightest interval in this file. Jobs run one at a time inside
+  // the handler, so a short interval does not mean many concurrent router connections.
+  await networkQueue.add(
+    JOB_NAMES.runProvisioningJobs,
+    {},
+    { repeat: { every: 20_000 }, removeOnComplete: true, removeOnFail: 100 }
+  );
   await networkQueue.add(
     JOB_NAMES.pollRouterHealth,
     {},
@@ -278,6 +290,7 @@ async function main() {
       if (job.name === JOB_NAMES.sendWhatsappOtp) return handleSendWhatsappOtp(job.data);
       if (job.name === JOB_NAMES.sendWhatsappVoucher) return handleSendWhatsappVoucher(job.data);
       if (job.name === JOB_NAMES.sendWhatsappTenantWelcome) return handleSendWhatsappTenantWelcome(job.data);
+      if (job.name === JOB_NAMES.sendWhatsappServiceStatus) return handleSendWhatsappServiceStatus(job.data);
 
       if (job.name === JOB_NAMES.whatsappConnect) {
         const { tenantId, pairWithPhoneNumber } = whatsappConnectJobSchema.parse(job.data);

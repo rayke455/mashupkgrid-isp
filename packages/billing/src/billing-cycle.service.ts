@@ -1,5 +1,5 @@
 import { prisma } from "@mashupkgrid/database";
-import { suspendRadiusUser, reactivateRadiusUser } from "@mashupkgrid/radius";
+import { suspendRadiusUser, reactivateRadiusUser, enqueueProvisioningJob } from "@mashupkgrid/radius";
 import { isAppError } from "@mashupkgrid/shared";
 import { createRenewalInvoice } from "./invoice.service.js";
 import { addDays, cycleLengthDays } from "./money.js";
@@ -17,6 +17,21 @@ async function bestEffortRadiusSync(tenantId: string, customerServiceId: string,
     if (isAppError(err) && err.statusCode === 404) return;
     // eslint-disable-next-line no-console
     console.error(`[billing] failed to ${action} RADIUS access for subscription ${customerServiceId}`, err);
+  }
+
+  // The RADIUS side above stops the customer AUTHENTICATING again; it does not touch a session
+  // already established, nor the router's own account state. Queueing the provisioning job is
+  // what actually enforces the change on the device (spec section 6), and it is queued rather
+  // than run here because this is an overnight batch that must not stall on one unreachable
+  // router.
+  try {
+    await enqueueProvisioningJob(tenantId, {
+      customerServiceId,
+      operation: action === "suspend" ? "SUSPEND" : "RESTORE",
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(`[billing] could not queue ${action} provisioning for ${customerServiceId}`, err);
   }
 }
 

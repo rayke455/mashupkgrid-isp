@@ -5,6 +5,7 @@ import {
   buildRadiusUsername,
   suspendRadiusUser,
   reactivateRadiusUser,
+  enqueueProvisioningJob,
 } from "@mashupkgrid/radius";
 import { getCustomerOrThrow } from "./customer.service.js";
 import { getPackageOrThrow } from "./package.service.js";
@@ -36,6 +37,33 @@ export interface SubscribeResult {
  * second concurrent subscription for the same customer will fail this call with a
  * ConflictError — this codebase's current model is one active connection per customer.
  */
+/**
+ * Queues the network side of a subscription change (spec sections 5, 6 and 7).
+ *
+ * Called AFTER the billing transaction commits, never inside it: a job row referring to a
+ * subscription that then rolls back would be queued work for something that does not exist.
+ *
+ * Failures here are logged, never thrown. The billing state change is the source of truth and
+ * must not be undone because a job could not be queued — and enqueueProvisioningJob already
+ * records an unprovisionable package as a FAILED job with the reason, so the operator sees it in
+ * the provisioning queue rather than losing it to a swallowed exception.
+ */
+async function queueNetworkChange(
+  tenantId: string,
+  customerServiceId: string,
+  operation: "PROVISION" | "SUSPEND" | "RESTORE" | "DEPROVISION"
+): Promise<void> {
+  try {
+    await enqueueProvisioningJob(tenantId, { customerServiceId, operation });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(
+      `[billing] could not queue ${operation} for subscription ${customerServiceId}`,
+      err
+    );
+  }
+}
+
 export async function subscribeCustomerToPackage(
   tenantId: string,
   input: SubscribeInput
@@ -51,7 +79,7 @@ export async function subscribeCustomerToPackage(
   const cycleDays = cycleLengthDays(pkg.billingCycle, pkg.durationDays);
   const nextBillingAt = addDays(startDate, cycleDays);
 
-  return prisma.$transaction(async (tx) => {
+  const created = await prisma.$transaction(async (tx) => {
     const subscription = await tx.customerService.create({
       data: {
         tenantId,
@@ -84,6 +112,50 @@ export async function subscribeCustomerToPackage(
       radiusPassword: plaintextPassword,
     };
   });
+
+  await queueNetworkChange(tenantId, created.subscription.id, "PROVISION");
+  return created;
+}
+
+/**
+ * Moves a subscription onto a different package (spec section 7). The new package brings its own
+ * VLAN, speed and profile, so a single PROVISION job re-applies the whole configuration rather
+ * than trying to patch individual fields — that is what stops a customer being left half on the
+ * old plan and half on the new one, which section 7 explicitly forbids.
+ *
+ * Billing is deliberately untouched here beyond the package pointer: pro-rating, credit and the
+ * invoice for a mid-cycle change are billing decisions this function does not presume to make.
+ */
+export async function changeSubscriptionPackage(
+  tenantId: string,
+  subscriptionId: string,
+  newPackageId: string
+): Promise<CustomerService> {
+  const subscription = await getSubscriptionOrThrow(tenantId, subscriptionId);
+  if (subscription.status === "CANCELLED") {
+    throw new ConflictError("A cancelled subscription cannot change package");
+  }
+  if (subscription.packageId === newPackageId) {
+    throw new ConflictError("This subscription is already on that package");
+  }
+  const pkg = await getPackageOrThrow(tenantId, newPackageId);
+  if (!pkg.isActive) throw new ConflictError("Cannot move a subscription onto an inactive package");
+
+  const updated = await prisma.customerService.update({
+    where: { id: subscriptionId },
+    data: { packageId: newPackageId },
+  });
+
+  // The subscription's network state is now stale by definition — it reflects the OLD package
+  // until a device confirms otherwise, so it goes back to PENDING rather than continuing to
+  // claim ACTIVE for a configuration that is no longer what the customer pays for.
+  await prisma.customerService.update({
+    where: { id: subscriptionId },
+    data: { provisioningStatus: "PENDING" },
+  });
+
+  await queueNetworkChange(tenantId, subscriptionId, "PROVISION");
+  return updated;
 }
 
 export async function getSubscriptionOrThrow(tenantId: string, subscriptionId: string): Promise<CustomerService> {
@@ -99,10 +171,14 @@ export async function cancelSubscription(tenantId: string, subscriptionId: strin
   if (subscription.status === "CANCELLED") {
     throw new ConflictError("Subscription is already cancelled");
   }
-  return prisma.customerService.update({
+  const cancelled = await prisma.customerService.update({
     where: { id: subscriptionId },
     data: { status: "CANCELLED", autoRenew: false, cancelledAt: new Date() },
   });
+  // Deprovision removes device configuration. It does NOT delete the customer or the
+  // subscription record (spec section 6).
+  await queueNetworkChange(tenantId, subscriptionId, "DEPROVISION");
+  return cancelled;
 }
 
 /** A manual, staff-initiated suspend — unlike the overnight billing-cycle job's version, RADIUS
@@ -120,6 +196,7 @@ export async function suspendSubscription(tenantId: string, subscriptionId: stri
   await suspendRadiusUser(tenantId, subscriptionId).catch((err) => {
     if (!isAppError(err) || err.statusCode !== 404) throw err;
   });
+  await queueNetworkChange(tenantId, subscriptionId, "SUSPEND");
   return updated;
 }
 
@@ -135,5 +212,6 @@ export async function reactivateSubscription(tenantId: string, subscriptionId: s
   await reactivateRadiusUser(tenantId, subscriptionId).catch((err) => {
     if (!isAppError(err) || err.statusCode !== 404) throw err;
   });
+  await queueNetworkChange(tenantId, subscriptionId, "RESTORE");
   return updated;
 }
