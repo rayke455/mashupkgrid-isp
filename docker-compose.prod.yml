@@ -56,13 +56,6 @@ services:
     env_file: .env.production
     ports:
       - "127.0.0.1:4000:4000"
-    volumes:
-      # Captive-portal configs (brand name, support phone, price list) are written here at
-      # runtime, one JSON file per tenant. Without a volume they live only in the container
-      # filesystem and are destroyed by every `up --build`. Same reasoning as whatsapp_auth
-      # on the worker below. WORKDIR is /repo/apps/api, so this is the `data` the API resolves
-      # relative to its own cwd.
-      - captive_portal_data:/repo/apps/api/data
     depends_on:
       postgres:
         condition: service_healthy
@@ -111,4 +104,3 @@ volumes:
   postgres_data:
   redis_data:
   whatsapp_auth:
-  captive_portal_data:

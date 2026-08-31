@@ -49,9 +49,14 @@ const paystackStatusParamsSchema = z.object({
   reference: z.string().min(1),
 });
 
-import * as fs from "fs";
-import * as path from "path";
-
+/**
+ * Per-tenant captive-portal branding. Backed by the `captive_portal_configs` table (one row per
+ * tenant, see packages/database/prisma/schema.prisma) rather than a JSON file on disk, which is
+ * what it used to be. The file store cost three separate defects: the slug went into a
+ * filesystem path and needed its own traversal guard, the write endpoint was unauthenticated,
+ * and the directory had no volume in production so every deploy silently restored a stale copy
+ * baked into the image. A tenant-scoped row removes all three by construction.
+ */
 export interface CaptivePortalConfig {
   phone: string;
   supportPhone: string;
@@ -79,45 +84,65 @@ const DEFAULT_CAPTIVE_CONFIG: CaptivePortalConfig = {
   ],
 };
 
-function getStoragePath(tenantSlug: string): string {
-  const dir = path.resolve(process.cwd(), "data", "captive-portal");
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-  // The character allowlist is what keeps a slug from escaping this directory (`../`, absolute
-  // paths, NUL). A slug that sanitizes down to nothing would produce a bare ".json" shared by
-  // every such caller, so it's rejected outright rather than silently collapsed into one file.
-  const safeSlug = tenantSlug.toLowerCase().replace(/[^a-z0-9_-]/g, "");
-  if (!safeSlug) throw new ValidationError("Invalid tenant slug");
-  return path.join(dir, `${safeSlug}.json`);
-}
-
-function loadTenantCaptiveConfig(tenantSlug: string, tenantName?: string): CaptivePortalConfig {
-  try {
-    const file = getStoragePath(tenantSlug);
-    if (fs.existsSync(file)) {
-      const data = fs.readFileSync(file, "utf-8");
-      return { ...DEFAULT_CAPTIVE_CONFIG, ...JSON.parse(data) };
-    }
-  } catch (err) {
-    console.error("Error reading captive portal config:", err);
+/** Every column is nullable, so an unset field falls back to the shared default rather than
+ *  rendering an empty portal. A tenant with no row at all gets the defaults with its own name
+ *  as the brand, which is what a freshly-created tenant should show before anyone customizes. */
+function toCaptiveConfig(
+  row: {
+    phone: string | null;
+    supportPhone: string | null;
+    brandName: string | null;
+    welcomeTitle: string | null;
+    bannerSubtitle: string | null;
+    activeThemeId: string | null;
+    installationFee: string | null;
+    fiberRates: unknown;
+  } | null,
+  tenantName?: string
+): CaptivePortalConfig {
+  if (!row) {
+    return { ...DEFAULT_CAPTIVE_CONFIG, brandName: tenantName || DEFAULT_CAPTIVE_CONFIG.brandName };
   }
   return {
-    ...DEFAULT_CAPTIVE_CONFIG,
-    brandName: tenantName || DEFAULT_CAPTIVE_CONFIG.brandName,
+    phone: row.phone ?? DEFAULT_CAPTIVE_CONFIG.phone,
+    supportPhone: row.supportPhone ?? DEFAULT_CAPTIVE_CONFIG.supportPhone,
+    brandName: row.brandName ?? tenantName ?? DEFAULT_CAPTIVE_CONFIG.brandName,
+    welcomeTitle: row.welcomeTitle ?? DEFAULT_CAPTIVE_CONFIG.welcomeTitle,
+    bannerSubtitle: row.bannerSubtitle ?? DEFAULT_CAPTIVE_CONFIG.bannerSubtitle,
+    activeThemeId: row.activeThemeId ?? DEFAULT_CAPTIVE_CONFIG.activeThemeId,
+    installationFee: row.installationFee ?? DEFAULT_CAPTIVE_CONFIG.installationFee,
+    fiberRates: (row.fiberRates as CaptivePortalConfig["fiberRates"]) ?? DEFAULT_CAPTIVE_CONFIG.fiberRates,
   };
 }
 
-function saveTenantCaptiveConfig(tenantSlug: string, config: Partial<CaptivePortalConfig>): CaptivePortalConfig {
-  const current = loadTenantCaptiveConfig(tenantSlug);
-  const updated = { ...current, ...config };
-  try {
-    const file = getStoragePath(tenantSlug);
-    fs.writeFileSync(file, JSON.stringify(updated, null, 2), "utf-8");
-  } catch (err) {
-    console.error("Error writing captive portal config:", err);
-  }
-  return updated;
+async function loadTenantCaptiveConfig(tenantId: string, tenantName?: string): Promise<CaptivePortalConfig> {
+  const row = await prisma.captivePortalConfig.findUnique({ where: { tenantId } });
+  return toCaptiveConfig(row, tenantName);
+}
+
+async function saveTenantCaptiveConfig(
+  tenantId: string,
+  tenantName: string,
+  patch: Partial<CaptivePortalConfig>
+): Promise<CaptivePortalConfig> {
+  // Upsert with only the supplied keys: a caller editing one field must not blank out the rest,
+  // which is the same partial-merge behaviour the file store had.
+  const data = {
+    ...(patch.phone !== undefined ? { phone: patch.phone } : {}),
+    ...(patch.supportPhone !== undefined ? { supportPhone: patch.supportPhone } : {}),
+    ...(patch.brandName !== undefined ? { brandName: patch.brandName } : {}),
+    ...(patch.welcomeTitle !== undefined ? { welcomeTitle: patch.welcomeTitle } : {}),
+    ...(patch.bannerSubtitle !== undefined ? { bannerSubtitle: patch.bannerSubtitle } : {}),
+    ...(patch.activeThemeId !== undefined ? { activeThemeId: patch.activeThemeId } : {}),
+    ...(patch.installationFee !== undefined ? { installationFee: patch.installationFee } : {}),
+    ...(patch.fiberRates !== undefined ? { fiberRates: patch.fiberRates } : {}),
+  };
+  const row = await prisma.captivePortalConfig.upsert({
+    where: { tenantId },
+    create: { tenantId, ...data },
+    update: data,
+  });
+  return toCaptiveConfig(row, tenantName);
 }
 
 // Every field is length-bounded: this config is written verbatim to a JSON file on disk and
@@ -156,7 +181,7 @@ export async function hotspotRoutes(app: FastifyInstance): Promise<void> {
     async (request, reply) => {
       const { tenantSlug } = tenantParamsSchema.parse(request.params);
       const tenant = await resolveTenantBySlug(tenantSlug);
-      const config = loadTenantCaptiveConfig(tenantSlug, tenant.name);
+      const config = await loadTenantCaptiveConfig(tenant.id, tenant.name);
 
       reply.send(
         successResponse(
@@ -183,7 +208,7 @@ export async function hotspotRoutes(app: FastifyInstance): Promise<void> {
     async (request, reply) => {
       const { tenantSlug } = tenantParamsSchema.parse(request.params);
       const tenant = await resolveTenantBySlug(tenantSlug);
-      const config = loadTenantCaptiveConfig(tenantSlug, tenant.name);
+      const config = await loadTenantCaptiveConfig(tenant.id, tenant.name);
       reply.send(successResponse(config, request.id));
     }
   );
@@ -208,15 +233,18 @@ export async function hotspotRoutes(app: FastifyInstance): Promise<void> {
       const { tenantSlug } = tenantParamsSchema.parse(request.params);
       const body = updateConfigSchema.parse(request.body);
 
-      const callerSlug = request.tenantCtx?.slug;
-      if (!callerSlug) {
+      const caller = request.tenantCtx;
+      if (!caller) {
         throw new ConflictError("Platform administration has no captive portal of its own");
       }
-      if (callerSlug.toLowerCase() !== tenantSlug.toLowerCase()) {
+      if (caller.slug.toLowerCase() !== tenantSlug.toLowerCase()) {
         throw new ForbiddenError("You can only edit your own tenant's captive portal");
       }
 
-      const updated = saveTenantCaptiveConfig(callerSlug, body);
+      // Keyed by the caller's own tenant id from the verified session, never by the slug in the
+      // path — the ownership check above rejects a mismatch, and the id is what the row is
+      // actually keyed on, so there is no way for the two to drift apart.
+      const updated = await saveTenantCaptiveConfig(caller.id, caller.name, body);
       reply.send(successResponse(updated, request.id));
     }
   );

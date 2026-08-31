@@ -30,10 +30,22 @@ const h = vi.hoisted(() => ({
     liveChatConfig: { findUnique: vi.fn().mockResolvedValue(null) },
     mpesaStkRequest: { findFirst: vi.fn() },
     paystackTransaction: { findFirst: vi.fn() },
+    captivePortalConfig: {
+      findUnique: vi.fn(async ({ where }: { where: { tenantId: string } }) =>
+        h.configRows.get(where.tenantId) ?? null
+      ),
+      upsert: vi.fn(async ({ where, create, update }: any) => {
+        const existing = h.configRows.get(where.tenantId);
+        const row = existing ? { ...existing, ...update } : { ...create };
+        h.configRows.set(where.tenantId, row);
+        return row;
+      }),
+    },
   },
   getCachedPermissions: vi.fn(),
   resolveTenantBySlug: vi.fn(),
-  writtenFiles: new Map<string, string>(),
+  /** Stands in for the captive_portal_configs table: tenantId -> stored row. */
+  configRows: new Map<string, Record<string, unknown>>(),
 }));
 
 vi.mock("@mashupkgrid/database", () => ({ prisma: h.prisma }));
@@ -61,16 +73,6 @@ vi.mock("@mashupkgrid/payments", () => ({
   initiatePesapalHotspotPurchase: vi.fn(),
   verifyAndReconcilePesapalTransaction: vi.fn(),
 }));
-// The handler persists to disk. Capturing the write in memory keeps the suite from littering
-// apps/api/data/captive-portal, and lets every rejection test assert that nothing was written —
-// a 403 that still reached the filesystem would be a failed fix, not a passing one.
-vi.mock("fs", () => ({
-  existsSync: (p: string) => h.writtenFiles.has(String(p)),
-  mkdirSync: vi.fn(),
-  readFileSync: (p: string) => h.writtenFiles.get(String(p)) ?? "{}",
-  writeFileSync: (p: string, data: string) => void h.writtenFiles.set(String(p), String(data)),
-}));
-
 import { signAccessToken } from "@mashupkgrid/auth";
 import { registerErrorHandler } from "../../plugins/error-handler.js";
 import { hotspotRoutes } from "../hotspot.js";
@@ -115,7 +117,7 @@ describe("PUT /hotspot/:tenantSlug/config authorization", () => {
   });
 
   beforeEach(() => {
-    h.writtenFiles.clear();
+    h.configRows.clear();
     // A live, unrevoked session backing whichever token a test presents.
     h.prisma.session.findUnique.mockResolvedValue({
       id: SESSION_ID,
@@ -147,7 +149,7 @@ describe("PUT /hotspot/:tenantSlug/config authorization", () => {
       payload: VALID_BODY,
     });
     expect(res.statusCode).toBe(401);
-    expect(h.writtenFiles.size).toBe(0);
+    expect(h.configRows.size).toBe(0);
   });
 
   it("rejects a bearer token that is not a valid access token", async () => {
@@ -158,7 +160,7 @@ describe("PUT /hotspot/:tenantSlug/config authorization", () => {
       payload: VALID_BODY,
     });
     expect(res.statusCode).toBe(401);
-    expect(h.writtenFiles.size).toBe(0);
+    expect(h.configRows.size).toBe(0);
   });
 
   it("rejects an authenticated staff member who lacks settings.manage", async () => {
@@ -170,7 +172,7 @@ describe("PUT /hotspot/:tenantSlug/config authorization", () => {
       payload: VALID_BODY,
     });
     expect(res.statusCode).toBe(403);
-    expect(h.writtenFiles.size).toBe(0);
+    expect(h.configRows.size).toBe(0);
   });
 
   it("rejects a fully-authorized staff member editing ANOTHER tenant's portal", async () => {
@@ -181,7 +183,7 @@ describe("PUT /hotspot/:tenantSlug/config authorization", () => {
       payload: VALID_BODY,
     });
     expect(res.statusCode).toBe(403);
-    expect(h.writtenFiles.size).toBe(0);
+    expect(h.configRows.size).toBe(0);
   });
 
   it("rejects a revoked session even though the token itself still verifies", async () => {
@@ -198,7 +200,7 @@ describe("PUT /hotspot/:tenantSlug/config authorization", () => {
       payload: VALID_BODY,
     });
     expect(res.statusCode).toBe(401);
-    expect(h.writtenFiles.size).toBe(0);
+    expect(h.configRows.size).toBe(0);
   });
 
   it("allows a permitted staff member to edit their OWN tenant's portal", async () => {
@@ -210,12 +212,12 @@ describe("PUT /hotspot/:tenantSlug/config authorization", () => {
     });
     expect(res.statusCode).toBe(200);
     expect(res.json().data.brandName).toBe("Acme WiFi");
-    expect(h.writtenFiles.size).toBe(1);
-    // Written under the caller's OWN slug, never whatever the path said.
-    expect([...h.writtenFiles.keys()][0]).toContain("acme.json");
+    expect(h.configRows.size).toBe(1);
+    // Keyed by the caller's OWN tenant id, never by whatever slug the path carried.
+    expect([...h.configRows.keys()][0]).toBe(TENANT_A.id);
   });
 
-  it("bounds field length so one write cannot grow the stored file without limit", async () => {
+  it("bounds field length so one write cannot grow the stored row without limit", async () => {
     const res = await app.inject({
       method: "PUT",
       url: `/api/v1/hotspot/${TENANT_A.slug}/config`,
@@ -223,7 +225,7 @@ describe("PUT /hotspot/:tenantSlug/config authorization", () => {
       payload: { brandName: "x".repeat(5000) },
     });
     expect(res.statusCode).toBe(422);
-    expect(h.writtenFiles.size).toBe(0);
+    expect(h.configRows.size).toBe(0);
   });
 
   it("keeps the matching GET public — the portal is read before any login exists", async () => {

@@ -73,6 +73,7 @@ model Tenant {
   smsProviderConfig      SmsProviderConfig?
   aiAssistantConfig      AiAssistantConfig?
   liveChatConfig         LiveChatConfig?
+  captivePortalConfig    CaptivePortalConfig?
   whatsappConnection     WhatsappConnection?
   tickets                Ticket[]
   onboardingFee          TenantOnboardingFee?
@@ -733,6 +734,38 @@ model AiAssistantConfig {
 /// client-side HTML, so unlike AiAssistantConfig's API key this is stored plain. Two independent
 /// placement toggles (not just one master switch) because a tenant asked specifically to be able
 /// to turn each surface on/off on its own, not just everywhere at once.
+/// Per-tenant captive-portal branding, shown to anyone who connects to that ISP's WiFi before
+/// they log in. This lived in apps/api/data/captive-portal/<slug>.json until it moved here, and
+/// that file-based store was the source of three separate defects worth remembering: the write
+/// endpoint was unauthenticated (any visitor could rewrite any ISP's support phone number), the
+/// slug was interpolated into a filesystem path so it needed its own traversal guard, and the
+/// directory had no volume in production, so every deploy silently restored a stale copy baked
+/// into the image. All three stop existing once this is a tenant-scoped row like every other
+/// config in this schema.
+model CaptivePortalConfig {
+  id              String   @id @default(uuid())
+  tenantId        String   @unique
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  phone           String?
+  supportPhone    String?
+  brandName       String?
+  welcomeTitle    String?
+  bannerSubtitle  String?
+  activeThemeId   String?
+  installationFee String?
+  /// The speed/price tiers rendered on the portal. A JSON column rather than its own table:
+  /// an ordered display list a tenant edits as a whole, which nothing ever queries into.
+  /// Note jsonb normalizes object key order on write, so a row read back is key-reordered
+  /// relative to what was sent. Array order (the display order a tenant arranges) IS
+  /// preserved, and every value survives intact - verified against a real database. Compare
+  /// these field-by-field, never by JSON.stringify equality.
+  fiberRates      Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("captive_portal_configs")
+}
+
 model LiveChatConfig {
   id                   String   @id @default(uuid())
   tenantId             String   @unique
@@ -767,7 +800,7 @@ enum WhatsappConnectionStatus {
 /// dashboard reads.
 model WhatsappConnection {
   id              String                   @id @default(uuid())
-  /// Null identifies the single platform-level line — the one that sends ISP-registration OTPs,
+  /// Null identifies the single platform-level line â€” the one that sends ISP-registration OTPs,
   /// which go out before the tenant that could own a session exists. Postgres treats NULLs as
   /// distinct in a unique index, so @unique alone would allow unlimited platform rows; the
   /// migration adds a partial unique index that pins it to exactly one.
