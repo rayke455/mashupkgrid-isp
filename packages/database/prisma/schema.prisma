@@ -74,6 +74,7 @@ model Tenant {
   aiAssistantConfig      AiAssistantConfig?
   liveChatConfig         LiveChatConfig?
   captivePortalConfig    CaptivePortalConfig?
+  vlans                  Vlan[]
   whatsappConnection     WhatsappConnection?
   tickets                Ticket[]
   onboardingFee          TenantOnboardingFee?
@@ -449,6 +450,25 @@ model Package {
   createdAt            DateTime     @default(now())
   updatedAt            DateTime     @updatedAt
   deletedAt            DateTime?
+  // --- Network service configuration (spec section 3) ------------------------------------
+  // A package is what determines a subscriber's network setup, so the VLAN, pool, profiles and
+  // router live here and are inherited by every CustomerService created from this package.
+  // All nullable: packages predating this module have none of it, and a package still bills
+  // correctly without it -- what it cannot do is drive automatic provisioning, which is exactly
+  // the distinction the provisioning job surfaces rather than silently guessing a default.
+  serviceType    NetworkServiceType @default(PPPOE)
+  vlanId         String?
+  vlan           Vlan?              @relation(fields: [vlanId], references: [id], onDelete: SetNull)
+  ipPoolId       String?
+  ipPool         IPPool?            @relation(fields: [ipPoolId], references: [id], onDelete: SetNull)
+  /// Names of profiles that must already exist on the device. Stored as free text because they
+  /// are the vendor's own identifiers, not something this system owns or can validate offline;
+  /// the provisioning job verifies them against the device and fails loudly if absent.
+  pppoeProfile   String?
+  hotspotProfile String?
+  routerId       String?
+  router         Router?            @relation(fields: [routerId], references: [id], onDelete: SetNull)
+  fairUsagePolicy String?
 
   customerServices CustomerService[]
   hotspotVouchers  HotspotVoucher[]
@@ -1297,6 +1317,8 @@ model Router {
   updatedAt         DateTime     @updatedAt
   deletedAt         DateTime?
 
+  vlans            Vlan[]
+  packages         Package[]
   ipPools     IPPool[]
   radiusNas   RadiusNas[]
   syncTasks   NetworkSyncTask[]
@@ -1328,6 +1350,8 @@ model IPPool {
   updatedAt  DateTime  @updatedAt
 
   addresses IPAddress[]
+  vlans     Vlan[]
+  packages  Package[]
 
   @@unique([tenantId, name])
   @@map("ip_pools")
@@ -1557,8 +1581,108 @@ enum SyncTaskStatus {
 /// comments) already govern accept/reject and rate limits. The only router-side action that's
 /// ever actually needed is kicking an already-active session after a suspend, since a RADIUS
 /// reject only blocks the *next* auth attempt, not a session already established.
+/// 802.1Q VLAN purposes. CUSTOM exists so an ISP can label a VLAN for a purpose this list does
+/// not name, without a schema change; the human-readable label then lives in Vlan.customTypeLabel.
+enum VlanType {
+  CUSTOMER_INTERNET
+  BUSINESS_INTERNET
+  IPTV
+  VOIP
+  HOTSPOT
+  MANAGEMENT
+  GUEST
+  CUSTOM
+}
+
+/// How a VLAN's configuration currently stands ON THE DEVICE, which is deliberately separate
+/// from whether an admin has enabled it in this system (Vlan.isEnabled). A VLAN can be enabled
+/// here and still NOT_PROVISIONED or FAILED on the router, and the dashboard must be able to
+/// show that difference rather than implying a row in this database means live network config.
+enum VlanProvisioningStatus {
+  NOT_PROVISIONED
+  PENDING
+  ACTIVE
+  FAILED
+}
+
+/// How a subscriber actually attaches to the network for a given package.
+enum NetworkServiceType {
+  PPPOE
+  HOTSPOT
+  STATIC_IP
+  IPTV
+}
+
 enum SyncTaskAction {
   DISCONNECT_USER
+}
+
+/// An 802.1Q VLAN an ISP has defined. A row here is a DECLARATION of intent, not proof that the
+/// VLAN exists on any device -- provisioningStatus is what tracks the device side, and nothing
+/// in this system may report a VLAN as live on a router without an actual device response
+/// saying so.
+model Vlan {
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  /// The 802.1Q tag itself (1-4094). Named vlanTag rather than vlanId so it is never confused
+  /// with this row's own primary key, which foreign keys elsewhere point at.
+  vlanTag         Int
+  name            String
+  description     String?
+  type            VlanType @default(CUSTOMER_INTERNET)
+  /// Only meaningful when type = CUSTOM; the label an admin gave their own VLAN purpose.
+  customTypeLabel String?
+
+  /// Nullable: a VLAN can be designed before the router that will carry it is linked. The
+  /// compound unique below is what stops two VLANs claiming the same tag on one device.
+  routerId String?
+  router   Router? @relation(fields: [routerId], references: [id], onDelete: SetNull)
+
+  subnetCidr String?
+  gateway    String?
+  ipPoolId   String?
+  ipPool     IPPool? @relation(fields: [ipPoolId], references: [id], onDelete: SetNull)
+  dnsServers String[] @default([])
+
+  downloadKbps Int?
+  uploadKbps   Int?
+  mtu          Int?
+
+  /// Whether an administrator has this VLAN switched on in the billing system. Distinct from
+  /// provisioningStatus, which reflects the device.
+  isEnabled          Boolean                 @default(true)
+  provisioningStatus VlanProvisioningStatus  @default(NOT_PROVISIONED)
+  /// The device's own error text from the last failed provisioning attempt, surfaced verbatim to
+  /// the admin rather than replaced with a generic message they cannot act on.
+  lastProvisioningError String?
+  lastProvisionedAt     DateTime?
+
+  /// Fiber/OLT fields. Nullable and unused by any code path today: there is no OLT device model
+  /// yet, and inventing one before a real OLT integration exists would be guessing at a vendor's
+  /// data shape. They are here so the VLAN record can carry the identifiers a future OLT adapter
+  /// will need without a second migration against live data.
+  oltDeviceRef   String?
+  ponPort        String?
+  serviceVlanTag Int?
+  customerVlanTag Int?
+  vlanMode       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+
+  packages Package[]
+
+  /// The duplicate-VLAN-ID rule the spec calls for, enforced by the database rather than by a
+  /// service-layer check alone. Note Postgres treats NULLs as distinct, so this constrains only
+  /// VLANs actually assigned to a router; the unassigned case is checked in the service, since
+  /// two unrouted VLANs sharing a tag is a warning, not a conflict.
+  @@unique([routerId, vlanTag])
+  @@index([tenantId, isEnabled])
+  @@index([tenantId, type])
+  @@map("vlans")
 }
 
 /// A router-side operation that couldn't be applied synchronously (router unreachable, or the
