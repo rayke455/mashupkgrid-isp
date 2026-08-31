@@ -8,6 +8,7 @@ import {
   createPendingRouter,
   getGeneratedCredentials,
   completeRouterProvisioning,
+  ensureRouterVpnIp,
   startVpnRegistration,
   completeVpnRegistration,
   updateRouter,
@@ -196,16 +197,35 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
         );
       }
 
-      // The route only ever stores the token's hash — re-deriving the raw token to embed in the
-      // script isn't possible from that, so the raw token itself must have been captured at
       const { provisionToken } = provisioningScriptQuerySchema.parse(request.query);
       const managementSource = env.ROUTER_MANAGEMENT_SOURCE || "68.210.187.104";
+      const vpnIp = await ensureRouterVpnIp(router.id);
+
+      let serverPublicKey = env.WIREGUARD_SERVER_PUBLIC_KEY;
+      if (!serverPublicKey) {
+        try {
+          const { execFileSync } = await import("node:child_process");
+          serverPublicKey = execFileSync("wg", ["show", env.WIREGUARD_INTERFACE, "public-key"], {
+            encoding: "utf-8",
+          }).trim();
+        } catch {
+          serverPublicKey = "";
+        }
+      }
+
+      const serverHost = env.WIREGUARD_SERVER_ENDPOINT
+        ? (env.WIREGUARD_SERVER_ENDPOINT.includes(":") ? env.WIREGUARD_SERVER_ENDPOINT.split(":")[0] : env.WIREGUARD_SERVER_ENDPOINT)
+        : "68.210.187.104";
 
       const credentials = await getGeneratedCredentials(tenantId, routerId);
       const callbackUrl = `${env.APP_API_PUBLIC_URL}/api/v1/routers/provision/${provisionToken}/callback`;
       const script = buildMikrotikProvisioningScript(router, credentials, callbackUrl, {
         radiusHost: process.env.RADIUS_SERVER_HOST || "68.210.187.104",
         managementSource,
+        serverPublicKey,
+        serverHost,
+        serverPort: env.WIREGUARD_LISTEN_PORT || 51820,
+        vpnIp,
       });
 
       await writeAuditLog({
@@ -569,18 +589,24 @@ function getClientIp(request: { headers: Record<string, string | string[] | unde
   app.post("/provision/:token/callback", { config: { audience: "system-critical" } }, async (request, reply) => {
     const { token } = provisionCallbackParamsSchema.parse(request.params);
     const remoteIp = getClientIp(request);
+    let wgpubkey = typeof request.body === "string" ? request.body : "";
+    if (!wgpubkey && typeof request.query === "object" && request.query && "wgpubkey" in request.query) {
+      wgpubkey = String((request.query as Record<string, unknown>).wgpubkey || "");
+    }
+    wgpubkey = wgpubkey.replace(/["'\r\n]/g, "").trim().replace(/ /g, "+");
+
     try {
-      const router = await completeRouterProvisioning(token, remoteIp);
+      const router = await completeRouterProvisioning(token, remoteIp, wgpubkey || undefined);
       await writeAuditLog({
         tenantId: router.tenantId,
         action: "router.provisioned_via_callback",
         resourceType: "Router",
         resourceId: router.id,
-        after: { host: router.host },
+        after: { host: router.host, vpnIp: router.vpnIp },
         ipAddress: remoteIp,
         userAgent: request.headers["user-agent"] ?? null,
       });
-      reply.status(200).send({ linked: true, host: remoteIp });
+      reply.status(200).send({ linked: true, host: router.host, vpnIp: router.vpnIp });
     } catch (err) {
       if (err instanceof NotFoundError) {
         reply.status(404).send({ linked: false, error: "Unknown or already-superseded provisioning token" });

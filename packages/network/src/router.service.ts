@@ -112,15 +112,61 @@ export async function getGeneratedCredentials(
   };
 }
 
+/** Pre-allocates or returns the reserved WireGuard tunnel IP for a router */
+export async function ensureRouterVpnIp(routerId: string): Promise<string> {
+  const router = await prisma.router.findUnique({ where: { id: routerId } });
+  if (!router) throw new NotFoundError("Router");
+  if (router.vpnIp) return router.vpnIp;
+
+  const vpnIp = await prisma.$transaction(async (tx) => {
+    const existing = await tx.router.findUnique({ where: { id: routerId } });
+    if (existing?.vpnIp) return existing.vpnIp;
+    const inUse = await tx.router.findMany({
+      where: { vpnIp: { not: null }, id: { not: routerId } },
+      select: { vpnIp: true },
+    });
+    const candidate = allocateNextVpnIp(env.WIREGUARD_SUBNET_CIDR, inUse.map((r) => r.vpnIp!));
+    await tx.router.update({ where: { id: routerId }, data: { vpnIp: candidate } });
+    return candidate;
+  });
+
+  return vpnIp;
+}
+
 /** Completes provisioning for the router that owns `provisionToken`: records the address the
- *  callback actually arrived from as its `host`, so the admin never types one in. Idempotent —
- *  a router that re-runs its script (e.g. after a reboot) simply re-confirms/updates its
- *  address rather than erroring on an already-linked token. */
-export async function completeRouterProvisioning(provisionToken: string, remoteHost: string): Promise<Router> {
+ *  callback actually arrived from as its `host`, and if a WireGuard public key is provided,
+ *  registers the peer and sets the tunnel IP as `host` automatically. */
+export async function completeRouterProvisioning(
+  provisionToken: string,
+  remoteHost: string,
+  wgPublicKey?: string
+): Promise<Router> {
   const router = await prisma.router.findFirst({
     where: { provisionTokenHash: hashToken(provisionToken), deletedAt: null },
   });
   if (!router) throw new NotFoundError("Provisioning token");
+
+  const cleanWgKey = wgPublicKey ? wgPublicKey.replace(/["'\r\n]/g, "").trim().replace(/ /g, "+") : "";
+
+  if (cleanWgKey) {
+    const vpnIp = router.vpnIp || (await ensureRouterVpnIp(router.id));
+    try {
+      await registerWireguardPeer(env.WIREGUARD_INTERFACE, cleanWgKey, vpnIp);
+    } catch (err) {
+      console.warn("WireGuard peer registration warning on provisioning:", err);
+    }
+
+    return prisma.router.update({
+      where: { id: router.id },
+      data: {
+        host: vpnIp,
+        vpnIp,
+        vpnPublicKey: cleanWgKey,
+        vpnConfiguredAt: router.vpnConfiguredAt ?? new Date(),
+        provisionedAt: router.provisionedAt ?? new Date(),
+      },
+    });
+  }
 
   return prisma.router.update({
     where: { id: router.id },

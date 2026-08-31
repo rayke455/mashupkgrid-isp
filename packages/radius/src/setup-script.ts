@@ -34,6 +34,10 @@ export function buildMikrotikProvisioningScript(
     radiusHost?: string;
     radiusSecret?: string;
     managementSource?: string;
+    serverPublicKey?: string;
+    serverHost?: string;
+    serverPort?: number;
+    vpnIp?: string;
   } = {}
 ): string {
   const apiLine = router.useTls
@@ -46,57 +50,68 @@ export function buildMikrotikProvisioningScript(
   const managementSource = options.managementSource?.trim();
   const apiSource = managementSource ? ` address=${managementSource}` : " address=\"\"";
   const firewallSource = managementSource ? ` src-address=${managementSource}` : "";
+  const serverHost = options.serverHost || "68.210.187.104";
+  const serverPort = options.serverPort || 51820;
+  const serverPublicKey = options.serverPublicKey || "";
+  const vpnIp = options.vpnIp || "10.90.0.2";
 
   return `# =========================================================
 # MASHUPKGRID ISP — ALL-IN-ONE AUTOMATIC SETUP SCRIPT
 # Router: "${safeName}"
-# Paste this into WinBox Terminal (or SSH). It configures API,
-# RADIUS billing (Hotspot & PPPoE), Walled Garden, and Heartbeat.
+# Paste this into WinBox Terminal (or SSH). It configures:
+#  1. Dedicated Management API & User
+#  2. WireGuard Remote Access Tunnel (Direct Cloud Management)
+#  3. RADIUS Billing (Hotspot & PPPoE) + CoA Port 3799
+#  4. Hotspot Walled Garden for M-Pesa
+#  5. Automatic Heartbeat Scheduler & Instant Handshake
 # =========================================================
+{
+  # 1. Enable API Service and allow port ${router.apiPort} through Firewall
+  ${apiLine}${apiSource}
+  /ip firewall filter remove [find comment="MASHUPKGRID ISP API"]
+  /ip firewall filter add chain=input protocol=tcp dst-port=${router.apiPort}${firewallSource} action=accept comment="MASHUPKGRID ISP API"
+  :do {/ip firewall filter move [find comment="MASHUPKGRID ISP API"] destination=0} on-error={}
 
-# 1. Enable API Service and allow port ${router.apiPort} through Firewall
-${apiLine}${apiSource}
-/ip firewall filter remove [find comment="MASHUPKGRID ISP API"]
-# place-before=1 fails outright with "no such item" on a router whose filter chain has fewer
-# than two rules — which is every factory-reset MikroTik, so the accept rule was silently never
-# added and the API stayed firewalled off. Add first, then move to the top separately, with an
-# on-error guard so an unmovable rule can't abort the rest of the paste.
-/ip firewall filter add chain=input protocol=tcp dst-port=${router.apiPort}${firewallSource} action=accept comment="MASHUPKGRID ISP API"
-:do {/ip firewall filter move [find comment="MASHUPKGRID ISP API"] destination=0} on-error={}
+  # 2. Create dedicated management user
+  /user remove [find name=${credentials.username}]
+  /user add name=${credentials.username} group=full password="${credentials.password}" comment="MASHUPKGRID ISP - managed, do not delete"
 
-# 2. Create dedicated management user
-/user remove [find name=${credentials.username}]
-/user add name=${credentials.username} group=full password="${credentials.password}" comment="MASHUPKGRID ISP - managed, do not delete"
+  # 3. WireGuard Remote Access (RouterOS v7+)
+  :do {
+    /interface wireguard remove [find name=mkg-wg]
+    /interface wireguard add name=mkg-wg listen-port=51820
+    :delay 2s
+    /interface wireguard peers remove [find interface=mkg-wg]
+    /interface wireguard peers add interface=mkg-wg public-key="${serverPublicKey}" endpoint-address="${serverHost}" endpoint-port=${serverPort} allowed-address=0.0.0.0/0 persistent-keepalive=25s
+    /ip address remove [find interface=mkg-wg]
+    /ip address add address="${vpnIp}/32" interface=mkg-wg
+  } on-error={ :put "Note: WireGuard requires RouterOS v7+" }
 
-# 3. Configure RADIUS for PPPoE and Hotspot billing
-/radius remove [find comment="MASHUPKGRID ISP"]
-/radius add service=ppp,hotspot address=${radiusHost} secret="${radiusSecret}" authentication-port=1812 accounting-port=1813 timeout=3000ms comment="MASHUPKGRID ISP"
+  # 4. Configure RADIUS for PPPoE and Hotspot billing
+  /radius remove [find comment="MASHUPKGRID ISP"]
+  /radius add service=ppp,hotspot address=${radiusHost} secret="${radiusSecret}" authentication-port=1812 accounting-port=1813 timeout=3000ms comment="MASHUPKGRID ISP"
+  /ppp aaa set use-radius=yes accounting=yes interim-update=1m
+  /radius incoming set accept=yes port=3799
 
-# 4. Enable RADIUS on PPP & Hotspot with 1-minute accounting updates
-/ppp aaa set use-radius=yes accounting=yes interim-update=1m
-/radius incoming set accept=yes port=3799
+  # 5. Hotspot Walled Garden for M-Pesa payments & Captive Portal
+  /ip hotspot walled-garden ip remove [find comment="MASHUPKGRID ISP"]
+  /ip hotspot walled-garden ip add dst-host=api.mashuphost.tech action=accept comment="MASHUPKGRID ISP"
+  /ip hotspot walled-garden ip add dst-host=mashuphost.tech action=accept comment="MASHUPKGRID ISP"
+  /ip hotspot walled-garden ip add dst-host=*.safaricom.co.ke action=accept comment="MASHUPKGRID ISP"
 
-# 5. Hotspot Walled Garden for M-Pesa payments & Captive Portal
-/ip hotspot walled-garden ip remove [find comment="MASHUPKGRID ISP"]
-/ip hotspot walled-garden ip add dst-host=api.mashuphost.tech action=accept comment="MASHUPKGRID ISP"
-/ip hotspot walled-garden ip add dst-host=mashuphost.tech action=accept comment="MASHUPKGRID ISP"
-/ip hotspot walled-garden ip add dst-host=*.safaricom.co.ke action=accept comment="MASHUPKGRID ISP"
+  # 6. Automatic Heartbeat Scheduler (keeps router synchronized with cloud)
+  :local mywgkey ""
+  :do { :set mywgkey [/interface wireguard get [find name=mkg-wg] public-key] } on-error={}
+  /system scheduler remove [find name=mkg-heartbeat]
+  /system scheduler add name=mkg-heartbeat interval=1m on-event="/tool fetch url=\\"${callbackUrl}?wgpubkey=\\$mywgkey\\" http-method=post keep-result=no"
 
-# 6. Automatic Heartbeat Scheduler (keeps router synchronized with cloud)
-/system scheduler remove [find name=mkg-heartbeat]
-# The inner quotes around the URL must reach RouterOS as literal backslash-quote. In a JS
-# template literal \\" is a plain " — so this line used to emit a nested, unescaped
-# on-event="/tool fetch url="https://..." ...", which RouterOS rejects with "expected end of
-# command" and no scheduler is created: the router links once on the paste and then never checks
-# in again, so it goes stale the moment its address changes. \\\\" is what emits \\".
-/system scheduler add name=mkg-heartbeat interval=1m on-event="/tool fetch url=\\"${callbackUrl}\\" http-method=post keep-result=no"
+  # 7. Complete initial cloud linking handshake
+  /tool fetch url="${callbackUrl}?wgpubkey=$mywgkey" http-method=post http-data=$mywgkey keep-result=no
 
-# 7. Complete initial cloud linking handshake
-/tool fetch url="${callbackUrl}" http-method=post keep-result=no
-
-:put "========================================================="
-:put "  SUCCESS! Your MikroTik router is fully configured!     "
-:put "========================================================="
+  :put "========================================================="
+  :put "  SUCCESS! Your MikroTik router is 100% ONLINE!         "
+  :put "========================================================="
+}
 `;
 }
 
