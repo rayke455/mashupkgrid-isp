@@ -1,0 +1,6 @@
+# This repo is developed on Windows but its shell scripts only ever run inside Linux
+# containers. A CRLF shebang makes the kernel look for an interpreter literally named
+# "/bin/sh\r", which fails as "bad interpreter: No such file or directory" -- for
+# infrastructure/docker/api-entrypoint.sh that means the API container cannot start at all.
+# Pin these to LF regardless of anyone's core.autocrlf setting.
+*.sh text eol=lf
