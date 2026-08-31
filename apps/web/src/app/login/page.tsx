@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -30,14 +30,17 @@ const loginSchema = z.object({
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
-export default function LoginPage({
-  searchParams,
-}: {
-  searchParams: { tenant?: string };
-}) {
+// Reads the tenant from `useSearchParams()` rather than a `searchParams` page prop. Next 15
+// makes that prop a Promise, which a client component can only unwrap with React 19's `use()` —
+// and this app is on React 18. The hook is the idiomatic client-component route regardless, and
+// it is already what register/, verify-email/ and reset-password/ do, so this also stops /login
+// being the odd one out. `useSearchParams()` opts the route into client-side rendering, hence
+// the Suspense boundary in the default export below.
+function LoginContent() {
   const { login, loginWithGoogle } = useAuth();
   const router = useRouter();
-  const detectedTenant = searchParams.tenant ?? null;
+  const searchParams = useSearchParams();
+  const detectedTenant = searchParams.get("tenant");
   const [manualOverride, setManualOverride] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [googlePending, setGooglePending] = useState(false);
@@ -405,5 +408,13 @@ export default function LoginPage({
         </div>
       </footer>
     </main>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-slate-900" />}>
+      <LoginContent />
+    </Suspense>
   );
 }

@@ -34,6 +34,10 @@ export interface AuthenticatedUser {
 export interface TenantContext {
   id: string;
   slug: string;
+  /** The tenant's display name. Carried here because resolveTenant has already loaded the row,
+   *  so anything needing it (e.g. the captive portal's default brand name) gets it without a
+   *  second query. */
+  name: string;
   status: "ACTIVE" | "SUSPENDED" | "CANCELLED";
   /** White-label branding, exposed here so `/auth/me` can hand it straight to the frontend
    *  without a second round trip — safe to include on every authenticated request, neither

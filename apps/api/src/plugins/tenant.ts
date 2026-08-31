@@ -36,6 +36,7 @@ export async function resolveTenant(request: FastifyRequest): Promise<void> {
   request.tenantCtx = {
     id: tenant.id,
     slug: tenant.slug,
+    name: tenant.name,
     status: tenant.status,
     brandColor: tenant.brandColor,
     logoUrl: tenant.logoUrl,

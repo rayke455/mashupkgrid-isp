@@ -11,6 +11,15 @@ allowBuilds:
   protobufjs: true
   unrs-resolver: true
 overrides:
+  # Next pins postcss 8.4.31 inside its own dependency tree. That copy carries four advisories
+  # (path traversal in previous-source-map auto-loading, arbitrary file read, and two stringify
+  # issues) which apps/web's own postcss ^8.4.47 already resolves past — but the nested one wins
+  # for anything Next runs itself. All four are build-time-only and not reachable here (postcss
+  # never sees attacker-supplied CSS: a tenant's custom CSS is injected in the browser at runtime
+  # by CustomCodeInjector, never fed through the build), so this is hygiene rather than an
+  # exposure fix. Kept inside the 8.x line, and verified with a full `next build`.
+  postcss: ^8.5.26
+
   # @whiskeysockets/baileys lists this git-hosted package under `dependencies` (not
   # `devDependencies`) in its own package.json, even though it's only their internal ESLint
   # config — never actually imported by baileys' runtime code. pnpm's supply-chain policy
