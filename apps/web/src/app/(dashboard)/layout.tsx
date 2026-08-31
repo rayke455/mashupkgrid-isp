@@ -188,6 +188,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       show: isTenantScoped && has("routers.read"),
     },
     {
+      href: "/vlans",
+      label: "VLANs",
+      icon: <IconLayers size={18} />,
+      show: isTenantScoped && has("vlans.read"),
+    },
+    {
       href: "/ip-pools",
       label: "IP Pools",
       icon: <IconNetworkPool size={18} />,

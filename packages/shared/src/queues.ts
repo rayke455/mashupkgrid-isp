@@ -130,6 +130,7 @@ export const JOB_NAMES = {
   pollPendingStkRequests: "poll-pending-stk-requests",
   // Phase 4 — network/MikroTik/RADIUS (docs/architecture/13-phase4-plan.md).
   retryPendingSyncTasks: "retry-pending-sync-tasks",
+  runProvisioningJobs: "run-provisioning-jobs",
   pollRouterHealth: "poll-router-health",
   expireOverdueVouchers: "expire-overdue-vouchers",
   // Dunning — escalating payment reminders ahead of suspendOverdueCustomers, not just the

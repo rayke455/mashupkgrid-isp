@@ -25,6 +25,7 @@ import { mpesaRoutes } from "./routes/mpesa.js";
 import { routerRoutes } from "./routes/routers.js";
 import { ipPoolRoutes } from "./routes/ip-pools.js";
 import { vlanRoutes } from "./routes/vlans.js";
+import { provisioningRoutes } from "./routes/provisioning.js";
 import { radiusUserRoutes } from "./routes/radius-users.js";
 import { voucherRoutes } from "./routes/vouchers.js";
 import { settingsRoutes } from "./routes/settings.js";
@@ -88,6 +89,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(routerRoutes, { prefix: "/api/v1/routers" });
   await app.register(ipPoolRoutes, { prefix: "/api/v1/ip-pools" });
   await app.register(vlanRoutes, { prefix: "/api/v1/vlans" });
+  await app.register(provisioningRoutes, { prefix: "/api/v1/provisioning" });
   await app.register(radiusUserRoutes, { prefix: "/api/v1/radius/users" });
   await app.register(voucherRoutes, { prefix: "/api/v1/vouchers" });
   await app.register(settingsRoutes, { prefix: "/api/v1/settings" });
