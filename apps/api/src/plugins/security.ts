@@ -74,6 +74,15 @@ export async function registerSecurity(app: FastifyInstance): Promise<void> {
       if (isOwnTenantSubdomain(origin)) return cb(null, true);
       cb(null, false);
     },
+    // @fastify/cors v11 changed its default `methods` to the CORS-safelisted set
+    // ("GET,HEAD,POST") — every preflight for a DELETE, PATCH or PUT is answered with an
+    // Access-Control-Allow-Methods that omits the method being asked about, so the browser
+    // blocks the real request before it is ever sent. The API never sees it, nothing is
+    // logged server-side, and the web app reports a bare network failure: "Remove router"
+    // and "Edit IP" simply never worked in production while every POST-based button did.
+    // This API has 30+ DELETE/PATCH/PUT routes, so list them explicitly rather than relying
+    // on a default that has already changed once.
+    methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     credentials: true,
   });
 }
