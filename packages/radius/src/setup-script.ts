@@ -29,44 +29,60 @@ export interface MikrotikSetupScript {
 export function buildMikrotikProvisioningScript(
   router: Router,
   credentials: { username: string; password: string },
-  callbackUrl: string
+  callbackUrl: string,
+  options: {
+    radiusHost?: string;
+    radiusSecret?: string;
+  } = {}
 ): string {
   const apiLine = router.useTls
     ? `/ip service set api-ssl disabled=no port=${router.apiPort}`
     : `/ip service set api disabled=no port=${router.apiPort}`;
 
-  // RouterOS 6.43+ and every v7 release accept the combined `url=` form below. Older RouterOS
-  // (pre-6.43, realistically only relevant on hardware that's never been upgraded since ~2018)
-  // needs the address/mode/src-path split instead — pre-computed here so nothing has to parse a
-  // URL string inside RouterOS's own scripting language, just uncomment it if the line above
-  // errors with "bad command name fetch" or a syntax error.
-  const parsed = new URL(callbackUrl);
-  const legacyMode = parsed.protocol === "https:" ? "https" : "http";
-  const legacyPort = parsed.port || (legacyMode === "https" ? "443" : "80");
-  const legacyPath = `${parsed.pathname}${parsed.search}`;
   const safeName = sanitizeForScript(router.name);
+  const radiusHost = options.radiusHost || "68.210.187.104";
+  const radiusSecret = options.radiusSecret || credentials.password;
 
-  return `# MASHUPKGRID ISP — provisioning script for router "${safeName}"
-# Paste this into the router's terminal (WinBox: New Terminal, or SSH), then run it.
-# This is the ONLY script needed to link the router — no IP/port/credentials to type
-# on the dashboard, the platform detects them from this script running.
+  return `# =========================================================
+# MASHUPKGRID ISP — ALL-IN-ONE AUTOMATIC SETUP SCRIPT
+# Router: "${safeName}"
+# Paste this into WinBox Terminal (or SSH). It configures API,
+# RADIUS billing (Hotspot & PPPoE), Walled Garden, and Heartbeat.
+# =========================================================
 
-# 1. Enable the API service and allow it through firewall
+# 1. Enable API Service and allow port ${router.apiPort} through Firewall
 ${apiLine} address=""
+/ip firewall filter remove [find comment="MASHUPKGRID ISP API"]
 /ip firewall filter add chain=input protocol=tcp dst-port=${router.apiPort} action=accept comment="MASHUPKGRID ISP API" place-before=1
 
-# 2. Create a dedicated API user for the platform (do not reuse this account elsewhere).
+# 2. Create dedicated management user
 /user remove [find name=${credentials.username}]
 /user add name=${credentials.username} group=full password="${credentials.password}" comment="MASHUPKGRID ISP - managed, do not delete"
 
-# 3. Tell MASHUPKGRID ISP this router is ready — this is what finishes linking it.
-/tool fetch url="${callbackUrl}" http-method=post keep-result=no
+# 3. Configure RADIUS for PPPoE and Hotspot billing
+/radius remove [find comment="MASHUPKGRID ISP"]
+/radius add service=ppp,hotspot address=${radiusHost} secret="${radiusSecret}" authentication-port=1812 accounting-port=1813 timeout=3000ms comment="MASHUPKGRID ISP"
 
-# 4. Schedule automatic heartbeat so platform always tracks router IP changes automatically without Winbox
+# 4. Enable RADIUS on PPP & Hotspot with 1-minute accounting updates
+/ppp aaa set use-radius=yes accounting=yes interim-update=1m
+/radius incoming set accept=yes port=3799
+
+# 5. Hotspot Walled Garden for M-Pesa payments & Captive Portal
+/ip hotspot walled-garden ip remove [find comment="MASHUPKGRID ISP"]
+/ip hotspot walled-garden ip add dst-host=api.mashuphost.tech action=accept comment="MASHUPKGRID ISP"
+/ip hotspot walled-garden ip add dst-host=mashuphost.tech action=accept comment="MASHUPKGRID ISP"
+/ip hotspot walled-garden ip add dst-host=*.safaricom.co.ke action=accept comment="MASHUPKGRID ISP"
+
+# 6. Automatic Heartbeat Scheduler (keeps router synchronized with cloud)
 /system scheduler remove [find name=mkg-heartbeat]
 /system scheduler add name=mkg-heartbeat interval=1m on-event="/tool fetch url=\"${callbackUrl}\" http-method=post keep-result=no"
 
-:put "Done — MASHUPKGRID ISP will detect this router and keep IP synchronized automatically."
+# 7. Complete initial cloud linking handshake
+/tool fetch url="${callbackUrl}" http-method=post keep-result=no
+
+:put "========================================================="
+:put "  SUCCESS! Your MikroTik router is fully configured!     "
+:put "========================================================="
 `;
 }
 

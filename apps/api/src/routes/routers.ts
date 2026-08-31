@@ -210,7 +210,9 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
 
       const credentials = await getGeneratedCredentials(tenantId, routerId);
       const callbackUrl = `${env.APP_API_PUBLIC_URL}/api/v1/routers/provision/${provisionToken}/callback`;
-      const script = buildMikrotikProvisioningScript(router, credentials, callbackUrl);
+      const script = buildMikrotikProvisioningScript(router, credentials, callbackUrl, {
+        radiusHost: process.env.RADIUS_SERVER_HOST || "68.210.187.104",
+      });
 
       await writeAuditLog({
         tenantId,
