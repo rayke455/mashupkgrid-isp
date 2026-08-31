@@ -586,17 +586,60 @@ function getClientIp(request: { headers: Record<string, string | string[] | unde
     });
   });
 
+function parseRouterUptime(uptimeStr: string): number {
+  const trimmed = uptimeStr.trim();
+  if (/^\d+$/.test(trimmed)) return Number(trimmed);
+  let totalSeconds = 0;
+  const weeks = trimmed.match(/(\d+)w/);
+  if (weeks) totalSeconds += parseInt(weeks[1], 10) * 7 * 86400;
+  const days = trimmed.match(/(\d+)d/);
+  if (days) totalSeconds += parseInt(days[1], 10) * 86400;
+  const timeMatch = trimmed.match(/(?:^|[a-z])(\d{1,2}):(\d{2}):(\d{2})$/);
+  if (timeMatch) {
+    totalSeconds += parseInt(timeMatch[1], 10) * 3600 + parseInt(timeMatch[2], 10) * 60 + parseInt(timeMatch[3], 10);
+  }
+  return totalSeconds > 0 ? totalSeconds : 60;
+}
+
   app.post("/provision/:token/callback", { config: { audience: "system-critical" } }, async (request, reply) => {
     const { token } = provisionCallbackParamsSchema.parse(request.params);
     const remoteIp = getClientIp(request);
+    const query = (request.query as Record<string, unknown>) || {};
     let wgpubkey = typeof request.body === "string" ? request.body : "";
-    if (!wgpubkey && typeof request.query === "object" && request.query && "wgpubkey" in request.query) {
-      wgpubkey = String((request.query as Record<string, unknown>).wgpubkey || "");
+    if (!wgpubkey && typeof query === "object" && "wgpubkey" in query) {
+      wgpubkey = String(query.wgpubkey || "");
     }
     wgpubkey = wgpubkey.replace(/["'\r\n]/g, "").trim().replace(/ /g, "+");
 
+    const cpuStr = String(query.cpu || "");
+    const uptimeStr = String(query.uptime || "");
+    const freeMemStr = String(query.freemem || "");
+    const totMemStr = String(query.totmem || "");
+
+    const metrics: {
+      cpuLoadPercent?: number;
+      uptimeSeconds?: number;
+      memoryUsedBytes?: bigint;
+      memoryTotalBytes?: bigint;
+    } = {};
+
+    if (cpuStr && !isNaN(Number(cpuStr))) {
+      metrics.cpuLoadPercent = Math.min(100, Math.max(0, Number(cpuStr)));
+    }
+    if (uptimeStr) {
+      metrics.uptimeSeconds = parseRouterUptime(uptimeStr);
+    }
+    if (totMemStr && !isNaN(Number(totMemStr))) {
+      const tot = BigInt(totMemStr);
+      metrics.memoryTotalBytes = tot;
+      if (freeMemStr && !isNaN(Number(freeMemStr))) {
+        const free = BigInt(freeMemStr);
+        metrics.memoryUsedBytes = tot > free ? tot - free : 0n;
+      }
+    }
+
     try {
-      const router = await completeRouterProvisioning(token, remoteIp, wgpubkey || undefined);
+      const router = await completeRouterProvisioning(token, remoteIp, wgpubkey || undefined, metrics);
       await writeAuditLog({
         tenantId: router.tenantId,
         action: "router.provisioned_via_callback",

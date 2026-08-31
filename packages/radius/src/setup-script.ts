@@ -99,14 +99,18 @@ export function buildMikrotikProvisioningScript(
   /ip hotspot walled-garden ip add dst-host=mashuphost.tech action=accept comment="MASHUPKGRID ISP"
   /ip hotspot walled-garden ip add dst-host=*.safaricom.co.ke action=accept comment="MASHUPKGRID ISP"
 
-  # 6. Automatic Heartbeat Scheduler (keeps router synchronized with cloud)
+  # 6. Automatic Heartbeat Scheduler (keeps router synchronized with cloud metrics)
   :local mywgkey ""
   :do { :set mywgkey [/interface wireguard get [find name=mkg-wg] public-key] } on-error={}
   /system scheduler remove [find name=mkg-heartbeat]
-  /system scheduler add name=mkg-heartbeat interval=1m on-event="/tool fetch url=\\"${callbackUrl}?wgpubkey=\\$mywgkey\\" http-method=post keep-result=no"
+  /system scheduler add name=mkg-heartbeat interval=1m on-event="{ :local c [/system resource get cpu-load]; :local u [/system resource get uptime]; :local f [/system resource get free-memory]; :local t [/system resource get total-memory]; :local w \\"\\"; :do {:set w [/interface wireguard get [find name=mkg-wg] public-key]} on-error={}; /tool fetch url=\\"${callbackUrl}?cpu=\\$c&uptime=\\$u&freemem=\\$f&totmem=\\$t&wgpubkey=\\$w\\" http-method=post keep-result=no }"
 
-  # 7. Complete initial cloud linking handshake
-  /tool fetch url="${callbackUrl}?wgpubkey=$mywgkey" http-method=post http-data=$mywgkey keep-result=no
+  # 7. Complete initial cloud linking handshake with live metrics
+  :local c [/system resource get cpu-load]
+  :local u [/system resource get uptime]
+  :local f [/system resource get free-memory]
+  :local t [/system resource get total-memory]
+  /tool fetch url="${callbackUrl}?cpu=$c&uptime=$u&freemem=$f&totmem=$t&wgpubkey=$mywgkey" http-method=post http-data=$mywgkey keep-result=no
 
   :put "========================================================="
   :put "  SUCCESS! Your MikroTik router is 100% ONLINE!         "

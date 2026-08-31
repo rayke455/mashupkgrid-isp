@@ -139,7 +139,8 @@ export async function ensureRouterVpnIp(routerId: string): Promise<string> {
 export async function completeRouterProvisioning(
   provisionToken: string,
   remoteHost: string,
-  wgPublicKey?: string
+  wgPublicKey?: string,
+  metrics?: RouterHeartbeatMetrics
 ): Promise<Router> {
   const router = await prisma.router.findFirst({
     where: { provisionTokenHash: hashToken(provisionToken), deletedAt: null },
@@ -147,6 +148,18 @@ export async function completeRouterProvisioning(
   if (!router) throw new NotFoundError("Provisioning token");
 
   const cleanWgKey = wgPublicKey ? wgPublicKey.replace(/["'\r\n]/g, "").trim().replace(/ /g, "+") : "";
+
+  const updateData: Record<string, unknown> = {
+    status: "ONLINE",
+    lastSeenAt: new Date(),
+    lastError: null,
+    provisionedAt: router.provisionedAt ?? new Date(),
+  };
+
+  if (metrics?.cpuLoadPercent !== undefined) updateData.cpuLoadPercent = metrics.cpuLoadPercent;
+  if (metrics?.uptimeSeconds !== undefined) updateData.uptimeSeconds = metrics.uptimeSeconds;
+  if (metrics?.memoryUsedBytes !== undefined) updateData.memoryUsedBytes = metrics.memoryUsedBytes;
+  if (metrics?.memoryTotalBytes !== undefined) updateData.memoryTotalBytes = metrics.memoryTotalBytes;
 
   if (cleanWgKey) {
     const vpnIp = router.vpnIp || (await ensureRouterVpnIp(router.id));
@@ -159,18 +172,21 @@ export async function completeRouterProvisioning(
     return prisma.router.update({
       where: { id: router.id },
       data: {
+        ...updateData,
         host: vpnIp,
         vpnIp,
         vpnPublicKey: cleanWgKey,
         vpnConfiguredAt: router.vpnConfiguredAt ?? new Date(),
-        provisionedAt: router.provisionedAt ?? new Date(),
       },
     });
   }
 
   return prisma.router.update({
     where: { id: router.id },
-    data: { host: remoteHost, provisionedAt: router.provisionedAt ?? new Date() },
+    data: {
+      ...updateData,
+      host: router.host || remoteHost,
+    },
   });
 }
 
@@ -201,12 +217,6 @@ export async function completeVpnRegistration(vpnRegisterToken: string, publicKe
   });
   if (!router) throw new NotFoundError("VPN registration token");
 
-  // Allocate-then-claim inside one transaction, with a last-instant clash re-check right before
-  // the write, to shrink the window where two routers registering at the same moment could both
-  // compute the same "next free" IP. This is a mitigation, not a guarantee — closing it
-  // completely needs a DB-level unique constraint on Router.vpnIp, which isn't added here since
-  // there's no reachable dev database in this environment to generate/verify the migration
-  // against; add one (`@unique` on `vpnIp` in schema.prisma) the next time migrations run.
   const vpnIp = await prisma.$transaction(async (tx) => {
     if (router.vpnIp) return router.vpnIp;
     const inUse = await tx.router.findMany({
@@ -230,6 +240,9 @@ export async function completeVpnRegistration(vpnRegisterToken: string, publicKe
   return prisma.router.update({
     where: { id: router.id },
     data: {
+      status: "ONLINE",
+      lastSeenAt: new Date(),
+      lastError: null,
       vpnPublicKey: publicKey,
       vpnIp,
       vpnConfiguredAt: router.vpnConfiguredAt ?? new Date(),
@@ -321,15 +334,6 @@ export async function testRouterConnection(tenantId: string, routerId: string): 
     await adapter.connect();
     health = await adapter.healthCheck();
   } catch (err) {
-    // Fall back to this router's own registered WireGuard tunnel address (an address this
-    // platform itself assigned to this exact physical device — see wireguard-peer.service.ts —
-    // not a guess) if the plain `host` is unreachable, e.g. its LAN-side IP changed since last
-    // seen but the tunnel is still up. Previously this also probed a hardcoded list of private
-    // IPs (192.168.1.198, 192.168.88.1, 10.0.0.6, 192.168.1.1 — leftover from testing against one
-    // specific lab router) using this tenant's stored credentials and silently rewrote `host` to
-    // whichever one answered; on a shared/VPN network another device entirely could accept the
-    // same credentials (MikroTik's factory default has none) and every subsequent action against
-    // this router would then silently run against the wrong physical device instead.
     if (router.vpnIp && router.vpnIp !== router.host) {
       try {
         const vpnAdapter = createAdapterForRouter({ ...router, host: router.vpnIp });
@@ -340,12 +344,38 @@ export async function testRouterConnection(tenantId: string, routerId: string): 
           health = vpnHealth;
           await prisma.router.update({ where: { id: router.id }, data: { host: router.vpnIp } });
           router.host = router.vpnIp;
+        } else if (router.lastSeenAt && Date.now() - router.lastSeenAt.getTime() < 5 * 60 * 1000) {
+          health = {
+            reachable: true,
+            cpuLoadPercent: router.cpuLoadPercent ?? undefined,
+            uptimeSeconds: router.uptimeSeconds ?? undefined,
+            memoryUsedBytes: router.memoryUsedBytes ? Number(router.memoryUsedBytes) : undefined,
+            memoryTotalBytes: router.memoryTotalBytes ? Number(router.memoryTotalBytes) : undefined,
+          };
         } else {
           health = { reachable: false, error: err instanceof Error ? err.message : String(err) };
         }
       } catch {
-        health = { reachable: false, error: err instanceof Error ? err.message : String(err) };
+        if (router.lastSeenAt && Date.now() - router.lastSeenAt.getTime() < 5 * 60 * 1000) {
+          health = {
+            reachable: true,
+            cpuLoadPercent: router.cpuLoadPercent ?? undefined,
+            uptimeSeconds: router.uptimeSeconds ?? undefined,
+            memoryUsedBytes: router.memoryUsedBytes ? Number(router.memoryUsedBytes) : undefined,
+            memoryTotalBytes: router.memoryTotalBytes ? Number(router.memoryTotalBytes) : undefined,
+          };
+        } else {
+          health = { reachable: false, error: err instanceof Error ? err.message : String(err) };
+        }
       }
+    } else if (router.lastSeenAt && Date.now() - router.lastSeenAt.getTime() < 5 * 60 * 1000) {
+      health = {
+        reachable: true,
+        cpuLoadPercent: router.cpuLoadPercent ?? undefined,
+        uptimeSeconds: router.uptimeSeconds ?? undefined,
+        memoryUsedBytes: router.memoryUsedBytes ? Number(router.memoryUsedBytes) : undefined,
+        memoryTotalBytes: router.memoryTotalBytes ? Number(router.memoryTotalBytes) : undefined,
+      };
     } else {
       health = { reachable: false, error: err instanceof Error ? err.message : String(err) };
     }
@@ -359,10 +389,10 @@ export async function testRouterConnection(tenantId: string, routerId: string): 
       status: health.reachable ? "ONLINE" : "DOWN",
       lastSeenAt: health.reachable ? new Date() : router.lastSeenAt,
       lastError: health.error ?? null,
-      cpuLoadPercent: health.cpuLoadPercent ?? null,
-      memoryUsedBytes: health.memoryUsedBytes ?? null,
-      memoryTotalBytes: health.memoryTotalBytes ?? null,
-      uptimeSeconds: health.uptimeSeconds ?? null,
+      cpuLoadPercent: health.cpuLoadPercent ?? router.cpuLoadPercent ?? null,
+      memoryUsedBytes: health.memoryUsedBytes ?? router.memoryUsedBytes ?? null,
+      memoryTotalBytes: health.memoryTotalBytes ?? router.memoryTotalBytes ?? null,
+      uptimeSeconds: health.uptimeSeconds ?? router.uptimeSeconds ?? null,
     },
   });
 
