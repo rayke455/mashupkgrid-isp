@@ -267,7 +267,7 @@ set accept=yes port=3799
       )}
 
       {/* Dynamic Background Mesh & Ambient Glow */}
-      <div className="fixed inset-0 pointer-events-none z-0">
+      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
         <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-gradient-to-tr from-brand-600/20 via-indigo-500/15 to-emerald-500/10 blur-[130px] rounded-full" />
         <div className="absolute top-[800px] right-0 w-[600px] h-[400px] bg-brand-500/10 blur-[120px] rounded-full" />
         <div className="absolute bottom-10 left-10 w-[500px] h-[500px] bg-emerald-500/10 blur-[120px] rounded-full" />

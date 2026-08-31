@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
@@ -29,6 +29,8 @@ import {
   IconMessage,
   IconLifeBuoy,
   IconSparkles,
+  IconMenu,
+  IconClose,
 } from "@/components/icons";
 
 interface NavItem {
@@ -85,10 +87,33 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const { user, loading, logout } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
   }, [loading, user, router]);
+
+  // Close the drawer whenever navigation happens. Without this, tapping a nav link on a phone
+  // leaves the drawer covering the page you just asked for.
+  useEffect(() => {
+    setMobileNavOpen(false);
+  }, [pathname]);
+
+  // Escape closes it, and the page behind it must not scroll while it is open — a drawer you can
+  // scroll the background through feels broken on touch.
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setMobileNavOpen(false);
+    };
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [mobileNavOpen]);
 
   const { data: liveChat } = useQuery({
     queryKey: ["live-chat-widget"],
@@ -262,8 +287,26 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <TenantThemeStyle brandColor={user.tenantBrandColor}>
     <div className="flex min-h-screen bg-slate-50 dark:bg-obsidian-950 antialiased text-slate-900 dark:text-slate-100">
-      {/* Sidebar */}
-      <aside className="flex w-64 shrink-0 flex-col border-r border-slate-200/80 bg-white dark:border-obsidian-800 dark:bg-obsidian-900">
+      {/* Backdrop, mobile only. Tapping anywhere off the drawer closes it, which is the gesture
+          people reach for before they look for a close button. */}
+      {mobileNavOpen && (
+        <div
+          className="fixed inset-0 z-40 bg-slate-900/60 backdrop-blur-sm md:hidden"
+          onClick={() => setMobileNavOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Sidebar. Below md it is a fixed-position drawer that sits OUTSIDE the flex flow, so it
+          takes no layout width — that is the whole bug this replaced: at w-64 shrink-0 it ate
+          256px of a 360px phone, leaving roughly 40px of readable content after padding. From md
+          up it returns to a normal static column exactly as before. */}
+      <aside
+        id="dashboard-nav"
+        className={`fixed inset-y-0 left-0 z-50 flex w-64 shrink-0 flex-col border-r border-slate-200/80 bg-white transition-transform duration-200 ease-out dark:border-obsidian-800 dark:bg-obsidian-900 md:static md:z-auto md:translate-x-0 ${
+          mobileNavOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
         {/* Brand Header */}
         <div className="flex items-center gap-3 px-5 py-5 border-b border-slate-100 dark:border-obsidian-800/80">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 text-sm font-bold text-white shadow-sm">
@@ -277,6 +320,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               {user.tenantId ? `Tenant: ${user.tenantId}` : "Platform Root"}
             </span>
           </div>
+          {/* Explicit close, mobile only. The backdrop already closes on tap, but a visible
+              control is what someone looks for first, and it keeps the drawer keyboard-operable. */}
+          <button
+            type="button"
+            onClick={() => setMobileNavOpen(false)}
+            aria-label="Close navigation menu"
+            className="ml-auto inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-obsidian-850 dark:hover:text-white md:hidden"
+          >
+            <IconClose size={20} />
+          </button>
         </div>
 
         {/* Nav Links */}
@@ -359,11 +412,35 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       </aside>
 
-      {/* Main Content Area */}
-      <main className="flex-1 overflow-y-auto p-8 max-w-7xl">
-        <DashboardBanners />
-        {children}
-      </main>
+      {/* Main Content Area. min-w-0 is load-bearing on both this column and <main>: a flex child
+          defaults to min-width:auto, so a wide table refuses to shrink and pushes the whole page
+          into horizontal scroll instead of scrolling inside its own container. */}
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* Mobile-only top bar — the only way to reach navigation below md. */}
+        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-slate-200/80 bg-white/95 px-4 py-3 backdrop-blur dark:border-obsidian-800 dark:bg-obsidian-900/95 md:hidden">
+          <button
+            type="button"
+            onClick={() => setMobileNavOpen(true)}
+            aria-label="Open navigation menu"
+            aria-expanded={mobileNavOpen}
+            aria-controls="dashboard-nav"
+            className="-ml-1 inline-flex h-10 w-10 items-center justify-center rounded-lg text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-obsidian-850 dark:hover:text-white"
+          >
+            <IconMenu size={22} />
+          </button>
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-brand-600 to-brand-800 text-xs font-bold text-white">
+            M
+          </div>
+          <span className="truncate text-sm font-bold tracking-tight text-slate-900 dark:text-white">
+            MASHUPKGRID
+          </span>
+        </header>
+
+        <main className="min-w-0 flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 md:max-w-7xl">
+          <DashboardBanners />
+          {children}
+        </main>
+      </div>
       {liveChat?.show && <TawkToWidget widgetId={liveChat.widgetId} />}
     </div>
     </TenantThemeStyle>

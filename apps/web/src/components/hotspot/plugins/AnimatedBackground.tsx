@@ -131,7 +131,7 @@ export function AnimatedBackground({ config }: { config: BackgroundFxConfig }) {
   if (config.effectType === "cyber-grid") {
     return (
       <div
-        className="fixed inset-0 pointer-events-none z-0 opacity-25"
+        className="fixed inset-0 overflow-hidden pointer-events-none z-0 opacity-25"
         style={{
           backgroundImage: `
             linear-gradient(to right, rgba(99, 102, 241, 0.25) 1px, transparent 1px),
@@ -147,7 +147,7 @@ export function AnimatedBackground({ config }: { config: BackgroundFxConfig }) {
   if (config.effectType === "gradient-shift") {
     return (
       <div
-        className="fixed inset-0 pointer-events-none z-0 opacity-35 animate-gradient-shift"
+        className="fixed inset-0 overflow-hidden pointer-events-none z-0 opacity-35 animate-gradient-shift"
         style={{
           background: "linear-gradient(-45deg, #ee7752, #e73c7e, #23a6d5, #23d5ab)",
           backgroundSize: "400% 400%",

@@ -203,7 +203,7 @@ export function GoldEnergyTheme({
   return (
     <div className="min-h-screen bg-black text-white relative overflow-x-hidden font-sans pb-24 select-none">
       {/* Dynamic Golden Fluid Energy Wave Background matching Screenshot */}
-      <div className="fixed inset-0 pointer-events-none z-0 opacity-50">
+      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0 opacity-50">
         <div className="absolute top-1/4 right-0 w-[500px] h-[500px] bg-gradient-to-l from-amber-500/20 via-yellow-500/10 to-transparent blur-3xl" />
         <div className="absolute bottom-10 left-0 w-[600px] h-[600px] bg-gradient-to-r from-yellow-600/15 via-amber-400/10 to-transparent blur-3xl" />
         <svg className="absolute inset-0 w-full h-full opacity-70" xmlns="http://www.w3.org/2000/svg">
