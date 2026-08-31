@@ -53,7 +53,12 @@ export function buildMikrotikProvisioningScript(
 # 1. Enable API Service and allow port ${router.apiPort} through Firewall
 ${apiLine} address=""
 /ip firewall filter remove [find comment="MASHUPKGRID ISP API"]
-/ip firewall filter add chain=input protocol=tcp dst-port=${router.apiPort} action=accept comment="MASHUPKGRID ISP API" place-before=1
+# place-before=1 fails outright with "no such item" on a router whose filter chain has fewer
+# than two rules — which is every factory-reset MikroTik, so the accept rule was silently never
+# added and the API stayed firewalled off. Add first, then move to the top separately, with an
+# on-error guard so an unmovable rule can't abort the rest of the paste.
+/ip firewall filter add chain=input protocol=tcp dst-port=${router.apiPort} action=accept comment="MASHUPKGRID ISP API"
+:do {/ip firewall filter move [find comment="MASHUPKGRID ISP API"] destination=0} on-error={}
 
 # 2. Create dedicated management user
 /user remove [find name=${credentials.username}]
@@ -75,7 +80,12 @@ ${apiLine} address=""
 
 # 6. Automatic Heartbeat Scheduler (keeps router synchronized with cloud)
 /system scheduler remove [find name=mkg-heartbeat]
-/system scheduler add name=mkg-heartbeat interval=1m on-event="/tool fetch url=\"${callbackUrl}\" http-method=post keep-result=no"
+# The inner quotes around the URL must reach RouterOS as literal backslash-quote. In a JS
+# template literal \\" is a plain " — so this line used to emit a nested, unescaped
+# on-event="/tool fetch url="https://..." ...", which RouterOS rejects with "expected end of
+# command" and no scheduler is created: the router links once on the paste and then never checks
+# in again, so it goes stale the moment its address changes. \\\\" is what emits \\".
+/system scheduler add name=mkg-heartbeat interval=1m on-event="/tool fetch url=\\"${callbackUrl}\\" http-method=post keep-result=no"
 
 # 7. Complete initial cloud linking handshake
 /tool fetch url="${callbackUrl}" http-method=post keep-result=no
