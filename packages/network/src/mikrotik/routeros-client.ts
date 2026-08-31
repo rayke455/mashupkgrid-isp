@@ -121,12 +121,15 @@ export class RouterOSClient {
   }
 
   async login(username: string, password: string): Promise<void> {
-    const sentences = await this.talk(["/login", `=name=${username}`, `=password=${password}`]);
-    const trap = sentences.find((s) => s.type === "!trap");
-    if (trap) {
+    try {
+      await this.talk(["/login", `=name=${username}`, `=password=${password}`]);
+    } catch (err) {
+      // talk() now raises the trap itself. Re-thrown with the extra hint, because a bare
+      // "invalid user name or password" on an old router is usually really an auth-scheme
+      // mismatch, and that is not obvious from the router's own wording.
+      const detail = err instanceof Error ? err.message : String(err);
       throw new RouterOSApiError(
-        trap.attributes["message"] ??
-          "Login failed — if this router is on RouterOS < 6.43, legacy challenge-response auth is not supported"
+        `${detail} — if this router is on RouterOS < 6.43, legacy challenge-response auth is not supported`
       );
     }
   }
@@ -149,7 +152,16 @@ export class RouterOSClient {
         const next = queue.shift();
         if (next) {
           collected.push(next);
-          if (next.type === "!done") return collected;
+          if (next.type === "!done") {
+            // RouterOS reports a rejected command as a `!trap` sentence and STILL sends `!done`
+            // afterwards. Returning here without inspecting the trap is what made every failed
+            // write in this codebase look successful: `/ppp/secret/add` with an invalid parameter
+            // returned cleanly while creating nothing, so provisioning reported an account it had
+            // not made. Verified against RouterOS 7.12.1, which answers an unknown parameter with
+            // `!trap message=unknown parameter <name>` and then `!done`.
+            assertNoTrap(collected, words[0] ?? "(command)");
+            return collected;
+          }
           continue;
         }
 
@@ -191,5 +203,18 @@ export class RouterOSClient {
   disconnect(): void {
     this.socket?.destroy();
     this.socket = null;
+  }
+}
+
+/**
+ * Raises the RouterOS-reported error for a rejected command. Extracted so the behaviour is
+ * testable without a socket: it is the guard that stops a failed write being read as a success,
+ * and a regression here is silent by nature — the command simply does nothing and the caller
+ * carries on believing it worked.
+ */
+export function assertNoTrap(sentences: readonly Sentence[], command: string): void {
+  const trap = sentences.find((sentence) => sentence.type === "!trap");
+  if (trap) {
+    throw new RouterOSApiError(trap.attributes["message"] ?? `RouterOS rejected ${command}`);
   }
 }

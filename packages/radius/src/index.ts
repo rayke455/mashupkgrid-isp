@@ -11,3 +11,4 @@ export * from "./setup-script.js";
 export * from "./radius-server.js";
 export * from "./cidr.js";
 export type { Db } from "./db.js";
+export * from "./provisioning.service.js";

@@ -95,6 +95,7 @@ model Tenant {
 
   @@index([status])
   @@map("tenants")
+  provisioningJobs       ProvisioningJob[]
 }
 
 model User {
@@ -415,6 +416,7 @@ model Customer {
   @@unique([tenantId, customerNumber])
   @@index([tenantId, status])
   @@map("customers")
+  provisioningJobs ProvisioningJob[]
 }
 
 enum BillingCycle {
@@ -505,12 +507,19 @@ model CustomerService {
   createdAt          DateTime              @default(now())
   updatedAt          DateTime              @updatedAt
 
+  /// Where this subscription stands ON THE NETWORK, as opposed to `status`, which is its
+  /// billing state. They genuinely differ: a subscription can be billing-ACTIVE while its
+  /// provisioning is FAILED because the router rejected the configuration, and an operator
+  /// must be able to see that rather than have one status paper over the other.
+  provisioningStatus ServiceProvisioningStatus @default(PENDING)
+
   invoices   Invoice[]
   radiusUser RadiusUser?
 
   @@index([tenantId, status])
   @@index([nextBillingAt])
   @@map("customer_services")
+  provisioningJobs ProvisioningJob[]
 }
 
 enum InvoiceStatus {
@@ -1325,6 +1334,7 @@ model Router {
 
   @@index([tenantId, status])
   @@map("routers")
+  provisioningJobs ProvisioningJob[]
 }
 
 enum IpVersion {
@@ -1613,6 +1623,40 @@ enum NetworkServiceType {
   IPTV
 }
 
+/// What a provisioning job is trying to make true on the network.
+enum ProvisioningOperation {
+  /// First-time setup, or re-applying configuration after a package change.
+  PROVISION
+  /// Subscription lapsed: cut network access WITHOUT deleting anything (spec section 6).
+  SUSPEND
+  /// Paid again: put the customer back exactly as they were.
+  RESTORE
+  /// Cancelled for good. Removes device configuration; the customer record stays.
+  DEPROVISION
+}
+
+/// A job's own lifecycle. Distinct from ServiceProvisioningStatus, which is the SUBSCRIBER's
+/// resulting state — one failed SUSPEND job leaves the job FAILED while the subscriber stays
+/// ACTIVE, and conflating the two would hide exactly that situation from an operator.
+enum ProvisioningJobStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+/// Where a subscriber actually stands on the network (spec section 5). Never set to ACTIVE
+/// except from a device response confirming the configuration was accepted.
+enum ServiceProvisioningStatus {
+  PENDING
+  PROCESSING
+  ACTIVE
+  FAILED
+  SUSPENDED
+  DEPROVISIONED
+}
+
 enum SyncTaskAction {
   DISCONNECT_USER
 }
@@ -1683,6 +1727,82 @@ model Vlan {
   @@index([tenantId, isEnabled])
   @@index([tenantId, type])
   @@map("vlans")
+  provisioningJobs ProvisioningJob[]
+}
+
+/// A unit of network configuration work, queued rather than run inside the request that
+/// caused it (spec section 18). A payment must never fail because a router was unreachable,
+/// and a router operation must never be retried by retrying a payment.
+model ProvisioningJob {
+  id       String @id @default(uuid())
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  customerId        String
+  customer          Customer        @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customerServiceId String
+  customerService   CustomerService @relation(fields: [customerServiceId], references: [id], onDelete: Cascade)
+
+  /// Nullable because a job is still worth recording when the package has no VLAN or the
+  /// router has not been linked yet — that is a configuration gap an operator must SEE as a
+  /// failed job, not something to silently skip.
+  vlanId   String?
+  vlan     Vlan?   @relation(fields: [vlanId], references: [id], onDelete: SetNull)
+  routerId String?
+  router   Router? @relation(fields: [routerId], references: [id], onDelete: SetNull)
+
+  operation ProvisioningOperation
+  status    ProvisioningJobStatus @default(PENDING)
+
+  /// Collapses duplicate work: re-running the same operation for the same subscription and
+  /// the same intended configuration reuses this row instead of queueing a second job. This
+  /// is what makes retries safe (spec section 18) — the unique index is the enforcement.
+  idempotencyKey String @unique
+
+  attempts    Int @default(0)
+  maxAttempts Int @default(5)
+
+  /// The device's own error text, kept verbatim so an operator sees what the router actually
+  /// said rather than a message this system invented (spec section 5).
+  lastError String?
+
+  /// The configuration this job intends to apply, snapshotted at queue time. A package edited
+  /// afterwards must not silently change what an already-queued job does.
+  payload Json
+  /// What the device reported on success.
+  result  Json?
+
+  createdAt   DateTime  @default(now())
+  startedAt   DateTime?
+  completedAt DateTime?
+  updatedAt   DateTime  @updatedAt
+
+  logs ProvisioningLog[]
+
+  @@index([tenantId, status])
+  @@index([status, createdAt])
+  @@map("provisioning_jobs")
+}
+
+/// One attempt at one job. Separate from the job so a retry history survives — the job row
+/// only carries the LATEST error, and 'it failed three times with the same timeout' is a
+/// different diagnosis from 'it failed three times for three different reasons'.
+model ProvisioningLog {
+  id     String          @id @default(uuid())
+  jobId  String
+  job    ProvisioningJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  attempt Int
+  succeeded Boolean
+  /// Verbatim device response or error. Never rewritten into a friendlier message here; the
+  /// UI may summarise, but the record keeps what the device said.
+  message String
+  /// Individual steps within the attempt, so a partial failure shows which step broke.
+  steps   Json?
+  durationMs Int?
+  createdAt DateTime @default(now())
+
+  @@index([jobId, attempt])
+  @@map("provisioning_logs")
 }
 
 /// A router-side operation that couldn't be applied synchronously (router unreachable, or the

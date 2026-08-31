@@ -107,7 +107,12 @@ export class MikroTikAdapter implements NetworkDeviceAdapter {
       "=service=pppoe",
     ];
     if (user.profile) words.push(`=profile=${user.profile}`);
-    if (user.rateLimit) words.push(`=limit-bytes-in=0`, `=rate-limit=${user.rateLimit}`);
+    // Deliberately NOT `=rate-limit=`. A PPP secret has no such property: RouterOS 7.12.1 answers
+    // `!trap unknown parameter rate-limit` and creates nothing at all, so passing it did not just
+    // lose the speed setting, it silently aborted the whole account creation. Per-subscriber
+    // speed is delivered by the Mikrotik-Rate-Limit RADIUS reply attribute (see
+    // packages/radius' provisioning service), which is the same mechanism the voucher flow
+    // already uses; a package's PPP profile carries it otherwise.
     if (user.comment) words.push(`=comment=${user.comment}`);
     await this.requireClient().talk(words);
   }
@@ -124,7 +129,8 @@ export class MikroTikAdapter implements NetworkDeviceAdapter {
     const words = ["/ppp/secret/set", `=.id=${id}`];
     if (patch.password) words.push(`=password=${patch.password}`);
     if (patch.profile) words.push(`=profile=${patch.profile}`);
-    if (patch.rateLimit) words.push(`=rate-limit=${patch.rateLimit}`);
+    // Same reason as createUser: `rate-limit` is not a /ppp/secret property. Speed changes are
+    // applied through the RADIUS reply attribute, not here.
     if (patch.comment) words.push(`=comment=${patch.comment}`);
     await this.requireClient().talk(words);
   }
