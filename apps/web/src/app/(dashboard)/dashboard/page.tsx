@@ -184,28 +184,28 @@ export default function DashboardHomePage() {
   const trialTenantsCount = platformTenants?.items.filter((t) => t.trialEndsAt && new Date(t.trialEndsAt) > new Date()).length ?? 0;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6 sm:space-y-8 w-full min-w-0">
       {/* Top Welcome & Telemetry Header */}
-      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 text-white shadow-2xl border border-indigo-500/20">
-        <div className="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-cyan-500/10 blur-3xl" />
-        <div className="absolute -left-16 -bottom-16 h-64 w-64 rounded-full bg-purple-500/10 blur-3xl" />
+      <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-4 sm:p-6 lg:p-8 text-white shadow-2xl border border-indigo-500/20 w-full min-w-0">
+        <div className="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-cyan-500/10 blur-3xl pointer-events-none" />
+        <div className="absolute -left-16 -bottom-16 h-64 w-64 rounded-full bg-purple-500/10 blur-3xl pointer-events-none" />
 
-        <div className="relative z-10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="flex h-2.5 w-2.5 rounded-full bg-emerald-400 animate-ping" />
-              <span className="text-[11px] font-black uppercase tracking-widest text-emerald-400">
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6 min-w-0">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 mb-1.5">
+              <span className="flex h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-400 animate-ping" />
+              <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-widest text-emerald-400 truncate">
                 {isPlatform ? "Super Admin Master Console" : "Live Operations Telemetry"}
               </span>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">
+            <h1 className="text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight break-words text-white">
               {isPlatform
                 ? "Platform Control & Multi-Tenant Center"
                 : isStaff
                 ? `Good ${timeOfDayGreeting()}, ${friendlyNameFromEmail(user?.email)}.`
                 : "My Account"}
             </h1>
-            <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-xl">
+            <p className="text-xs sm:text-sm text-slate-300 mt-1.5 max-w-xl break-words leading-relaxed">
               {isPlatform
                 ? "Manage tenant organizations, global Google OAuth, system maintenance, and infrastructure health."
                 : isStaff
@@ -214,19 +214,19 @@ export default function DashboardHomePage() {
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 shrink-0">
             {isPlatform ? (
               <>
                 <Link
                   href="/tenants"
-                  className="rounded-xl bg-purple-600 hover:bg-purple-500 border border-purple-400/40 px-3.5 py-2 text-xs font-bold text-white shadow-lg transition-all flex items-center gap-1.5 active:scale-95"
+                  className="rounded-xl bg-purple-600 hover:bg-purple-500 border border-purple-400/40 px-3.5 py-2 text-xs font-bold text-white shadow-lg transition-all flex items-center gap-1.5 active:scale-95 text-center"
                 >
                   <span>🏢</span>
                   <span>Provision Tenant</span>
                 </Link>
                 <Link
                   href="/platform-google-signin"
-                  className="rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 px-3.5 py-2 text-xs font-bold text-slate-200 shadow-md transition-all flex items-center gap-1.5 active:scale-95"
+                  className="rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 px-3.5 py-2 text-xs font-bold text-slate-200 shadow-md transition-all flex items-center gap-1.5 active:scale-95 text-center"
                 >
                   <span>🔐</span>
                   <span>Google Auth</span>
@@ -236,14 +236,14 @@ export default function DashboardHomePage() {
               <>
                 <Link
                   href="/vouchers"
-                  className="rounded-xl bg-purple-600/90 hover:bg-purple-600 border border-purple-400/40 px-3.5 py-2 text-xs font-bold text-white shadow-lg transition-all flex items-center gap-1.5 active:scale-95"
+                  className="rounded-xl bg-purple-600/90 hover:bg-purple-600 border border-purple-400/40 px-3.5 py-2 text-xs font-bold text-white shadow-lg transition-all flex items-center gap-1.5 active:scale-95 text-center"
                 >
                   <span>🎟️</span>
                   <span>Hotspot Vouchers</span>
                 </Link>
                 <Link
                   href="/customers"
-                  className="rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 px-3.5 py-2 text-xs font-bold text-slate-200 shadow-md transition-all flex items-center gap-1.5 active:scale-95"
+                  className="rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 px-3.5 py-2 text-xs font-bold text-slate-200 shadow-md transition-all flex items-center gap-1.5 active:scale-95 text-center"
                 >
                   <span>👤</span>
                   <span>+ Subscriber</span>

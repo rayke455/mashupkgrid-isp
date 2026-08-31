@@ -13,7 +13,7 @@ export function Card({
 }) {
   return (
     <div
-      className={`rounded-xl border border-slate-200/80 bg-white p-6 shadow-subtle transition-all duration-200 dark:border-obsidian-800 dark:bg-obsidian-900 ${
+      className={`rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-6 shadow-subtle transition-all duration-200 dark:border-obsidian-800 dark:bg-obsidian-900 min-w-0 ${
         hover ? "hover:border-brand-500/50 hover:shadow-card dark:hover:border-brand-500/40" : ""
       } ${className}`}
     >

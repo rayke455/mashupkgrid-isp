@@ -292,163 +292,184 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <TenantThemeStyle brandColor={user.tenantBrandColor}>
-    <div className="flex min-h-screen bg-slate-50 dark:bg-obsidian-950 antialiased text-slate-900 dark:text-slate-100">
-      {/* Backdrop, mobile only. Tapping anywhere off the drawer closes it, which is the gesture
-          people reach for before they look for a close button. */}
-      {mobileNavOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-slate-900/60 backdrop-blur-sm md:hidden"
-          onClick={() => setMobileNavOpen(false)}
-          aria-hidden="true"
-        />
-      )}
-
-      {/* Sidebar. Below md it is a fixed-position drawer that sits OUTSIDE the flex flow, so it
-          takes no layout width — that is the whole bug this replaced: at w-64 shrink-0 it ate
-          256px of a 360px phone, leaving roughly 40px of readable content after padding. From md
-          up it returns to a normal static column exactly as before. */}
-      <aside
-        id="dashboard-nav"
-        className={`fixed inset-y-0 left-0 z-50 flex w-64 shrink-0 flex-col border-r border-slate-200/80 bg-white transition-transform duration-200 ease-out dark:border-obsidian-800 dark:bg-obsidian-900 md:static md:z-auto md:translate-x-0 ${
-          mobileNavOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
-      >
-        {/* Brand Header */}
-        <div className="flex items-center gap-3 px-5 py-5 border-b border-slate-100 dark:border-obsidian-800/80">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 text-sm font-bold text-white shadow-sm">
-            M
-          </div>
-          <div className="min-w-0">
-            <span className="text-sm font-bold tracking-tight block truncate text-slate-900 dark:text-white">
-              MASHUPKGRID
-            </span>
-            <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-              {user.tenantId ? `Tenant: ${user.tenantId}` : "Platform Root"}
-            </span>
-          </div>
-          {/* Explicit close, mobile only. The backdrop already closes on tap, but a visible
-              control is what someone looks for first, and it keeps the drawer keyboard-operable. */}
-          <button
-            type="button"
+      <div className="flex min-h-screen w-full bg-slate-50 dark:bg-obsidian-950 antialiased text-slate-900 dark:text-slate-100 overflow-x-hidden">
+        {/* Backdrop for Mobile & Tablet (<1024px). Tapping off the drawer closes it. */}
+        {mobileNavOpen && (
+          <div
+            className="fixed inset-0 z-40 bg-slate-950/70 backdrop-blur-xs transition-opacity lg:hidden"
             onClick={() => setMobileNavOpen(false)}
-            aria-label="Close navigation menu"
-            className="ml-auto inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-obsidian-850 dark:hover:text-white md:hidden"
-          >
-            <IconClose size={20} />
-          </button>
-        </div>
+            aria-hidden="true"
+          />
+        )}
 
-        {/* Nav Links */}
-        <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-          {generalItems.map((item) => (
-            <NavLink
-              key={item.href}
-              href={item.href}
-              label={item.label}
-              icon={item.icon}
-              active={isActive(item.href)}
-            />
-          ))}
-
-          {operationsItems.some((item) => item.show) && (
-            <>
-              <p className="mb-1.5 mt-6 px-3 text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                Operations
-              </p>
-              {operationsItems
-                .filter((item) => item.show)
-                .map((item) => (
-                  <NavLink
-                    key={item.href}
-                    href={item.href}
-                    label={item.label}
-                    icon={item.icon}
-                    active={isActive(item.href)}
-                  />
-                ))}
-            </>
-          )}
-
-          {platformItems.some((item) => item.show) && (
-            <>
-              <p className="mb-1.5 mt-6 px-3 text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-                Platform Admin
-              </p>
-              {platformItems
-                .filter((item) => item.show)
-                .map((item) => (
-                  <NavLink
-                    key={item.href}
-                    href={item.href}
-                    label={item.label}
-                    icon={item.icon}
-                    active={isActive(item.href)}
-                  />
-                ))}
-            </>
-          )}
-        </nav>
-
-        {/* User Account Footer Card */}
-        <div className="border-t border-slate-200/80 p-3 dark:border-obsidian-800 bg-slate-50/50 dark:bg-obsidian-950/40">
-          <div className="mb-3 flex items-center gap-2.5 px-2">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-100 text-xs font-bold text-brand-700 dark:bg-brand-950 dark:text-brand-300 border border-brand-200 dark:border-brand-900/60">
-              {initialsOf(user.email)}
+        {/* Sidebar Drawer:
+            - Desktop (≥1024px): Static side column occupying 256px.
+            - Mobile/Tablet (<1024px): Overlay drawer sliding in smoothly from the left. */}
+        <aside
+          id="dashboard-nav"
+          className={`fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] shrink-0 flex-col border-r border-slate-200/80 bg-white transition-transform duration-300 ease-in-out dark:border-obsidian-800 dark:bg-obsidian-900 shadow-2xl lg:static lg:z-auto lg:w-64 lg:max-w-none lg:shadow-none lg:translate-x-0 ${
+            mobileNavOpen ? "translate-x-0" : "-translate-x-full"
+          }`}
+        >
+          {/* Brand Header */}
+          <div className="flex items-center gap-3 px-5 py-4 sm:py-5 border-b border-slate-100 dark:border-obsidian-800/80">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brand-600 to-brand-800 text-sm font-bold text-white shadow-sm">
+              M
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-semibold text-slate-900 dark:text-white">
-                {user.email ?? "Signed in"}
-              </p>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <StatusDot status="ONLINE" pulse={false} />
-                <p className="truncate text-[10px] text-slate-500">
-                  {!user.tenantId ? "Super Admin" : has("reports.read") ? "Staff" : "Customer"}
+              <span className="text-sm font-bold tracking-tight block truncate text-slate-900 dark:text-white">
+                MASHUPKGRID
+              </span>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 dark:text-slate-500 block truncate">
+                {user.tenantId ? `Tenant: ${user.tenantId.slice(0, 18)}...` : "Platform Root"}
+              </span>
+            </div>
+            {/* Explicit Close Button for Mobile Drawer */}
+            <button
+              type="button"
+              onClick={() => setMobileNavOpen(false)}
+              aria-label="Close navigation menu"
+              className="ml-auto inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-obsidian-850 dark:hover:text-white lg:hidden"
+            >
+              <IconClose size={20} />
+            </button>
+          </div>
+
+          {/* Nav Links */}
+          <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
+            {generalItems.map((item) => (
+              <NavLink
+                key={item.href}
+                href={item.href}
+                label={item.label}
+                icon={item.icon}
+                active={isActive(item.href)}
+              />
+            ))}
+
+            {operationsItems.some((item) => item.show) && (
+              <>
+                <p className="mb-1.5 mt-6 px-3 text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                  Operations
                 </p>
+                {operationsItems
+                  .filter((item) => item.show)
+                  .map((item) => (
+                    <NavLink
+                      key={item.href}
+                      href={item.href}
+                      label={item.label}
+                      icon={item.icon}
+                      active={isActive(item.href)}
+                    />
+                  ))}
+              </>
+            )}
+
+            {platformItems.some((item) => item.show) && (
+              <>
+                <p className="mb-1.5 mt-6 px-3 text-[11px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+                  Platform Admin
+                </p>
+                {platformItems
+                  .filter((item) => item.show)
+                  .map((item) => (
+                    <NavLink
+                      key={item.href}
+                      href={item.href}
+                      label={item.label}
+                      icon={item.icon}
+                      active={isActive(item.href)}
+                    />
+                  ))}
+              </>
+            )}
+          </nav>
+
+          {/* User Account Footer Card */}
+          <div className="border-t border-slate-200/80 p-3 dark:border-obsidian-800 bg-slate-50/50 dark:bg-obsidian-950/40">
+            <div className="mb-3 flex items-center gap-2.5 px-2">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-100 text-xs font-bold text-brand-700 dark:bg-brand-950 dark:text-brand-300 border border-brand-200 dark:border-brand-900/60">
+                {initialsOf(user.email)}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-semibold text-slate-900 dark:text-white">
+                  {user.email ?? "Signed in"}
+                </p>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <StatusDot status="ONLINE" pulse={false} />
+                  <p className="truncate text-[10px] text-slate-500">
+                    {!user.tenantId ? "Super Admin" : has("reports.read") ? "Staff" : "Customer"}
+                  </p>
+                </div>
               </div>
             </div>
+            <Button
+              variant="secondary"
+              className="w-full gap-2 text-xs py-1.5"
+              onClick={() => logout().then(() => router.replace("/login"))}
+            >
+              <IconLogOut size={14} />
+              <span>Sign out</span>
+            </Button>
           </div>
-          <Button
-            variant="secondary"
-            className="w-full gap-2 text-xs py-1.5"
-            onClick={() => logout().then(() => router.replace("/login"))}
-          >
-            <IconLogOut size={14} />
-            <span>Sign out</span>
-          </Button>
+        </aside>
+
+        {/* Main Content Area */}
+        <div className="flex min-w-0 flex-1 flex-col w-full overflow-x-hidden">
+          {/* Mobile & Tablet Top Bar (<1024px) */}
+          <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-slate-200/80 bg-white/95 px-3 sm:px-4 backdrop-blur dark:border-obsidian-800 dark:bg-obsidian-900/95 lg:hidden">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              <button
+                type="button"
+                onClick={() => setMobileNavOpen(true)}
+                aria-label="Open navigation menu"
+                aria-expanded={mobileNavOpen}
+                aria-controls="dashboard-nav"
+                className="-ml-1 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-obsidian-850 dark:hover:text-white active:scale-95"
+              >
+                <IconMenu size={22} />
+              </button>
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-brand-600 to-brand-800 text-xs font-bold text-white shadow-xs">
+                  M
+                </div>
+                <div className="min-w-0">
+                  <span className="truncate text-xs sm:text-sm font-bold tracking-tight text-slate-900 dark:text-white block">
+                    MASHUPKGRID
+                  </span>
+                  <span className="text-[9px] font-semibold text-slate-400 block truncate">
+                    {user.tenantId ? `Tenant Console` : "Super Admin"}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              {user.tenantTrialEndsAt && (
+                <div className="flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-[11px] font-bold text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                  <span>⏳</span>
+                  <span className="hidden sm:inline">Trial</span>
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => logout().then(() => router.replace("/login"))}
+                title="Sign out"
+                className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-100 text-xs font-bold text-brand-700 dark:bg-brand-950 dark:text-brand-300 border border-brand-200 dark:border-brand-900/60 hover:border-brand-400 transition-all active:scale-95"
+              >
+                {initialsOf(user.email)}
+              </button>
+            </div>
+          </header>
+
+          <main className="min-w-0 flex-1 p-3.5 sm:p-5 md:p-6 lg:p-8 w-full max-w-7xl mx-auto overflow-x-hidden">
+            <DashboardBanners />
+            {children}
+          </main>
         </div>
-      </aside>
-
-      {/* Main Content Area. min-w-0 is load-bearing on both this column and <main>: a flex child
-          defaults to min-width:auto, so a wide table refuses to shrink and pushes the whole page
-          into horizontal scroll instead of scrolling inside its own container. */}
-      <div className="flex min-w-0 flex-1 flex-col">
-        {/* Mobile-only top bar — the only way to reach navigation below md. */}
-        <header className="sticky top-0 z-30 flex items-center gap-3 border-b border-slate-200/80 bg-white/95 px-4 py-3 backdrop-blur dark:border-obsidian-800 dark:bg-obsidian-900/95 md:hidden">
-          <button
-            type="button"
-            onClick={() => setMobileNavOpen(true)}
-            aria-label="Open navigation menu"
-            aria-expanded={mobileNavOpen}
-            aria-controls="dashboard-nav"
-            className="-ml-1 inline-flex h-10 w-10 items-center justify-center rounded-lg text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-obsidian-850 dark:hover:text-white"
-          >
-            <IconMenu size={22} />
-          </button>
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-brand-600 to-brand-800 text-xs font-bold text-white">
-            M
-          </div>
-          <span className="truncate text-sm font-bold tracking-tight text-slate-900 dark:text-white">
-            MASHUPKGRID
-          </span>
-        </header>
-
-        <main className="min-w-0 flex-1 overflow-y-auto p-4 sm:p-6 md:p-8 md:max-w-7xl">
-          <DashboardBanners />
-          {children}
-        </main>
+        {liveChat?.show && <TawkToWidget widgetId={liveChat.widgetId} />}
       </div>
-      {liveChat?.show && <TawkToWidget widgetId={liveChat.widgetId} />}
-    </div>
     </TenantThemeStyle>
   );
 }
