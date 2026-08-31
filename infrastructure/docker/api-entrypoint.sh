@@ -24,14 +24,22 @@ if [ "${ENABLE_WIREGUARD_REMOTE_ACCESS}" = "true" ]; then
   PREFIX="$(echo "${WIREGUARD_SUBNET_CIDR:-10.90.0.0/16}" | sed 's#.*/##')"
 
   if [ -z "${WIREGUARD_SERVER_PRIVATE_KEY}" ]; then
-    echo "[entrypoint] WARNING: ENABLE_WIREGUARD_REMOTE_ACCESS=true but WIREGUARD_SERVER_PRIVATE_KEY is empty; skipping ${IFACE}." >&2
+    if [ -f /tmp/wg_server.key ]; then
+      WIREGUARD_SERVER_PRIVATE_KEY="$(cat /tmp/wg_server.key)"
+    else
+      WIREGUARD_SERVER_PRIVATE_KEY="$(wg genkey 2>/dev/null || true)"
+      if [ -n "${WIREGUARD_SERVER_PRIVATE_KEY}" ]; then
+        echo "${WIREGUARD_SERVER_PRIVATE_KEY}" > /tmp/wg_server.key
+      fi
+    fi
+  fi
+
+  if [ -z "${WIREGUARD_SERVER_PRIVATE_KEY}" ]; then
+    echo "[entrypoint] WARNING: wireguard-tools genkey unavailable; skipping ${IFACE}." >&2
   else
     echo "[entrypoint] Bringing up ${IFACE} on UDP ${PORT} at ${SERVER_IP}/${PREFIX}"
     {
       ip link add "${IFACE}" type wireguard
-      # Never write the key to a command line: /proc/<pid>/cmdline is world-readable, so a
-      # `wg set ... private-key <literal>` would expose the server identity to any process in
-      # the container. wg reads it from a file, so keep it one, mode 600, and remove it after.
       umask 077
       printf '%s' "${WIREGUARD_SERVER_PRIVATE_KEY}" > /tmp/wg.key
       wg set "${IFACE}" listen-port "${PORT}" private-key /tmp/wg.key

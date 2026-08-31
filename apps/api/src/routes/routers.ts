@@ -429,8 +429,20 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
         );
       }
 
+      let serverPublicKey = env.WIREGUARD_SERVER_PUBLIC_KEY;
+      if (!serverPublicKey) {
+        try {
+          const { execFileSync } = await import("node:child_process");
+          serverPublicKey = execFileSync("wg", ["show", env.WIREGUARD_INTERFACE, "public-key"], {
+            encoding: "utf-8",
+          }).trim();
+        } catch {
+          serverPublicKey = "";
+        }
+      }
+
       const script = buildMikrotikVpnCompleteScript({
-        serverPublicKey: env.WIREGUARD_SERVER_PUBLIC_KEY,
+        serverPublicKey,
         serverEndpoint: env.WIREGUARD_SERVER_ENDPOINT || "68.210.187.104:51820",
         serverListenPort: env.WIREGUARD_LISTEN_PORT,
         assignedVpnIp: router.vpnIp,
