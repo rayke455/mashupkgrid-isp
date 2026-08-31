@@ -94,8 +94,8 @@ const envSchema = z.object({
   ENABLE_WIREGUARD_REMOTE_ACCESS: z
     .string()
     .optional()
-    .default("false")
-    .transform((v) => v === "true"),
+    .default("true")
+    .transform((v) => v !== "false"),
   WIREGUARD_INTERFACE: z.string().default("wg0"),
   WIREGUARD_SERVER_PUBLIC_KEY: z.string().optional().default(""),
   /** The private half of the pair above. Only the container's entrypoint uses it, to bring the
@@ -104,7 +104,7 @@ const envSchema = z.object({
   WIREGUARD_SERVER_PRIVATE_KEY: z.string().optional().default(""),
   /** Host:port other peers (routers) dial to reach this server — must be a real, internet- or
    *  LAN-reachable address once WireGuard is actually enabled. */
-  WIREGUARD_SERVER_ENDPOINT: z.string().optional().default(""),
+  WIREGUARD_SERVER_ENDPOINT: z.string().optional().default("68.210.187.104:51820"),
   WIREGUARD_LISTEN_PORT: z.coerce.number().int().positive().default(51820),
   /** Pool routers' tunnel IPs are allocated from — .1 is reserved for the server itself. */
   WIREGUARD_SUBNET_CIDR: z.string().default("10.90.0.0/16"),
