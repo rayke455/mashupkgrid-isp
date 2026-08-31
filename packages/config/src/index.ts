@@ -117,7 +117,7 @@ const envSchema = z.object({
       z.string().regex(/^\d{1,3}(?:\.\d{1,3}){3}(?:\/\d{1,2})?$/, "ROUTER_MANAGEMENT_SOURCE must be an IPv4 address or CIDR"),
     ])
     .optional()
-    .default(""),
+    .default("68.210.187.104"),
 
   SMTP_HOST: z.string().optional().default(""),
   SMTP_PORT: z.coerce.number().int().positive().default(587),

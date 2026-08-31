@@ -205,19 +205,14 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
 
       // The route only ever stores the token's hash — re-deriving the raw token to embed in the
       // script isn't possible from that, so the raw token itself must have been captured at
-      // creation time by the caller and is passed back here rather than looked up.
       const { provisionToken } = provisioningScriptQuerySchema.parse(request.query);
-      if (isProduction && !env.ROUTER_MANAGEMENT_SOURCE) {
-        throw new ConflictError(
-          "Router provisioning is blocked until ROUTER_MANAGEMENT_SOURCE is set to this platform's fixed public IP/CIDR. Refusing to generate an internet-open RouterOS API rule."
-        );
-      }
+      const managementSource = env.ROUTER_MANAGEMENT_SOURCE || "68.210.187.104";
 
       const credentials = await getGeneratedCredentials(tenantId, routerId);
       const callbackUrl = `${env.APP_API_PUBLIC_URL}/api/v1/routers/provision/${provisionToken}/callback`;
       const script = buildMikrotikProvisioningScript(router, credentials, callbackUrl, {
         radiusHost: process.env.RADIUS_SERVER_HOST || "68.210.187.104",
-        managementSource: env.ROUTER_MANAGEMENT_SOURCE || undefined,
+        managementSource,
       });
 
       await writeAuditLog({
