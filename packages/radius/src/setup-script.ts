@@ -244,20 +244,22 @@ add dst-host=*pstk.it action=accept comment="Paystack IP Bypass"
  *  one) and only ever sends the *public* half anywhere. The key travels as the raw POST body
  *  (`http-data=`), not a query parameter — a WireGuard public key is standard base64 and would
  *  need URL-encoding RouterOS's scripting language has no built-in way to do. */
-export function buildMikrotikVpnStartScript(router: Router, callbackUrl: string, listenPort = 13231): string {
+export function buildMikrotikVpnStartScript(router: Router, callbackUrl: string, listenPort = 51820): string {
   return `# MASHUPKGRID ISP — remote access (WireGuard) setup, step 1 of 2, for router "${sanitizeForScript(router.name)}"
 # Requires RouterOS v7+ (WireGuard has no v6 equivalent). Paste into the router's terminal, run it.
 
-# 1. Create the WireGuard interface — RouterOS generates its own keypair; the private key never
-#    leaves the router.
+# 1. Clean up any previous WireGuard interface and create fresh interface
+/interface wireguard remove [find name=mkg-wg]
 /interface wireguard add name=mkg-wg listen-port=${listenPort}
 :delay 1s
 
-# 2. Read back the public key it just generated and send it to the platform.
+# 2. Read back the public key and register it with the cloud platform
 :local pubkey [/interface wireguard get [find name=mkg-wg] public-key]
-/tool fetch url="${callbackUrl}" http-method=post http-data=$pubkey keep-result=no
+/tool fetch url="${callbackUrl}?pubkey=$pubkey" http-method=post http-data=$pubkey keep-result=no
 
-:put "Sent — the platform will reply with a second script to finish the tunnel. Check the dashboard."
+:put "========================================================="
+:put "  Step 1 complete! Click 'Finish Remote Access' on web   "
+:put "========================================================="
 `;
 }
 
@@ -274,13 +276,22 @@ export interface VpnCompleteScriptInput {
  *  `Router.host` is already the tunnel IP server-side, so every other feature (test-connection,
  *  hotspot script, live sessions) just starts working over the tunnel with no further changes. */
 export function buildMikrotikVpnCompleteScript(input: VpnCompleteScriptInput): string {
+  const endpointHost = input.serverEndpoint.includes(":") ? input.serverEndpoint.split(":")[0] : input.serverEndpoint;
+  const endpointPort = input.serverEndpoint.includes(":") ? Number(input.serverEndpoint.split(":")[1]) : (input.serverListenPort || 51820);
+  const serverPubKey = input.serverPublicKey || "";
+
   return `# MASHUPKGRID ISP — remote access (WireGuard) setup, step 2 of 2
 # Paste into the router's terminal, run it. This finishes the tunnel — the platform can then
 # reach this router at ${input.assignedVpnIp} regardless of its real network location.
 
-/interface wireguard peers add interface=mkg-wg public-key="${input.serverPublicKey}" endpoint-address=${input.serverEndpoint} endpoint-port=${input.serverListenPort} allowed-address=0.0.0.0/0 persistent-keepalive=25s
+/interface wireguard peers remove [find interface=mkg-wg]
+/interface wireguard peers add interface=mkg-wg public-key="${serverPubKey}" endpoint-address="${endpointHost}" endpoint-port=${endpointPort} allowed-address=0.0.0.0/0 persistent-keepalive=25s
+
+/ip address remove [find interface=mkg-wg]
 /ip address add address=${input.assignedVpnIp}/32 interface=mkg-wg
 
-:put "Done — this router is reachable via its VPN tunnel at ${input.assignedVpnIp}."
+:put "========================================================="
+:put "  SUCCESS! WireGuard tunnel active at ${input.assignedVpnIp} "
+:put "========================================================="
 `;
 }

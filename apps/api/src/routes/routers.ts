@@ -109,20 +109,13 @@ function toRouterSummary(router: RouterRow) {
 }
 
 export async function routerRoutes(app: FastifyInstance): Promise<void> {
-  // RouterOS's `/tool fetch ... http-method=post` sends `Content-Type:
-  // application/x-www-form-urlencoded` even with no explicit data/headers set — confirmed
-  // against a real hAP lite, which otherwise got a 415 from Fastify's default parser rejecting
-  // an unrecognized content type before the route handler ever ran. Captured as a raw string
-  // rather than form-decoded: the provisioning callback below never reads it at all (the token
-  // in the URL is the only thing it needs), but the VPN registration callback does — a
-  // WireGuard public key is standard base64 (`+`, `/`, `=` and all), so it travels as the
-  // request body via `http-data=`, not as a query parameter, to avoid needing URL-encoding
-  // RouterOS's own limited scripting language has no built-in support for. Scoped to this
-  // plugin only — it adds a content type, it doesn't touch the existing JSON parsing every other
-  // route here still uses.
-  app.addContentTypeParser("application/x-www-form-urlencoded", { parseAs: "string" }, (_request, body, done) => {
-    done(null, body);
-  });
+  app.addContentTypeParser(
+    ["application/x-www-form-urlencoded", "text/plain", "application/octet-stream", "*"],
+    { parseAs: "string" },
+    (_request, body, done) => {
+      done(null, typeof body === "string" ? body : "");
+    }
+  );
 
   app.get(
     "/",
@@ -591,17 +584,38 @@ function getClientIp(request: { headers: Record<string, string | string[] | unde
    *  surfaces as a real error in the response body rather than a silent 200, since — unlike the
    *  provisioning callback, where "money already moved" reasoning applies to M-Pesa but not
    *  here — there's no harm in the router's own log showing the fetch actually failed. */
-  app.post("/vpn/:token/register-peer", { config: { audience: "system-critical" } }, async (request, reply) => {
+  app.get("/vpn/:token/register-peer", { config: { audience: "system-critical" } }, async (request, reply) => {
     const { token } = provisionCallbackParamsSchema.parse(request.params);
-    const publicKey = typeof request.body === "string" ? request.body.trim() : "";
-    if (!publicKey) {
-      reply.status(400).send({ registered: false, error: "Missing WireGuard public key in request body" });
+    const pubkey = (request.query as Record<string, string | undefined>)?.pubkey || "";
+    if (!pubkey) {
+      reply.status(200).send({
+        success: true,
+        message: "VPN register-peer endpoint is online. Provide public key via POST body or ?pubkey=",
+      });
       return;
     }
-    if (!WIREGUARD_PUBLIC_KEY_PATTERN.test(publicKey)) {
-      reply
-        .status(400)
-        .send({ registered: false, error: "Body is not a valid WireGuard public key (44-character base64)" });
+    const cleanKey = pubkey.replace(/["'\r\n\s]/g, "").trim();
+    try {
+      const router = await completeVpnRegistration(token, cleanKey);
+      reply.status(200).send({ registered: true, vpnIp: router.vpnIp });
+    } catch (err) {
+      if (err instanceof NotFoundError) {
+        reply.status(404).send({ registered: false, error: "Unknown or already-superseded VPN registration token" });
+        return;
+      }
+      throw err;
+    }
+  });
+
+  app.post("/vpn/:token/register-peer", { config: { audience: "system-critical" } }, async (request, reply) => {
+    const { token } = provisionCallbackParamsSchema.parse(request.params);
+    let publicKey = typeof request.body === "string" ? request.body : "";
+    if (!publicKey && typeof request.query === "object" && request.query && "pubkey" in request.query) {
+      publicKey = String((request.query as Record<string, unknown>).pubkey || "");
+    }
+    publicKey = publicKey.replace(/["'\r\n\s]/g, "").trim();
+    if (!publicKey) {
+      reply.status(400).send({ registered: false, error: "Missing WireGuard public key in request body or query" });
       return;
     }
 
