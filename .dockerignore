@@ -21,7 +21,11 @@ packages/database/*.cjs
 
 android
 *.apk
-data
+# `data` on its own matches only /data at the context root — it does NOT match
+# apps/api/data, so the captive-portal configs written there at runtime were being
+# baked into the image by `COPY . .` and then restored over the live ones on every
+# deploy. The `**/` prefix is what makes this match at any depth.
+**/data
 scratch
 docs
 *.log

@@ -35,3 +35,9 @@ packages/database/*.cjs
 # above: they hardcode router addresses and RADIUS shared secrets typed in by hand during live
 # MikroTik testing, so a routine `git add -A` publishes credentials.
 scratch/
+
+# Captive-portal configs are runtime state each deployment owns (they hold a tenant's live
+# support phone number), written by the API at apps/api/data/captive-portal/<slug>.json and
+# persisted by the `captive_portal_data` volume in docker-compose.prod.yml. Committing them
+# meant a deploy silently restored a developer's copy over whatever the ISP had saved.
+apps/api/data/
