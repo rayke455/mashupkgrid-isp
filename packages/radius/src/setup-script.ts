@@ -33,6 +33,7 @@ export function buildMikrotikProvisioningScript(
   options: {
     radiusHost?: string;
     radiusSecret?: string;
+    managementSource?: string;
   } = {}
 ): string {
   const apiLine = router.useTls
@@ -42,6 +43,9 @@ export function buildMikrotikProvisioningScript(
   const safeName = sanitizeForScript(router.name);
   const radiusHost = options.radiusHost || "68.210.187.104";
   const radiusSecret = options.radiusSecret || credentials.password;
+  const managementSource = options.managementSource?.trim();
+  const apiSource = managementSource ? ` address=${managementSource}` : " address=\"\"";
+  const firewallSource = managementSource ? ` src-address=${managementSource}` : "";
 
   return `# =========================================================
 # MASHUPKGRID ISP — ALL-IN-ONE AUTOMATIC SETUP SCRIPT
@@ -51,13 +55,13 @@ export function buildMikrotikProvisioningScript(
 # =========================================================
 
 # 1. Enable API Service and allow port ${router.apiPort} through Firewall
-${apiLine} address=""
+${apiLine}${apiSource}
 /ip firewall filter remove [find comment="MASHUPKGRID ISP API"]
 # place-before=1 fails outright with "no such item" on a router whose filter chain has fewer
 # than two rules — which is every factory-reset MikroTik, so the accept rule was silently never
 # added and the API stayed firewalled off. Add first, then move to the top separately, with an
 # on-error guard so an unmovable rule can't abort the rest of the paste.
-/ip firewall filter add chain=input protocol=tcp dst-port=${router.apiPort} action=accept comment="MASHUPKGRID ISP API"
+/ip firewall filter add chain=input protocol=tcp dst-port=${router.apiPort}${firewallSource} action=accept comment="MASHUPKGRID ISP API"
 :do {/ip firewall filter move [find comment="MASHUPKGRID ISP API"] destination=0} on-error={}
 
 # 2. Create dedicated management user

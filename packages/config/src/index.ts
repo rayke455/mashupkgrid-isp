@@ -50,8 +50,8 @@ const envSchema = z.object({
   TRUST_PROXY: z
     .string()
     .optional()
-    .default("true")
-    .transform((v) => v !== "false"),
+    .default("false")
+    .transform((v) => v === "true"),
   CORS_ORIGIN: z.string().default("http://localhost:3000"),
   /** Publicly reachable base URL of apps/api — used to build the M-Pesa callback URL handed to
    *  Safaricom (must be internet-reachable, e.g. an ngrok tunnel in dev, a real domain in
@@ -108,6 +108,16 @@ const envSchema = z.object({
   WIREGUARD_LISTEN_PORT: z.coerce.number().int().positive().default(51820),
   /** Pool routers' tunnel IPs are allocated from — .1 is reserved for the server itself. */
   WIREGUARD_SUBNET_CIDR: z.string().default("10.90.0.0/16"),
+
+  /** The fixed public IP/CIDR from which the platform manages RouterOS devices. Production
+   * provisioning refuses to generate an internet-open API rule when this is unset. */
+  ROUTER_MANAGEMENT_SOURCE: z
+    .union([
+      z.literal(""),
+      z.string().regex(/^\d{1,3}(?:\.\d{1,3}){3}(?:\/\d{1,2})?$/, "ROUTER_MANAGEMENT_SOURCE must be an IPv4 address or CIDR"),
+    ])
+    .optional()
+    .default(""),
 
   SMTP_HOST: z.string().optional().default(""),
   SMTP_PORT: z.coerce.number().int().positive().default(587),

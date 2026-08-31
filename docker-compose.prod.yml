@@ -7,7 +7,7 @@
 #     "5432:5432" / "6379:6379" would expose them to the whole internet.
 #   * api and web bind to 127.0.0.1 only -- Caddy is the sole public entrypoint.
 #   * Credentials come from .env.production, never hardcoded here.
-#   * A one-shot `migrate` service runs `prisma migrate deploy` before api/worker start.
+#   * A one-shot `migrate` service applies versioned Prisma migrations before api/worker start.
 services:
   postgres:
     image: postgres:16-alpine
@@ -42,7 +42,9 @@ services:
       dockerfile: infrastructure/docker/api.Dockerfile
     env_file: .env.production
     working_dir: /repo/packages/database
-    command: ["npx", "prisma", "db", "push", "--skip-generate"]
+    # `db push` bypasses the committed migration history and can silently introduce
+    # schema drift. Production must apply exactly the reviewed migrations in order.
+    command: ["npx", "prisma", "migrate", "deploy"]
     restart: "no"
     depends_on:
       postgres:
@@ -56,6 +58,10 @@ services:
     env_file: .env.production
     ports:
       - "127.0.0.1:4000:4000"
+      # The worker shares this network namespace (below), so its RADIUS listeners are published
+      # here. Restrict these UDP ports to known router public IPs in the Azure NSG/UFW.
+      - "1812:1812/udp"
+      - "1813:1813/udp"
       # The WireGuard listen port must be reachable from the public internet -- routers behind
       # CGNAT dial in, so this is the one direction that can work. Bound to 0.0.0.0 unlike the
       # API port above, and UDP. Must match WIREGUARD_LISTEN_PORT and the host firewall rule.
@@ -72,6 +78,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   worker:
     build:
@@ -79,12 +87,10 @@ services:
       dockerfile: infrastructure/docker/worker.Dockerfile
     restart: unless-stopped
     env_file: .env.production
-    # The embedded RADIUS server lives in the worker (apps/worker/src/index.ts) and must be
-    # reachable by MikroTik NAS devices, so these two are public on purpose. Restrict the
-    # sources in the Azure NSG to your routers' IPs.
-    ports:
-      - "1812:1812/udp"
-      - "1813:1813/udp"
+    # Router polling and provisioning run here. Sharing the API namespace gives this process
+    # access to wg0, which the API creates and owns when remote access is enabled. It also lets
+    # the worker's embedded RADIUS listeners use the UDP ports published by `api` above.
+    network_mode: "service:api"
     volumes:
       # The paired WhatsApp (Baileys) session keys. Without a volume these live in the
       # container filesystem and are destroyed on every rebuild, forcing a fresh QR scan
@@ -95,6 +101,10 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      api:
+        condition: service_started
 
   web:
     build:

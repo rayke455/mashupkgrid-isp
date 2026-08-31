@@ -1,5 +1,5 @@
 import { createSocket, type Socket } from "node:dgram";
-import { createHash } from "node:crypto";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { prisma } from "@mashupkgrid/database";
 import { createAdapterForRouter } from "@mashupkgrid/network";
 import { timingSafeStringEqual } from "@mashupkgrid/shared";
@@ -149,6 +149,23 @@ function buildResponse(
     .digest();
 
   return Buffer.concat([header, responseAuthenticator, attrBuf]);
+}
+
+/** RFC 2866 §3 — Accounting-Requests are authenticated with MD5(Code + ID + Length +
+ * sixteen zero bytes + Attributes + shared secret). Never process an accounting update before
+ * this check: otherwise anyone able to send UDP to port 1813 can fabricate usage and trigger a
+ * customer's data-cap disconnect. */
+function verifyAccountingRequest(packet: Buffer, secret: string): boolean {
+  if (packet.length < 20) return false;
+  const length = packet.readUInt16BE(2);
+  if (length !== packet.length) return false;
+  const expected = createHash("md5")
+    .update(packet.subarray(0, 4))
+    .update(Buffer.alloc(16))
+    .update(packet.subarray(20, length))
+    .update(Buffer.from(secret, "utf8"))
+    .digest();
+  return timingSafeEqual(expected, packet.subarray(4, 20));
 }
 
 async function getNasSecret(sourceAddress: string): Promise<string | null> {
@@ -332,34 +349,43 @@ export function startRadiusServer(options: { authPort?: number; acctPort?: numbe
 
   const acctSocket: Socket = createSocket("udp4");
   acctSocket.on("message", (msg, rinfo) => {
-    const packet = parsePacket(msg);
-    if (!packet || packet.code !== RADIUS_CODE.ACCOUNTING_REQUEST) return;
-    // The Accounting-Response authenticator is MD5(Code+ID+Length+RequestAuthenticator+
-    // Attributes+Secret) same as auth, but with no attributes to echo back there's nothing
-    // meaningful to look up a per-NAS secret for correctness beyond acking, so a fixed
-    // placeholder secret is fine: MikroTik doesn't re-verify the accounting ack's hash.
-    const response = buildResponse(RADIUS_CODE.ACCOUNTING_RESPONSE, packet.identifier, packet.authenticator, "", []);
-    acctSocket.send(response, rinfo.port, rinfo.address);
+    void (async () => {
+      const packet = parsePacket(msg);
+      if (!packet || packet.code !== RADIUS_CODE.ACCOUNTING_REQUEST) return;
 
-    const statusType = readUInt32Attr(packet, ATTR.ACCT_STATUS_TYPE);
-    if (statusType !== ACCT_STATUS_TYPE.INTERIM_UPDATE && statusType !== ACCT_STATUS_TYPE.STOP) return;
+      const secret = await getNasSecret(rinfo.address);
+      if (!secret) {
+        console.warn(`[radius] Accounting-Request from unknown NAS ${rinfo.address} — no matching RadiusNas row`);
+        return;
+      }
+      if (!verifyAccountingRequest(msg, secret)) {
+        console.warn(`[radius] rejected unauthenticated Accounting-Request from ${rinfo.address}`);
+        return;
+      }
 
-    const username = findAttr(packet, ATTR.USER_NAME)?.toString("utf8");
-    if (!username) return;
+      const response = buildResponse(RADIUS_CODE.ACCOUNTING_RESPONSE, packet.identifier, packet.authenticator, secret, []);
+      acctSocket.send(response, rinfo.port, rinfo.address);
 
-    const inputBytes =
-      readUInt32Attr(packet, ATTR.ACCT_INPUT_GIGAWORDS) * U32_MAX_PLUS_ONE +
-      readUInt32Attr(packet, ATTR.ACCT_INPUT_OCTETS);
-    const outputBytes =
-      readUInt32Attr(packet, ATTR.ACCT_OUTPUT_GIGAWORDS) * U32_MAX_PLUS_ONE +
-      readUInt32Attr(packet, ATTR.ACCT_OUTPUT_OCTETS);
+      const statusType = readUInt32Attr(packet, ATTR.ACCT_STATUS_TYPE);
+      if (statusType !== ACCT_STATUS_TYPE.INTERIM_UPDATE && statusType !== ACCT_STATUS_TYPE.STOP) return;
 
-    enforceDataCap(username, rinfo.address, inputBytes + outputBytes).catch((err) =>
-      console.error(`[radius] error enforcing data cap for "${username}":`, err)
-    );
-    recordVoucherUsage(username, inputBytes, outputBytes).catch((err) =>
-      console.error(`[radius] error recording usage for "${username}":`, err)
-    );
+      const username = findAttr(packet, ATTR.USER_NAME)?.toString("utf8");
+      if (!username) return;
+
+      const inputBytes =
+        readUInt32Attr(packet, ATTR.ACCT_INPUT_GIGAWORDS) * U32_MAX_PLUS_ONE +
+        readUInt32Attr(packet, ATTR.ACCT_INPUT_OCTETS);
+      const outputBytes =
+        readUInt32Attr(packet, ATTR.ACCT_OUTPUT_GIGAWORDS) * U32_MAX_PLUS_ONE +
+        readUInt32Attr(packet, ATTR.ACCT_OUTPUT_OCTETS);
+
+      enforceDataCap(username, rinfo.address, inputBytes + outputBytes).catch((err) =>
+        console.error(`[radius] error enforcing data cap for "${username}":`, err)
+      );
+      recordVoucherUsage(username, inputBytes, outputBytes).catch((err) =>
+        console.error(`[radius] error recording usage for "${username}":`, err)
+      );
+    })().catch((err) => console.error("[radius] error handling Accounting-Request:", err));
   });
   acctSocket.bind(acctPort, "0.0.0.0");
 
