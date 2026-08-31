@@ -4,6 +4,10 @@ import type {
   NetworkUserSpec,
   DeviceHealth,
   DeviceSession,
+  DeviceVlanInterface,
+  CreateVlanInterfaceSpec,
+  DeviceIpPool,
+  DeviceProfile,
 } from "../adapter.interface.js";
 
 export interface MikroTikCredentials {
@@ -309,6 +313,175 @@ export class MikroTikAdapter implements NetworkDeviceAdapter {
       message: `Strict 1-hour timeout enforced. Removed ${cookiesRemoved} cached cookie(s) and disabled silent re-auth.`,
     };
   }
+  // --- VLAN and addressing (spec section 9) ---------------------------------------------------
+  // Every method here reports what the DEVICE said. None of them assume a topology: the parent
+  // interface a VLAN stacks on is always supplied by the caller, because it is the ISP's network
+  // design and not something this system may guess at.
+
+  async listVlanInterfaces(): Promise<DeviceVlanInterface[]> {
+    const rows = await this.requireClient().print(["/interface/vlan/print"]);
+    return rows.map((r) => parseVlanInterfaceRow(r));
+  }
+
+  private async findVlanRow(name: string): Promise<Record<string, string> | null> {
+    const rows = await this.requireClient().print(["/interface/vlan/print", `?name=${name}`]);
+    return rows[0] ?? null;
+  }
+
+  async createVlanInterface(spec: CreateVlanInterfaceSpec): Promise<DeviceVlanInterface> {
+    // Validate the parent exists before adding. RouterOS would reject an unknown interface
+    // anyway, but its error is terse; naming the real problem is what lets an admin fix it.
+    const parents = await this.requireClient().print([
+      "/interface/print",
+      `?name=${spec.parentInterface}`,
+    ]);
+    if (parents.length === 0) {
+      throw new Error(
+        `Interface "${spec.parentInterface}" does not exist on this router - pick one of its real interfaces to carry the VLAN.`
+      );
+    }
+
+    const words = [
+      "/interface/vlan/add",
+      `=name=${spec.name}`,
+      `=vlan-id=${spec.vlanId}`,
+      `=interface=${spec.parentInterface}`,
+    ];
+    if (spec.mtu) words.push(`=mtu=${spec.mtu}`);
+    if (spec.comment) words.push(`=comment=${spec.comment}`);
+    await this.requireClient().talk(words);
+
+    // Read back rather than returning what we sent. If the device normalized or quietly altered
+    // anything, the caller must see the device's version, not our optimistic one.
+    const created = await this.findVlanRow(spec.name);
+    if (!created) {
+      throw new Error(`Router accepted VLAN "${spec.name}" but it is absent on read-back.`);
+    }
+    return parseVlanInterfaceRow(created);
+  }
+
+  async updateVlanInterface(
+    name: string,
+    patch: Partial<CreateVlanInterfaceSpec>
+  ): Promise<DeviceVlanInterface> {
+    const row = await this.findVlanRow(name);
+    if (!row) throw new Error(`No VLAN interface named "${name}" on this router.`);
+
+    const words = ["/interface/vlan/set", `=.id=${row[".id"]}`];
+    if (patch.name !== undefined) words.push(`=name=${patch.name}`);
+    if (patch.vlanId !== undefined) words.push(`=vlan-id=${patch.vlanId}`);
+    if (patch.parentInterface !== undefined) words.push(`=interface=${patch.parentInterface}`);
+    if (patch.mtu !== undefined) words.push(`=mtu=${patch.mtu}`);
+    if (patch.comment !== undefined) words.push(`=comment=${patch.comment}`);
+    if (words.length === 2) return parseVlanInterfaceRow(row); // nothing asked to change
+
+    await this.requireClient().talk(words);
+    const after = await this.findVlanRow(patch.name ?? name);
+    if (!after) throw new Error(`VLAN "${name}" vanished from the router during update.`);
+    return parseVlanInterfaceRow(after);
+  }
+
+  async setVlanInterfaceEnabled(name: string, enabled: boolean): Promise<DeviceVlanInterface> {
+    const row = await this.findVlanRow(name);
+    if (!row) throw new Error(`No VLAN interface named "${name}" on this router.`);
+    await this.requireClient().talk([
+      enabled ? "/interface/vlan/enable" : "/interface/vlan/disable",
+      `=.id=${row[".id"]}`,
+    ]);
+    const after = await this.findVlanRow(name);
+    if (!after) throw new Error(`VLAN "${name}" vanished from the router.`);
+    return parseVlanInterfaceRow(after);
+  }
+
+  /**
+   * Removing a VLAN interface drops every subscriber riding it, so the target is confirmed twice
+   * before anything is deleted: it must exist, AND its vlan-id must match what the caller
+   * believes it is removing. A name collision, or a VLAN re-tagged on the device by hand, would
+   * otherwise make this delete the wrong interface (spec section 9: validate the target and
+   * configuration before destructive network changes).
+   */
+  async removeVlanInterface(name: string, expectedVlanId: number): Promise<void> {
+    const row = await this.findVlanRow(name);
+    if (!row) return; // already absent - removal is idempotent
+    const actual = Number(row["vlan-id"] ?? 0);
+    if (actual !== expectedVlanId) {
+      throw new Error(
+        `Refusing to remove "${name}": this router has it as VLAN ${actual}, not VLAN ${expectedVlanId}. ` +
+          `It was changed on the device - reconcile before removing.`
+      );
+    }
+    await this.requireClient().talk(["/interface/vlan/remove", `=.id=${row[".id"]}`]);
+  }
+
+  async listInterfaces(): Promise<Array<{ name: string; type: string; running: boolean }>> {
+    const rows = await this.requireClient().print(["/interface/print"]);
+    return rows.map((r) => ({
+      name: r["name"] ?? "",
+      type: r["type"] ?? "",
+      running: r["running"] === "true",
+    }));
+  }
+
+  async listIpPools(): Promise<DeviceIpPool[]> {
+    const rows = await this.requireClient().print(["/ip/pool/print"]);
+    return rows.map((r) => ({
+      id: r[".id"] ?? "",
+      name: r["name"] ?? "",
+      ranges: r["ranges"] ?? "",
+    }));
+  }
+
+  /** Idempotent by pool name: re-running a provisioning job must not stack duplicate pools,
+   *  which is the requirement spec section 18 places on every job. */
+  async upsertIpPool(name: string, ranges: string): Promise<DeviceIpPool> {
+    const existing = await this.requireClient().print(["/ip/pool/print", `?name=${name}`]);
+    if (existing[0]) {
+      await this.requireClient().talk([
+        "/ip/pool/set",
+        `=.id=${existing[0][".id"]}`,
+        `=ranges=${ranges}`,
+      ]);
+    } else {
+      await this.requireClient().talk(["/ip/pool/add", `=name=${name}`, `=ranges=${ranges}`]);
+    }
+    const rows = await this.requireClient().print(["/ip/pool/print", `?name=${name}`]);
+    const row = rows[0];
+    if (!row) throw new Error(`IP pool "${name}" is absent on read-back.`);
+    return { id: row[".id"] ?? "", name: row["name"] ?? "", ranges: row["ranges"] ?? "" };
+  }
+
+  /** Idempotent by (address, interface) so a retried job does not add the same gateway twice. */
+  async assignIpAddress(interfaceName: string, addressCidr: string): Promise<void> {
+    const existing = await this.requireClient().print([
+      "/ip/address/print",
+      `?address=${addressCidr}`,
+      `?interface=${interfaceName}`,
+    ]);
+    if (existing.length > 0) return;
+    await this.requireClient().talk([
+      "/ip/address/add",
+      `=address=${addressCidr}`,
+      `=interface=${interfaceName}`,
+    ]);
+  }
+
+  async listPppProfiles(): Promise<DeviceProfile[]> {
+    const rows = await this.requireClient().print(["/ppp/profile/print"]);
+    return rows.map((r) => ({
+      id: r[".id"] ?? "",
+      name: r["name"] ?? "",
+      ...(r["rate-limit"] ? { rateLimit: r["rate-limit"] } : {}),
+    }));
+  }
+
+  async listHotspotProfiles(): Promise<DeviceProfile[]> {
+    const rows = await this.requireClient().print(["/ip/hotspot/user/profile/print"]);
+    return rows.map((r) => ({
+      id: r[".id"] ?? "",
+      name: r["name"] ?? "",
+      ...(r["rate-limit"] ? { rateLimit: r["rate-limit"] } : {}),
+    }));
+  }
 }
 
 /** RouterOS reports uptime as e.g. "4w2d3h4m5s" — parses it into whole seconds. */
@@ -321,4 +494,24 @@ export function parseRouterOSUptime(value: string): number {
     total += Number(match[1]) * (unitSeconds[match[2]!] ?? 0);
   }
   return total;
+}
+
+/**
+ * Maps one `/interface/vlan/print` row to the vendor-agnostic shape. Exported so it can be tested
+ * against real captured RouterOS output without a device on the network — the field names and the
+ * string-typed booleans below were taken from a live hAP lite on RouterOS 7.12.1, not from docs.
+ */
+export function parseVlanInterfaceRow(row: Record<string, string>): DeviceVlanInterface {
+  return {
+    id: row[".id"] ?? "",
+    name: row["name"] ?? "",
+    vlanId: Number(row["vlan-id"] ?? 0),
+    parentInterface: row["interface"] ?? "",
+    ...(row["mtu"] ? { mtu: Number(row["mtu"]) } : {}),
+    // RouterOS sends these as the STRINGS "true"/"false". A truthiness check would read every
+    // row as disabled, since the non-empty string "false" is truthy in JavaScript.
+    disabled: row["disabled"] === "true",
+    ...(row["running"] !== undefined ? { running: row["running"] === "true" } : {}),
+    ...(row["comment"] ? { comment: row["comment"] } : {}),
+  };
 }
