@@ -1,4 +1,6 @@
+import { redirect } from "next/navigation";
 import { CustomerAppShell } from "@/components/customer-app/CustomerAppShell";
+import { getDemoTenantSlug } from "@/lib/demo-portal";
 
 export const metadata = {
   title: "FiberConnect — ISP Customer Super App",
@@ -6,5 +8,9 @@ export const metadata = {
 };
 
 export default function CustomerAppDefaultPage() {
-  return <CustomerAppShell tenantSlug="demo-isp" initialBrandName="FiberConnect" />;
+  const tenantSlug = getDemoTenantSlug();
+  if (!tenantSlug) {
+    redirect("/");
+  }
+  return <CustomerAppShell tenantSlug={tenantSlug} initialBrandName="FiberConnect" />;
 }

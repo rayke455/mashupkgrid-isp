@@ -32,6 +32,7 @@ import {
   handleSendWhatsappTenantWelcome,
   handleSendWhatsappServiceStatus,
 } from "./jobs/whatsapp-notifications.js";
+import { createGracefulShutdown } from "./lib/shutdown.js";
 import { startRadiusServer } from "@mashupkgrid/radius";
 import { whatsappConnectJobSchema, whatsappDisconnectJobSchema } from "@mashupkgrid/shared";
 import { setConnectionStatus, clearPairingQr } from "@mashupkgrid/whatsapp";
@@ -315,22 +316,22 @@ async function main() {
     { connection }
   );
 
-  const shutdown = async () => {
-    console.log("[worker] shutting down...");
-    await whatsappManager.stopAll().catch(() => {});
-    await Promise.all([
-      emailWorker.close(),
-      maintenanceWorker.close(),
-      cleanupWorker.close(),
-      billingWorker.close(),
-      mpesaWorker.close(),
-      networkWorker.close(),
-      webhooksWorker.close(),
-      whatsappWorker.close(),
-      radiusServer?.close() ?? Promise.resolve(),
-    ]);
-    process.exit(0);
-  };
+  const shutdown = createGracefulShutdown(
+    [
+      () => whatsappManager.stopAll().catch(() => {}),
+      () => emailWorker.close(),
+      () => maintenanceWorker.close(),
+      () => cleanupWorker.close(),
+      () => billingWorker.close(),
+      () => mpesaWorker.close(),
+      () => networkWorker.close(),
+      () => webhooksWorker.close(),
+      () => whatsappWorker.close(),
+      () => radiusServer?.close() ?? Promise.resolve(),
+    ],
+    (code) => process.exit(code),
+    { log: console.log }
+  );
   process.on("SIGINT", shutdown);
   process.on("SIGTERM", shutdown);
 }

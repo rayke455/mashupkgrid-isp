@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { isDemoPortalEnabled } from "@/lib/demo-portal";
 import type {
   AppTab,
   CustomerProfile,
@@ -222,6 +223,9 @@ export function CustomerAppShell({
   tenantSlug = "demo-isp",
   initialBrandName = "FiberConnect",
 }: CustomerAppShellProps) {
+  const demoPortalEnabled = isDemoPortalEnabled();
+  const safeTenantSlug = demoPortalEnabled ? tenantSlug : "demo-isp";
+
   const [isAuthenticated, setIsAuthenticated] = useState(true);
   const [currentTab, setCurrentTab] = useState<AppTab>("home");
   const [customer, setCustomer] = useState<CustomerProfile>(DEFAULT_CUSTOMER);
@@ -308,6 +312,20 @@ export function CustomerAppShell({
       prev.map((d) => (d.id === deviceId ? { ...d, isBlocked: !d.isBlocked } : d))
     );
   };
+
+  if (!demoPortalEnabled) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 px-6 text-center text-slate-200">
+        <div className="max-w-md rounded-2xl border border-slate-800 bg-slate-900 p-6 shadow-2xl">
+          <div className="mb-3 text-3xl">⚠️</div>
+          <h1 className="text-xl font-black text-white">Customer portal unavailable</h1>
+          <p className="mt-2 text-sm text-slate-400">
+            This demo customer app is disabled in production. Connect a real tenant and enable the live customer portal behind authenticated account data.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-100 dark:bg-slate-950 flex flex-col items-center justify-start py-0 sm:py-6 px-0 sm:px-4">
