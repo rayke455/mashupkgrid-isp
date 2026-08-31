@@ -2,7 +2,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { prisma } from "@mashupkgrid/database";
 import { isProduction } from "@mashupkgrid/config";
-import { successResponse, ValidationError } from "@mashupkgrid/shared";
+import { successResponse, ValidationError, isReservedSubdomain } from "@mashupkgrid/shared";
 import { authenticate } from "../plugins/authenticate.js";
 import { resolveTenant } from "../plugins/tenant.js";
 import { checkMaintenance } from "../plugins/maintenance.js";
@@ -276,11 +276,9 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     }
   );
 
-  const RESERVED_SLUGS = new Set([
-    "api", "admin", "app", "auth", "superadmin", "demo", "test", "billing",
-    "dashboard", "help", "status", "portal", "radius", "isp", "hotspot", "vouchers", "system", "support"
-  ]);
-
+  // Single source of truth with the enforcement in authService.registerIspTenant and the
+  // super-admin tenant-creation route — this endpoint is only the wizard's live preview, so if
+  // the two lists ever drift the preview says "available" for a name registration then rejects.
   app.get(
     "/isp-registration/check-slug",
     { config: { audience: "public" }, preHandler: [checkMaintenance] },
@@ -297,7 +295,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
         }, request.id));
       }
 
-      if (RESERVED_SLUGS.has(cleanSlug)) {
+      if (isReservedSubdomain(cleanSlug)) {
         return reply.send(successResponse({
           available: false,
           slug: cleanSlug,
@@ -372,10 +370,14 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     heardAboutUs: z.string().optional(),
   });
 
+  // Creates a whole tenant, an owner account, and a trial subscription from an unauthenticated
+  // request. Without a limit here the only bound was the 300/min global one, which is enough to
+  // mass-register thousands of tenants (and burn the platform WhatsApp line sending each one a
+  // welcome message). Reuses the OTP limit: a legitimate signup happens once.
   app.post(
     "/isp-registration",
     {
-      config: { audience: "public" },
+      config: { audience: "public", rateLimit: otpRateLimitConfig },
       preHandler: [checkMaintenance],
     },
     async (request, reply) => {

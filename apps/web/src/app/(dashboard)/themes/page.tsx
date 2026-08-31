@@ -81,9 +81,9 @@ export default function ThemesPage() {
     } catch {}
 
     try {
+      // Staff write — must carry the bearer token; only the matching GET is public.
       await apiFetch(`/api/v1/hotspot/${tenantSlug}/config`, {
         method: 'PUT',
-        skipAuth: true,
         body: JSON.stringify(payload),
       });
 

@@ -76,6 +76,14 @@ const hotspotScriptQuerySchema = z.object({
   radiusHost: z.string().min(1).max(255).regex(HOST_PATTERN, "radiusHost must be a plain hostname or IP address"),
 });
 const provisioningScriptQuerySchema = z.object({ provisionToken: z.string().min(1) });
+// A WireGuard public key is exactly 32 bytes, standard-base64 encoded: 43 characters plus one
+// "=" of padding. Enforcing that shape matters because the value arrives as the raw body of an
+// UNAUTHENTICATED callback and is then (a) passed as an argv element to the `wg` binary, where a
+// leading "-" would be read as a flag rather than a key, and (b) persisted verbatim to
+// Router.vpnPublicKey with no length bound of its own.
+// The final character before the padding carries only 4 significant bits, so it is restricted
+// to the base64 symbols whose index is a multiple of 4 (A E I M Q U Y c g k o s w 0 4 8).
+const WIREGUARD_PUBLIC_KEY_PATTERN = /^[A-Za-z0-9+/]{42}[AEIMQUYcgkosw048]=$/;
 const provisionCallbackParamsSchema = z.object({ token: z.string().min(1) });
 
 function requireTenant(tenantId: string | null): string {
@@ -568,6 +576,12 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
     const publicKey = typeof request.body === "string" ? request.body.trim() : "";
     if (!publicKey) {
       reply.status(400).send({ registered: false, error: "Missing WireGuard public key in request body" });
+      return;
+    }
+    if (!WIREGUARD_PUBLIC_KEY_PATTERN.test(publicKey)) {
+      reply
+        .status(400)
+        .send({ registered: false, error: "Body is not a valid WireGuard public key (44-character base64)" });
       return;
     }
 

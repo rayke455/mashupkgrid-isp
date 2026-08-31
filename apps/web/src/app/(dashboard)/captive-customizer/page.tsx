@@ -93,9 +93,11 @@ export default function CaptiveCustomizerPage() {
 
     // Persist to backend API for this specific tenant
     try {
+      // Saving the captive-portal config is a staff write (see the PUT route in
+      // apps/api/src/routes/hotspot.ts) — it must carry the caller's bearer token. Only the
+      // matching GET is public.
       await apiFetch(`/api/v1/hotspot/${tenantSlug}/config`, {
         method: "PUT",
-        skipAuth: true,
         body: JSON.stringify(payload),
       });
     } catch (err) {
