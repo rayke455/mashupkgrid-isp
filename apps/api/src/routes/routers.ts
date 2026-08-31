@@ -539,6 +539,23 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
     }
   );
 
+function getClientIp(request: { headers: Record<string, string | string[] | undefined>; ip: string }): string {
+  const cfIp = request.headers["cf-connecting-ip"];
+  if (typeof cfIp === "string" && cfIp.trim().length > 0) {
+    return cfIp.trim();
+  }
+  const xRealIp = request.headers["x-real-ip"];
+  if (typeof xRealIp === "string" && xRealIp.trim().length > 0) {
+    return xRealIp.trim();
+  }
+  const xForwardedFor = request.headers["x-forwarded-for"];
+  if (typeof xForwardedFor === "string" && xForwardedFor.trim().length > 0) {
+    const first = xForwardedFor.split(",")[0]?.trim();
+    if (first) return first;
+  }
+  return request.ip;
+}
+
   // --- Public callback (the router itself, via /tool fetch in the provisioning script) —
   // audience "system-critical" bypasses maintenance mode (a router mid-provisioning shouldn't
   // silently fail to link just because maintenance mode is on) and carries no staff auth, since
@@ -546,18 +563,19 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
   // was generated per-router and is only ever known to whoever pasted the script. -------------
   app.post("/provision/:token/callback", { config: { audience: "system-critical" } }, async (request, reply) => {
     const { token } = provisionCallbackParamsSchema.parse(request.params);
+    const remoteIp = getClientIp(request);
     try {
-      const router = await completeRouterProvisioning(token, request.ip);
+      const router = await completeRouterProvisioning(token, remoteIp);
       await writeAuditLog({
         tenantId: router.tenantId,
         action: "router.provisioned_via_callback",
         resourceType: "Router",
         resourceId: router.id,
         after: { host: router.host },
-        ipAddress: request.ip,
+        ipAddress: remoteIp,
         userAgent: request.headers["user-agent"] ?? null,
       });
-      reply.status(200).send({ linked: true });
+      reply.status(200).send({ linked: true, host: remoteIp });
     } catch (err) {
       if (err instanceof NotFoundError) {
         reply.status(404).send({ linked: false, error: "Unknown or already-superseded provisioning token" });

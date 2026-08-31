@@ -94,6 +94,20 @@ export default function RoutersPage() {
     onSettled: () => setDeletingId(null),
   });
 
+  const updateRouterHost = useMutation({
+    mutationFn: ({ routerId, host }: { routerId: string; host: string }) =>
+      apiFetch(`/api/v1/routers/${routerId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ host }),
+      }),
+    onSuccess: () => {
+      setActionSuccess("✏️ Router IP updated successfully.");
+      setTimeout(() => setActionSuccess(null), 5000);
+      queryClient.invalidateQueries({ queryKey: ["routers"] });
+    },
+    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to update router IP"),
+  });
+
   const [kickingId, setKickingId] = useState<string | null>(null);
   const [boostingId, setBoostingId] = useState<string | null>(null);
   const [enforcingId, setEnforcingId] = useState<string | null>(null);
@@ -253,10 +267,24 @@ export default function RoutersPage() {
                           ({router.vendor})
                         </span>
                       </h3>
-                      <p className="font-mono text-xs text-slate-500 dark:text-slate-400">
+                      <p className="font-mono text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
                         {router.host ? (
                           <>
-                            {router.host}:{router.apiPort} {router.useTls ? "(TLS Encrypted)" : ""}
+                            <span>
+                              {router.host}:{router.apiPort} {router.useTls ? "(TLS Encrypted)" : ""}
+                            </span>
+                            <button
+                              onClick={() => {
+                                const newHost = window.prompt("Update Router IP / Hostname:", router.host || "");
+                                if (newHost && newHost.trim() !== router.host) {
+                                  updateRouterHost.mutate({ routerId: router.id, host: newHost.trim() });
+                                }
+                              }}
+                              className="text-[11px] text-brand-600 hover:text-brand-500 underline ml-1 cursor-pointer font-sans"
+                              title="Edit IP / Host"
+                            >
+                              Edit IP
+                            </button>
                           </>
                         ) : (
                           <span className="text-amber-600 dark:text-amber-400">Waiting for router to check in...</span>

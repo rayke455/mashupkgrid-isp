@@ -50,8 +50,8 @@ const envSchema = z.object({
   TRUST_PROXY: z
     .string()
     .optional()
-    .default("false")
-    .transform((v) => v === "true"),
+    .default("true")
+    .transform((v) => v !== "false"),
   CORS_ORIGIN: z.string().default("http://localhost:3000"),
   /** Publicly reachable base URL of apps/api — used to build the M-Pesa callback URL handed to
    *  Safaricom (must be internet-reachable, e.g. an ngrok tunnel in dev, a real domain in
