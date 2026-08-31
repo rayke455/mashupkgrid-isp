@@ -31,7 +31,6 @@ RUN pnpm install --frozen-lockfile
 FROM deps AS build
 COPY . .
 RUN pnpm --filter @mashupkgrid/database generate
-RUN pnpm --filter @mashupkgrid/worker build
 
 FROM base AS runtime
 ENV NODE_ENV=production
