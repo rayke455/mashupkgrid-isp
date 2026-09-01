@@ -10,6 +10,26 @@ function sanitizeForScript(value: string): string {
   return value.replace(/[^\w .-]/g, "").trim() || "router";
 }
 
+/** RouterOS's walled garden keys entries by hostname OR address depending on the submenu
+ *  property used — `dst-host` is DNS-resolved (and so is the only thing that works for a
+ *  CDN/multi-IP platform host), while a bare IP has to go in as `dst-address` or RouterOS
+ *  tries, and fails, to resolve it as a name. Dev deployments hand this a bare IP; production
+ *  hands it a domain, so pick per value rather than assuming either. */
+function walledGardenLine(host: string): string {
+  const isIp = /^\d{1,3}(\.\d{1,3}){3}$/.test(host);
+  const key = isIp ? "dst-address" : "dst-host";
+  return `/ip hotspot walled-garden ip add ${key}=${host} action=accept comment="MASHUPKGRID"`;
+}
+
+/** Hostname out of a config URL, tolerating a value that is already a bare host. */
+function hostFromUrl(value: string): string {
+  try {
+    return new URL(value).hostname;
+  } catch {
+    return value.replace(/^https?:\/\//, "").split("/")[0]!.split(":")[0]!;
+  }
+}
+
 export interface MikrotikSetupScript {
   /** Paste directly into the router's terminal (WinBox "New Terminal", or SSH). */
   mikrotikScript: string;
@@ -40,6 +60,14 @@ export function buildMikrotikProvisioningScript(
     vpnIp?: string;
     loginTemplateUrl?: string;
     hotspotInterface?: string;
+    /** Existing IP pool the hotspot hands addresses from — deliberately reusing the interface's
+     *  current DHCP pool rather than creating a second one on the same subnet. */
+    addressPool?: string;
+    /** Host of the branded captive-portal page the router's login.html redirects to (the web
+     *  app, which is a different host from the API in every deployment) — it MUST be in the
+     *  walled garden or an unauthenticated client can never load the page it was redirected to,
+     *  which looks exactly like "the captive portal doesn't display". */
+    portalHost?: string;
   } = {}
 ): string {
   const apiLine = router.useTls
@@ -48,6 +76,12 @@ export function buildMikrotikProvisioningScript(
 
   const safeName = sanitizeForScript(router.name);
   const radiusHost = options.radiusHost || "68.210.187.104";
+  // Defaults to the router's own generated password, and completeRouterProvisioning (in
+  // @mashupkgrid/network) registers the RadiusNas row with exactly this value when the callback
+  // below lands. The embedded RADIUS server matches a NAS by source IP and verifies with that
+  // stored secret, so if this default is changed here it MUST be changed there too — a mismatch
+  // makes every Access-Request fail with no reply, which the captive portal shows the user as
+  // "Already authorizing, retry later".
   const radiusSecret = options.radiusSecret || credentials.password;
   const managementSource = options.managementSource?.trim();
   const apiSource = managementSource ? ` address=${managementSource}` : " address=\"\"";
@@ -57,7 +91,17 @@ export function buildMikrotikProvisioningScript(
   const serverPublicKey = options.serverPublicKey || "";
   const vpnIp = options.vpnIp || "10.90.0.2";
   const hotspotInterface = options.hotspotInterface || "bridge";
+  // "bridge" / "default-dhcp" are the names MikroTik's own defconf ships with, so they are right
+  // on a factory-reset router; the DHCP-derived fallback in the script covers everything else.
+  const addressPool = options.addressPool || "default-dhcp";
   const loginTemplateUrl = options.loginTemplateUrl || "https://api.mashuphost.tech/api/v1/hotspot/demo-isp/mikrotik-login-template";
+  const apiHost = hostFromUrl(loginTemplateUrl);
+  const portalHost = options.portalHost ? hostFromUrl(options.portalHost) : "mashuphost.tech";
+  // De-duped: in production the API and the portal are two subdomains of one domain, but in dev
+  // they're the same IP on different ports, and a repeated walled-garden entry is just noise.
+  const walledGardenHosts = Array.from(
+    new Set([apiHost, portalHost, "*.safaricom.co.ke", "*paystack.com", "*paystack.co", "*pstk.it"])
+  );
 
   return `# MASHUPKGRID ISP — Automated Setup for "${safeName}"
 # 1. API Service
@@ -81,20 +125,44 @@ ${apiLine}
 /ppp aaa set use-radius=yes accounting=yes interim-update=1m
 /radius incoming set accept=yes port=3799
 
-# 5. Hotspot RADIUS Configuration
-/ip hotspot profile set [find default=yes] use-radius=yes login-by=http-chap,http-pap radius-accounting=yes radius-interim-update=1m
+# 5. Hotspot Captive Portal Server — WITHOUT this nothing intercepts an unauthenticated
+#    client's traffic, so no login page is ever shown no matter how the profile, RADIUS and
+#    walled garden are configured. This is the single line whose removal (commit c9f944c) took
+#    the whole captive portal offline.
+#
+#    Every line below is deliberately self-contained: NO ":local" variables, and no nested
+#    ":if ... do={:if ... }". This script is delivered two ways — "/import setup.rsc" AND
+#    copy-paste into a terminal — and in the terminal each pasted line is its own scope, so a
+#    variable set on one line is already empty on the next. A confirmed hAP failure: interface
+#    detection assigned to a ":local", then "/ip hotspot add interface=$hsif" on the next line
+#    saw nothing and bound the hotspot to the WireGuard interface instead of the LAN bridge,
+#    producing an INVALID hotspot and no portal. Nested :if blocks also plain syntax-error on
+#    the RouterOS v6 console.
+/ip hotspot profile set [find default=yes] use-radius=yes login-by=http-chap,http-pap radius-accounting=yes radius-interim-update=1m html-directory=hotspot
+/ip hotspot remove [find name=mkg-hotspot]
+:do {/ip hotspot add name=mkg-hotspot interface=${hotspotInterface} address-pool=${addressPool} profile=default disabled=no} on-error={}
+# Fallback for a router whose LAN bridge/pool aren't named the defconf defaults: derive both
+# from whatever the existing DHCP server already serves. One self-contained statement, so it
+# survives being pasted on its own line, and only runs if the line above created nothing.
+:if ([:len [/ip hotspot find name=mkg-hotspot]] = 0) do={:do {/ip hotspot add name=mkg-hotspot interface=[/ip dhcp-server get [:pick [/ip dhcp-server find] 0] interface] address-pool=[/ip dhcp-server get [:pick [/ip dhcp-server find] 0] address-pool] profile=default disabled=no} on-error={}}
 
-# 6. Walled Garden (M-Pesa & Portal Bypasses)
-/ip hotspot walled-garden ip add dst-host=api.mashuphost.tech action=accept
-/ip hotspot walled-garden ip add dst-host=mashuphost.tech action=accept
-/ip hotspot walled-garden ip add dst-host=*.safaricom.co.ke action=accept
-/ip hotspot walled-garden ip add dst-host=*paystack.com action=accept
+# 5b. The portal cannot appear without working DNS: the client's captive-portal probe, the
+#     redirect to the branded page, and every walled-garden dst-host lookup all resolve names.
+:if ([:len [/ip dns get servers]] = 0) do={/ip dns set servers=8.8.8.8,1.1.1.1}
+/ip dns set allow-remote-requests=yes
 
-# 7. Cloud Portal Login Template
-/tool fetch url="${loginTemplateUrl}" dst-path=hotspot/login.html
+# 6. Walled Garden (portal + payment gateway bypasses). Removed by comment first so re-running
+#    this script doesn't stack duplicate entries.
+/ip hotspot walled-garden ip remove [find comment="MASHUPKGRID"]
+${walledGardenHosts.map(walledGardenLine).join("\n")}
+
+# 7. Cloud Portal Login Template. Non-fatal: if the fetch fails the router keeps its stock
+#    hotspot login page, which still authenticates against RADIUS — a plain login form beats
+#    no page at all, and the import continues instead of aborting here.
+:do {/tool fetch url="${loginTemplateUrl}" dst-path=hotspot/login.html check-certificate=no} on-error={:put "WARNING: portal login page fetch failed - stock RouterOS login page will be used."}
 
 :put "========================================================="
-:put "  SUCCESS! Router & Hotspot are 100% ONLINE!             "
+:put "  SUCCESS! Router & Hotspot captive portal are ONLINE!  "
 :put "========================================================="
 `;
 }

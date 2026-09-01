@@ -8,10 +8,25 @@
 #   * api and web bind to 127.0.0.1 only -- Caddy is the sole public entrypoint.
 #   * Credentials come from .env.production, never hardcoded here.
 #   * A one-shot `migrate` service applies versioned Prisma migrations before api/worker start.
+#   * Every service caps its container logs (see x-logging below).
+# Docker's json-file driver has NO size limit by default. Unrotated container logs grew to
+# roughly 20GB here and filled the VM's 29GB disk, which killed Postgres mid-checkpoint
+# ("PANIC: could not write to file ... No space left on device") and 500ed every database-backed
+# route until the logs were truncated by hand. `api` is the main producer -- it logs every
+# request, and the dashboard polls /api/v1/routers every 5 seconds -- but the cap is applied to
+# every service so no single one can fill the disk again. 50MB x 3 files bounds the whole stack
+# at roughly 900MB.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "3"
+
 services:
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
+    logging: *default-logging
     environment:
       POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env.production}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.production}
@@ -27,6 +42,7 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
+    logging: *default-logging
     command: ["redis-server", "--appendonly", "yes"]
     volumes:
       - redis_data:/data
@@ -46,6 +62,7 @@ services:
     # schema drift. Production must apply exactly the reviewed migrations in order.
     command: ["npx", "prisma", "db", "push", "--skip-generate"]
     restart: "no"
+    logging: *default-logging
     depends_on:
       postgres:
         condition: service_healthy
@@ -55,6 +72,7 @@ services:
       context: .
       dockerfile: infrastructure/docker/api.Dockerfile
     restart: unless-stopped
+    logging: *default-logging
     env_file: .env.production
     ports:
       - "127.0.0.1:4000:4000"
@@ -84,6 +102,7 @@ services:
       context: .
       dockerfile: infrastructure/docker/worker.Dockerfile
     restart: unless-stopped
+    logging: *default-logging
     env_file: .env.production
     # Router polling and provisioning run here. Sharing the API namespace gives this process
     # access to wg0, which the API creates and owns when remote access is enabled. It also lets
@@ -111,6 +130,7 @@ services:
         NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:?set NEXT_PUBLIC_API_URL in .env.production}
         NEXT_PUBLIC_PLATFORM_BASE_DOMAIN: ${PLATFORM_BASE_DOMAIN:?set PLATFORM_BASE_DOMAIN in .env.production}
     restart: unless-stopped
+    logging: *default-logging
     env_file: .env.production
     ports:
       - "127.0.0.1:3000:3000"

@@ -139,6 +139,67 @@ export async function ensureRouterVpnIp(routerId: string): Promise<string> {
 /** Completes provisioning for the router that owns `provisionToken`: records the address the
  *  callback actually arrived from as its `host`, and if a WireGuard public key is provided,
  *  registers the peer and sets the tunnel IP as `host` automatically. */
+/** Registers this router as a RADIUS NAS at the address its packets actually come FROM.
+ *
+ *  The embedded RADIUS server (packages/radius/src/radius-server.ts, getNasSecret) authorizes a
+ *  NAS purely by the UDP source address of the incoming Access-Request, looking it up as
+ *  RadiusNas.nasname. With no matching row it logs a warning and returns WITHOUT replying at
+ *  all — and a MikroTik with no RADIUS reply leaves the login attempt pending, which the user
+ *  sees on the captive portal as "Already authorizing, retry later". So a router that is
+ *  otherwise perfectly provisioned can never authenticate anyone until this row exists.
+ *
+ *  `sourceAddress` is the address this callback arrived from, NOT router.host: when remote
+ *  access is on, host becomes the WireGuard tunnel IP, but the router still sends RADIUS out
+ *  its WAN to the platform's public address, so the packets keep arriving from the public IP.
+ *  Registering the tunnel IP here would look right and still drop every Access-Request.
+ *
+ *  The secret is the router's own generated password because that is exactly what
+ *  buildMikrotikProvisioningScript embeds as the RADIUS shared secret (its `radiusSecret`
+ *  defaults to `credentials.password`) — the two must not drift apart.
+ *
+ *  Re-run on every heartbeat rather than once at provisioning, so a router on a dynamic or
+ *  CGNAT address re-registers itself within a minute of its address changing instead of
+ *  silently losing hotspot auth. */
+async function syncRadiusNasRegistration(router: Router, sourceAddress: string): Promise<void> {
+  const secret = decryptAtRest(router.passwordEncrypted, env.ENCRYPTION_KEY);
+  const existing = await prisma.radiusNas.findFirst({ where: { routerId: router.id } });
+
+  if (existing && existing.nasname === sourceAddress && existing.secret === secret) return;
+
+  // `nasname` is globally unique (one source IP can only mean one NAS). A row already holding
+  // this address that belongs to a DIFFERENT router is not ours to take — two routers sharing
+  // one public address is unsupportable under source-IP-keyed auth, and stealing the row would
+  // silently break whichever one lost the race. Leave it and make the reason visible instead.
+  const conflict = await prisma.radiusNas.findFirst({ where: { nasname: sourceAddress } });
+  if (conflict && conflict.routerId && conflict.routerId !== router.id) {
+    console.warn(
+      `[radius] Cannot register router ${router.id} at ${sourceAddress}: already registered to router ${conflict.routerId}. ` +
+        `Both routers appear to share one public address — hotspot/PPPoE auth cannot work for both.`
+    );
+    return;
+  }
+  if (conflict) await prisma.radiusNas.delete({ where: { id: conflict.id } });
+
+  if (existing) {
+    await prisma.radiusNas.update({
+      where: { id: existing.id },
+      data: { nasname: sourceAddress, secret, shortname: router.name.slice(0, 32) },
+    });
+    return;
+  }
+
+  await prisma.radiusNas.create({
+    data: {
+      tenantId: router.tenantId,
+      routerId: router.id,
+      nasname: sourceAddress,
+      shortname: router.name.slice(0, 32),
+      type: "mikrotik",
+      secret,
+    },
+  });
+}
+
 export async function completeRouterProvisioning(
   provisionToken: string,
   remoteHost: string,
@@ -163,6 +224,15 @@ export async function completeRouterProvisioning(
   if (metrics?.uptimeSeconds !== undefined) updateData.uptimeSeconds = metrics.uptimeSeconds;
   if (metrics?.memoryUsedBytes !== undefined) updateData.memoryUsedBytes = metrics.memoryUsedBytes;
   if (metrics?.memoryTotalBytes !== undefined) updateData.memoryTotalBytes = metrics.memoryTotalBytes;
+
+  // Always keyed to the WAN source address, in both the tunnel and no-tunnel paths below.
+  try {
+    await syncRadiusNasRegistration(router, remoteHost);
+  } catch (err) {
+    // A provisioning callback that reached us must still mark the router online; a NAS-sync
+    // failure degrades hotspot auth but is not a reason to drop the heartbeat entirely.
+    console.warn("RADIUS NAS registration warning on provisioning:", err);
+  }
 
   if (cleanWgKey) {
     const vpnIp = router.vpnIp || (await ensureRouterVpnIp(router.id));

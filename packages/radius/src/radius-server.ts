@@ -1,5 +1,5 @@
 import { createSocket, type Socket } from "node:dgram";
-import { createHash, timingSafeEqual } from "node:crypto";
+import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { prisma } from "@mashupkgrid/database";
 import { createAdapterForRouter } from "@mashupkgrid/network";
 import { timingSafeStringEqual } from "@mashupkgrid/shared";
@@ -54,6 +54,10 @@ const ATTR = {
   ACCT_OUTPUT_OCTETS: 43,
   ACCT_INPUT_GIGAWORDS: 52,
   ACCT_OUTPUT_GIGAWORDS: 53,
+  /** RFC 3579 §3.2. RouterOS 7.15+ ships require-message-auth=yes-for-request-resp by default
+   *  (the BlastRADIUS mitigation), and a NAS in that mode DISCARDS an Access-Accept that has no
+   *  Message-Authenticator — silently, so it looks exactly like the server never answered. */
+  MESSAGE_AUTHENTICATOR: 80,
 } as const;
 
 /** RFC 2866 §5.1 */
@@ -129,7 +133,21 @@ function encodeAttribute(type: number, value: Buffer): Buffer {
 /** RFC 2865 §3 — the reply's Response Authenticator is MD5(Code+ID+Length+RequestAuthenticator
  *  +Attributes+Secret), computed over the reply packet itself with the *request's* authenticator
  *  spliced in — this is what proves the reply actually came from whoever holds the shared
- *  secret, not just anyone who can send a UDP packet back to the NAS. */
+ *  secret, not just anyone who can send a UDP packet back to the NAS.
+ *
+ *  Access-Accept/Access-Reject additionally carry a Message-Authenticator (RFC 3579 §3.2).
+ *  This is not optional in practice: RouterOS 7.15+ defaults to
+ *  `require-message-auth=yes-for-request-resp` and a NAS in that mode drops a reply without one
+ *  WITHOUT logging anything the operator can see — indistinguishable from the server being
+ *  down, which is how it presented on a live hAP (the captive portal just sat on
+ *  "Already authorizing, retry later"). Accounting-Response is excluded: RFC 3579 scopes the
+ *  attribute to Access-* packets, and RouterOS does not expect it on accounting replies.
+ *
+ *  Order is load-bearing. The Message-Authenticator is HMAC-MD5 over the packet while its own
+ *  16-byte value reads as zeroes AND the authenticator field still holds the REQUEST's
+ *  authenticator; only once it is spliced in can the Response Authenticator be computed over
+ *  the finished attribute buffer. Computing them the other way round yields a packet that every
+ *  correct NAS rejects. */
 function buildResponse(
   code: number,
   identifier: number,
@@ -137,12 +155,28 @@ function buildResponse(
   secret: string,
   attributes: RadiusAttribute[]
 ): Buffer {
-  const attrBuf = Buffer.concat(attributes.map((a) => encodeAttribute(a.type, a.value)));
+  const withMessageAuthenticator =
+    code === RADIUS_CODE.ACCESS_ACCEPT || code === RADIUS_CODE.ACCESS_REJECT;
+
+  const allAttributes = withMessageAuthenticator
+    ? [...attributes, { type: ATTR.MESSAGE_AUTHENTICATOR, value: Buffer.alloc(16) }]
+    : attributes;
+
+  const attrBuf = Buffer.concat(allAttributes.map((a) => encodeAttribute(a.type, a.value)));
   const length = 20 + attrBuf.length;
   const header = Buffer.alloc(4);
   header.writeUInt8(code, 0);
   header.writeUInt8(identifier, 1);
   header.writeUInt16BE(length, 2);
+
+  if (withMessageAuthenticator) {
+    // The zeroed value sits in the final 16 bytes of attrBuf (its attribute was appended last),
+    // which is also exactly where the computed HMAC has to land.
+    const messageAuthenticator = createHmac("md5", Buffer.from(secret, "utf8"))
+      .update(Buffer.concat([header, requestAuthenticator, attrBuf]))
+      .digest();
+    messageAuthenticator.copy(attrBuf, attrBuf.length - 16);
+  }
 
   const responseAuthenticator = createHash("md5")
     .update(Buffer.concat([header, requestAuthenticator, attrBuf, Buffer.from(secret, "utf8")]))

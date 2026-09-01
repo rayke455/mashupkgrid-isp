@@ -245,6 +245,7 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
         serverPort: env.WIREGUARD_LISTEN_PORT || 51820,
         vpnIp,
         loginTemplateUrl,
+        portalHost: env.APP_WEB_URL,
       });
 
       await writeAuditLog({
@@ -645,6 +646,7 @@ function getClientIp(request: { headers: Record<string, string | string[] | unde
       serverPort: env.WIREGUARD_LISTEN_PORT || 51820,
       vpnIp,
       loginTemplateUrl,
+      portalHost: env.APP_WEB_URL,
     });
 
     reply.header("Content-Type", "text/plain; charset=utf-8").send(script);
