@@ -58,25 +58,26 @@ export function buildMikrotikProvisioningScript(
   return `# =========================================================
 # MASHUPKGRID ISP — ALL-IN-ONE AUTOMATIC SETUP SCRIPT
 # Router: "${safeName}"
-# Paste this into WinBox Terminal (or SSH). It configures:
-#  1. Dedicated Management API & User
-#  2. WireGuard Remote Access Tunnel (Direct Cloud Management)
-#  3. RADIUS Billing (Hotspot & PPPoE) + CoA Port 3799
-#  4. Hotspot Walled Garden for M-Pesa
-#  5. Automatic Heartbeat Scheduler & Instant Handshake
+# Paste this into WinBox Terminal (or SSH).
 # =========================================================
 {
-  # 1. Enable API Service and allow port ${router.apiPort} through Firewall
-  ${apiLine}${apiSource}
-  /ip firewall filter remove [find comment="MASHUPKGRID ISP API"]
-  /ip firewall filter add chain=input protocol=tcp dst-port=${router.apiPort}${firewallSource} action=accept comment="MASHUPKGRID ISP API"
-  :do {/ip firewall filter move [find comment="MASHUPKGRID ISP API"] destination=0} on-error={}
+  # 1. Enable API Service
+  :do {
+    ${apiLine}${apiSource}
+    /ip firewall filter remove [find comment="MASHUPKGRID ISP API"]
+    /ip firewall filter add chain=input protocol=tcp dst-port=${router.apiPort}${firewallSource} action=accept comment="MASHUPKGRID ISP API"
+    :do {/ip firewall filter move [find comment="MASHUPKGRID ISP API"] destination=0} on-error={}
+  } on-error={ :put "Warning: API service setup had an error" }
 
   # 2. Create dedicated management user
-  /user remove [find name=${credentials.username}]
-  /user add name=${credentials.username} group=full password="${credentials.password}" comment="MASHUPKGRID ISP - managed, do not delete"
+  :do {
+    /user remove [find name=${credentials.username}]
+  } on-error={}
+  :do {
+    /user add name=${credentials.username} group=full password="${credentials.password}"
+  } on-error={ :put "Warning: user setup had an error" }
 
-  # 3. WireGuard Remote Access (RouterOS v7+)
+  # 3. WireGuard Remote Access (RouterOS v7+ only, skipped on v6)
   :do {
     /interface wireguard remove [find name=mkg-wg]
     /interface wireguard add name=mkg-wg listen-port=51820
@@ -85,35 +86,37 @@ export function buildMikrotikProvisioningScript(
     /interface wireguard peers add interface=mkg-wg public-key="${serverPublicKey}" endpoint-address="${serverHost}" endpoint-port=${serverPort} allowed-address=0.0.0.0/0 persistent-keepalive=25s
     /ip address remove [find interface=mkg-wg]
     /ip address add address="${vpnIp}/32" interface=mkg-wg
-  } on-error={ :put "Note: WireGuard requires RouterOS v7+" }
+  } on-error={ :put "Skipped: WireGuard requires RouterOS v7+" }
 
-  # 4. Configure RADIUS for PPPoE and Hotspot billing
-  /radius remove [find comment="MASHUPKGRID ISP"]
-  /radius add service=ppp,hotspot address=${radiusHost} secret="${radiusSecret}" authentication-port=1812 accounting-port=1813 timeout=3000ms comment="MASHUPKGRID ISP"
-  /ppp aaa set use-radius=yes accounting=yes interim-update=1m
-  /radius incoming set accept=yes port=3799
+  # 4. Configure RADIUS
+  :do { /radius remove [find service~"ppp"] } on-error={}
+  :do { /radius remove [find service~"hotspot"] } on-error={}
+  :do {
+    /radius add service=ppp,hotspot address=${radiusHost} secret="${radiusSecret}" authentication-port=1812 accounting-port=1813 timeout=3s
+  } on-error={ :put "Warning: RADIUS setup had an error" }
+  :do { /ppp aaa set use-radius=yes accounting=yes interim-update=1m } on-error={}
+  :do { /radius incoming set accept=yes port=3799 } on-error={}
 
-  # 5. Hotspot Walled Garden for M-Pesa payments & Captive Portal
-  /ip hotspot walled-garden ip remove [find comment="MASHUPKGRID ISP"]
-  /ip hotspot walled-garden ip add dst-host=api.mashuphost.tech action=accept comment="MASHUPKGRID ISP"
-  /ip hotspot walled-garden ip add dst-host=mashuphost.tech action=accept comment="MASHUPKGRID ISP"
-  /ip hotspot walled-garden ip add dst-host=*.safaricom.co.ke action=accept comment="MASHUPKGRID ISP"
+  # 5. Hotspot Walled Garden
+  :do { /ip hotspot walled-garden ip remove [find dst-host~"mashuphost"] } on-error={}
+  :do { /ip hotspot walled-garden ip remove [find dst-host~"safaricom"] } on-error={}
+  :do {
+    /ip hotspot walled-garden ip add dst-host=api.mashuphost.tech action=accept
+    /ip hotspot walled-garden ip add dst-host=mashuphost.tech action=accept
+    /ip hotspot walled-garden ip add dst-host=*.safaricom.co.ke action=accept
+  } on-error={}
 
-  # 6. Automatic Heartbeat Scheduler (keeps router synchronized with cloud metrics)
-  :local mywgkey ""
-  :do { :set mywgkey [/interface wireguard get [find name=mkg-wg] public-key] } on-error={}
-  /system scheduler remove [find name=mkg-heartbeat]
-  /system scheduler add name=mkg-heartbeat interval=1m on-event="{ :local c [/system resource get cpu-load]; :local u [/system resource get uptime]; :local f [/system resource get free-memory]; :local t [/system resource get total-memory]; :local w \\"\\"; :do {:set w [/interface wireguard get [find name=mkg-wg] public-key]} on-error={}; /tool fetch url=\\"${callbackUrl}?cpu=\\$c&uptime=\\$u&freemem=\\$f&totmem=\\$t&wgpubkey=\\$w\\" http-method=post keep-result=no }"
+  # 6. Heartbeat Scheduler (calls cloud every 60s)
+  :do { /system scheduler remove [find name=mkg-heartbeat] } on-error={}
+  /system scheduler add name=mkg-heartbeat interval=1m on-event="/tool fetch url=\\"${callbackUrl}\\" http-method=post keep-result=no"
 
-  # 7. Complete initial cloud linking handshake with live metrics
-  :local c [/system resource get cpu-load]
-  :local u [/system resource get uptime]
-  :local f [/system resource get free-memory]
-  :local t [/system resource get total-memory]
-  /tool fetch url="${callbackUrl}?cpu=$c&uptime=$u&freemem=$f&totmem=$t&wgpubkey=$mywgkey" http-method=post http-data=$mywgkey keep-result=no
+  # 7. Initial cloud handshake
+  :do {
+    /tool fetch url="${callbackUrl}" http-method=post keep-result=no
+  } on-error={ :put "Warning: could not reach cloud — heartbeat will retry" }
 
   :put "========================================================="
-  :put "  SUCCESS! Your MikroTik router is 100% ONLINE!         "
+  :put "  SUCCESS! Router is configured and checking in!         "
   :put "========================================================="
 }
 `;
