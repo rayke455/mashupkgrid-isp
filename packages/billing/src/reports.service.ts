@@ -1,4 +1,12 @@
 import { prisma } from "@mashupkgrid/database";
+import { dayKeyInTimeZone } from "@mashupkgrid/shared";
+
+/** The tenant's own timezone, for bucketing report rows into the days its operator actually
+ *  experiences. Falls back to the same default the Tenant model uses. */
+async function tenantTimeZone(tenantId: string): Promise<string> {
+  const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { timezone: true } });
+  return tenant?.timezone || "Africa/Nairobi";
+}
 
 export interface RevenueByDay {
   date: string;
@@ -11,14 +19,17 @@ export interface RevenueByDay {
  *  route layer with a short TTL, not bake staleness into this function. */
 export async function getRevenueByDay(tenantId: string, days = 30): Promise<RevenueByDay[]> {
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-  const payments = await prisma.payment.findMany({
-    where: { tenantId, status: "COMPLETED", createdAt: { gte: since } },
-    select: { amountMinor: true, createdAt: true },
-  });
+  const [timeZone, payments] = await Promise.all([
+    tenantTimeZone(tenantId),
+    prisma.payment.findMany({
+      where: { tenantId, status: "COMPLETED", createdAt: { gte: since } },
+      select: { amountMinor: true, createdAt: true },
+    }),
+  ]);
 
   const byDay = new Map<string, { totalMinor: number; paymentCount: number }>();
   for (const payment of payments) {
-    const key = payment.createdAt.toISOString().slice(0, 10);
+    const key = dayKeyInTimeZone(payment.createdAt, timeZone);
     const bucket = byDay.get(key) ?? { totalMinor: 0, paymentCount: 0 };
     bucket.totalMinor += payment.amountMinor;
     bucket.paymentCount += 1;

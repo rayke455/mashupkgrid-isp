@@ -18,6 +18,9 @@ interface WhatsappConnectionView {
   /** 8-character code for "link with phone number" pairing. WhatsApp issues either this or a
    *  QR per attempt, never both. */
   pairingCode: string | null;
+  /** True while this tenant's customer messages are going out on the platform's shared line
+   *  because no number of their own is linked. */
+  deliveringOnPlatformLine: boolean;
 }
 
 const STATUS_META: Record<ConnectionStatus, { label: string; variant: "success" | "warning" | "danger" | "neutral"; dot: string }> = {
@@ -99,6 +102,21 @@ export default function WhatsappSettingsPage() {
           <span>{meta.label}</span>
         </Badge>
       </div>
+
+      {connection?.deliveringOnPlatformLine && (
+        <Card className="border-amber-500/40 bg-amber-50/40 dark:bg-amber-950/20">
+          <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
+            Your customers are being messaged from a shared number
+          </p>
+          <p className="mt-1 text-sm text-amber-800 dark:text-amber-300">
+            Until you link your own WhatsApp, vouchers and login codes still reach your customers —
+            but they arrive from a number that isn&apos;t yours, and{" "}
+            <strong>anything a customer replies there is discarded</strong>: it does not reach your
+            support queue and nobody sees it. Link your number below to send from your own line and
+            start receiving replies.
+          </p>
+        </Card>
+      )}
 
       {connection?.lastError && (
         <Card className="border-amber-500/40 bg-amber-50/40 dark:bg-amber-950/20">

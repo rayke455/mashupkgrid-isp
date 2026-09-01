@@ -288,6 +288,9 @@ export interface VpnCompleteScriptInput {
   serverEndpoint: string;
   serverListenPort: number;
   assignedVpnIp: string;
+  /** The platform's WireGuard tunnel subnet (WIREGUARD_SUBNET_CIDR). Scopes what the peer is
+   *  allowed to send — see the allowed-address line below for why 0.0.0.0/0 was wrong here. */
+  tunnelSubnetCidr?: string;
 }
 
 /** Step 2, generated only after the platform has allocated this router a tunnel IP and added it
@@ -299,13 +302,19 @@ export function buildMikrotikVpnCompleteScript(input: VpnCompleteScriptInput): s
   const endpointHost = input.serverEndpoint.includes(":") ? input.serverEndpoint.split(":")[0] : input.serverEndpoint;
   const endpointPort = input.serverEndpoint.includes(":") ? Number(input.serverEndpoint.split(":")[1]) : (input.serverListenPort || 51820);
   const serverPubKey = input.serverPublicKey || "";
+  const tunnelSubnet = input.tunnelSubnetCidr || "10.90.0.0/16";
 
   return `# MASHUPKGRID ISP — remote access (WireGuard) setup, step 2 of 2
 # Paste into the router's terminal, run it. This finishes the tunnel — the platform can then
 # reach this router at ${input.assignedVpnIp} regardless of its real network location.
 
+# allowed-address is the peer's permission to claim a source address, not a route. Scoping it to
+# the platform's own tunnel subnet is what makes this a MANAGEMENT tunnel: at 0.0.0.0/0 the
+# server peer was authorised to send the router traffic claiming ANY source address on the
+# internet, and on a small CPE it also invites the whole-internet-through-the-tunnel behaviour
+# that flattens a device with no crypto acceleration.
 /interface wireguard peers remove [find interface=mkg-wg]
-/interface wireguard peers add interface=mkg-wg public-key="${serverPubKey}" endpoint-address="${endpointHost}" endpoint-port=${endpointPort} allowed-address=0.0.0.0/0 persistent-keepalive=25s
+/interface wireguard peers add interface=mkg-wg public-key="${serverPubKey}" endpoint-address="${endpointHost}" endpoint-port=${endpointPort} allowed-address=${tunnelSubnet} persistent-keepalive=25s
 
 /ip address remove [find interface=mkg-wg]
 /ip address add address=${input.assignedVpnIp}/32 interface=mkg-wg

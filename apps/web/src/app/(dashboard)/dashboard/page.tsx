@@ -5,6 +5,10 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
 import { apiFetch } from "@/lib/api-client";
+import { TrendChart } from "@/components/charts/trend-chart";
+import { StackedColumns } from "@/components/charts/stacked-columns";
+import { BarList } from "@/components/charts/bar-list";
+import { ChartTable } from "@/components/charts/chart-table";
 import { formatMoney } from "@/lib/money";
 import { Card, Badge, StatusDot, Unavailable, Button } from "@/components/ui";
 import { CustomerPortal } from "@/components/customer-portal";
@@ -560,6 +564,46 @@ export default function DashboardHomePage() {
         </div>
       )}
 
+      {/* Revenue trend — previously the dashboard showed only a 30-day total, which cannot
+          distinguish a steady month from one good day followed by silence. */}
+      {isStaff && (
+        <Card className="space-y-4">
+          <div className="border-b border-slate-100 pb-2 dark:border-slate-800">
+            <h2 className="text-base font-bold text-slate-900 dark:text-white">Revenue</h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              Completed payments per day, last 30 days
+            </p>
+          </div>
+
+          {!revenue || revenue.length === 0 ? (
+            <div className="py-16 text-center text-xs text-slate-400">
+              No completed payments in the last 30 days.
+            </div>
+          ) : (
+            <>
+              <TrendChart
+                points={revenue.map((day) => ({ date: day.date, value: day.totalMinor }))}
+                format={formatMoney}
+                caption="Revenue per day, last 30 days"
+              />
+              <div className="flex items-center justify-between border-t border-slate-100 pt-2 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
+                <span>
+                  {totalPaymentCount} payment{totalPaymentCount === 1 ? "" : "s"} over{" "}
+                  {revenue.length} day{revenue.length === 1 ? "" : "s"}
+                </span>
+                <span className="font-mono font-semibold text-slate-900 dark:text-white">
+                  {revenue30dMinor !== null ? formatMoney(revenue30dMinor) : "—"} total
+                </span>
+              </div>
+              <ChartTable
+                columns={["Date", "Revenue", "Payments"]}
+                rows={revenue.map((day) => [day.date, formatMoney(day.totalMinor), day.paymentCount])}
+              />
+            </>
+          )}
+        </Card>
+      )}
+
       {/* Network Bandwidth Telemetry & Heavy Consumers Center */}
       {isStaff && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -595,75 +639,40 @@ export default function DashboardHomePage() {
               </div>
             </div>
 
-            {/* Visual Bar Chart */}
             <div className="pt-2">
               {!bandwidth || bandwidth.length === 0 ? (
                 <div className="py-16 text-center text-xs text-slate-400">
                   No bandwidth telemetry recorded yet. Live subscriber sessions will populate here.
                 </div>
               ) : (
-                <div className="space-y-3">
-                  <div className="h-44 flex items-end gap-1.5 sm:gap-2 pt-4 px-1">
-                    {bandwidth.map((day) => {
-                      const total = day.downloadBytes + day.uploadBytes;
-                      const heightPercent = Math.max(Math.round((total / maxDailyBytes) * 100), 6);
-                      const isHigh = total > maxDailyBytes * 0.7;
-
-                      return (
-                        <div
-                          key={day.date}
-                          className="group relative flex-1 flex flex-col items-center h-full justify-end"
-                        >
-                          {/* Tooltip on hover */}
-                          <div className="pointer-events-none absolute -top-12 z-30 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900 text-white text-[10px] rounded-lg px-2 py-1 shadow-xl whitespace-nowrap border border-slate-700">
-                            <span className="font-bold">{day.date}</span>: {formatBytes(total)}
-                            <div className="text-[9px] text-cyan-300">
-                              ↓ {formatBytes(day.downloadBytes)} • ↑ {formatBytes(day.uploadBytes)}
-                            </div>
-                          </div>
-
-                          {/* Dual-tone Stacked Bar */}
-                          <div
-                            style={{ height: `${heightPercent}%` }}
-                            className={`w-full rounded-t-lg transition-all duration-300 flex flex-col justify-end overflow-hidden ${
-                              isHigh
-                                ? "bg-gradient-to-t from-cyan-600 to-indigo-500 shadow-md shadow-cyan-500/20"
-                                : "bg-gradient-to-t from-cyan-700/60 to-indigo-600/60 hover:from-cyan-500 hover:to-indigo-400"
-                            }`}
-                          >
-                            <div
-                              style={{
-                                height: `${(day.uploadBytes / (total || 1)) * 100}%`,
-                              }}
-                              className="w-full bg-purple-400/40"
-                            />
-                          </div>
-
-                          <span className="text-[9px] font-mono text-slate-400 mt-2 truncate w-full text-center">
-                            {day.date.slice(5)}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Legend & Stats Footer */}
-                  <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-100 dark:border-slate-800">
-                    <div className="flex items-center gap-4">
-                      <span className="flex items-center gap-1.5">
-                        <span className="h-2.5 w-2.5 rounded-sm bg-cyan-500" />
-                        <span>Download ({formatBytes(totalDownloadBytes)})</span>
-                      </span>
-                      <span className="flex items-center gap-1.5">
-                        <span className="h-2.5 w-2.5 rounded-sm bg-purple-500" />
-                        <span>Upload ({formatBytes(totalUploadBytes)})</span>
-                      </span>
-                    </div>
-                    <span className="font-mono font-bold text-slate-900 dark:text-white">
-                      Peak: {formatBytes(maxDailyBytes)}
+                <>
+                  <StackedColumns
+                    columns={bandwidth.map((day) => ({
+                      date: day.date,
+                      primary: day.downloadBytes,
+                      secondary: day.uploadBytes,
+                    }))}
+                    primaryLabel="Download"
+                    secondaryLabel="Upload"
+                    format={formatBytes}
+                  />
+                  <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-2 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400">
+                    <span>
+                      {formatBytes(totalDownloadBytes)} down · {formatBytes(totalUploadBytes)} up
+                    </span>
+                    <span className="font-mono font-semibold text-slate-900 dark:text-white">
+                      Peak day {formatBytes(maxDailyBytes)}
                     </span>
                   </div>
-                </div>
+                  <ChartTable
+                    columns={["Date", "Download", "Upload"]}
+                    rows={bandwidth.map((day) => [
+                      day.date,
+                      formatBytes(day.downloadBytes),
+                      formatBytes(day.uploadBytes),
+                    ])}
+                  />
+                </>
               )}
             </div>
           </Card>
@@ -680,44 +689,20 @@ export default function DashboardHomePage() {
               </p>
             </div>
 
-            <div className="space-y-2.5">
-              {!topConsumers || topConsumers.length === 0 ? (
-                <div className="py-8 text-center text-xs text-slate-400">
-                  No heavy consumer records yet.
-                </div>
-              ) : (
-                topConsumers.map((consumer, idx) => {
-                  const medal = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `${idx + 1}.`;
-                  return (
-                    <div
-                      key={consumer.username}
-                      className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200/60 dark:border-slate-800 text-xs hover:border-cyan-500/40 transition-colors"
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <span className="font-bold text-slate-400 text-xs w-4">{medal}</span>
-                        <div className="min-w-0">
-                          <p className="font-bold text-slate-900 dark:text-white font-mono truncate">
-                            {consumer.username}
-                          </p>
-                          <p className="text-[10px] text-slate-400">
-                            {consumer.sessionCount} sessions
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="text-right">
-                        <span className="font-black text-cyan-600 dark:text-cyan-400 font-mono block">
-                          {formatBytes(consumer.totalBytes)}
-                        </span>
-                        <span className="text-[9px] text-slate-400 block font-mono">
-                          ↓ {formatBytes(consumer.downloadBytes)}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
-            </div>
+            {!topConsumers || topConsumers.length === 0 ? (
+              <div className="py-8 text-center text-xs text-slate-400">
+                No heavy consumer records yet.
+              </div>
+            ) : (
+              <BarList
+                items={topConsumers.map((consumer) => ({
+                  label: consumer.username,
+                  value: consumer.totalBytes,
+                  detail: `${consumer.sessionCount} sessions · ${formatBytes(consumer.downloadBytes)} down`,
+                }))}
+                format={formatBytes}
+              />
+            )}
 
             <Link
               href="/sessions"

@@ -107,24 +107,43 @@ export interface WhatsappConnectionStatusView {
   /** Present only while pairing by phone number — the 8-character code to type into WhatsApp.
    *  Mutually exclusive with `qr` in practice: WhatsApp issues one or the other per attempt. */
   pairingCode: string | null;
+  /** True when this tenant is NOT connected but the platform line is, which is exactly when
+   *  resolveSocket (apps/worker/src/lib/whatsapp-runtime.ts) silently sends this tenant's
+   *  customer messages out on the platform's own number.
+   *
+   *  Surfaced because the tenant otherwise has no way to know it is happening: their status reads
+   *  "Not connected", so they reasonably assume WhatsApp is simply unused — while their customers
+   *  are receiving vouchers and OTPs from a number that is not theirs, and any reply those
+   *  customers send is logged and discarded rather than reaching the tenant's support queue.
+   *
+   *  Always false for the platform scope itself, which has nothing to fall back to. */
+  deliveringOnPlatformLine: boolean;
 }
 
 export async function getConnectionStatus(tenantId: ConnectionScope): Promise<WhatsappConnectionStatusView> {
-  const [row, qr, pairingCode] = await Promise.all([
+  const [row, qr, pairingCode, platformRow] = await Promise.all([
     tenantId !== null
       ? prisma.whatsappConnection.findUnique({ where: { tenantId } })
       : prisma.whatsappConnection.findFirst({ where: { tenantId: null } }),
     readPairingQr(tenantId),
     readPairingCode(tenantId),
+    // Only needed to answer "is my traffic going out on someone else's line right now"; skipped
+    // for the platform scope, which is that line.
+    tenantId !== null
+      ? prisma.whatsappConnection.findFirst({ where: { tenantId: null }, select: { status: true } })
+      : Promise.resolve(null),
   ]);
 
+  const status = row?.status ?? "DISCONNECTED";
+
   return {
-    status: row?.status ?? "DISCONNECTED",
+    status,
     phoneNumber: row?.phoneNumber ?? null,
     lastConnectedAt: row?.lastConnectedAt ?? null,
     lastError: row?.lastError ?? null,
     qr,
     pairingCode,
+    deliveringOnPlatformLine: status !== "CONNECTED" && platformRow?.status === "CONNECTED",
   };
 }
 

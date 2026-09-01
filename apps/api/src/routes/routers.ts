@@ -423,6 +423,7 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
         serverEndpoint: env.WIREGUARD_SERVER_ENDPOINT || "68.210.187.104:51820",
         serverListenPort: env.WIREGUARD_LISTEN_PORT,
         assignedVpnIp: router.vpnIp,
+        tunnelSubnetCidr: env.WIREGUARD_SUBNET_CIDR,
       });
 
       reply.send(successResponse({ script }, request.id));

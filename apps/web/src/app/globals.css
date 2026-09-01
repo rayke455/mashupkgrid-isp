@@ -158,3 +158,29 @@ input[type="range"] {
 .animate-photonic-glow {
   animation: photonic-glow 2.2s ease-in-out infinite;
 }
+
+/* ---------------------------------------------------------------------------------------------
+   Chart tokens.
+
+   Data marks deliberately do NOT use the tenant brand colour. Brand is a runtime CSS variable
+   that each ISP picks for themselves, so it cannot be checked ahead of time for contrast against
+   the chart surface or for colourblind separation from a second series — a tenant who picks pale
+   yellow would get an unreadable chart. These two hues are fixed and were validated against this
+   app's real surfaces (white / obsidian-900) in both modes: adjacent CVD ΔE 24.7 light / 26.8
+   dark, normal-vision ΔE 33.6 / 31.8, contrast ≥ 3:1. Brand colour still carries the UI chrome.
+
+   Dark values are the same hues re-stepped for the dark surface, not an automatic lightening.
+--------------------------------------------------------------------------------------------- */
+.viz {
+  --viz-surface: #ffffff;
+  --viz-grid: #e2e8f0;
+  --viz-series-1: #2a78d6;
+  --viz-series-2: #eb6834;
+}
+
+.dark .viz {
+  --viz-surface: #0f172a;
+  --viz-grid: #1e293b;
+  --viz-series-1: #3987e5;
+  --viz-series-2: #d95926;
+}

@@ -4,7 +4,6 @@ export * from "./sync.service.js";
 export * from "./ip-pool.service.js";
 export * from "./voucher.service.js";
 export * from "./hotspot-package.service.js";
-export * from "./nas.service.js";
 export * from "./bandwidth-report.service.js";
 export * from "./hotspot-account-login.service.js";
 export * from "./setup-script.js";

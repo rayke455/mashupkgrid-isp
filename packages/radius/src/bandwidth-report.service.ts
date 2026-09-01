@@ -1,4 +1,11 @@
 import { prisma } from "@mashupkgrid/database";
+import { dayKeyInTimeZone } from "@mashupkgrid/shared";
+
+/** See getRevenueByDay in @mashupkgrid/billing — same reasoning, same default. */
+async function tenantTimeZone(tenantId: string): Promise<string> {
+  const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { timezone: true } });
+  return tenant?.timezone || "Africa/Nairobi";
+}
 
 export interface BandwidthByDay {
   date: string;
@@ -28,15 +35,18 @@ function toNumber(value: bigint | null): number {
  *  report in this codebase is written rather than introducing a second, raw-SQL style here. */
 export async function getBandwidthByDay(tenantId: string, days = 30): Promise<BandwidthByDay[]> {
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
-  const sessions = await prisma.radAcct.findMany({
-    where: { tenantId, acctStartTime: { gte: since } },
-    select: { acctStartTime: true, acctInputOctets: true, acctOutputOctets: true },
-  });
+  const [timeZone, sessions] = await Promise.all([
+    tenantTimeZone(tenantId),
+    prisma.radAcct.findMany({
+      where: { tenantId, acctStartTime: { gte: since } },
+      select: { acctStartTime: true, acctInputOctets: true, acctOutputOctets: true },
+    }),
+  ]);
 
   const byDay = new Map<string, BandwidthByDay>();
   for (const session of sessions) {
     if (!session.acctStartTime) continue;
-    const key = session.acctStartTime.toISOString().slice(0, 10);
+    const key = dayKeyInTimeZone(session.acctStartTime, timeZone);
     const bucket = byDay.get(key) ?? { date: key, uploadBytes: 0, downloadBytes: 0, sessionCount: 0 };
     bucket.uploadBytes += toNumber(session.acctInputOctets);
     bucket.downloadBytes += toNumber(session.acctOutputOctets);
