@@ -39,6 +39,33 @@ services:
       timeout: 5s
       retries: 10
 
+  # Nightly database backup. The postgres_data volume was, until this service existed, the ONLY
+  # copy of every tenant's customers, invoices, vouchers and encrypted router credentials — and
+  # it has already been taken down once by a full disk. Uses the same postgres image so pg_dump
+  # always matches the server version; a mismatch is the classic way a backup silently refuses to
+  # restore. See infrastructure/backup/pg-backup.sh for the restore command.
+  #
+  # This protects against corruption, a bad migration and human error. It does NOT protect
+  # against losing the VM, because the dumps live on that same disk: copy /backups off the host
+  # (or bind-mount it to attached storage) for that.
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_USER: ${POSTGRES_USER:?set POSTGRES_USER in .env.production}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env.production}
+      POSTGRES_DB: ${POSTGRES_DB:?set POSTGRES_DB in .env.production}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-7}
+    volumes:
+      - ./infrastructure/backup/pg-backup.sh:/usr/local/bin/pg-backup.sh:ro
+      - postgres_backups:/backups
+    entrypoint: ["/bin/sh", "/usr/local/bin/pg-backup.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   redis:
     image: redis:7-alpine
     restart: unless-stopped
@@ -139,5 +166,8 @@ services:
 
 volumes:
   postgres_data:
+  # Kept separate from postgres_data on purpose: a backup that shares a volume with the database
+  # it is backing up is lost by the same accident that destroys the original.
+  postgres_backups:
   redis_data:
   whatsapp_auth:

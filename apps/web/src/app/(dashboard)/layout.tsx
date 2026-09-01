@@ -32,6 +32,7 @@ import {
   IconMenu,
   IconClose,
   IconPulse,
+  IconShield,
 } from "@/components/icons";
 
 interface NavItem {
@@ -235,6 +236,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       label: "Bandwidth Usage",
       icon: <IconSpeed size={18} />,
       show: isTenantScoped && has("reports.read"),
+    },
+    {
+      href: "/audit-log",
+      label: "Audit log",
+      icon: <IconShield size={18} />,
+      show: isTenantScoped && has("audit_logs.read"),
     },
     {
       href: "/settings",
