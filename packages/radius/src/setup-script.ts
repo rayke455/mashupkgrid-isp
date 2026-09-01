@@ -60,69 +60,48 @@ export function buildMikrotikProvisioningScript(
   const loginTemplateUrl = options.loginTemplateUrl || "https://api.mashuphost.tech/api/v1/hotspot/demo-isp/mikrotik-login-template";
 
   return `# MASHUPKGRID ISP — Automated Setup for "${safeName}"
-{
-  # 1. API Service
-  :do {
-    ${apiLine}${apiSource}
-    /ip firewall filter remove [find comment="MASHUPKGRID ISP API"]
-    /ip firewall filter add chain=input protocol=tcp dst-port=${router.apiPort}${firewallSource} action=accept comment="MASHUPKGRID ISP API"
-    :do {/ip firewall filter move [find comment="MASHUPKGRID ISP API"] destination=0} on-error={}
-  } on-error={}
+# 1. API Service
+${apiLine}
+/ip firewall filter remove [find comment="MASHUPKGRID ISP API"]
+/ip firewall filter add chain=input protocol=tcp dst-port=${router.apiPort}${firewallSource} action=accept comment="MASHUPKGRID ISP API"
+:do {/ip firewall filter move [find comment="MASHUPKGRID ISP API"] destination=0} on-error={}
 
-  # 2. Management User
-  :do { /user remove [find name=${credentials.username}] } on-error={}
-  :do { /user add name=${credentials.username} group=full password="${credentials.password}" } on-error={}
+# 2. Management User
+/user remove [find name=${credentials.username}]
+/user add name=${credentials.username} group=full password="${credentials.password}"
 
-  # 3. Heartbeat Scheduler & Instant Handshake (Links router immediately)
-  :do { /system scheduler remove [find name=mkg-heartbeat] } on-error={}
-  /system scheduler add name=mkg-heartbeat interval=1m on-event="/tool fetch url=\\"${callbackUrl}\\" http-method=post keep-result=no"
-  /tool fetch url="${callbackUrl}" http-method=post keep-result=no
+# 3. Heartbeat Scheduler & Instant Handshake (Links router immediately)
+/system scheduler remove [find name=mkg-heartbeat]
+/system scheduler add name=mkg-heartbeat interval=1m on-event="/tool fetch url=\\"${callbackUrl}\\" http-method=post keep-result=no"
+/tool fetch url="${callbackUrl}" http-method=post keep-result=no
 
-  # 4. RADIUS Authentication (PPPoE & Hotspot)
-  :do { /radius remove [find service~"ppp"] } on-error={}
-  :do { /radius remove [find service~"hotspot"] } on-error={}
-  :do { /radius add service=ppp,hotspot address=${radiusHost} secret="${radiusSecret}" authentication-port=1812 accounting-port=1813 timeout=3s } on-error={}
-  :do { /ppp aaa set use-radius=yes accounting=yes interim-update=1m } on-error={}
-  :do { /radius incoming set accept=yes port=3799 } on-error={}
+# 4. RADIUS Authentication (PPPoE & Hotspot)
+/radius remove [find service~"ppp"]
+/radius remove [find service~"hotspot"]
+/radius add service=ppp,hotspot address=${radiusHost} secret="${radiusSecret}" authentication-port=1812 accounting-port=1813 timeout=3s
+/ppp aaa set use-radius=yes accounting=yes interim-update=1m
+/radius incoming set accept=yes port=3799
 
-  # 5. Hotspot Captive Portal (runtime safe)
-  :do {
-    :execute "/ip hotspot profile remove [find name=mkg-hotspot-profile]"
-    :execute "/ip hotspot profile add name=mkg-hotspot-profile use-radius=yes login-by=http-chap,http-pap radius-accounting=yes radius-interim-update=1m html-directory=hotspot"
-    :execute "/ip hotspot remove [find name=mkg-hotspot]"
-    :execute "/ip hotspot add name=mkg-hotspot interface=${hotspotInterface} profile=mkg-hotspot-profile disabled=no"
-  } on-error={}
+# 5. Hotspot Captive Portal Server
+/ip hotspot profile remove [find name=mkg-hotspot-profile]
+/ip hotspot profile add name=mkg-hotspot-profile use-radius=yes login-by=http-chap,http-pap radius-accounting=yes radius-interim-update=1m html-directory=hotspot
+/ip hotspot remove [find name=mkg-hotspot]
+/ip hotspot add name=mkg-hotspot interface=${hotspotInterface} profile=mkg-hotspot-profile disabled=no
 
-  # 6. Walled Garden (runtime safe)
-  :do {
-    :execute "/ip hotspot walled-garden ip remove [find dst-host~\"mashuphost\"]"
-    :execute "/ip hotspot walled-garden ip remove [find dst-host~\"safaricom\"]"
-    :execute "/ip hotspot walled-garden ip add dst-host=api.mashuphost.tech action=accept"
-    :execute "/ip hotspot walled-garden ip add dst-host=mashuphost.tech action=accept"
-    :execute "/ip hotspot walled-garden ip add dst-host=*.safaricom.co.ke action=accept"
-    :execute "/ip hotspot walled-garden ip add dst-host=*paystack.com action=accept"
-  } on-error={}
+# 6. Walled Garden (M-Pesa & Portal Bypasses)
+/ip hotspot walled-garden ip remove [find dst-host~"mashuphost"]
+/ip hotspot walled-garden ip remove [find dst-host~"safaricom"]
+/ip hotspot walled-garden ip add dst-host=api.mashuphost.tech action=accept
+/ip hotspot walled-garden ip add dst-host=mashuphost.tech action=accept
+/ip hotspot walled-garden ip add dst-host=*.safaricom.co.ke action=accept
+/ip hotspot walled-garden ip add dst-host=*paystack.com action=accept
 
-  # 7. Cloud Portal Login Template
-  :do {
-    /tool fetch url="${loginTemplateUrl}" dst-path=hotspot/login.html
-  } on-error={}
+# 7. Cloud Portal Login Template
+/tool fetch url="${loginTemplateUrl}" dst-path=hotspot/login.html
 
-  # 8. WireGuard (RouterOS v7+)
-  :do {
-    :execute "/interface wireguard remove [find name=mkg-wg]"
-    :execute "/interface wireguard add name=mkg-wg listen-port=51820"
-    :delay 2s
-    :execute "/interface wireguard peers remove [find interface=mkg-wg]"
-    :execute "/interface wireguard peers add interface=mkg-wg public-key=\"${serverPublicKey}\" endpoint-address=\"${serverHost}\" endpoint-port=${serverPort} allowed-address=0.0.0.0/0 persistent-keepalive=25s"
-    :execute "/ip address remove [find interface=mkg-wg]"
-    :execute "/ip address add address=\"${vpnIp}/32\" interface=mkg-wg"
-  } on-error={}
-
-  :put "========================================================="
-  :put "  SUCCESS! Router is 100% LINKED & ONLINE!               "
-  :put "========================================================="
-}
+:put "========================================================="
+:put "  SUCCESS! Router is 100% LINKED & ONLINE!               "
+:put "========================================================="
 `;
 }
 
