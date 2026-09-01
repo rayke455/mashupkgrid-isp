@@ -58,6 +58,18 @@ const ATTR = {
    *  (the BlastRADIUS mitigation), and a NAS in that mode DISCARDS an Access-Accept that has no
    *  Message-Authenticator — silently, so it looks exactly like the server never answered. */
   MESSAGE_AUTHENTICATOR: 80,
+  // Session identity/detail, all RFC 2865/2866. Without these an accounting row cannot say
+  // WHICH session it describes, so none of them are optional for persistence.
+  NAS_IP_ADDRESS: 4,
+  FRAMED_IP_ADDRESS: 8,
+  FRAMED_PROTOCOL: 7,
+  CALLED_STATION_ID: 30,
+  CALLING_STATION_ID: 31,
+  NAS_PORT_TYPE: 61,
+  ACCT_SESSION_ID: 44,
+  ACCT_SESSION_TIME: 46,
+  ACCT_TERMINATE_CAUSE: 49,
+  NAS_PORT_ID: 87,
 } as const;
 
 /** RFC 2866 §5.1 */
@@ -202,9 +214,15 @@ function verifyAccountingRequest(packet: Buffer, secret: string): boolean {
   return timingSafeEqual(expected, packet.subarray(4, 20));
 }
 
-async function getNasSecret(sourceAddress: string): Promise<string | null> {
-  const nas = await prisma.radiusNas.findFirst({ where: { nasname: sourceAddress } });
-  return nas?.secret ?? null;
+/** The NAS row for a packet's source address. Returns tenantId alongside the secret because
+ *  accounting rows are tenant-scoped and the packet itself carries no tenant identity — the
+ *  source IP is the only thing that maps a session back to whose network it happened on. */
+async function getNas(sourceAddress: string): Promise<{ secret: string; tenantId: string } | null> {
+  const nas = await prisma.radiusNas.findFirst({
+    where: { nasname: sourceAddress },
+    select: { secret: true, tenantId: true },
+  });
+  return nas ?? null;
 }
 
 async function checkCredentials(username: string, password: string): Promise<boolean> {
@@ -299,7 +317,20 @@ async function enforceDataCap(username: string, nasAddress: string, totalBytes: 
   const capBytes = Number(cap.value);
   if (!Number.isFinite(capBytes) || capBytes <= 0 || totalBytes < capBytes) return;
 
-  const router = await prisma.router.findFirst({ where: { host: nasAddress, deletedAt: null } });
+  // Resolve the router via its NAS registration first, and only fall back to matching on host.
+  // `nasAddress` is where the accounting packet came FROM — the router's WAN address — while
+  // `Router.host` becomes the WireGuard tunnel IP as soon as remote access is enabled. Matching
+  // those two directly therefore finds nothing on exactly the routers most likely to be behind
+  // CGNAT, and the cap silently stops being enforced (this function only warns). The RadiusNas
+  // row is the mapping that is kept current for this purpose — completeRouterProvisioning
+  // re-registers it from every heartbeat.
+  const nas = await prisma.radiusNas.findFirst({
+    where: { nasname: nasAddress },
+    select: { routerId: true },
+  });
+  const router = nas?.routerId
+    ? await prisma.router.findFirst({ where: { id: nas.routerId, deletedAt: null } })
+    : await prisma.router.findFirst({ where: { host: nasAddress, deletedAt: null } });
   if (!router) {
     console.warn(
       `[radius] "${username}" exceeded its data cap (${totalBytes}/${capBytes} bytes) but no Router row matches NAS ${nasAddress} — cannot force-disconnect`
@@ -336,6 +367,104 @@ async function recordVoucherUsage(username: string, inputBytes: number, outputBy
     .catch((err) => console.error(`[radius] failed to record usage for "${username}":`, err));
 }
 
+/** Reads a string attribute, trimming the trailing NULs some NAS vendors pad with. */
+function readStringAttr(packet: RadiusPacket, type: number): string | undefined {
+  const buf = findAttr(packet, type);
+  if (!buf) return undefined;
+  const value = buf.toString("utf8").replace(/\0+$/, "").trim();
+  return value.length > 0 ? value : undefined;
+}
+
+/** Dotted-quad out of a 4-byte address attribute. */
+function readIpAttr(packet: RadiusPacket, type: number): string | undefined {
+  const buf = findAttr(packet, type);
+  if (!buf || buf.length !== 4) return undefined;
+  return `${buf[0]}.${buf[1]}.${buf[2]}.${buf[3]}`;
+}
+
+/** RFC 2866 §5.5 — Acct-Terminate-Cause is an enum; store the name rather than the number so a
+ *  report is readable without a lookup table. Unknown values keep their numeric form. */
+const TERMINATE_CAUSE: Record<number, string> = {
+  1: "User-Request", 2: "Lost-Carrier", 3: "Lost-Service", 4: "Idle-Timeout",
+  5: "Session-Timeout", 6: "Admin-Reset", 7: "Admin-Reboot", 8: "Port-Error",
+  9: "NAS-Error", 10: "NAS-Request", 11: "NAS-Reboot", 12: "Port-Unneeded",
+  13: "Port-Preempted", 14: "Port-Suspended", 15: "Service-Unavailable",
+  16: "Callback", 17: "User-Error", 18: "Host-Request",
+};
+
+/** Persists one Accounting-Request into `radacct` — the table every bandwidth and session
+ *  report reads (see bandwidth-report.service.ts).
+ *
+ *  This is what makes usage real. Previously the accounting handler dropped Accounting-Start
+ *  outright and only ever fed the octet counters to enforceDataCap/recordVoucherUsage, so
+ *  nothing was ever written here: `radacct` stayed permanently empty and every bandwidth
+ *  report rendered zeroes no matter how much traffic the network actually carried.
+ *
+ *  Keyed by acctUniqueId. FreeRADIUS synthesises that column the same way — a hash over the
+ *  session id, the NAS and the user — because Acct-Session-Id is only unique per NAS, so two
+ *  routers can and do issue the same one. Hashing all three is what keeps a START and its
+ *  later INTERIM/STOP updating ONE row instead of accumulating duplicates. */
+async function recordAccounting(
+  packet: RadiusPacket,
+  nasIpAddress: string,
+  tenantId: string,
+  statusType: number,
+  username: string,
+  inputBytes: number,
+  outputBytes: number
+): Promise<void> {
+  const acctSessionId = readStringAttr(packet, ATTR.ACCT_SESSION_ID);
+  if (!acctSessionId) return; // Nothing identifies the session; a row would be unattributable.
+
+  const acctUniqueId = createHash("md5")
+    .update(`${acctSessionId}|${nasIpAddress}|${username}`)
+    .digest("hex");
+
+  const now = new Date();
+  const sessionTime = readUInt32Attr(packet, ATTR.ACCT_SESSION_TIME) || null;
+  const terminateCauseCode = readUInt32Attr(packet, ATTR.ACCT_TERMINATE_CAUSE);
+
+  const common = {
+    acctUpdateTime: now,
+    acctSessionTime: sessionTime,
+    acctInputOctets: BigInt(inputBytes),
+    acctOutputOctets: BigInt(outputBytes),
+    framedIpAddress: readIpAttr(packet, ATTR.FRAMED_IP_ADDRESS),
+    callingStationId: readStringAttr(packet, ATTR.CALLING_STATION_ID),
+    calledStationId: readStringAttr(packet, ATTR.CALLED_STATION_ID),
+    nasPortId: readStringAttr(packet, ATTR.NAS_PORT_ID),
+    nasPortType: readStringAttr(packet, ATTR.NAS_PORT_TYPE),
+  };
+
+  const isStop = statusType === ACCT_STATUS_TYPE.STOP;
+  const stopFields = isStop
+    ? {
+        acctStopTime: now,
+        acctTerminateCause:
+          terminateCauseCode > 0
+            ? TERMINATE_CAUSE[terminateCauseCode] ?? String(terminateCauseCode)
+            : null,
+      }
+    : {};
+
+  await prisma.radAcct.upsert({
+    where: { acctUniqueId },
+    // An INTERIM or STOP whose START was missed (server restart, lost packet) still creates the
+    // row: a session with slightly late start data beats a session that never appears at all.
+    create: {
+      tenantId,
+      acctSessionId,
+      acctUniqueId,
+      username,
+      nasIpAddress,
+      acctStartTime: now,
+      ...common,
+      ...stopFields,
+    },
+    update: { ...common, ...stopFields },
+  });
+}
+
 export interface RadiusServerHandle {
   close: () => Promise<void>;
 }
@@ -354,11 +483,12 @@ export function startRadiusServer(options: { authPort?: number; acctPort?: numbe
       const packet = parsePacket(msg);
       if (!packet || packet.code !== RADIUS_CODE.ACCESS_REQUEST) return;
 
-      const secret = await getNasSecret(rinfo.address);
-      if (!secret) {
+      const nas = await getNas(rinfo.address);
+      if (!nas) {
         console.warn(`[radius] Access-Request from unknown NAS ${rinfo.address} — no matching RadiusNas row`);
         return;
       }
+      const secret = nas.secret;
 
       try {
         const usernameBuf = findAttr(packet, ATTR.USER_NAME);
@@ -387,11 +517,12 @@ export function startRadiusServer(options: { authPort?: number; acctPort?: numbe
       const packet = parsePacket(msg);
       if (!packet || packet.code !== RADIUS_CODE.ACCOUNTING_REQUEST) return;
 
-      const secret = await getNasSecret(rinfo.address);
-      if (!secret) {
+      const nas = await getNas(rinfo.address);
+      if (!nas) {
         console.warn(`[radius] Accounting-Request from unknown NAS ${rinfo.address} — no matching RadiusNas row`);
         return;
       }
+      const secret = nas.secret;
       if (!verifyAccountingRequest(msg, secret)) {
         console.warn(`[radius] rejected unauthenticated Accounting-Request from ${rinfo.address}`);
         return;
@@ -401,7 +532,6 @@ export function startRadiusServer(options: { authPort?: number; acctPort?: numbe
       acctSocket.send(response, rinfo.port, rinfo.address);
 
       const statusType = readUInt32Attr(packet, ATTR.ACCT_STATUS_TYPE);
-      if (statusType !== ACCT_STATUS_TYPE.INTERIM_UPDATE && statusType !== ACCT_STATUS_TYPE.STOP) return;
 
       const username = findAttr(packet, ATTR.USER_NAME)?.toString("utf8");
       if (!username) return;
@@ -412,6 +542,18 @@ export function startRadiusServer(options: { authPort?: number; acctPort?: numbe
       const outputBytes =
         readUInt32Attr(packet, ATTR.ACCT_OUTPUT_GIGAWORDS) * U32_MAX_PLUS_ONE +
         readUInt32Attr(packet, ATTR.ACCT_OUTPUT_OCTETS);
+
+      // Persist EVERY status type, Start included. Start is what makes a session visible while
+      // it is still running; dropping it (as this handler used to) means a session only ever
+      // appears once it is already over, and never at all if the client simply walks out of
+      // range without the NAS sending a Stop.
+      recordAccounting(packet, rinfo.address, nas.tenantId, statusType, username, inputBytes, outputBytes).catch(
+        (err) => console.error(`[radius] error recording accounting for "${username}":`, err)
+      );
+
+      // Cap enforcement and voucher usage only make sense once counters exist — a Start carries
+      // zeroes, and acting on those would reset a voucher's recorded usage to nothing.
+      if (statusType !== ACCT_STATUS_TYPE.INTERIM_UPDATE && statusType !== ACCT_STATUS_TYPE.STOP) return;
 
       enforceDataCap(username, rinfo.address, inputBytes + outputBytes).catch((err) =>
         console.error(`[radius] error enforcing data cap for "${username}":`, err)

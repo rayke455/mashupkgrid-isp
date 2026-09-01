@@ -384,6 +384,14 @@ export async function deleteRouter(tenantId: string, routerId: string): Promise<
   await prisma.router.update({ where: { id: routerId }, data: { deletedAt: new Date() } });
 }
 
+/** How long after its last heartbeat a router is still considered alive when the platform
+ *  cannot open a management connection to it. Most routers sit behind NAT or CGNAT with no
+ *  port forward, so an unreachable API says nothing about whether the router is up — the
+ *  heartbeat is the real liveness signal. buildMikrotikProvisioningScript schedules that every
+ *  minute, so this is ten missed beats before a router is called DOWN: long enough to ride out
+ *  a flaky uplink, short enough that staff notice a dead site the same shift. */
+const HEARTBEAT_LIVENESS_WINDOW_MS = 10 * 60 * 1000;
+
 /** Opens a real connection to the router, runs a health check, and persists the result onto
  *  the Router row (status/lastSeenAt/lastError/resource usage) so the routers list reflects
  *  reality without a separate polling round-trip from the caller. */
@@ -403,6 +411,9 @@ export async function testRouterConnection(tenantId: string, routerId: string): 
   const adapter = createAdapterForRouter({ ...router, host: router.host });
 
   let health: DeviceHealth = { reachable: false };
+  // True when "reachable" was inferred from a recent heartbeat rather than an actual connection.
+  // The distinction decides whether lastSeenAt may be advanced below — see the update call.
+  let inferredFromHeartbeat = false;
   try {
     await adapter.connect();
     health = await adapter.healthCheck();
@@ -417,7 +428,8 @@ export async function testRouterConnection(tenantId: string, routerId: string): 
           health = vpnHealth;
           await prisma.router.update({ where: { id: router.id }, data: { host: router.vpnIp } });
           router.host = router.vpnIp;
-        } else if (router.lastSeenAt && Date.now() - router.lastSeenAt.getTime() < 5 * 60 * 1000) {
+        } else if (router.lastSeenAt && Date.now() - router.lastSeenAt.getTime() < HEARTBEAT_LIVENESS_WINDOW_MS) {
+          inferredFromHeartbeat = true;
           health = {
             reachable: true,
             cpuLoadPercent: router.cpuLoadPercent ?? undefined,
@@ -429,7 +441,8 @@ export async function testRouterConnection(tenantId: string, routerId: string): 
           health = { reachable: false, error: err instanceof Error ? err.message : String(err) };
         }
       } catch {
-        if (router.lastSeenAt && Date.now() - router.lastSeenAt.getTime() < 5 * 60 * 1000) {
+        if (router.lastSeenAt && Date.now() - router.lastSeenAt.getTime() < HEARTBEAT_LIVENESS_WINDOW_MS) {
+          inferredFromHeartbeat = true;
           health = {
             reachable: true,
             cpuLoadPercent: router.cpuLoadPercent ?? undefined,
@@ -441,7 +454,8 @@ export async function testRouterConnection(tenantId: string, routerId: string): 
           health = { reachable: false, error: err instanceof Error ? err.message : String(err) };
         }
       }
-    } else if (router.lastSeenAt && Date.now() - router.lastSeenAt.getTime() < 5 * 60 * 1000) {
+    } else if (router.lastSeenAt && Date.now() - router.lastSeenAt.getTime() < HEARTBEAT_LIVENESS_WINDOW_MS) {
+      inferredFromHeartbeat = true;
       health = {
         reachable: true,
         cpuLoadPercent: router.cpuLoadPercent ?? undefined,
@@ -460,7 +474,14 @@ export async function testRouterConnection(tenantId: string, routerId: string): 
     where: { id: router.id },
     data: {
       status: health.reachable ? "ONLINE" : "DOWN",
-      lastSeenAt: health.reachable ? new Date() : router.lastSeenAt,
+      // Only a genuinely successful connection advances lastSeenAt. A real heartbeat writes it
+      // itself (completeRouterProvisioning), so nothing is lost here — whereas advancing it on
+      // an INFERRED result makes the liveness check self-refreshing: the branches above read
+      // lastSeenAt to conclude the router is alive, and writing it back means the next poll
+      // reads a timestamp this poll just set. With poll-router-health running every 20 seconds,
+      // that window never expires and a router physically unplugged from the wall reports
+      // ONLINE indefinitely. Confirmed live on a disconnected hAP.
+      ...(health.reachable && !inferredFromHeartbeat ? { lastSeenAt: new Date() } : {}),
       lastError: health.error ?? null,
       cpuLoadPercent: health.cpuLoadPercent ?? router.cpuLoadPercent ?? null,
       memoryUsedBytes: health.memoryUsedBytes ?? router.memoryUsedBytes ?? null,

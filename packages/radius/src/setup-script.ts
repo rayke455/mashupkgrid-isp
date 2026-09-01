@@ -110,15 +110,6 @@ function hostWithSubdomains(host: string): string[] {
   return [host, `*.${registrableDomain(host)}`];
 }
 
-export interface MikrotikSetupScript {
-  /** Paste directly into the router's terminal (WinBox "New Terminal", or SSH). */
-  mikrotikScript: string;
-  /** Add this `client { }` block to infrastructure/freeradius/raddb/clients.conf — dynamic
-   *  SQL-backed client loading is off (see that file), so this router won't be trusted by
-   *  FreeRADIUS until it's added there with the same secret. */
-  freeradiusClientSnippet: string;
-}
-
 /** Builds the one paste-and-run script a "Link a router" wizard needs before it knows anything
  *  about the router's address: it enables the RouterOS API, creates the dedicated user/password
  *  this platform generated (so no one ever types API credentials into the dashboard), and calls
@@ -240,6 +231,13 @@ ${apiLine}
 :if ([:len [/ip dns get servers]] = 0) do={/ip dns set servers=8.8.8.8,1.1.1.1}
 /ip dns set allow-remote-requests=yes
 
+# 5c. Hotspot clients need source NAT to reach the internet once they authenticate. MikroTik's
+#     defconf ships a masquerade rule, but a router that has been reset to a blank config, or
+#     had its firewall rebuilt by hand, has none -- and the symptom is the worst kind: login
+#     succeeds, then every page still fails. Only added when no masquerade rule exists at all,
+#     so an operator's own NAT setup is never duplicated or overridden.
+:if ([:len [/ip firewall nat find action=masquerade]] = 0) do={/ip firewall nat add chain=srcnat action=masquerade comment="MASHUPKGRID"}
+
 # 6. Walled Garden (portal + payment gateway bypasses). Removed by comment first so re-running
 #    this script doesn't stack duplicate entries.
 /ip hotspot walled-garden remove [find comment="MASHUPKGRID"]
@@ -254,146 +252,6 @@ ${walledGardenLines(walledGardenHosts)}
 :put "========================================================="
 :put "  SUCCESS! Router & Hotspot captive portal are ONLINE!  "
 :put "========================================================="
-`;
-}
-
-/** Builds the RADIUS half of setup — separate from buildMikrotikProvisioningScript because it
- *  needs a real, known `router.host` (the FreeRADIUS clients.conf entry is keyed by the
- *  router's actual IP), which only exists after the provisioning callback above has landed. No
- *  local `/ppp secret` entries are created — this app is RADIUS-first (see the SyncTaskAction
- *  doc comment in schema.prisma), so the router only needs to know where to send
- *  Access-Requests, not who's allowed to log in. */
-export function buildMikrotikSetupScript(
-  router: Router & { host: string },
-  nas: RadiusNas,
-  radiusHost: string
-): MikrotikSetupScript {
-  const apiLine = router.useTls
-    ? `/ip service set api-ssl disabled=no port=${router.apiPort}`
-    : `/ip service set api disabled=no port=${router.apiPort}`;
-  const safeName = sanitizeForScript(router.name);
-
-  const mikrotikScript = `# MASHUPKGRID ISP — setup script for router "${safeName}" (${router.host})
-# Paste this into the router's terminal (WinBox: New Terminal, or SSH), then run it.
-
-# 1. Enable the API service the ISP platform uses to manage this router.
-${apiLine}
-
-# 2. Point PPP authentication at the ISP platform's RADIUS server.
-/radius add service=ppp address=${radiusHost} secret=${nas.secret} comment="MASHUPKGRID ISP"
-/ppp aaa set use-radius=yes accounting=yes interim-update=5m
-
-# 3. If this router also runs a hotspot, point it at RADIUS too (safe to leave commented out
-#    otherwise):
-# /radius add service=hotspot address=${radiusHost} secret=${nas.secret} comment="MASHUPKGRID ISP"
-# /ip hotspot profile set [find] use-radius=yes
-
-:put "Done — this router now authenticates PPPoE users via MASHUPKGRID ISP."
-`;
-
-  const freeradiusClientSnippet = `client ${safeName.toLowerCase().replace(/[^a-z0-9-]+/g, "-")} {
-\tipaddr = ${router.host}
-\tsecret = ${nas.secret}
-\tshortname = ${safeName}
-}`;
-
-  return { mikrotikScript, freeradiusClientSnippet };
-}
-
-export interface HotspotScriptInput {
-  /** The bridge/interface the hotspot server binds to — reuse whatever already carries the
-   *  router's WiFi/LAN clients (e.g. "bridge"), not a fresh one, so this coexists with any
-   *  existing DHCP server there instead of fighting it. */
-  interfaceName: string;
-  /** Name of the router's EXISTING IP pool (e.g. "default-dhcp") to reuse for hotspot clients —
-   *  deliberately not creating a new pool, since a second pool on the same subnet is how you get
-   *  duplicate-IP conflicts with whatever DHCP server already serves this interface. */
-  addressPoolName: string;
-  /** Where unauthenticated clients get redirected — a page this platform serves that itself
-   *  redirects into the router's own local login flow (see the login.html template below). */
-  loginTemplateUrl: string;
-  /** Everything the client needs walled-garden access to before authenticating: the platform's
-   *  own host (to load the login page and call its API) — a bare IP in dev, a real domain once
-   *  this is deployed. */
-  platformHost: string;
-  /** This tenant's verified custom domains (the Domain model). A white-labelled tenant's portal
-   *  is not on the platform's own host, so without these the router blocks the very page it just
-   *  redirected the customer to. */
-  portalDomains?: string[];
-  /** Where this router should send hotspot Access-Requests — the same FreeRADIUS server PPPoE
-   *  uses, just a separate `/radius add service=hotspot` client entry, since RouterOS scopes
-   *  RADIUS client config per service rather than sharing one entry across service types. */
-  radiusHost: string;
-  /** The RadiusNas row's shared secret (see getOrCreateNasForRouter) — reused as-is rather than
-   *  generating a second one, since FreeRADIUS's clients.conf trusts this router by IP, not by
-   *  service, so one secret already covers both PPP and hotspot traffic from it. */
-  nasSecret: string;
-}
-
-/** Builds the RouterOS script that turns on an actual captive-portal hotspot server — distinct
- *  from the RADIUS `service=hotspot` line in buildMikrotikSetupScript, which only tells the
- *  router *where to check credentials*. Without this, connecting to the router's WiFi is just
- *  normal internet access with no login prompt at all, which is exactly the gap a real hAP lite
- *  test surfaced: RADIUS was wired up correctly, but nothing was actually intercepting
- *  unauthenticated traffic to redirect it anywhere.
- *
- *  Reuses the interface's existing DHCP/IP pool rather than provisioning a parallel one (see
- *  HotspotScriptInput doc comments) — the same thing RouterOS's own `/ip hotspot setup` wizard
- *  does when pointed at an interface that already has DHCP. Overwrites the router's local
- *  hotspot/login.html with a one-line redirect to `loginTemplateUrl`, which RouterOS serves with
- *  its own `$(...)` template variables substituted — those then flow through to the platform's
- *  hosted captive-portal page as query params so it can complete the login handshake back
- *  against the router (see apps/web's hotspot page and the `-esc` variable use there). */
-export function buildMikrotikHotspotScript(router: Router, input: HotspotScriptInput): string {
-  const profileName = "mkg-hotspot-profile";
-  const hotspotName = "mkg-hotspot";
-  const safeName = sanitizeForScript(router.name);
-
-  return `# MASHUPKGRID ISP — hotspot captive-portal setup for router "${safeName}"
-# Paste this into the router's terminal (WinBox: New Terminal, or SSH), then run it.
-# Reuses the "${input.interfaceName}" interface's existing DHCP/IP pool — this does not
-# create a second DHCP server or touch your existing LAN/WiFi client leases.
-
-# 1. Walled garden — lets an unauthenticated client reach the platform and every payment
-#    gateway before it has logged in. Emitted to BOTH RouterOS menus: the packet-level
-#    "walled-garden ip" menu is the only one that lets an HTTPS connection through, and every
-#    host here is HTTPS-only. Cleared by comment first so re-running never stacks duplicates.
-#
-#    Each line stands alone rather than using RouterOS's "menu then bare add" block form: that
-#    form only works when the whole block is executed together, and this script is routinely
-#    pasted a few lines at a time.
-/ip hotspot walled-garden remove [find comment="MASHUPKGRID"]
-/ip hotspot walled-garden ip remove [find comment="MASHUPKGRID"]
-${walledGardenLines([
-    ...hostWithSubdomains(input.platformHost),
-    ...hostWithSubdomains(hostFromUrl(input.loginTemplateUrl)),
-    ...(input.portalDomains ?? []).flatMap((d) => hostWithSubdomains(hostFromUrl(d))),
-    ...PAYMENT_GATEWAY_WALLED_GARDEN_HOSTS,
-  ])}
-
-# 2. Point hotspot authentication at the platform's RADIUS server (a separate client entry from
-#    PPPoE's — RouterOS scopes RADIUS clients per service).
-/radius add service=hotspot address=${input.radiusHost} secret=${input.nasSecret} comment="MASHUPKGRID ISP"
-
-# 3. Hotspot profile — RADIUS-backed, so the same voucher/account credentials PPPoE uses work
-#    here too. radius-accounting=yes is required or RouterOS never sends ANY accounting packets
-#    (not even Start/Stop) — without it, enforceDataCap in radius-server.ts never runs, since it
-#    only fires off accounting packets (confirmed live: cap enforcement silently did nothing until
-#    this was set). radius-interim-update matters beyond just accounting hygiene too: without it
-#    RouterOS only ever sends Start/Stop, so both live traffic reporting and data-cap enforcement
-#    (Mikrotik-Total-Limit) would only ever see a session's usage once it's already over.
-/ip hotspot profile add name=${profileName} use-radius=yes login-by=http-chap,http-pap radius-accounting=yes radius-interim-update=1m
-
-# 4. The hotspot server itself, bound to "${input.interfaceName}" and reusing its existing
-#    "${input.addressPoolName}" IP pool.
-/ip hotspot add name=${hotspotName} interface=${input.interfaceName} address-pool=${input.addressPoolName} profile=${profileName} disabled=no
-
-# 5. Replace the router's local login page with a one-line redirect to the platform's own
-#    branded captive-portal page — RouterOS fills in $(mac)/$(ip)/$(link-login-only-esc)/
-#    $(link-orig-esc) when it serves this file to a connecting client.
-/tool fetch url="${input.loginTemplateUrl}" dst-path=hotspot/login.html
-
-:put "Done — connect to this router's WiFi from another device to see the login page."
 `;
 }
 

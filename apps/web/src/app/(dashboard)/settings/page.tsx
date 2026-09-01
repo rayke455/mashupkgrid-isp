@@ -83,8 +83,12 @@ export default function SettingsPage() {
   const [urlCopied, setUrlCopied] = useState(false);
 
   // Captive Portal Hotspot Branding & Numbers
-  const [contactPhone, setContactPhone] = useState("0724 165 988");
-  const [supportPhone, setSupportPhone] = useState("0724 165 988");
+  // Seeded empty, never with a sample identity: these are the values that get SAVED, so
+  // pre-filling them with a real company's name and support number meant a tenant who opened
+  // this page and pressed save silently published another ISP's contact details as their own.
+  // The grey placeholders below still show the expected format.
+  const [contactPhone, setContactPhone] = useState("");
+  const [supportPhone, setSupportPhone] = useState("");
   const [welcomeTitle, setWelcomeTitle] = useState("FAST & SECURE WI-FI");
   const [bannerSubtitle, setBannerSubtitle] = useState("HIGH SPEED FIBER CONNECTION");
   const [activeThemeId, setActiveThemeId] = useState("suntech-blue");
@@ -144,7 +148,7 @@ export default function SettingsPage() {
         installationFee: installationFee.trim(),
       };
       try {
-        localStorage.setItem("mkg_hotspot_captive_config", JSON.stringify(captivePayload));
+        localStorage.setItem(`mkg_hotspot_captive_config:${tenantSlug}`, JSON.stringify(captivePayload));
       } catch {}
       // Staff write — must carry the bearer token; only the matching GET is public.
       await apiFetch(`/api/v1/hotspot/${tenantSlug}/config`, {

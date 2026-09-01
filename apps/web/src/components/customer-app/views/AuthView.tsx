@@ -11,7 +11,9 @@ interface AuthViewProps {
 
 export function AuthView({ onSuccess, brandName = "FiberConnect", brandColor = "#2563eb" }: AuthViewProps) {
   const [modalMode, setModalMode] = useState<"none" | "phone" | "email" | "link">("none");
-  const [phone, setPhone] = useState("0724 165 988");
+  // Empty, not a sample number -- this field sends a login OTP, and pre-filling a real number
+  // would deliver one-time codes to whoever owns it.
+  const [phone, setPhone] = useState("");
   const [otp, setOtp] = useState("");
   const [otpSent, setOtpSent] = useState(false);
   const [email, setEmail] = useState("");

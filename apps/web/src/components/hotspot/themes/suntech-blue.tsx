@@ -160,7 +160,9 @@ export function SuntechBlueTheme({
   const displayName = tenantName.toUpperCase();
   const titleText = welcomeTitle || "HIGH SPEED";
   const subText = bannerSubtitle || "FIBER CONNECTION";
-  const phoneToDisplay = contactPhone || supportPhone || "0724 165 988";
+  // No fallback number -- see the same fix in gold-energy.tsx. An unset contact number must not
+  // become another ISP's support line in a tap-to-dial "For Installation Call" banner.
+  const phoneToDisplay = contactPhone || supportPhone || "";
 
   const defaultRates = [
     { speed: "10MBPS", price: "1,500/-" },
@@ -240,6 +242,7 @@ export function SuntechBlueTheme({
             </div>
 
             {/* Bottom Navy Contact Bar matching Screenshot */}
+            {phoneToDisplay && (
             <div className="mt-3 rounded-xl bg-blue-950 px-3 py-2 flex items-center justify-between text-white shadow-md">
               <div className="flex items-center gap-1.5 text-white">
                 <span className="h-5 w-5 rounded-full bg-blue-800 text-white flex items-center justify-center">
@@ -256,6 +259,7 @@ export function SuntechBlueTheme({
                 {phoneToDisplay}
               </a>
             </div>
+            )}
           </div>
         </div>
 

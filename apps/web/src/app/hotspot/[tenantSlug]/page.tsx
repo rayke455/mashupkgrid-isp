@@ -69,6 +69,27 @@ function formatPriceKsh(priceMinor: number): string {
  *  the moment it expires or fails. Deliberately voucher-only, not account-login: a subscriber's
  *  real account password is a different sensitivity class not worth persisting client-side. */
 const REMEMBERED_VOUCHER_PREFIX = "mkg-hotspot-voucher:";
+/** Per-tenant so one ISP's staff preview can never brand another ISP's portal. */
+const CAPTIVE_PREVIEW_PREFIX = "mkg_hotspot_captive_config:";
+/** The phone number this device last paid with, per tenant. A captive portal is re-entered
+ *  constantly by the same handful of devices, and re-typing an M-Pesa number on a phone keypad
+ *  behind a login wall is the step people abandon at. Stored only in the visitor's own browser
+ *  — it never reaches the server and identifies nobody but the device's own owner. */
+const REMEMBERED_PHONE_PREFIX = "mkg-hotspot-phone:";
+
+function rememberPhone(tenantSlug: string, phone: string): void {
+  try {
+    localStorage.setItem(REMEMBERED_PHONE_PREFIX + tenantSlug, phone);
+  } catch {}
+}
+
+function loadRememberedPhone(tenantSlug: string): string {
+  try {
+    return localStorage.getItem(REMEMBERED_PHONE_PREFIX + tenantSlug) ?? "";
+  } catch {
+    return "";
+  }
+}
 
 interface RememberedVoucher {
   code: string;
@@ -188,12 +209,18 @@ export default function HotspotCaptivePortalPage() {
 
   const [localConfig, setLocalConfig] = useState<Partial<TenantInfo> | null>(null);
 
+  // Staff-side branding preview, scoped to ONE tenant. The key used to be a single global
+  // "mkg_hotspot_captive_config", written by the dashboard's customizer/settings/themes pages
+  // and read here unconditionally — so on any device that had opened a dashboard, one tenant's
+  // brand name and support number were rendered on a DIFFERENT tenant's captive portal. It also
+  // made the portal's branding depend on the viewer's browser history rather than on the
+  // tenant, which is not something anyone can debug from the server side.
   useEffect(() => {
     try {
-      const raw = localStorage.getItem("mkg_hotspot_captive_config");
+      const raw = localStorage.getItem(`${CAPTIVE_PREVIEW_PREFIX}${tenantSlug}`);
       if (raw) setLocalConfig(JSON.parse(raw));
     } catch {}
-  }, []);
+  }, [tenantSlug]);
 
   // Sync theme with tenant backend config or localStorage if no query override
   useEffect(() => {
@@ -296,6 +323,9 @@ export default function HotspotCaptivePortalPage() {
   useEffect(() => {
     const remembered = loadRememberedVoucher(tenantSlug);
     setRememberedVoucher(remembered);
+    // Pre-fill the payment number from this device's last purchase. Deliberately does not
+    // overwrite anything already typed: this effect also re-runs on tenantSlug changes.
+    setBuyPhone((current) => current || loadRememberedPhone(tenantSlug));
     if (autoReconnectAttempted.current) return;
     if (!linkLoginOnly || !remembered) return;
     autoReconnectAttempted.current = true;
@@ -359,6 +389,9 @@ export default function HotspotCaptivePortalPage() {
       }),
     onSuccess: (data) => {
       setError(null);
+      // Remembered only once the gateway has accepted the request, so a typo that never reached
+      // a payment provider is not what gets pre-filled on the customer's next visit.
+      rememberPhone(tenantSlug, buyPhone.trim());
       if (data.method === "PAYSTACK" && data.authorizationUrl) {
         window.location.href = data.authorizationUrl;
         return;
@@ -445,8 +478,13 @@ export default function HotspotCaptivePortalPage() {
   }, [checkoutRequestId, pollingStatus, tenantSlug, connectWithVoucher]);
 
   const SelectedThemeComponent = getThemeComponent(activeThemeId);
-  const contactPhone = tenant?.phone || localConfig?.phone || tenant?.supportPhone || localConfig?.supportPhone || "0724 165 988";
-  const tenantDisplayName = tenant?.brandName || localConfig?.brandName || tenant?.name || "SUNTECH FIBRE";
+  // No hardcoded fallback identity. These previously defaulted to one specific ISP's trading
+  // name and support number, so ANY tenant who had not filled in their branding showed that
+  // company's name and phone number to their own paying customers — telling them to call a
+  // competitor for help. An empty string is correct here: the components below already omit a
+  // missing support number, and the tenant's registered name is always available from /info.
+  const contactPhone = tenant?.phone || localConfig?.phone || tenant?.supportPhone || localConfig?.supportPhone || "";
+  const tenantDisplayName = tenant?.brandName || localConfig?.brandName || tenant?.name || "";
   const supportPhoneToUse = tenant?.supportPhone || localConfig?.supportPhone || contactPhone;
   const welcomeTitleToUse = tenant?.welcomeTitle || localConfig?.welcomeTitle || undefined;
   const bannerSubtitleToUse = tenant?.bannerSubtitle || localConfig?.bannerSubtitle || undefined;

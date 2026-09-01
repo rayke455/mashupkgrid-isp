@@ -6,7 +6,9 @@ import { THEME_CATALOG, ThemeId } from '@/components/hotspot/themes';
 import { useAuth } from '@/lib/auth-context';
 import { apiFetch } from '@/lib/api-client';
 
-const LOCAL_STORAGE_KEY = 'mkg_hotspot_captive_config';
+// Scoped per tenant. As a single shared key this was read back by the CUSTOMER captive portal
+// on the same browser, so one ISP's branding preview rendered on another ISP's portal.
+const previewKey = (tenantSlug: string) => `mkg_hotspot_captive_config:${tenantSlug}`;
 
 export default function ThemesPage() {
   const { user } = useAuth();
@@ -16,9 +18,13 @@ export default function ThemesPage() {
 
   // Captive Portal Backend State
   const [selectedTheme, setSelectedTheme] = useState<ThemeId>('suntech-blue');
-  const [contactPhone, setContactPhone] = useState('0724 165 988');
-  const [supportPhone, setSupportPhone] = useState('0724 165 988');
-  const [brandName, setBrandName] = useState('SUNTECH FIBRE');
+  // Seeded empty, never with a sample identity: these are the values that get SAVED, so
+  // pre-filling them with a real company's name and support number meant a tenant who opened
+  // this page and pressed save silently published another ISP's contact details as their own.
+  // The grey placeholders below still show the expected format.
+  const [contactPhone, setContactPhone] = useState('');
+  const [supportPhone, setSupportPhone] = useState('');
+  const [brandName, setBrandName] = useState('');
   const [welcomeTitle, setWelcomeTitle] = useState('FAST & SECURE WI-FI');
   const [bannerSubtitle, setBannerSubtitle] = useState('HIGH SPEED FIBER CONNECTION');
   const [installationFee, setInstallationFee] = useState('1,500/-');
@@ -30,7 +36,7 @@ export default function ThemesPage() {
   useEffect(() => {
     // 1. Load from localStorage if present for immediate UI fill
     try {
-      const raw = localStorage.getItem(LOCAL_STORAGE_KEY);
+      const raw = localStorage.getItem(previewKey(tenantSlug));
       if (raw) {
         const parsed = JSON.parse(raw);
         if (parsed.activeThemeId) setSelectedTheme(parsed.activeThemeId as ThemeId);
@@ -77,7 +83,7 @@ export default function ThemesPage() {
 
     // Store in browser localStorage
     try {
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(payload));
+      localStorage.setItem(previewKey(tenantSlug), JSON.stringify(payload));
     } catch {}
 
     try {
@@ -287,7 +293,7 @@ export default function ThemesPage() {
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-12 sm:items-center">
                   <div className="col-span-7 space-y-1">
                     <div className="inline-block border-2 border-blue-900 rounded-full px-2.5 py-0.5">
-                      <span className="text-[10px] font-black text-blue-950">{brandName || "SUNTECH FIBRE"}</span>
+                      <span className="text-[10px] font-black text-blue-950">{brandName || "Your brand name"}</span>
                     </div>
                     <div className="text-xs font-black text-blue-900 leading-tight">{welcomeTitle || "HIGH SPEED"}</div>
                     <div className="text-sm font-black text-red-600 leading-tight">{bannerSubtitle || "FIBER CONNECTION"}</div>
@@ -301,7 +307,7 @@ export default function ThemesPage() {
                 <div className="rounded-xl bg-blue-950 px-3 py-1.5 flex items-center justify-between text-white shadow-md">
                   <span className="text-[8px] font-black uppercase text-slate-300">For Installation Call:</span>
                   <span className="font-mono text-xs font-black text-white bg-blue-900/60 px-2.5 py-0.5 rounded-lg border border-blue-700/50 text-amber-300">
-                    {contactPhone || "0724 165 988"}
+                    {contactPhone || "Your support number"}
                   </span>
                 </div>
               </div>

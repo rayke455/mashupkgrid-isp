@@ -20,10 +20,7 @@ import {
   enforceRouterStrictTimeout,
 } from "@mashupkgrid/network";
 import {
-  getOrCreateNasForRouter,
-  buildMikrotikSetupScript,
   buildMikrotikProvisioningScript,
-  buildMikrotikHotspotScript,
   buildMikrotikVpnStartScript,
   buildMikrotikVpnCompleteScript,
 } from "@mashupkgrid/radius";
@@ -49,7 +46,6 @@ const preHandler = [authenticate, resolveTenant, checkMaintenance] as const;
 // plain identifier/hostname rather than trying to escape special characters per-template.
 const ROUTER_NAME_PATTERN = /^[a-zA-Z0-9 ._-]+$/;
 const HOST_PATTERN = /^[a-zA-Z0-9.:-]+$/;
-const ROUTEROS_IDENTIFIER_PATTERN = /^[a-zA-Z0-9_-]+$/;
 
 const createRouterSchema = z.object({
   name: z.string().min(1).max(64).regex(ROUTER_NAME_PATTERN, "Router name may only contain letters, numbers, spaces, and . _ -"),
@@ -68,9 +64,6 @@ const createPendingRouterSchema = z.object({
 });
 
 const idParamsSchema = z.object({ routerId: z.string().uuid() });
-const setupScriptQuerySchema = z.object({
-  radiusHost: z.string().min(1).max(255).regex(HOST_PATTERN, "radiusHost must be a plain hostname or IP address"),
-});
 /** A tenant's own portal hostnames, for the router's walled garden. A white-labelled tenant
  *  sends its customers to its own domain, not the platform's, so a router that only allows the
  *  platform host blocks the exact page it just redirected the customer to — which presents as
@@ -87,11 +80,6 @@ async function getTenantPortalDomains(tenantId: string): Promise<string[]> {
   return domains.map((d) => d.hostname);
 }
 
-const hotspotScriptQuerySchema = z.object({
-  interfaceName: z.string().min(1).max(64).regex(ROUTEROS_IDENTIFIER_PATTERN, "interfaceName may only contain letters, numbers, _ and -"),
-  addressPoolName: z.string().min(1).max(64).regex(ROUTEROS_IDENTIFIER_PATTERN, "addressPoolName may only contain letters, numbers, _ and -"),
-  radiusHost: z.string().min(1).max(255).regex(HOST_PATTERN, "radiusHost must be a plain hostname or IP address"),
-});
 const provisioningScriptQuerySchema = z.object({ provisionToken: z.string().min(1) });
 // A WireGuard public key is exactly 32 bytes, standard-base64 encoded: 43 characters plus one
 // "=" of padding. Enforcing that shape matters because the value arrives as the raw body of an
@@ -369,83 +357,6 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
     }
   );
 
-  /** Reveals a real, deployable RouterOS setup script (and the matching FreeRADIUS `client {}`
-   *  snippet) — sensitive enough (it carries the RADIUS shared secret) to be audit-logged the
-   *  same way the RADIUS password reveal is. */
-  app.get(
-    "/:routerId/setup-script",
-    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("routers.manage")] },
-    async (request, reply) => {
-      const tenantId = requireTenant(request.user!.tenantId);
-      const { routerId } = idParamsSchema.parse(request.params);
-      const { radiusHost } = setupScriptQuerySchema.parse(request.query);
-      const router = await getRouterOrThrow(tenantId, routerId);
-      if (!router.host) {
-        throw new ConflictError(
-          `"${router.name}" hasn't checked in yet — paste the provisioning script on the router first, or link it manually.`
-        );
-      }
-      const nas = await getOrCreateNasForRouter(tenantId, { ...router, host: router.host });
-      const script = buildMikrotikSetupScript({ ...router, host: router.host }, nas, radiusHost);
-
-      await writeAuditLog({
-        tenantId,
-        actorUserId: request.user!.id,
-        action: "router.setup_script_revealed",
-        resourceType: "Router",
-        resourceId: router.id,
-        ipAddress: request.ip,
-        userAgent: request.headers["user-agent"] ?? null,
-      });
-
-      reply.send(successResponse(script, request.id));
-    }
-  );
-
-  /** Reveals the RouterOS script that turns on an actual hotspot captive-portal server — see
-   *  buildMikrotikHotspotScript's doc comment for why this is a separate script from the
-   *  RADIUS-only one above. Audit-logged the same way. */
-  app.get(
-    "/:routerId/hotspot-script",
-    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("routers.manage")] },
-    async (request, reply) => {
-      const tenantId = requireTenant(request.user!.tenantId);
-      const { routerId } = idParamsSchema.parse(request.params);
-      const { interfaceName, addressPoolName, radiusHost } = hotspotScriptQuerySchema.parse(request.query);
-      const router = await getRouterOrThrow(tenantId, routerId);
-      if (!router.host) {
-        throw new ConflictError(
-          `"${router.name}" hasn't checked in yet — paste the provisioning script on the router first, or link it manually.`
-        );
-      }
-
-      const nas = await getOrCreateNasForRouter(tenantId, { ...router, host: router.host });
-      const tenantSlug = request.tenantCtx!.slug;
-      const loginTemplateUrl = `${env.APP_API_PUBLIC_URL}/api/v1/hotspot/${tenantSlug}/mikrotik-login-template`;
-      const platformHost = new URL(env.APP_API_PUBLIC_URL).hostname;
-      const script = buildMikrotikHotspotScript(router, {
-        interfaceName,
-        addressPoolName,
-        loginTemplateUrl,
-        platformHost,
-        radiusHost,
-        nasSecret: nas.secret,
-        portalDomains: await getTenantPortalDomains(tenantId),
-      });
-
-      await writeAuditLog({
-        tenantId,
-        actorUserId: request.user!.id,
-        action: "router.hotspot_script_revealed",
-        resourceType: "Router",
-        resourceId: router.id,
-        ipAddress: request.ip,
-        userAgent: request.headers["user-agent"] ?? null,
-      });
-
-      reply.send(successResponse({ script }, request.id));
-    }
-  );
 
   /** Step 1: issues a fresh registration token and hands back the paste-and-run script that
    *  makes the router generate its own keypair and call home with the public half. */

@@ -56,9 +56,6 @@ export default function RoutersPage() {
   const [error, setError] = useState<string | null>(null);
   const [testingId, setTestingId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [scripts, setScripts] = useState<
-    Record<string, { mikrotikScript: string; freeradiusClientSnippet: string }>
-  >({});
   const [vpnScripts, setVpnScripts] = useState<Record<string, string>>({});
   const [openSessionsFor, setOpenSessionsFor] = useState<string | null>(null);
 
@@ -167,24 +164,6 @@ export default function RoutersPage() {
     enabled: openSessionsFor !== null,
     refetchInterval: openSessionsFor !== null ? 10_000 : false,
     retry: false,
-  });
-
-  const generateScript = useMutation({
-    mutationFn: async (routerId: string) => {
-      const radiusHost = window.prompt(
-        "RADIUS server host — the IP or hostname this router should send Access-Requests to (your FreeRADIUS server):"
-      );
-      if (!radiusHost) return null;
-      const script = await apiFetch<{ mikrotikScript: string; freeradiusClientSnippet: string }>(
-        `/api/v1/routers/${routerId}/setup-script?radiusHost=${encodeURIComponent(radiusHost)}`
-      );
-      return { routerId, script };
-    },
-    onSuccess: (result) => {
-      if (!result) return;
-      setScripts((prev) => ({ ...prev, [result.routerId]: result.script }));
-    },
-    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to generate setup script"),
   });
 
   const startVpn = useMutation({
@@ -349,14 +328,6 @@ export default function RoutersPage() {
                     <Button
                       variant="secondary"
                       className="px-3 py-1.5 text-xs"
-                      onClick={() => generateScript.mutate(router.id)}
-                      disabled={generateScript.isPending || !router.host}
-                    >
-                      RADIUS Script
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      className="px-3 py-1.5 text-xs"
                       onClick={() => setOpenSessionsFor(openSessionsFor === router.id ? null : router.id)}
                       disabled={!router.host}
                     >
@@ -401,50 +372,6 @@ export default function RoutersPage() {
                   </div>
                 </div>
               </div>
-
-              {/* Generated Scripts Section */}
-              {scripts[router.id] && (
-                <div className="mt-5 space-y-4 border-t border-slate-200 pt-4 dark:border-obsidian-800">
-                  <div>
-                    <div className="mb-1.5 flex items-center justify-between">
-                      <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                        <IconTerminal size={14} className="text-brand-600" />
-                        Paste into MikroTik WinBox &quot;New Terminal&quot; or SSH:
-                      </p>
-                      <Button
-                        variant="secondary"
-                        className="px-2.5 py-1 text-xs gap-1"
-                        onClick={() => handleCopy(scripts[router.id]!.mikrotikScript, `mk-${router.id}`)}
-                      >
-                        {copiedId === `mk-${router.id}` ? <IconCheck size={12} /> : <IconCopy size={12} />}
-                        <span>{copiedId === `mk-${router.id}` ? "Copied!" : "Copy RouterOS Script"}</span>
-                      </Button>
-                    </div>
-                    <pre className="max-h-56 overflow-auto rounded-lg bg-slate-950 p-3 font-mono text-xs text-emerald-400 border border-slate-800">
-                      {scripts[router.id]!.mikrotikScript}
-                    </pre>
-                  </div>
-
-                  <div>
-                    <div className="mb-1.5 flex items-center justify-between">
-                      <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                        Add to <code className="text-brand-600 font-mono">raddb/clients.conf</code> on FreeRADIUS server:
-                      </p>
-                      <Button
-                        variant="secondary"
-                        className="px-2.5 py-1 text-xs gap-1"
-                        onClick={() => handleCopy(scripts[router.id]!.freeradiusClientSnippet, `rad-${router.id}`)}
-                      >
-                        {copiedId === `rad-${router.id}` ? <IconCheck size={12} /> : <IconCopy size={12} />}
-                        <span>{copiedId === `rad-${router.id}` ? "Copied!" : "Copy RADIUS snippet"}</span>
-                      </Button>
-                    </div>
-                    <pre className="overflow-auto rounded-lg bg-slate-950 p-3 font-mono text-xs text-brand-300 border border-slate-800">
-                      {scripts[router.id]!.freeradiusClientSnippet}
-                    </pre>
-                  </div>
-                </div>
-              )}
 
               {/* VPN (Remote Access) Script Section */}
               {vpnScripts[router.id] && (

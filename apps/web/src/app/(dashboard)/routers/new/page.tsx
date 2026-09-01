@@ -7,7 +7,7 @@ import { apiFetch, ApiRequestError } from "@/lib/api-client";
 import { Button, Card, ErrorText, Input, Label, Badge, StatusDot } from "@/components/ui";
 import { IconCopy, IconCheck, IconTerminal, IconChevronRight } from "@/components/icons";
 
-type Step = 1 | 2 | 3 | 4;
+type Step = 1 | 2 | 3;
 
 interface RouterRecord {
   id: string;
@@ -17,16 +17,15 @@ interface RouterRecord {
   lastError: string | null;
 }
 
-interface SetupScript {
-  mikrotikScript: string;
-  freeradiusClientSnippet: string;
-}
-
+// One script does the whole job -- API user, RADIUS, hotspot server, walled garden and portal
+// page all come from the single provisioning script in step 2 (buildMikrotikProvisioningScript).
+// There is deliberately no separate "RADIUS" step: it used to ask for a FreeRADIUS host and hand
+// out a clients.conf snippet, neither of which this platform uses -- RADIUS is the worker's own
+// embedded server and the NAS row registers itself from the router's heartbeat.
 const STEPS: { n: Step; label: string }[] = [
   { n: 1, label: "Identity" },
   { n: 2, label: "Provision" },
-  { n: 3, label: "RADIUS" },
-  { n: 4, label: "Done" },
+  { n: 3, label: "Done" },
 ];
 
 function StepDots({ current }: { current: Step }) {
@@ -84,8 +83,6 @@ export default function LinkRouterWizardPage() {
   const [manualUsername, setManualUsername] = useState("");
   const [manualPassword, setManualPassword] = useState("");
 
-  const [radiusHost, setRadiusHost] = useState("");
-  const [script, setScript] = useState<SetupScript | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [oneLiner, setOneLiner] = useState<string>("");
 
@@ -183,13 +180,6 @@ export default function LinkRouterWizardPage() {
     onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to link router manually"),
   });
 
-  const generateScript = useMutation({
-    mutationFn: () =>
-      apiFetch<SetupScript>(`/api/v1/routers/${created!.id}/setup-script?radiusHost=${encodeURIComponent(radiusHost)}`),
-    onSuccess: (result) => setScript(result),
-    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to generate setup script"),
-  });
-
   const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
@@ -255,7 +245,7 @@ export default function LinkRouterWizardPage() {
             <h2 className="font-semibold text-slate-900 dark:text-white">1-Line Auto Setup</h2>
           </div>
           <p className="mb-4 text-sm text-slate-500">
-            Open WinBox → New Terminal on <code className="font-mono text-xs font-bold text-brand-500">{created.name}</code>, paste this single command, and press Enter. It automatically downloads and installs API, RADIUS, Hotspot Captive Portal, M-Pesa Walled Garden, and connects the router.
+            Open WinBox → New Terminal on <code className="font-mono text-xs font-bold text-brand-500">{created.name}</code>, paste this single command, and press Enter. This is the only script you need. It configures the API user, RADIUS, the hotspot captive portal server, DNS and NAT, your branded login page, and the walled garden for M-Pesa, Paystack and Pesapal &mdash; then links the router.
           </p>
 
           {(oneLiner || provisionToken) && (
@@ -390,76 +380,6 @@ export default function LinkRouterWizardPage() {
       )}
 
       {step === 3 && created && (
-        <Card>
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="font-semibold text-slate-900 dark:text-white">RADIUS setup</h2>
-            {statusBadge}
-          </div>
-
-          <p className="mb-2 text-sm text-slate-500 dark:text-slate-400">
-            RADIUS server host — the IP or hostname this router should send Access-Requests to (your FreeRADIUS server):
-          </p>
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              setError(null);
-              generateScript.mutate();
-            }}
-            className="mb-4 flex items-end gap-2"
-          >
-            <div className="flex-1">
-              <Label htmlFor="radiusHost">FreeRADIUS host</Label>
-              <Input id="radiusHost" placeholder="10.0.0.5" value={radiusHost} onChange={(e) => setRadiusHost(e.target.value)} required />
-            </div>
-            <Button type="submit" disabled={generateScript.isPending}>
-              {generateScript.isPending ? "Generating..." : "Generate script"}
-            </Button>
-          </form>
-          {error && <ErrorText>{error}</ErrorText>}
-
-          {script && (
-            <div className="space-y-4">
-              <div>
-                <div className="mb-1.5 flex items-center justify-between">
-                  <p className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
-                    <IconTerminal size={14} className="text-brand-600" />
-                    Paste into MikroTik WinBox &quot;New Terminal&quot; or SSH:
-                  </p>
-                  <Button variant="secondary" className="px-2.5 py-1 text-xs gap-1" onClick={() => handleCopy(script.mikrotikScript, "mk")}>
-                    {copiedId === "mk" ? <IconCheck size={12} /> : <IconCopy size={12} />}
-                    {copiedId === "mk" ? "Copied!" : "Copy script"}
-                  </Button>
-                </div>
-                <pre className="max-h-56 overflow-auto rounded-lg bg-slate-950 p-3 font-mono text-xs text-emerald-400 border border-slate-800">
-                  {script.mikrotikScript}
-                </pre>
-              </div>
-              <div>
-                <div className="mb-1.5 flex items-center justify-between">
-                  <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                    Add to <code className="text-brand-600 font-mono">raddb/clients.conf</code> on FreeRADIUS server:
-                  </p>
-                  <Button variant="secondary" className="px-2.5 py-1 text-xs gap-1" onClick={() => handleCopy(script.freeradiusClientSnippet, "rad")}>
-                    {copiedId === "rad" ? <IconCheck size={12} /> : <IconCopy size={12} />}
-                    {copiedId === "rad" ? "Copied!" : "Copy snippet"}
-                  </Button>
-                </div>
-                <pre className="overflow-auto rounded-lg bg-slate-950 p-3 font-mono text-xs text-brand-300 border border-slate-800">
-                  {script.freeradiusClientSnippet}
-                </pre>
-              </div>
-            </div>
-          )}
-
-          <div className="mt-6 flex justify-end">
-            <Button onClick={() => setStep(4)} className="gap-1.5">
-              Continue <IconChevronRight size={14} />
-            </Button>
-          </div>
-        </Card>
-      )}
-
-      {step === 4 && created && (
         <Card>
           <div className="py-6 text-center">
             <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 dark:bg-emerald-950/60 dark:text-emerald-400">

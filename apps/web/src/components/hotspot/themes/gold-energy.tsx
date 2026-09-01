@@ -192,7 +192,11 @@ export function GoldEnergyTheme({
   completingRouterLogin,
 }: CaptiveThemeProps) {
   const displayName = tenantName.toUpperCase();
-  const phoneToDisplay = contactPhone || supportPhone || "0724 165 988";
+  // No fallback number. This used to default to one specific ISP's support line, so any tenant
+  // who had not set a contact number showed a competitor's phone number to their own customers,
+  // in a "Call us" banner, as a tap-to-dial link. The whole contact strip is hidden instead when
+  // there is nothing real to show.
+  const phoneToDisplay = contactPhone || supportPhone || "";
   const welcomeText = welcomeTitle || "WELCOME";
   const subtitleText = bannerSubtitle || "Fast & Reliable";
   const [activeMascotId, setActiveMascotId] = useState<Cartoon3DCharacterId | "cycle-all">("cycle-all");
@@ -325,6 +329,7 @@ export function GoldEnergyTheme({
             </div>
 
             {/* Contact Bar matching Screenshot */}
+            {phoneToDisplay && (
             <div className="mt-2.5 rounded-full bg-slate-950 px-3.5 py-1.5 flex items-center justify-between text-white shadow-md">
               <div className="flex items-center gap-1.5 text-amber-400">
                 <span className="h-5 w-5 rounded-full bg-amber-500 text-slate-950 flex items-center justify-center">
@@ -336,6 +341,7 @@ export function GoldEnergyTheme({
                 {phoneToDisplay}
               </a>
             </div>
+            )}
 
             {/* Feature Badges */}
             <div className="mt-2 pt-1.5 border-t border-slate-100 grid grid-cols-3 gap-1 text-[7.5px] text-slate-600 leading-tight text-center">

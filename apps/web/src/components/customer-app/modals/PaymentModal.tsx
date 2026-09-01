@@ -19,7 +19,10 @@ export function PaymentModal({
   serviceType,
   amount,
   packageName,
-  defaultPhone = "0724 165 988",
+  // Empty, not a sample number: this value is pre-filled into the field an M-Pesa STK push is
+  // sent to, so a customer who tapped Pay without editing it would have pushed a payment prompt
+  // to a stranger's handset.
+  defaultPhone = "",
   brandName = "FiberConnect",
   onClose,
   onSuccess,
