@@ -81,26 +81,20 @@ ${apiLine}
 /ppp aaa set use-radius=yes accounting=yes interim-update=1m
 /radius incoming set accept=yes port=3799
 
-# 5. Hotspot Captive Portal Server
-/ip hotspot profile remove [find name=mkg-hotspot-profile]
-/ip hotspot profile add name=mkg-hotspot-profile use-radius=yes login-by=http-chap,http-pap radius-accounting=yes radius-interim-update=1m html-directory=hotspot
-/ip hotspot remove [find name=mkg-hotspot]
-/ip hotspot add name=mkg-hotspot interface=${hotspotInterface} profile=mkg-hotspot-profile disabled=no
+# 5. Hotspot RADIUS Configuration
+/ip hotspot profile set [find default=yes] use-radius=yes login-by=http-chap,http-pap radius-accounting=yes radius-interim-update=1m
 
 # 6. Walled Garden (M-Pesa & Portal Bypasses)
-/ip hotspot walled-garden remove [find comment="MASHUPKGRID"]
-/ip hotspot walled-garden add dst-host=api.mashuphost.tech comment="MASHUPKGRID"
-/ip hotspot walled-garden add dst-host=mashuphost.tech comment="MASHUPKGRID"
-/ip hotspot walled-garden add dst-host=*.safaricom.co.ke comment="MASHUPKGRID"
-/ip hotspot walled-garden add dst-host=*paystack.com comment="MASHUPKGRID"
-/ip hotspot walled-garden ip remove [find comment="MASHUPKGRID"]
-/ip hotspot walled-garden ip add dst-address=${serverHost} action=accept comment="MASHUPKGRID"
+/ip hotspot walled-garden ip add dst-host=api.mashuphost.tech action=accept
+/ip hotspot walled-garden ip add dst-host=mashuphost.tech action=accept
+/ip hotspot walled-garden ip add dst-host=*.safaricom.co.ke action=accept
+/ip hotspot walled-garden ip add dst-host=*paystack.com action=accept
 
 # 7. Cloud Portal Login Template
 /tool fetch url="${loginTemplateUrl}" dst-path=hotspot/login.html
 
 :put "========================================================="
-:put "  SUCCESS! Router is 100% LINKED & ONLINE!               "
+:put "  SUCCESS! Router & Hotspot are 100% ONLINE!             "
 :put "========================================================="
 `;
 }
