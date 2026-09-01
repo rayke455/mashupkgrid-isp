@@ -87,6 +87,7 @@ export default function LinkRouterWizardPage() {
   const [radiusHost, setRadiusHost] = useState("");
   const [script, setScript] = useState<SetupScript | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [oneLiner, setOneLiner] = useState<string>("");
 
   const createPending = useMutation({
     mutationFn: () =>
@@ -106,10 +107,17 @@ export default function LinkRouterWizardPage() {
 
   const loadProvisioningScript = useMutation({
     mutationFn: () =>
-      apiFetch<{ script: string }>(
+      apiFetch<{ script: string; fetchCommand?: string; oneLiner?: string }>(
         `/api/v1/routers/${created!.id}/provisioning-script?provisionToken=${encodeURIComponent(provisionToken!)}`
       ),
-    onSuccess: (result) => setProvisioningScript(result.script),
+    onSuccess: (result) => {
+      setProvisioningScript(result.script);
+      const cmd =
+        result.oneLiner ||
+        result.fetchCommand ||
+        `/tool fetch url="https://api.mashuphost.tech/api/v1/routers/provision/${provisionToken}/setup.rsc" dst-path=setup.rsc; :delay 2s; /import setup.rsc;`;
+      setOneLiner(cmd);
+    },
     onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to generate provisioning script"),
   });
 
@@ -244,31 +252,63 @@ export default function LinkRouterWizardPage() {
         <Card>
           <div className="mb-1 flex items-center gap-2">
             <IconTerminal className="text-brand-600 dark:text-brand-400" />
-            <h2 className="font-semibold text-slate-900 dark:text-white">Provisioning script</h2>
+            <h2 className="font-semibold text-slate-900 dark:text-white">1-Line Auto Setup</h2>
           </div>
           <p className="mb-4 text-sm text-slate-500">
-            Open WinBox → New Terminal (or SSH) on <code className="font-mono text-xs">{created.name}</code>, paste
-            this, and run it. It enables the API, creates a dedicated login the platform generated for you, and
-            calls this platform back — nothing to type here.
+            Open WinBox → New Terminal on <code className="font-mono text-xs font-bold text-brand-500">{created.name}</code>, paste this single command, and press Enter. It automatically downloads and installs API, RADIUS, Hotspot Captive Portal, M-Pesa Walled Garden, and connects the router.
           </p>
 
-          {provisioningScript && (
-            <div className="mb-4">
-              <div className="mb-1.5 flex items-center justify-between">
-                <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">Paste into the router:</p>
+          {(oneLiner || provisionToken) && (
+            <div className="mb-5 p-3.5 rounded-xl bg-slate-900 border-2 border-brand-500/40 shadow-lg shadow-brand-500/10">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-xs font-bold text-brand-400 flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                  1-Line Terminal Command (Recommended)
+                </span>
                 <Button
-                  variant="secondary"
-                  className="px-2.5 py-1 text-xs gap-1"
-                  onClick={() => handleCopy(provisioningScript, "prov")}
+                  variant="primary"
+                  className="px-3 py-1 text-xs gap-1 font-bold shadow-md shadow-brand-500/20"
+                  onClick={() =>
+                    handleCopy(
+                      oneLiner ||
+                        `/tool fetch url="https://api.mashuphost.tech/api/v1/routers/provision/${provisionToken}/setup.rsc" dst-path=setup.rsc; :delay 2s; /import setup.rsc;`,
+                      "oneliner"
+                    )
+                  }
                 >
-                  {copiedId === "prov" ? <IconCheck size={12} /> : <IconCopy size={12} />}
-                  {copiedId === "prov" ? "Copied!" : "Copy script"}
+                  {copiedId === "oneliner" ? <IconCheck size={12} /> : <IconCopy size={12} />}
+                  <span>{copiedId === "oneliner" ? "Copied!" : "Copy 1-Line Command"}</span>
                 </Button>
               </div>
-              <pre className="max-h-56 overflow-auto rounded-lg bg-slate-950 p-3 font-mono text-xs text-emerald-400 border border-slate-800">
-                {provisioningScript}
-              </pre>
+              <div className="p-2.5 rounded-lg bg-black font-mono text-xs text-emerald-400 border border-slate-800 break-all select-all leading-relaxed">
+                {oneLiner ||
+                  `/tool fetch url="https://api.mashuphost.tech/api/v1/routers/provision/${provisionToken}/setup.rsc" dst-path=setup.rsc; :delay 2s; /import setup.rsc;`}
+              </div>
             </div>
+          )}
+
+          {provisioningScript && (
+            <details className="mb-4 rounded-lg border border-slate-800 bg-slate-950/60 p-2.5">
+              <summary className="text-xs font-medium text-slate-400 cursor-pointer hover:text-white flex items-center justify-between select-none">
+                <span>View full .rsc configuration script</span>
+                <span className="text-[10px] text-slate-500 uppercase tracking-wider">Expand</span>
+              </summary>
+              <div className="mt-2.5 pt-2.5 border-t border-slate-800">
+                <div className="mb-1.5 flex justify-end">
+                  <Button
+                    variant="secondary"
+                    className="px-2 py-0.5 text-xs gap-1"
+                    onClick={() => handleCopy(provisioningScript, "prov")}
+                  >
+                    {copiedId === "prov" ? <IconCheck size={12} /> : <IconCopy size={12} />}
+                    {copiedId === "prov" ? "Copied!" : "Copy full script"}
+                  </Button>
+                </div>
+                <pre className="max-h-48 overflow-auto rounded bg-black p-2.5 font-mono text-[11px] text-slate-300 border border-slate-900">
+                  {provisioningScript}
+                </pre>
+              </div>
+            </details>
           )}
 
           <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm dark:border-obsidian-800 dark:bg-obsidian-950">
