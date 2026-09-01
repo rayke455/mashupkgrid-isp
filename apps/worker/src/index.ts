@@ -296,7 +296,17 @@ async function main() {
       if (job.name === JOB_NAMES.whatsappConnect) {
         const { tenantId, pairWithPhoneNumber } = whatsappConnectJobSchema.parse(job.data);
         try {
-          await getManager()?.start(tenantId, { pairWithPhoneNumber });
+          // NOT optional-chained. `getManager()?.start(...)` silently does nothing when the
+          // runtime failed to come up, so the job completes successfully, no QR is ever
+          // published, and the dashboard sits on "Waiting for scan" forever with an empty
+          // lastError — the operator has no way to tell a broken runtime from a slow one.
+          const manager = getManager();
+          if (!manager) {
+            throw new Error(
+              "WhatsApp runtime is not running in this worker — check the worker's startup logs"
+            );
+          }
+          await manager.start(tenantId, { pairWithPhoneNumber });
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           await setConnectionStatus(tenantId, "DISCONNECTED", { lastError: message });

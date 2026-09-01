@@ -68,20 +68,29 @@ export interface CaptivePortalConfig {
   fiberRates?: Array<{ speed: string; price: string; subtitle?: string }>;
 }
 
+/**
+ * What a tenant's captive portal shows before they have configured anything.
+ *
+ * Everything identifying is deliberately EMPTY. This object previously carried one real ISP's
+ * trading name, support number, installation fee and full speed/price list — and it is served by
+ * /info to every tenant with no saved config, so a brand-new ISP's customers were shown another
+ * company's phone number to call and a price list that ISP does not charge. It also outranked the
+ * client-side fallbacks, since the portal receives these as real values rather than blanks.
+ *
+ * Only non-identifying presentation copy has a default: a headline, a subtitle and a theme are
+ * placeholders any ISP can live with, whereas a phone number or a tariff is a factual claim about
+ * a specific business. `brandName` falls back to the tenant's own registered name at the call
+ * site, so the portal is never nameless.
+ */
 const DEFAULT_CAPTIVE_CONFIG: CaptivePortalConfig = {
-  phone: "0724 165 988",
-  supportPhone: "0724 165 988",
-  brandName: "SUNTECH FIBRE",
+  phone: "",
+  supportPhone: "",
+  brandName: "",
   welcomeTitle: "FAST & SECURE WI-FI",
   bannerSubtitle: "HIGH SPEED FIBER CONNECTION",
   activeThemeId: "suntech-blue",
-  installationFee: "1,500/-",
-  fiberRates: [
-    { speed: "10MBPS", price: "1,500/-", subtitle: "Unlimited Home" },
-    { speed: "15MBPS", price: "2,000/-", subtitle: "Streaming Plus" },
-    { speed: "20MBPS", price: "2,500/-", subtitle: "Pro Business" },
-    { speed: "30MBPS", price: "3,000/-", subtitle: "Ultra Turbo" },
-  ],
+  installationFee: "",
+  fiberRates: [],
 };
 
 /** Every column is nullable, so an unset field falls back to the shared default rather than

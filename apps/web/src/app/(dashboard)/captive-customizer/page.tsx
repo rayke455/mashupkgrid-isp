@@ -253,7 +253,7 @@ export default function CaptiveCustomizerPage() {
                   type="text"
                   value={contactPhone}
                   onChange={(e) => setContactPhone(e.target.value)}
-                  placeholder="0724 165 988"
+                  placeholder="07XX XXX XXX"
                   className="w-full px-3 py-2 bg-slate-900 border border-slate-700 focus:border-brand-500 rounded-xl text-xs text-white font-mono outline-none"
                 />
                 <span className="text-[10px] text-slate-500 mt-1 block">Displays on &quot;For Installation Call:&quot;</span>
@@ -267,7 +267,7 @@ export default function CaptiveCustomizerPage() {
                   type="text"
                   value={supportPhone}
                   onChange={(e) => setSupportPhone(e.target.value)}
-                  placeholder="0724 165 988"
+                  placeholder="07XX XXX XXX"
                   className="w-full px-3 py-2 bg-slate-900 border border-slate-700 focus:border-brand-500 rounded-xl text-xs text-white font-mono outline-none"
                 />
                 <span className="text-[10px] text-slate-500 mt-1 block">Used for customer ticket helpline</span>
@@ -281,7 +281,7 @@ export default function CaptiveCustomizerPage() {
                   type="text"
                   value={brandName}
                   onChange={(e) => setBrandName(e.target.value)}
-                  placeholder="SUNTECH FIBRE"
+                  placeholder="Your company name"
                   className="w-full px-3 py-2 bg-slate-900 border border-slate-700 focus:border-brand-500 rounded-xl text-xs text-white font-bold outline-none"
                 />
                 <span className="text-[10px] text-slate-500 mt-1 block">Displayed on portal logo &amp; header</span>

@@ -195,7 +195,7 @@ export default function ThemesPage() {
                   type="text"
                   value={contactPhone}
                   onChange={(e) => setContactPhone(e.target.value)}
-                  placeholder="0724 165 988"
+                  placeholder="07XX XXX XXX"
                   className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 focus:border-blue-500 rounded-xl text-sm font-mono text-slate-900 dark:text-white outline-none"
                 />
                 <span className="text-[10.5px] text-slate-500 mt-1 block">
@@ -211,7 +211,7 @@ export default function ThemesPage() {
                   type="text"
                   value={supportPhone}
                   onChange={(e) => setSupportPhone(e.target.value)}
-                  placeholder="0724 165 988"
+                  placeholder="07XX XXX XXX"
                   className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 focus:border-blue-500 rounded-xl text-sm font-mono text-slate-900 dark:text-white outline-none"
                 />
                 <span className="text-[10.5px] text-slate-500 mt-1 block">
@@ -227,7 +227,7 @@ export default function ThemesPage() {
                   type="text"
                   value={brandName}
                   onChange={(e) => setBrandName(e.target.value)}
-                  placeholder="SUNTECH FIBRE"
+                  placeholder="Your company name"
                   className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 focus:border-blue-500 rounded-xl text-sm font-bold text-slate-900 dark:text-white outline-none"
                 />
                 <span className="text-[10.5px] text-slate-500 mt-1 block">

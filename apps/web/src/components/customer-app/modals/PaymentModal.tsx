@@ -106,7 +106,7 @@ export function PaymentModal({
                   required
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  placeholder="0724 165 988"
+                  placeholder="07XX XXX XXX"
                   className="w-full px-4 py-3 rounded-2xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-white font-mono text-sm outline-none focus:border-emerald-500"
                 />
               </div>

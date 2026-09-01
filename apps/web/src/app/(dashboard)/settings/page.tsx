@@ -501,7 +501,7 @@ export default function SettingsPage() {
                   id="contactPhone"
                   value={contactPhone}
                   onChange={(e) => setContactPhone(e.target.value)}
-                  placeholder="0724 165 988"
+                  placeholder="07XX XXX XXX"
                   className="font-mono"
                 />
                 <HintText>Displays on the banner: &quot;For Installation Call: [Number]&quot;</HintText>
@@ -513,7 +513,7 @@ export default function SettingsPage() {
                   id="supportPhone"
                   value={supportPhone}
                   onChange={(e) => setSupportPhone(e.target.value)}
-                  placeholder="0724 165 988"
+                  placeholder="07XX XXX XXX"
                   className="font-mono"
                 />
                 <HintText>Used for ticket support and WhatsApp inquiries.</HintText>

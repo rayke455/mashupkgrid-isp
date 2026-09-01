@@ -102,9 +102,24 @@ export class WhatsAppSessionManager {
     options: { pairWithPhoneNumber?: string } = {}
   ): Promise<void> {
     const id = normalizeSessionId(tenantId);
-    if (this.sessions.get(id)?.socket) return;
+    const existing = this.sessions.get(id);
 
-    const session: TenantSession = this.sessions.get(id) ?? { socket: null, stopping: false };
+    // Only an ALREADY-PAIRED session is left alone. Bailing out on the mere presence of a socket
+    // is what made re-pairing impossible: an unauthenticated socket from a previous attempt is
+    // still a socket, so once its QR expired (60s in Redis) every subsequent "Connect" returned
+    // here instantly — no new QR was ever published, and requestPairingCode below never ran
+    // either, so phone-number linking failed the same silent way. The only recovery was
+    // restarting the worker. A half-open or dead socket is now torn down and replaced.
+    if (existing?.socket?.authState?.creds?.registered) {
+      // Re-assert CONNECTED rather than just returning. The API flips the row to CONNECTING the
+      // moment the button is pressed, so a silent return on an already-paired line leaves the
+      // dashboard reading "Waiting for scan" for a session that is in fact working.
+      this.events.onReady?.(id, phoneFromSocket(existing.socket));
+      return;
+    }
+    if (existing?.socket) await this.stop(tenantId);
+
+    const session: TenantSession = { socket: null, stopping: false };
     session.stopping = false;
     this.sessions.set(id, session);
 

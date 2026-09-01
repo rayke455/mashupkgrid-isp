@@ -71,6 +71,65 @@ const SORTABLE_FIELDS = ["name", "slug", "createdAt", "status"] as const;
 const SEARCHABLE_FIELDS = ["name", "slug"];
 
 export async function tenantRoutes(app: FastifyInstance): Promise<void> {
+/**
+ * Per-tenant usage for the platform tenant list.
+ *
+ * The list previously showed only administrative state — plan, status, trial dates — which
+ * cannot answer the question a platform operator actually has: is this tenant LIVE? A tenant who
+ * signed up, never linked a router and has taken no money looks identical to a thriving one, and
+ * a trial ending in two days is worth a call only if there is a real network behind it.
+ *
+ * Three grouped queries scoped to the page's tenant ids, not one query per tenant: the aggregate
+ * cost stays flat whether the page shows 10 tenants or 100.
+ */
+async function loadTenantUsage(tenantIds: string[]): Promise<Map<string, TenantUsage>> {
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+  const [routers, customers, revenue] = await Promise.all([
+    prisma.router.groupBy({
+      by: ["tenantId", "status"],
+      where: { tenantId: { in: tenantIds }, deletedAt: null },
+      _count: { _all: true },
+    }),
+    prisma.customer.groupBy({
+      by: ["tenantId"],
+      where: { tenantId: { in: tenantIds } },
+      _count: { _all: true },
+    }),
+    prisma.payment.groupBy({
+      by: ["tenantId"],
+      where: { tenantId: { in: tenantIds }, status: "COMPLETED", createdAt: { gte: since } },
+      _sum: { amountMinor: true },
+    }),
+  ]);
+
+  const usage = new Map<string, TenantUsage>();
+  const blank = (): TenantUsage => ({
+    routerCount: 0,
+    routersOnline: 0,
+    customerCount: 0,
+    revenue30dMinor: 0,
+  });
+
+  for (const id of tenantIds) usage.set(id, blank());
+  for (const row of routers) {
+    const entry = usage.get(row.tenantId)!;
+    entry.routerCount += row._count._all;
+    if (row.status === "ONLINE") entry.routersOnline += row._count._all;
+  }
+  for (const row of customers) usage.get(row.tenantId)!.customerCount = row._count._all;
+  for (const row of revenue) usage.get(row.tenantId)!.revenue30dMinor = row._sum.amountMinor ?? 0;
+
+  return usage;
+}
+
+interface TenantUsage {
+  routerCount: number;
+  routersOnline: number;
+  customerCount: number;
+  revenue30dMinor: number;
+}
+
   app.get(
     "/",
     { config: { audience: "platform" }, preHandler: [...preHandler, requirePermission("tenants.read")] },
@@ -86,12 +145,21 @@ export async function tenantRoutes(app: FastifyInstance): Promise<void> {
         }),
         prisma.tenant.count({ where }),
       ]);
+
+      const usage = await loadTenantUsage(items.map((tenant) => tenant.id));
       // platformBaseDomain rides along here (not a separate request) so the "Provision New
       // Tenant" form's live URL preview can show the real configured domain instead of a
       // hardcoded guess — this list is already fetched on page load regardless.
       reply.send(
         successResponse(
-          { ...paginate(items.map(withPlatformUrl), total, query), platformBaseDomain: env.PLATFORM_BASE_DOMAIN },
+          {
+            ...paginate(
+              items.map((tenant) => ({ ...withPlatformUrl(tenant), usage: usage.get(tenant.id)! })),
+              total,
+              query
+            ),
+            platformBaseDomain: env.PLATFORM_BASE_DOMAIN,
+          },
           request.id
         )
       );

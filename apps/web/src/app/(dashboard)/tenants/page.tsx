@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
+import { formatMoney } from "@/lib/money";
 import { Button, Card, ErrorText, HintText, Input, Label, Badge, StatusDot } from "@/components/ui";
 import { IconTenants, IconCopy, IconCheck } from "@/components/icons";
 import { UpgradeTenantModal } from "@/components/tenants/upgrade-tenant-modal";
@@ -32,12 +33,51 @@ interface Tenant {
    *  route), not yet a live URL (no hostname-routing layer exists to serve it) but the value
    *  this tenant's subdomain will resolve to once that ships. */
   platformUrl: string;
+  /** Live usage, computed server-side — see loadTenantUsage in apps/api's tenants route. */
+  usage?: TenantUsage;
   subscription: {
     id: string;
     status: "TRIALING" | "ACTIVE" | "PAST_DUE" | "EXPIRED" | "CANCELLED";
     billingCycle: "MONTHLY" | "ANNUAL";
     plan: TenantPlanSummary;
   } | null;
+}
+
+interface TenantUsage {
+  routerCount: number;
+  routersOnline: number;
+  customerCount: number;
+  revenue30dMinor: number;
+}
+
+/**
+ * Why a tenant needs attention, or null if nothing is wrong.
+ *
+ * Ordered by urgency, and each one is a thing a platform operator can act on today. "Never got
+ * started" is the one worth reading twice: a tenant who signed up and never linked a router will
+ * churn silently, and administrative state alone (ACTIVE, on a plan, trial running) makes them
+ * look identical to a thriving customer.
+ */
+function tenantRisk(tenant: Tenant): { label: string; detail: string } | null {
+  const usage = tenant.usage;
+  const trialMsLeft = tenant.trialEndsAt ? new Date(tenant.trialEndsAt).getTime() - Date.now() : null;
+
+  if (tenant.subscription?.status === "PAST_DUE") {
+    return { label: "Past due", detail: "Subscription payment has failed" };
+  }
+  if (usage && usage.routerCount === 0) {
+    return { label: "Never got started", detail: "No router has ever been linked" };
+  }
+  if (usage && usage.routerCount > 0 && usage.routersOnline === 0) {
+    return { label: "All routers down", detail: `${usage.routerCount} linked, none reporting` };
+  }
+  if (trialMsLeft !== null && trialMsLeft > 0 && trialMsLeft < 3 * 24 * 60 * 60 * 1000) {
+    return { label: "Trial ending", detail: "Fewer than 3 days left" };
+  }
+  if (usage && usage.customerCount > 0 && usage.revenue30dMinor === 0) {
+    return { label: "No revenue", detail: "Has customers but took no payments in 30 days" };
+  }
+  return null;
 }
 
 interface PaginatedTenants {
@@ -314,7 +354,7 @@ export default function TenantsPage() {
   const [slug, setSlug] = useState("");
   const [ownerPhone, setOwnerPhone] = useState("");
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"ALL" | "ACTIVE" | "TRIAL" | "SUSPENDED">("ALL");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "ACTIVE" | "TRIAL" | "SUSPENDED" | "ATTENTION">("ALL");
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [broadcastTitle, setBroadcastTitle] = useState("");
@@ -381,6 +421,7 @@ export default function TenantsPage() {
   const activeCount = allItems.filter((t) => t.status === "ACTIVE").length;
   const trialCount = allItems.filter((t) => t.trialEndsAt && new Date(t.trialEndsAt) > new Date()).length;
   const suspendedCount = allItems.filter((t) => t.status === "SUSPENDED").length;
+  const attentionCount = allItems.filter((t) => tenantRisk(t) !== null).length;
 
   const filteredItems = allItems.filter((tenant) => {
     const matchesSearch =
@@ -393,6 +434,7 @@ export default function TenantsPage() {
     if (statusFilter === "ACTIVE") return tenant.status === "ACTIVE";
     if (statusFilter === "SUSPENDED") return tenant.status === "SUSPENDED";
     if (statusFilter === "TRIAL") return Boolean(tenant.trialEndsAt && new Date(tenant.trialEndsAt) > new Date());
+    if (statusFilter === "ATTENTION") return tenantRisk(tenant) !== null;
     return true;
   });
 
@@ -425,7 +467,7 @@ export default function TenantsPage() {
       </div>
 
       {/* 4 KPI Summary Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         <div
           onClick={() => setStatusFilter("ALL")}
           className={`p-3.5 rounded-2xl border transition-all cursor-pointer ${
@@ -472,6 +514,22 @@ export default function TenantsPage() {
         >
           <span className="text-[11px] font-bold text-rose-600 dark:text-rose-400 uppercase block">Suspended</span>
           <span className="text-2xl font-black text-rose-600 dark:text-rose-400">{suspendedCount}</span>
+        </div>
+
+        {/* The card an operator should look at first: administrative status says a tenant is
+            fine, usage says whether they actually are. */}
+        <div
+          onClick={() => setStatusFilter("ATTENTION")}
+          className={`p-3.5 rounded-2xl border transition-all cursor-pointer ${
+            statusFilter === "ATTENTION"
+              ? "bg-amber-50/50 border-amber-500/50 dark:bg-amber-950/20"
+              : "bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800"
+          }`}
+        >
+          <span className="block text-[11px] font-bold uppercase text-amber-600 dark:text-amber-400">
+            Needs attention
+          </span>
+          <span className="text-2xl font-black text-amber-600 dark:text-amber-400">{attentionCount}</span>
         </div>
       </div>
 
@@ -584,6 +642,8 @@ export default function TenantsPage() {
       <div className="space-y-3">
         {filteredItems.map((tenant) => {
           const countdown = trialCountdown(tenant.trialEndsAt);
+          const risk = tenantRisk(tenant);
+          const usage = tenant.usage;
           return (
             <Card key={tenant.id} className="py-4 space-y-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -593,6 +653,14 @@ export default function TenantsPage() {
                     <span className="font-mono text-xs text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/60 px-2 py-0.5 rounded-md border border-purple-200 dark:border-purple-800/40">
                       {tenant.slug}
                     </span>
+                    {risk && (
+                      <span
+                        title={risk.detail}
+                        className="rounded-md border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11px] font-semibold text-amber-700 dark:border-amber-800/50 dark:bg-amber-950/40 dark:text-amber-300"
+                      >
+                        {risk.label}
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-slate-400 mt-1">
                     Created {new Date(tenant.createdAt).toLocaleDateString()}
@@ -613,6 +681,31 @@ export default function TenantsPage() {
                       {copiedUrl === tenant.platformUrl ? <IconCheck size={12} /> : <IconCopy size={12} />}
                     </button>
                   </div>
+
+                  {/* Live usage — what administrative status cannot tell you. */}
+                  {usage && (
+                    <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-500 dark:text-slate-400">
+                      <span>
+                        <span className="font-semibold text-slate-700 dark:text-slate-200">
+                          {usage.routersOnline}/{usage.routerCount}
+                        </span>{" "}
+                        routers online
+                      </span>
+                      <span>
+                        <span className="font-semibold text-slate-700 dark:text-slate-200">
+                          {usage.customerCount}
+                        </span>{" "}
+                        customers
+                      </span>
+                      <span>
+                        <span className="font-semibold text-slate-700 dark:text-slate-200">
+                          {formatMoney(usage.revenue30dMinor)}
+                        </span>{" "}
+                        in 30 days
+                      </span>
+                      {risk && <span className="text-amber-600 dark:text-amber-400">{risk.detail}</span>}
+                    </div>
+                  )}
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2 self-start sm:self-auto">
