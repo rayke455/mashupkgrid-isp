@@ -234,6 +234,9 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
 
       const credentials = await getGeneratedCredentials(tenantId, routerId);
       const callbackUrl = `${env.APP_API_PUBLIC_URL}/api/v1/routers/provision/${provisionToken}/callback`;
+      const tenantSlug = request.tenantCtx?.slug || "demo-isp";
+      const loginTemplateUrl = `${env.APP_API_PUBLIC_URL}/api/v1/hotspot/${tenantSlug}/mikrotik-login-template`;
+
       const script = buildMikrotikProvisioningScript(router, credentials, callbackUrl, {
         radiusHost: process.env.RADIUS_SERVER_HOST || "68.210.187.104",
         managementSource,
@@ -241,6 +244,7 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
         serverHost,
         serverPort: env.WIREGUARD_LISTEN_PORT || 51820,
         vpnIp,
+        loginTemplateUrl,
       });
 
       await writeAuditLog({

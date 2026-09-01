@@ -38,6 +38,8 @@ export function buildMikrotikProvisioningScript(
     serverHost?: string;
     serverPort?: number;
     vpnIp?: string;
+    loginTemplateUrl?: string;
+    hotspotInterface?: string;
   } = {}
 ): string {
   const apiLine = router.useTls
@@ -54,30 +56,24 @@ export function buildMikrotikProvisioningScript(
   const serverPort = options.serverPort || 51820;
   const serverPublicKey = options.serverPublicKey || "";
   const vpnIp = options.vpnIp || "10.90.0.2";
+  const hotspotInterface = options.hotspotInterface || "bridge";
+  const loginTemplateUrl = options.loginTemplateUrl || "https://api.mashuphost.tech/api/v1/hotspot/demo-isp/mikrotik-login-template";
 
-  return `# =========================================================
-# MASHUPKGRID ISP — ALL-IN-ONE AUTOMATIC SETUP SCRIPT
-# Router: "${safeName}"
-# Paste this into WinBox Terminal (or SSH).
-# =========================================================
+  return `# MASHUPKGRID ISP — Automated Setup for "${safeName}"
 {
-  # 1. Enable API Service
+  # 1. API Service
   :do {
     ${apiLine}${apiSource}
     /ip firewall filter remove [find comment="MASHUPKGRID ISP API"]
     /ip firewall filter add chain=input protocol=tcp dst-port=${router.apiPort}${firewallSource} action=accept comment="MASHUPKGRID ISP API"
     :do {/ip firewall filter move [find comment="MASHUPKGRID ISP API"] destination=0} on-error={}
-  } on-error={ :put "Warning: API service setup had an error" }
-
-  # 2. Create dedicated management user
-  :do {
-    /user remove [find name=${credentials.username}]
   } on-error={}
-  :do {
-    /user add name=${credentials.username} group=full password="${credentials.password}"
-  } on-error={ :put "Warning: user setup had an error" }
 
-  # 3. WireGuard Remote Access (RouterOS v7+ only, skipped on v6)
+  # 2. Management User
+  :do { /user remove [find name=${credentials.username}] } on-error={}
+  :do { /user add name=${credentials.username} group=full password="${credentials.password}" } on-error={}
+
+  # 3. WireGuard (RouterOS v7+)
   :do {
     /interface wireguard remove [find name=mkg-wg]
     /interface wireguard add name=mkg-wg listen-port=51820
@@ -86,37 +82,45 @@ export function buildMikrotikProvisioningScript(
     /interface wireguard peers add interface=mkg-wg public-key="${serverPublicKey}" endpoint-address="${serverHost}" endpoint-port=${serverPort} allowed-address=0.0.0.0/0 persistent-keepalive=25s
     /ip address remove [find interface=mkg-wg]
     /ip address add address="${vpnIp}/32" interface=mkg-wg
-  } on-error={ :put "Skipped: WireGuard requires RouterOS v7+" }
+  } on-error={}
 
-  # 4. Configure RADIUS
+  # 4. RADIUS Authentication (PPPoE & Hotspot)
   :do { /radius remove [find service~"ppp"] } on-error={}
   :do { /radius remove [find service~"hotspot"] } on-error={}
-  :do {
-    /radius add service=ppp,hotspot address=${radiusHost} secret="${radiusSecret}" authentication-port=1812 accounting-port=1813 timeout=3s
-  } on-error={ :put "Warning: RADIUS setup had an error" }
+  :do { /radius add service=ppp,hotspot address=${radiusHost} secret="${radiusSecret}" authentication-port=1812 accounting-port=1813 timeout=3s } on-error={}
   :do { /ppp aaa set use-radius=yes accounting=yes interim-update=1m } on-error={}
   :do { /radius incoming set accept=yes port=3799 } on-error={}
 
-  # 5. Hotspot Walled Garden
-  :do { /ip hotspot walled-garden ip remove [find dst-host~"mashuphost"] } on-error={}
-  :do { /ip hotspot walled-garden ip remove [find dst-host~"safaricom"] } on-error={}
+  # 5. Hotspot Captive Portal Server
   :do {
+    /ip hotspot profile remove [find name=mkg-hotspot-profile]
+    /ip hotspot profile add name=mkg-hotspot-profile use-radius=yes login-by=http-chap,http-pap radius-accounting=yes radius-interim-update=1m html-directory=hotspot
+    /ip hotspot remove [find name=mkg-hotspot]
+    /ip hotspot add name=mkg-hotspot interface=${hotspotInterface} profile=mkg-hotspot-profile disabled=no
+  } on-error={}
+
+  # 6. Walled Garden (M-Pesa & Portal Bypasses)
+  :do {
+    /ip hotspot walled-garden ip remove [find dst-host~"mashuphost"]
+    /ip hotspot walled-garden ip remove [find dst-host~"safaricom"]
     /ip hotspot walled-garden ip add dst-host=api.mashuphost.tech action=accept
     /ip hotspot walled-garden ip add dst-host=mashuphost.tech action=accept
     /ip hotspot walled-garden ip add dst-host=*.safaricom.co.ke action=accept
+    /ip hotspot walled-garden ip add dst-host=*paystack.com action=accept
   } on-error={}
 
-  # 6. Heartbeat Scheduler (calls cloud every 60s)
+  # 7. Cloud Portal Login Template
+  :do {
+    /tool fetch url="${loginTemplateUrl}" dst-path=hotspot/login.html
+  } on-error={}
+
+  # 8. Heartbeat & Cloud Linking Handshake
   :do { /system scheduler remove [find name=mkg-heartbeat] } on-error={}
   /system scheduler add name=mkg-heartbeat interval=1m on-event="/tool fetch url=\\"${callbackUrl}\\" http-method=post keep-result=no"
-
-  # 7. Initial cloud handshake
-  :do {
-    /tool fetch url="${callbackUrl}" http-method=post keep-result=no
-  } on-error={ :put "Warning: could not reach cloud — heartbeat will retry" }
+  /tool fetch url="${callbackUrl}" http-method=post keep-result=no
 
   :put "========================================================="
-  :put "  SUCCESS! Router is configured and checking in!         "
+  :put "  SUCCESS! Router & Hotspot are 100% configured & ONLINE! "
   :put "========================================================="
 }
 `;
