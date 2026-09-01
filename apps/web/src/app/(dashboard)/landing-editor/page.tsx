@@ -6,7 +6,7 @@ import { Button, Card, Input, Label } from "@/components/ui";
 import {
   LandingContent,
   DEFAULT_LANDING_CONTENT,
-  getLandingContent,
+  fetchPublishedLandingContent,
   saveLandingContent,
   resetLandingContent,
 } from "@/lib/landing-content";
@@ -19,7 +19,9 @@ export default function LandingEditorPage() {
   const [savedSuccess, setSavedSuccess] = useState(false);
 
   useEffect(() => {
-    setContent(getLandingContent());
+    // Loads what is actually published, not this browser's local copy — see
+    // fetchPublishedLandingContent for why that distinction matters before a Save.
+    void fetchPublishedLandingContent().then(setContent);
   }, []);
 
   const handleSave = async (e: React.FormEvent) => {
