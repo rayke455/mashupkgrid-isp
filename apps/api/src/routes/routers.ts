@@ -71,6 +71,22 @@ const idParamsSchema = z.object({ routerId: z.string().uuid() });
 const setupScriptQuerySchema = z.object({
   radiusHost: z.string().min(1).max(255).regex(HOST_PATTERN, "radiusHost must be a plain hostname or IP address"),
 });
+/** A tenant's own portal hostnames, for the router's walled garden. A white-labelled tenant
+ *  sends its customers to its own domain, not the platform's, so a router that only allows the
+ *  platform host blocks the exact page it just redirected the customer to — which presents as
+ *  the captive portal "not loading" with no clue as to why.
+ *
+ *  SSL_PENDING is included alongside the fully-live statuses deliberately: allowing a host the
+ *  router will need shortly is harmless, whereas re-running the provisioning script every time a
+ *  certificate finishes issuing is the kind of step that silently never happens. */
+async function getTenantPortalDomains(tenantId: string): Promise<string[]> {
+  const domains = await prisma.domain.findMany({
+    where: { tenantId, status: { in: ["VERIFIED", "SSL_PENDING", "SSL_ACTIVE"] } },
+    select: { hostname: true },
+  });
+  return domains.map((d) => d.hostname);
+}
+
 const hotspotScriptQuerySchema = z.object({
   interfaceName: z.string().min(1).max(64).regex(ROUTEROS_IDENTIFIER_PATTERN, "interfaceName may only contain letters, numbers, _ and -"),
   addressPoolName: z.string().min(1).max(64).regex(ROUTEROS_IDENTIFIER_PATTERN, "addressPoolName may only contain letters, numbers, _ and -"),
@@ -234,7 +250,14 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
 
       const credentials = await getGeneratedCredentials(tenantId, routerId);
       const callbackUrl = `${env.APP_API_PUBLIC_URL}/api/v1/routers/provision/${provisionToken}/callback`;
-      const tenantSlug = request.tenantCtx?.slug || "demo-isp";
+      // No "demo-isp" fallback: the slug decides which tenant's captive portal this router
+      // sends its customers to, so guessing it would quietly provision a router to serve
+      // ANOTHER tenant's branding, packages and payment accounts. Failing loudly is the only
+      // safe behaviour when we cannot tell whose router this is.
+      const tenantSlug = request.tenantCtx?.slug;
+      if (!tenantSlug) {
+        throw new ConflictError("Could not determine this tenant's portal address — reload the dashboard and try again.");
+      }
       const loginTemplateUrl = `${env.APP_API_PUBLIC_URL}/api/v1/hotspot/${tenantSlug}/mikrotik-login-template`;
 
       const script = buildMikrotikProvisioningScript(router, credentials, callbackUrl, {
@@ -246,6 +269,7 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
         vpnIp,
         loginTemplateUrl,
         portalHost: env.APP_WEB_URL,
+        portalDomains: await getTenantPortalDomains(tenantId),
       });
 
       await writeAuditLog({
@@ -406,6 +430,7 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
         platformHost,
         radiusHost,
         nasSecret: nas.secret,
+        portalDomains: await getTenantPortalDomains(tenantId),
       });
 
       await writeAuditLog({
@@ -635,7 +660,12 @@ function getClientIp(request: { headers: Record<string, string | string[] | unde
 
     const credentials = await getGeneratedCredentials(router.tenantId, router.id);
     const callbackUrl = `${env.APP_API_PUBLIC_URL}/api/v1/routers/provision/${token}/callback`;
-    const tenantSlug = router.tenant?.slug || "demo-isp";
+    // Same reasoning as the provisioning-script route above — never guess the tenant.
+    const tenantSlug = router.tenant?.slug;
+    if (!tenantSlug) {
+      reply.status(500).header("Content-Type", "text/plain").send("# Error: router is not linked to a tenant\n");
+      return;
+    }
     const loginTemplateUrl = `${env.APP_API_PUBLIC_URL}/api/v1/hotspot/${tenantSlug}/mikrotik-login-template`;
 
     const script = buildMikrotikProvisioningScript(router, credentials, callbackUrl, {
@@ -647,6 +677,7 @@ function getClientIp(request: { headers: Record<string, string | string[] | unde
       vpnIp,
       loginTemplateUrl,
       portalHost: env.APP_WEB_URL,
+      portalDomains: await getTenantPortalDomains(router.tenantId),
     });
 
     reply.header("Content-Type", "text/plain; charset=utf-8").send(script);

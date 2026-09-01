@@ -10,15 +10,62 @@ function sanitizeForScript(value: string): string {
   return value.replace(/[^\w .-]/g, "").trim() || "router";
 }
 
-/** RouterOS's walled garden keys entries by hostname OR address depending on the submenu
- *  property used — `dst-host` is DNS-resolved (and so is the only thing that works for a
- *  CDN/multi-IP platform host), while a bare IP has to go in as `dst-address` or RouterOS
- *  tries, and fails, to resolve it as a name. Dev deployments hand this a bare IP; production
- *  hands it a domain, so pick per value rather than assuming either. */
-function walledGardenLine(host: string): string {
-  const isIp = /^\d{1,3}(\.\d{1,3}){3}$/.test(host);
-  const key = isIp ? "dst-address" : "dst-host";
-  return `/ip hotspot walled-garden ip add ${key}=${host} action=accept comment="MASHUPKGRID"`;
+/** Every third-party host an unauthenticated hotspot client must reach BEFORE it can pay and
+ *  log in. Derived from what packages/payments actually calls, not guesswork:
+ *
+ *  - Safaricom / M-Pesa (packages/payments/src/mpesa) — the STK push itself is server-to-server,
+ *    but the customer's own M-Pesa confirmation and any Daraja-hosted fallback page are not.
+ *  - Paystack (packages/payments/src/paystack) — the customer is redirected to Paystack's hosted
+ *    checkout, which pulls scripts from js.paystack.co and short-links through pstk.it.
+ *  - Pesapal (packages/payments/src/pesapal) — same pattern, hosted checkout on pay.pesapal.com.
+ *  - The 3-D Secure step-up hosts. A card payment that passes checkout but cannot reach its
+ *    issuer's ACS silently fails at the last step, which reads to the customer as "the payment
+ *    hung" — the single most confusing failure in a captive portal, since they have no way to
+ *    reach a support page either.
+ *
+ *  Wildcards throughout: every one of these is CDN-fronted with rotating addresses, so pinning
+ *  exact hosts is what breaks the moment a provider re-points a record. */
+export const PAYMENT_GATEWAY_WALLED_GARDEN_HOSTS = [
+  "*.safaricom.co.ke",
+  "*.paystack.com",
+  "*.paystack.co",
+  "*.pstk.it",
+  "*.pesapal.com",
+  "*.visa.com",
+  "*.mastercard.com",
+  "*.cardinalcommerce.com",
+  "*.modirum.com",
+] as const;
+
+/** RouterOS splits the walled garden across two menus and BOTH are needed.
+ *  `/ip hotspot walled-garden` is the HTTP-proxy-level menu: it can match a Host header, but only
+ *  for plain HTTP. `/ip hotspot walled-garden ip` is the packet-level menu, and it is the only
+ *  one that lets an HTTPS connection through — without an entry there the hotspot intercepts the
+ *  TLS connection and the client gets ERR_CONNECTION_CLOSED rather than a login page. Every
+ *  host this platform cares about is HTTPS-only, so each name is emitted to both menus (note the
+ *  differing action verbs: `allow` in the first, `accept` in the second).
+ *
+ *  A bare IP goes in as `dst-address` — passing one as `dst-host` makes RouterOS try, and fail,
+ *  to resolve it as a name. Dev deployments hand this an IP; production hands it a domain.
+ *
+ *  All entries are commented "MASHUPKGRID" so the script can clear exactly its own rules on a
+ *  re-run without touching anything an operator added by hand. */
+function walledGardenLines(hosts: readonly string[]): string {
+  const seen = new Set<string>();
+  const lines: string[] = [];
+
+  for (const host of hosts) {
+    if (!host || seen.has(host)) continue;
+    seen.add(host);
+
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) {
+      lines.push(`/ip hotspot walled-garden ip add dst-address=${host} action=accept comment="MASHUPKGRID"`);
+      continue;
+    }
+    lines.push(`/ip hotspot walled-garden add dst-host=${host} action=allow comment="MASHUPKGRID"`);
+    lines.push(`/ip hotspot walled-garden ip add dst-host=${host} action=accept comment="MASHUPKGRID"`);
+  }
+  return lines.join("\n");
 }
 
 /** Hostname out of a config URL, tolerating a value that is already a bare host. */
@@ -28,6 +75,39 @@ function hostFromUrl(value: string): string {
   } catch {
     return value.replace(/^https?:\/\//, "").split("/")[0]!.split(":")[0]!;
   }
+}
+
+/** Two-part public suffixes this platform actually meets. Kenya is the primary market (see the
+ *  Tenant model's KES/Africa-Nairobi defaults) where "acme.co.ke" is the registrable domain, not
+ *  "co.ke" — getting that wrong would emit a "*.co.ke" walled-garden rule, opening the hotspot
+ *  to an entire country's namespace. Not a full public-suffix list, and deliberately so: an
+ *  unlisted suffix falls back to the last two labels, which is merely narrower than ideal
+ *  (a redundant exact-host entry) rather than dangerously wide. */
+const MULTI_PART_TLDS = new Set([
+  "co.ke", "or.ke", "ne.ke", "ac.ke", "go.ke", "sc.ke", "me.ke", "mobi.ke", "info.ke",
+  "co.tz", "co.ug", "co.rw", "co.za", "org.za", "com.ng", "com.gh", "co.zm", "co.zw",
+  "co.uk", "org.uk", "ac.uk", "com.au", "co.nz", "com.br", "co.in",
+]);
+
+/** The registrable domain — "api.mashuphost.tech" and "portal.acme.co.ke" reduce to
+ *  "mashuphost.tech" and "acme.co.ke" respectively. */
+function registrableDomain(host: string): string {
+  const parts = host.split(".");
+  if (parts.length <= 2) return host;
+  const labelCount = MULTI_PART_TLDS.has(parts.slice(-2).join(".")) ? 3 : 2;
+  return parts.slice(-labelCount).join(".");
+}
+
+/** A host plus one wildcard covering its registrable domain. The exact host alone is not enough:
+ *  a portal behind a CDN (mashuphost.tech sits behind Cloudflare) pulls assets and API calls from
+ *  sibling names, and a tenant's own domain usually answers on both the apex and www. The
+ *  wildcard is anchored at the registrable domain rather than the host, so "api.example.com"
+ *  contributes "*.example.com" — a useful rule — instead of "*.api.example.com", which would
+ *  match nothing anyone visits. An IP is returned as-is; it has no subdomains. */
+function hostWithSubdomains(host: string): string[] {
+  if (!host) return [];
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return [host];
+  return [host, `*.${registrableDomain(host)}`];
 }
 
 export interface MikrotikSetupScript {
@@ -68,6 +148,11 @@ export function buildMikrotikProvisioningScript(
      *  walled garden or an unauthenticated client can never load the page it was redirected to,
      *  which looks exactly like "the captive portal doesn't display". */
     portalHost?: string;
+    /** Every additional hostname this tenant's own customers may be sent to — their verified
+     *  custom domains (the Domain model). A tenant on a white-label domain has a portal that is
+     *  NOT on portalHost, so without these the redirect lands on a host the hotspot is still
+     *  blocking and the customer sees a connection error instead of a login page. */
+    portalDomains?: string[];
   } = {}
 ): string {
   const apiLine = router.useTls
@@ -97,11 +182,15 @@ export function buildMikrotikProvisioningScript(
   const loginTemplateUrl = options.loginTemplateUrl || "https://api.mashuphost.tech/api/v1/hotspot/demo-isp/mikrotik-login-template";
   const apiHost = hostFromUrl(loginTemplateUrl);
   const portalHost = options.portalHost ? hostFromUrl(options.portalHost) : "mashuphost.tech";
-  // De-duped: in production the API and the portal are two subdomains of one domain, but in dev
-  // they're the same IP on different ports, and a repeated walled-garden entry is just noise.
-  const walledGardenHosts = Array.from(
-    new Set([apiHost, portalHost, "*.safaricom.co.ke", "*paystack.com", "*paystack.co", "*pstk.it"])
-  );
+  // Order matters only for readability of the generated script; walledGardenLines de-dupes.
+  // The tenant's own domains come before the gateways so an operator reading the script sees
+  // "my portal is reachable" first — that is the entry they most often need to check.
+  const walledGardenHosts = [
+    ...hostWithSubdomains(apiHost),
+    ...hostWithSubdomains(portalHost),
+    ...(options.portalDomains ?? []).flatMap((d) => hostWithSubdomains(hostFromUrl(d))),
+    ...PAYMENT_GATEWAY_WALLED_GARDEN_HOSTS,
+  ];
 
   return `# MASHUPKGRID ISP — Automated Setup for "${safeName}"
 # 1. API Service
@@ -153,8 +242,9 @@ ${apiLine}
 
 # 6. Walled Garden (portal + payment gateway bypasses). Removed by comment first so re-running
 #    this script doesn't stack duplicate entries.
+/ip hotspot walled-garden remove [find comment="MASHUPKGRID"]
 /ip hotspot walled-garden ip remove [find comment="MASHUPKGRID"]
-${walledGardenHosts.map(walledGardenLine).join("\n")}
+${walledGardenLines(walledGardenHosts)}
 
 # 7. Cloud Portal Login Template. Non-fatal: if the fetch fails the router keeps its stock
 #    hotspot login page, which still authenticates against RADIUS — a plain login form beats
@@ -226,6 +316,10 @@ export interface HotspotScriptInput {
    *  own host (to load the login page and call its API) — a bare IP in dev, a real domain once
    *  this is deployed. */
   platformHost: string;
+  /** This tenant's verified custom domains (the Domain model). A white-labelled tenant's portal
+   *  is not on the platform's own host, so without these the router blocks the very page it just
+   *  redirected the customer to. */
+  portalDomains?: string[];
   /** Where this router should send hotspot Access-Requests — the same FreeRADIUS server PPPoE
    *  uses, just a separate `/radius add service=hotspot` client entry, since RouterOS scopes
    *  RADIUS client config per service rather than sharing one entry across service types. */
@@ -260,24 +354,22 @@ export function buildMikrotikHotspotScript(router: Router, input: HotspotScriptI
 # Reuses the "${input.interfaceName}" interface's existing DHCP/IP pool — this does not
 # create a second DHCP server or touch your existing LAN/WiFi client leases.
 
-# 1. Walled garden — lets an unauthenticated client reach the platform & payment gateways
-#    (M-Pesa STK, Paystack Checkout, Apple Pay, Visa/Mastercard 3DS) before logging in.
-/ip hotspot walled-garden ip add dst-address=${input.platformHost} action=accept comment="MASHUPKGRID ISP platform"
-
-# 1b. Paystack & Online Payment Gateway Walled Garden (Bypasses for guest checkout without active internet)
-/ip hotspot walled-garden
-add dst-host=*paystack.com comment="Paystack Main Portal"
-add dst-host=*paystack.co comment="Paystack API & JS Checkout"
-add dst-host=*pstk.it comment="Paystack Shortlinks"
-add dst-host=*visa.com comment="Visa 3D-Secure Verification"
-add dst-host=*mastercard.com comment="Mastercard Identity Check"
-add dst-host=*cardinalcommerce.com comment="3DS Banking Verification"
-add dst-host=*modirum.com comment="3DS Banking Verification"
-
-/ip hotspot walled-garden ip
-add dst-host=*paystack.com action=accept comment="Paystack IP Bypass"
-add dst-host=*paystack.co action=accept comment="Paystack IP Bypass"
-add dst-host=*pstk.it action=accept comment="Paystack IP Bypass"
+# 1. Walled garden — lets an unauthenticated client reach the platform and every payment
+#    gateway before it has logged in. Emitted to BOTH RouterOS menus: the packet-level
+#    "walled-garden ip" menu is the only one that lets an HTTPS connection through, and every
+#    host here is HTTPS-only. Cleared by comment first so re-running never stacks duplicates.
+#
+#    Each line stands alone rather than using RouterOS's "menu then bare add" block form: that
+#    form only works when the whole block is executed together, and this script is routinely
+#    pasted a few lines at a time.
+/ip hotspot walled-garden remove [find comment="MASHUPKGRID"]
+/ip hotspot walled-garden ip remove [find comment="MASHUPKGRID"]
+${walledGardenLines([
+    ...hostWithSubdomains(input.platformHost),
+    ...hostWithSubdomains(hostFromUrl(input.loginTemplateUrl)),
+    ...(input.portalDomains ?? []).flatMap((d) => hostWithSubdomains(hostFromUrl(d))),
+    ...PAYMENT_GATEWAY_WALLED_GARDEN_HOSTS,
+  ])}
 
 # 2. Point hotspot authentication at the platform's RADIUS server (a separate client entry from
 #    PPPoE's — RouterOS scopes RADIUS clients per service).
