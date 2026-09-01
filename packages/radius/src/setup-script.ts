@@ -89,12 +89,14 @@ ${apiLine}
 /ip hotspot add name=mkg-hotspot interface=${hotspotInterface} profile=mkg-hotspot-profile disabled=no
 
 # 6. Walled Garden (M-Pesa & Portal Bypasses)
-/ip hotspot walled-garden ip remove [find dst-host~"mashuphost"]
-/ip hotspot walled-garden ip remove [find dst-host~"safaricom"]
-/ip hotspot walled-garden ip add dst-host=api.mashuphost.tech action=accept
-/ip hotspot walled-garden ip add dst-host=mashuphost.tech action=accept
-/ip hotspot walled-garden ip add dst-host=*.safaricom.co.ke action=accept
-/ip hotspot walled-garden ip add dst-host=*paystack.com action=accept
+/ip hotspot walled-garden remove [find dst-host~"mashuphost"]
+/ip hotspot walled-garden remove [find dst-host~"safaricom"]
+/ip hotspot walled-garden add dst-host=api.mashuphost.tech
+/ip hotspot walled-garden add dst-host=mashuphost.tech
+/ip hotspot walled-garden add dst-host=*.safaricom.co.ke
+/ip hotspot walled-garden add dst-host=*paystack.com
+/ip hotspot walled-garden ip remove [find dst-address="${serverHost}"]
+/ip hotspot walled-garden ip add dst-address=${serverHost} action=accept
 
 # 7. Cloud Portal Login Template
 /tool fetch url="${loginTemplateUrl}" dst-path=hotspot/login.html
