@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { prisma } from "@mashupkgrid/database";
 import { recordPaymentForInvoice, topUpWallet, refundPayment } from "@mashupkgrid/billing";
+import { listPurchaseAttempts, summarisePurchaseAttempts } from "@mashupkgrid/payments";
 import {
   successResponse,
   ConflictError,
@@ -19,6 +20,12 @@ import { writeAuditLog } from "../lib/audit.js";
 const preHandler = [authenticate, resolveTenant, checkMaintenance] as const;
 
 const paymentMethodSchema = z.enum(["MANUAL", "WALLET", "CASH", "BANK_TRANSFER"]);
+
+const purchaseAttemptsQuerySchema = z.object({
+  status: z.enum(["PENDING", "COMPLETED", "FAILED", "ABANDONED"]).optional(),
+  days: z.coerce.number().int().min(1).max(90).default(7),
+  limit: z.coerce.number().int().min(1).max(500).default(100),
+});
 
 const recordForInvoiceSchema = z.object({
   invoiceId: z.string().uuid(),
@@ -62,6 +69,24 @@ export async function paymentRoutes(app: FastifyInstance): Promise<void> {
         prisma.payment.count({ where }),
       ]);
       reply.send(successResponse(paginate(items, total, query), request.id));
+    }
+  );
+
+  /** Every payment a customer STARTED, not only the ones that completed — see
+   *  listPurchaseAttempts's doc comment for why an abandoned attempt is the most actionable row
+   *  a tenant has. Read-only, and gated on payments.read like the payment list above, since it
+   *  exposes customer phone numbers and what they tried to buy. */
+  app.get(
+    "/purchase-attempts",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("payments.read")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const query = purchaseAttemptsQuerySchema.parse(request.query);
+      const [attempts, summary] = await Promise.all([
+        listPurchaseAttempts(tenantId, query),
+        summarisePurchaseAttempts(tenantId, query.days),
+      ]);
+      reply.send(successResponse({ attempts, summary }, request.id));
     }
   );
 

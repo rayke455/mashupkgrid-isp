@@ -11,6 +11,8 @@ interface ConfigStatus {
   configured: boolean;
   isActive: boolean;
   shortcode: string | null;
+  shortcodeType: "PAYBILL" | "TILL";
+  storeNumber: string | null;
   environment: string;
 }
 
@@ -28,6 +30,8 @@ export default function MpesaPage() {
   const [consumerKey, setConsumerKey] = useState("");
   const [consumerSecret, setConsumerSecret] = useState("");
   const [shortcode, setShortcode] = useState("");
+  const [shortcodeType, setShortcodeType] = useState<"PAYBILL" | "TILL">("PAYBILL");
+  const [storeNumber, setStoreNumber] = useState("");
   const [passkey, setPasskey] = useState("");
   const [environment, setEnvironment] = useState<"sandbox" | "production">("sandbox");
   const [error, setError] = useState<string | null>(null);
@@ -49,7 +53,15 @@ export default function MpesaPage() {
     mutationFn: () =>
       apiFetch("/api/v1/payments/mpesa/config", {
         method: "PUT",
-        body: JSON.stringify({ consumerKey, consumerSecret, shortcode, passkey, environment }),
+        body: JSON.stringify({
+          consumerKey,
+          consumerSecret,
+          shortcode,
+          shortcodeType,
+          storeNumber: shortcodeType === "TILL" ? storeNumber : undefined,
+          passkey,
+          environment,
+        }),
       }),
     onSuccess: () => {
       setConsumerKey("");
@@ -92,7 +104,9 @@ export default function MpesaPage() {
         {status?.configured && (
           <Badge variant={status.isActive ? "success" : "warning"}>
             <StatusDot status={status.isActive ? "ONLINE" : "WARNING"} />
-            <span>{status.environment.toUpperCase()} · {status.shortcode}</span>
+            <span>
+              {status.environment.toUpperCase()} · {status.shortcodeType === "TILL" ? "Till" : "Paybill"} {status.shortcode}
+            </span>
           </Badge>
         )}
       </div>
@@ -129,9 +143,45 @@ export default function MpesaPage() {
             />
           </div>
           <div>
-            <Label htmlFor="shortcode">Business Shortcode / Paybill</Label>
-            <Input id="shortcode" placeholder="e.g. 174379" value={shortcode} onChange={(e) => setShortcode(e.target.value)} required />
+            <Label htmlFor="shortcodeType">Account Type</Label>
+            <select
+              id="shortcodeType"
+              className="w-full rounded-lg border border-slate-300/90 bg-white px-3.5 py-2 text-sm text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 dark:border-obsidian-700 dark:bg-obsidian-950 dark:text-slate-100"
+              value={shortcodeType}
+              onChange={(e) => setShortcodeType(e.target.value as "PAYBILL" | "TILL")}
+            >
+              <option value="PAYBILL">Paybill</option>
+              <option value="TILL">Buy Goods (Till)</option>
+            </select>
           </div>
+          <div>
+            <Label htmlFor="shortcode">{shortcodeType === "TILL" ? "Till Number" : "Paybill Number"}</Label>
+            <Input
+              id="shortcode"
+              placeholder={shortcodeType === "TILL" ? "e.g. 5678901" : "e.g. 174379"}
+              value={shortcode}
+              onChange={(e) => setShortcode(e.target.value)}
+              required
+            />
+            <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              The number your customers actually pay.
+            </p>
+          </div>
+          {shortcodeType === "TILL" && (
+            <div className="sm:col-span-2">
+              <Label htmlFor="storeNumber">Head Office / Store Number</Label>
+              <Input
+                id="storeNumber"
+                placeholder="Issued by Safaricom alongside your till"
+                value={storeNumber}
+                onChange={(e) => setStoreNumber(e.target.value)}
+              />
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                Your passkey belongs to this number, not the till, so Safaricom signs the payment
+                request with it. Leave blank only if Safaricom issued you a single number for both.
+              </p>
+            </div>
+          )}
           <div>
             <Label htmlFor="passkey">Lipa Na M-Pesa Online Passkey</Label>
             <Input id="passkey" type="password" value={passkey} onChange={(e) => setPasskey(e.target.value)} required />

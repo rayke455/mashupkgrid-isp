@@ -705,6 +705,16 @@ model PaymentProviderConfig {
   consumerKeyEncrypted    String?
   consumerSecretEncrypted String?
   shortcode               String?
+  /// "PAYBILL" | "TILL". Daraja treats the two as different transaction types, and sending the
+  /// wrong one does not error cleanly -- the STK push is simply never completed by the payer's
+  /// handset. A Paybill uses TransactionType=CustomerPayBillOnline with the paybill as both
+  /// BusinessShortCode and PartyB; a Buy Goods Till uses CustomerBuyGoodsOnline with the till as
+  /// PartyB and the HEAD OFFICE/store number as BusinessShortCode (see `storeNumber`).
+  shortcodeType           String              @default("PAYBILL")
+  /// Head office / store number, required only for TILL. Safaricom issues this alongside the
+  /// till; it is the number the passkey belongs to, so it -- not the till -- is what the STK
+  /// password is derived from. Null for Paybill, where the shortcode plays both roles.
+  storeNumber             String?
   passkeyEncrypted        String?
   /// Generic single-secret credential slot for providers that only need one API key (Paystack,
   /// and future gateways like IOTEC/ClickPesa/ZenoPay) rather than Daraja's four-part

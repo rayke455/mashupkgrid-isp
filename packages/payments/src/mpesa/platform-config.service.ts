@@ -46,6 +46,11 @@ export async function getPlatformMpesaCredentials(): Promise<MpesaCredentials> {
     consumerKey: decryptAtRest(config.consumerKeyEncrypted, env.ENCRYPTION_KEY),
     consumerSecret: decryptAtRest(config.consumerSecretEncrypted, env.ENCRYPTION_KEY),
     shortcode: config.shortcode,
+    // The platform's own collection account is a Paybill. This is stated explicitly rather than
+    // defaulted so that adding Till support for tenants can never silently change how the
+    // platform's own SaaS fees are collected.
+    shortcodeType: "PAYBILL",
+    storeNumber: null,
     passkey: decryptAtRest(config.passkeyEncrypted, env.ENCRYPTION_KEY),
     environment: config.environment === "production" ? "production" : "sandbox",
   };

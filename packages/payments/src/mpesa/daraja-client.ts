@@ -55,6 +55,20 @@ export function darajaPassword(shortcode: string, passkey: string, timestamp: st
   return Buffer.from(`${shortcode}${passkey}${timestamp}`).toString("base64");
 }
 
+/** The number Daraja calls `BusinessShortCode` — which is NOT always the number a customer pays.
+ *
+ *  For a Paybill the two are the same. For a Buy Goods Till they are not: the customer pays the
+ *  till (`PartyB`), while `BusinessShortCode` must be the head-office/store number, because that
+ *  is the number Safaricom issued the passkey against and therefore the one the STK password is
+ *  derived from. Getting this wrong does not fail loudly — Daraja accepts the request and the
+ *  payer's handset simply never completes it. Falls back to the shortcode when a Till has no
+ *  store number recorded, which at least matches the single-number setups Safaricom issues. */
+export function darajaBusinessShortCode(credentials: MpesaCredentials): string {
+  return credentials.shortcodeType === "TILL"
+    ? credentials.storeNumber || credentials.shortcode
+    : credentials.shortcode;
+}
+
 export interface StkPushParams {
   credentials: MpesaCredentials;
   phone: string;
@@ -78,19 +92,24 @@ export async function initiateStkPush(params: StkPushParams): Promise<StkPushRes
   const baseUrl = BASE_URLS[credentials.environment];
   const accessToken = await getAccessToken(credentials);
   const timestamp = darajaTimestamp();
-  const password = darajaPassword(credentials.shortcode, credentials.passkey, timestamp);
+  const businessShortCode = darajaBusinessShortCode(credentials);
+  const password = darajaPassword(businessShortCode, credentials.passkey, timestamp);
 
   const response = await fetch(`${baseUrl}/mpesa/stkpush/v1/processrequest`, {
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      BusinessShortCode: credentials.shortcode,
+      BusinessShortCode: businessShortCode,
       Password: password,
       Timestamp: timestamp,
-      TransactionType: "CustomerPayBillOnline",
+      // A Till must be pushed as CustomerBuyGoodsOnline; sending a Till as CustomerPayBillOnline
+      // produces a request the payer's handset never completes, with no error to explain it.
+      TransactionType:
+        credentials.shortcodeType === "TILL" ? "CustomerBuyGoodsOnline" : "CustomerPayBillOnline",
       // Daraja expects whole-shilling amounts (no minor units) — M-Pesa doesn't support cents.
       Amount: Math.round(params.amountMinor / 100),
       PartyA: params.phone,
+      // Always the number the money goes to: the till for Buy Goods, the paybill otherwise.
       PartyB: credentials.shortcode,
       PhoneNumber: params.phone,
       CallBackURL: params.callbackUrl,
@@ -123,13 +142,15 @@ export async function queryStkPushStatus(
   const baseUrl = BASE_URLS[credentials.environment];
   const accessToken = await getAccessToken(credentials);
   const timestamp = darajaTimestamp();
-  const password = darajaPassword(credentials.shortcode, credentials.passkey, timestamp);
+  // Must match the push exactly — a query signed with a different shortcode cannot find it.
+  const queryShortCode = darajaBusinessShortCode(credentials);
+  const password = darajaPassword(queryShortCode, credentials.passkey, timestamp);
 
   const response = await fetch(`${baseUrl}/mpesa/stkpushquery/v1/query`, {
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
     body: JSON.stringify({
-      BusinessShortCode: credentials.shortcode,
+      BusinessShortCode: queryShortCode,
       Password: password,
       Timestamp: timestamp,
       CheckoutRequestID: checkoutRequestId,

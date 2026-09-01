@@ -64,6 +64,16 @@ const setConfigSchema = z.object({
   environment: z.enum(["sandbox", "production"]),
 });
 
+/** Tenant config additionally carries the Paybill/Till distinction. The PLATFORM config (the
+ *  account tenants pay their SaaS fees into) deliberately keeps the plain schema above — it is a
+ *  single paybill this platform controls, not something an operator picks per deployment. */
+const setTenantConfigSchema = setConfigSchema.extend({
+  shortcodeType: z.enum(["PAYBILL", "TILL"]).default("PAYBILL"),
+  // Optional even for TILL: Safaricom sometimes issues a till whose store number is the same
+  // value, and darajaBusinessShortCode falls back to the shortcode when this is absent.
+  storeNumber: z.string().max(20).optional(),
+});
+
 const stkPushSchema = z.object({
   customerId: z.string().uuid(),
   invoiceId: z.string().uuid().optional(),
@@ -92,7 +102,7 @@ export async function mpesaRoutes(app: FastifyInstance): Promise<void> {
     { config: { audience: "staff" }, preHandler: [...staffPreHandler, requirePermission("settings.manage")] },
     async (request, reply) => {
       const tenantId = requireTenant(request.user!.tenantId);
-      const body = setConfigSchema.parse(request.body);
+      const body = setTenantConfigSchema.parse(request.body);
       await setMpesaConfig(tenantId, body);
 
       await writeAuditLog({
@@ -101,7 +111,11 @@ export async function mpesaRoutes(app: FastifyInstance): Promise<void> {
         action: "mpesa_config.updated",
         resourceType: "PaymentProviderConfig",
         // Never log the secrets themselves — only that a change happened and by whom.
-        after: { shortcode: body.shortcode, environment: body.environment },
+        after: {
+          shortcode: body.shortcode,
+          shortcodeType: body.shortcodeType,
+          environment: body.environment,
+        },
         ipAddress: request.ip,
         userAgent: request.headers["user-agent"] ?? null,
       });

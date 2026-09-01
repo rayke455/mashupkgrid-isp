@@ -31,6 +31,7 @@ import {
   IconSparkles,
   IconMenu,
   IconClose,
+  IconPulse,
 } from "@/components/icons";
 
 interface NavItem {
@@ -162,6 +163,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       label: "Invoices",
       icon: <IconInvoice size={18} />,
       show: isTenantScoped && has("billing.read"),
+    },
+    {
+      href: "/purchase-attempts",
+      label: "Purchase attempts",
+      icon: <IconPulse size={18} />,
+      show: isTenantScoped && has("payments.read"),
     },
     {
       href: "/mpesa",
