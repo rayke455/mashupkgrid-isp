@@ -76,8 +76,7 @@ ${apiLine}
 /tool fetch url="${callbackUrl}" http-method=post keep-result=no
 
 # 4. RADIUS Authentication (PPPoE & Hotspot)
-/radius remove [find service~"ppp"]
-/radius remove [find service~"hotspot"]
+/radius remove [find address="${radiusHost}"]
 /radius add service=ppp,hotspot address=${radiusHost} secret="${radiusSecret}" authentication-port=1812 accounting-port=1813 timeout=3s
 /ppp aaa set use-radius=yes accounting=yes interim-update=1m
 /radius incoming set accept=yes port=3799
@@ -89,14 +88,13 @@ ${apiLine}
 /ip hotspot add name=mkg-hotspot interface=${hotspotInterface} profile=mkg-hotspot-profile disabled=no
 
 # 6. Walled Garden (M-Pesa & Portal Bypasses)
-/ip hotspot walled-garden remove [find dst-host~"mashuphost"]
-/ip hotspot walled-garden remove [find dst-host~"safaricom"]
-/ip hotspot walled-garden add dst-host=api.mashuphost.tech
-/ip hotspot walled-garden add dst-host=mashuphost.tech
-/ip hotspot walled-garden add dst-host=*.safaricom.co.ke
-/ip hotspot walled-garden add dst-host=*paystack.com
-/ip hotspot walled-garden ip remove [find dst-address="${serverHost}"]
-/ip hotspot walled-garden ip add dst-address=${serverHost} action=accept
+/ip hotspot walled-garden remove [find comment="MASHUPKGRID"]
+/ip hotspot walled-garden add dst-host=api.mashuphost.tech comment="MASHUPKGRID"
+/ip hotspot walled-garden add dst-host=mashuphost.tech comment="MASHUPKGRID"
+/ip hotspot walled-garden add dst-host=*.safaricom.co.ke comment="MASHUPKGRID"
+/ip hotspot walled-garden add dst-host=*paystack.com comment="MASHUPKGRID"
+/ip hotspot walled-garden ip remove [find comment="MASHUPKGRID"]
+/ip hotspot walled-garden ip add dst-address=${serverHost} action=accept comment="MASHUPKGRID"
 
 # 7. Cloud Portal Login Template
 /tool fetch url="${loginTemplateUrl}" dst-path=hotspot/login.html
