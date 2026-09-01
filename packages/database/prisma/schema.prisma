@@ -1326,6 +1326,16 @@ model Router {
   vpnIp                String?
   vpnConfiguredAt      DateTime?
   status            RouterStatus @default(UNKNOWN)
+  /// PPPoE server settings, per router because they are a network-design choice that differs by
+  /// site: which port or VLAN faces the subscribers, and what addresses they are handed. Left
+  /// null on a hotspot-only router, in which case the provisioning script emits no PPPoE section
+  /// at all rather than imposing an addressing plan that could collide with a live network.
+  /// The interface PPPoE listens on (e.g. "ether2", "vlan100", or the LAN bridge).
+  pppoeInterface    String?
+  /// The gateway address subscribers see, e.g. "10.10.0.1". Must sit outside pppoePoolRange.
+  pppoeGatewayIp    String?
+  /// RouterOS pool range for subscriber addresses, e.g. "10.10.0.2-10.10.255.254".
+  pppoePoolRange    String?
   lastSeenAt        DateTime?
   lastError         String?
   cpuLoadPercent    Int?

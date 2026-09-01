@@ -83,6 +83,10 @@ export default function LinkRouterWizardPage() {
   const [manualUsername, setManualUsername] = useState("");
   const [manualPassword, setManualPassword] = useState("");
 
+  const [pppoeEnabled, setPppoeEnabled] = useState(false);
+  const [pppoeInterface, setPppoeInterface] = useState("");
+  const [pppoeGatewayIp, setPppoeGatewayIp] = useState("10.10.0.1");
+  const [pppoePoolRange, setPppoePoolRange] = useState("10.10.0.2-10.10.255.254");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [oneLiner, setOneLiner] = useState<string>("");
 
@@ -90,7 +94,18 @@ export default function LinkRouterWizardPage() {
     mutationFn: () =>
       apiFetch<RouterRecord & { provisionToken: string }>("/api/v1/routers/pending", {
         method: "POST",
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({
+          name,
+          // Sent only when enabled: an interface is what switches PPPoE on server-side, so
+          // leaving it out is how a hotspot-only router gets no PPPoE section in its script.
+          ...(pppoeEnabled && pppoeInterface.trim()
+            ? {
+                pppoeInterface: pppoeInterface.trim(),
+                pppoeGatewayIp: pppoeGatewayIp.trim(),
+                pppoePoolRange: pppoePoolRange.trim(),
+              }
+            : {}),
+        }),
       }),
     onSuccess: (result) => {
       const { provisionToken: token, ...routerRecord } = result;
@@ -228,6 +243,66 @@ export default function LinkRouterWizardPage() {
               onChange={(e) => setName(e.target.value)}
               required
             />
+            <div className="mt-5 rounded-xl border border-slate-200 p-4 dark:border-obsidian-800">
+              <label className="flex items-center gap-2.5">
+                <input
+                  type="checkbox"
+                  checked={pppoeEnabled}
+                  onChange={(e) => setPppoeEnabled(e.target.checked)}
+                  className="h-4 w-4 rounded border-slate-300 dark:border-obsidian-700"
+                />
+                <span className="text-sm font-semibold text-slate-900 dark:text-white">
+                  This router serves PPPoE subscribers
+                </span>
+              </label>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                Leave off for a hotspot-only router. RADIUS authentication is configured either
+                way — this adds the PPPoE server that actually listens for subscribers.
+              </p>
+
+              {pppoeEnabled && (
+                <div className="mt-4 space-y-3">
+                  <div>
+                    <Label htmlFor="pppoeInterface">PPPoE interface</Label>
+                    <Input
+                      id="pppoeInterface"
+                      placeholder="e.g. ether2, vlan100, or bridge"
+                      value={pppoeInterface}
+                      onChange={(e) => setPppoeInterface(e.target.value)}
+                      required
+                    />
+                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                      The port or VLAN facing your subscribers — not your uplink.
+                    </p>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <Label htmlFor="pppoeGatewayIp">Gateway address</Label>
+                      <Input
+                        id="pppoeGatewayIp"
+                        placeholder="10.10.0.1"
+                        value={pppoeGatewayIp}
+                        onChange={(e) => setPppoeGatewayIp(e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="pppoePoolRange">Subscriber address range</Label>
+                      <Input
+                        id="pppoePoolRange"
+                        placeholder="10.10.0.2-10.10.255.254"
+                        value={pppoePoolRange}
+                        onChange={(e) => setPppoePoolRange(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                    Pick a range that does not overlap anything already on this network — the
+                    gateway must sit outside the range.
+                  </p>
+                </div>
+              )}
+            </div>
+
             {error && <ErrorText>{error}</ErrorText>}
             <div className="mt-5 flex justify-end">
               <Button type="submit" disabled={createPending.isPending} className="gap-1.5">

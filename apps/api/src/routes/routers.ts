@@ -59,8 +59,33 @@ const createRouterSchema = z.object({
 
 const updateRouterSchema = createRouterSchema.partial();
 
+/** PPPoE is optional per router. The interface is what turns it on; the address fields fall back
+ *  to documented defaults in the script builder, so an operator who only knows their port can
+ *  still get a working server. */
+const pppoeFieldsSchema = {
+  pppoeInterface: z
+    .string()
+    .max(64)
+    .regex(/^[a-zA-Z0-9_.-]*$/, "Interface may only contain letters, numbers, and . _ -")
+    .optional(),
+  pppoeGatewayIp: z
+    .string()
+    .regex(/^(\d{1,3}\.){3}\d{1,3}$/, "Gateway must be an IPv4 address like 10.10.0.1")
+    .optional()
+    .or(z.literal("")),
+  pppoePoolRange: z
+    .string()
+    .regex(
+      /^(\d{1,3}\.){3}\d{1,3}-(\d{1,3}\.){3}\d{1,3}$/,
+      "Pool must be a range like 10.10.0.2-10.10.255.254"
+    )
+    .optional()
+    .or(z.literal("")),
+};
+
 const createPendingRouterSchema = z.object({
   name: z.string().min(1).max(64).regex(ROUTER_NAME_PATTERN, "Router name may only contain letters, numbers, spaces, and . _ -"),
+  ...pppoeFieldsSchema,
 });
 
 const idParamsSchema = z.object({ routerId: z.string().uuid() });
@@ -181,7 +206,11 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
       const tenantId = requireTenant(request.user!.tenantId);
       const body = createPendingRouterSchema.parse(request.body);
       await assertWithinPlanLimit(tenantId, "routers");
-      const { router, provisionToken } = await createPendingRouter(tenantId, body.name);
+      const { router, provisionToken } = await createPendingRouter(tenantId, body.name, {
+        pppoeInterface: body.pppoeInterface,
+        pppoeGatewayIp: body.pppoeGatewayIp,
+        pppoePoolRange: body.pppoePoolRange,
+      });
 
       await writeAuditLog({
         tenantId,
@@ -258,6 +287,9 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
         loginTemplateUrl,
         portalHost: env.APP_WEB_URL,
         portalDomains: await getTenantPortalDomains(tenantId),
+        pppoeInterface: router.pppoeInterface,
+        pppoeGatewayIp: router.pppoeGatewayIp,
+        pppoePoolRange: router.pppoePoolRange,
       });
 
       await writeAuditLog({
@@ -590,6 +622,9 @@ function getClientIp(request: { headers: Record<string, string | string[] | unde
       loginTemplateUrl,
       portalHost: env.APP_WEB_URL,
       portalDomains: await getTenantPortalDomains(router.tenantId),
+      pppoeInterface: router.pppoeInterface,
+      pppoeGatewayIp: router.pppoeGatewayIp,
+      pppoePoolRange: router.pppoePoolRange,
     });
 
     reply.header("Content-Type", "text/plain; charset=utf-8").send(script);

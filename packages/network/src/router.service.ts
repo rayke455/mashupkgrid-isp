@@ -74,9 +74,16 @@ export async function createRouter(tenantId: string, input: CreateRouterInput): 
  *  or port-forwarded IP, same assumption a WISP's edge/CPE routers typically already satisfy).
  *  Returns the plaintext provisioning token alongside the row — like an API key, it is never
  *  recoverable again once this call returns. */
+export interface PendingRouterPppoe {
+  pppoeInterface?: string;
+  pppoeGatewayIp?: string;
+  pppoePoolRange?: string;
+}
+
 export async function createPendingRouter(
   tenantId: string,
-  name: string
+  name: string,
+  pppoe: PendingRouterPppoe = {}
 ): Promise<{ router: Router; provisionToken: string }> {
   const existing = await prisma.router.findFirst({ where: { tenantId, name, deletedAt: null } });
   if (existing) throw new ConflictError(`A router named "${name}" already exists`);
@@ -95,6 +102,11 @@ export async function createPendingRouter(
       passwordEncrypted: encryptAtRest(generatedPassword, env.ENCRYPTION_KEY),
       provisionTokenHash: hashToken(provisionToken),
       status: "UNKNOWN",
+      // Empty strings are stored as null: "" would satisfy the "is PPPoE configured?" check in
+      // the script builder and emit a server bound to no interface.
+      pppoeInterface: pppoe.pppoeInterface?.trim() || null,
+      pppoeGatewayIp: pppoe.pppoeGatewayIp?.trim() || null,
+      pppoePoolRange: pppoe.pppoePoolRange?.trim() || null,
     },
   });
 

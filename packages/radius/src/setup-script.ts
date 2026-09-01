@@ -110,6 +110,46 @@ function hostWithSubdomains(host: string): string[] {
   return [host, `*.${registrableDomain(host)}`];
 }
 
+/** The PPPoE server half of a router's setup.
+ *
+ *  Emitted only when an interface is configured. PPPoE is not defaulted the way the hotspot is:
+ *  a hotspot safely binds the LAN bridge, whereas a PPPoE server needs to face the subscribers
+ *  specifically — a port, or a VLAN trunk — and it hands out addresses from a pool. Inventing an
+ *  addressing plan for someone's live network is how you collide with their existing subnets, so
+ *  a router with no PPPoE configuration gets no PPPoE section rather than a guess.
+ *
+ *  Without this the router authenticates PPPoE against RADIUS correctly and still cannot accept
+ *  a single subscriber, because nothing is listening for PPPoE discovery — exactly the failure
+ *  the hotspot had before `/ip hotspot add` was restored. */
+function buildPppoeSection(
+  iface?: string | null,
+  gatewayIp?: string | null,
+  poolRange?: string | null
+): string {
+  if (!iface) {
+    return `# 8. PPPoE — not configured for this router. Hotspot works without it; if you sell
+#    PPPoE/fibre subscriptions, set the PPPoE interface and address range on the router in the
+#    dashboard and re-run this script. RADIUS is already wired for PPP, so only the server
+#    itself is missing.`;
+  }
+
+  const gateway = gatewayIp || "10.10.0.1";
+  const range = poolRange || "10.10.0.2-10.10.255.254";
+
+  return `# 8. PPPoE Server. RADIUS already knows how to authenticate these subscribers (step 4);
+#    this is the part that listens for them. Each line is idempotent and self-contained, so a
+#    re-run updates rather than duplicates.
+/ip pool remove [find name=mkg-pppoe-pool]
+/ip pool add name=mkg-pppoe-pool ranges=${range}
+/ppp profile remove [find name=mkg-pppoe]
+/ppp profile add name=mkg-pppoe local-address=${gateway} remote-address=mkg-pppoe-pool
+# The subscriber's speed comes from RADIUS per account (Mikrotik-Rate-Limit), not from this
+# profile — the profile only supplies the addressing, so one profile serves every package.
+/interface pppoe-server server remove [find service-name=mkg-pppoe]
+/interface pppoe-server server add service-name=mkg-pppoe interface=${iface} default-profile=mkg-pppoe one-session-per-host=yes disabled=no
+:put "PPPoE server listening on ${iface}, subscribers get ${range}"`;
+}
+
 /** Builds the one paste-and-run script a "Link a router" wizard needs before it knows anything
  *  about the router's address: it enables the RouterOS API, creates the dedicated user/password
  *  this platform generated (so no one ever types API credentials into the dashboard), and calls
@@ -144,6 +184,11 @@ export function buildMikrotikProvisioningScript(
      *  NOT on portalHost, so without these the redirect lands on a host the hotspot is still
      *  blocking and the customer sees a connection error instead of a login page. */
     portalDomains?: string[];
+    /** PPPoE server settings. Omitted entirely when `pppoeInterface` is absent — see the step 8
+     *  comment in the generated script for why this is opt-in rather than defaulted. */
+    pppoeInterface?: string | null;
+    pppoeGatewayIp?: string | null;
+    pppoePoolRange?: string | null;
   } = {}
 ): string {
   const apiLine = router.useTls
@@ -170,6 +215,11 @@ export function buildMikrotikProvisioningScript(
   // "bridge" / "default-dhcp" are the names MikroTik's own defconf ships with, so they are right
   // on a factory-reset router; the DHCP-derived fallback in the script covers everything else.
   const addressPool = options.addressPool || "default-dhcp";
+  const pppoeSection = buildPppoeSection(
+    options.pppoeInterface,
+    options.pppoeGatewayIp,
+    options.pppoePoolRange
+  );
   const loginTemplateUrl = options.loginTemplateUrl || "https://api.mashuphost.tech/api/v1/hotspot/demo-isp/mikrotik-login-template";
   const apiHost = hostFromUrl(loginTemplateUrl);
   const portalHost = options.portalHost ? hostFromUrl(options.portalHost) : "mashuphost.tech";
@@ -248,6 +298,8 @@ ${walledGardenLines(walledGardenHosts)}
 #    hotspot login page, which still authenticates against RADIUS — a plain login form beats
 #    no page at all, and the import continues instead of aborting here.
 :do {/tool fetch url="${loginTemplateUrl}" dst-path=hotspot/login.html check-certificate=no} on-error={:put "WARNING: portal login page fetch failed - stock RouterOS login page will be used."}
+
+${pppoeSection}
 
 :put "========================================================="
 :put "  SUCCESS! Router & Hotspot captive portal are ONLINE!  "
