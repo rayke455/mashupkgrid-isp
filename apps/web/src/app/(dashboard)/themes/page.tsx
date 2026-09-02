@@ -96,10 +96,15 @@ export default function ThemesPage() {
       setSavedSuccess(true);
       setTimeout(() => setSavedSuccess(false), 3500);
     } catch (err: any) {
-      console.warn('Backend API save warning:', err);
-      // Still show success since localstorage saved
-      setSavedSuccess(true);
-      setTimeout(() => setSavedSuccess(false), 3500);
+      // A save that fails here must never look like a save that worked — the localStorage write
+      // above only updates THIS browser's own staff preview, not what any customer's phone
+      // renders. Claiming success on a failed backend write is exactly why theme changes stopped
+      // reaching the live portal: the operator saw a green checkmark and had no reason to retry.
+      console.error('Could not save captive portal config to backend:', err);
+      setError(
+        err?.message ||
+          'Could not publish your theme change — check your connection and try again. The live portal still shows the old theme.'
+      );
     } finally {
       setSaving(false);
     }
