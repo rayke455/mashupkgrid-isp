@@ -196,6 +196,11 @@ interface TenantUsage {
       const tenant = await prisma.tenant.create({
         data: {
           ...tenantFields,
+          // New tenants are aggregated by default: this platform's paybill collects and owes
+          // them the balance, so an ISP can start selling immediately with nothing to configure
+          // but the number they want paying into. The column default stays OWN so every tenant
+          // created before this keeps collecting on their own account, untouched.
+          collectionMode: "PLATFORM",
           trialEndsAt,
           subscription: {
             create: { planId: plan.id, status: "TRIALING", currentPeriodEnd: trialEndsAt },

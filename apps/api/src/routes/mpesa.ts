@@ -252,7 +252,7 @@ export async function mpesaRoutes(app: FastifyInstance): Promise<void> {
     { config: { audience: "staff" }, preHandler: [...staffPreHandler, requirePermission("payments.read")] },
     async (request, reply) => {
       const tenantId = requireTenant(request.user!.tenantId);
-      const [balance, entries, payouts] = await Promise.all([
+      const [balance, entries, payouts, tenant] = await Promise.all([
         getTenantBalance(tenantId),
         listTenantLedger(tenantId, 100),
         prisma.tenantPayout.findMany({
@@ -260,8 +260,88 @@ export async function mpesaRoutes(app: FastifyInstance): Promise<void> {
           orderBy: { createdAt: "desc" },
           take: 50,
         }),
+        prisma.tenant.findUnique({
+          where: { id: tenantId },
+          select: { collectionMode: true, payoutShortcode: true, payoutShortcodeType: true },
+        }),
       ]);
-      reply.send(successResponse({ balance, entries, payouts }, request.id));
+      reply.send(
+        successResponse(
+          {
+            balance,
+            entries,
+            payouts,
+            collectionMode: tenant?.collectionMode ?? "OWN",
+            payoutShortcode: tenant?.payoutShortcode ?? null,
+            payoutShortcodeType: tenant?.payoutShortcodeType ?? "PAYBILL",
+          },
+          request.id
+        )
+      );
+    }
+  );
+
+  /**
+   * A tenant setting where THEIR money is sent.
+   *
+   * Deliberately only the destination — never collectionMode, which decides whose account the
+   * public's payments land in and stays a platform decision. A tenant needs no M-Pesa consumer
+   * key, secret or passkey to be paid: this platform pushes to their number, so the only thing
+   * they have to supply is the number itself.
+   */
+  app.patch(
+    "/settlement/destination",
+    { config: { audience: "staff" }, preHandler: [...staffPreHandler, requirePermission("settings.manage")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const body = z
+        .object({
+          payoutShortcode: z
+            .string()
+            .min(1)
+            .max(20)
+            .regex(/^[0-9]+$/, "A paybill or till number is digits only"),
+          payoutShortcodeType: z.enum(["PAYBILL", "TILL"]),
+        })
+        .parse(request.body);
+
+      const before = await prisma.tenant.findUnique({ where: { id: tenantId } });
+      if (!before) throw new ConflictError("Tenant not found");
+
+      const after = await prisma.tenant.update({
+        where: { id: tenantId },
+        data: {
+          payoutShortcode: body.payoutShortcode.trim(),
+          payoutShortcodeType: body.payoutShortcodeType,
+        },
+      });
+
+      // Where a business's money goes is exactly the setting worth being able to prove who
+      // changed, and when.
+      await writeAuditLog({
+        tenantId,
+        actorUserId: request.user!.id,
+        action: "tenant.payout_destination_updated",
+        resourceType: "Tenant",
+        resourceId: tenantId,
+        before: {
+          payoutShortcode: before.payoutShortcode,
+          payoutShortcodeType: before.payoutShortcodeType,
+        },
+        after: {
+          payoutShortcode: after.payoutShortcode,
+          payoutShortcodeType: after.payoutShortcodeType,
+        },
+        ipAddress: request.ip,
+        userAgent: request.headers["user-agent"] ?? null,
+      });
+
+      reply.send(
+        successResponse(
+          { payoutShortcode: after.payoutShortcode, payoutShortcodeType: after.payoutShortcodeType },
+          request.id
+        )
+      );
     }
   );
 

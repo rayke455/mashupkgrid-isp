@@ -99,7 +99,13 @@ export default function MpesaPage() {
           <p className="text-sm text-slate-500 dark:text-slate-400">
             Safaricom C2B Paybill webhook processing and STK Push direct collections.
           </p>
-        </div>
+        
+          <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:bg-obsidian-900 dark:text-slate-300">
+            Only needed if you collect your customers&apos; payments into your own M-Pesa account.
+            If the platform collects on your behalf, you need nothing here — just the paybill or
+            till number on your <strong>Settlement</strong> page, and you are paid automatically.
+          </p>
+</div>
 
         {status?.configured && (
           <Badge variant={status.isActive ? "success" : "warning"}>
