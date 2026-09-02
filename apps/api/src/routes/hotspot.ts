@@ -797,6 +797,56 @@ export async function hotspotRoutes(app: FastifyInstance): Promise<void> {
   );
 
   /**
+   * Serves the downloadable 1-line Anti-VPN & Tunnel Shield RouterOS script:
+   * /tool fetch url="https://api.mashuphost.tech/api/v1/hotspot/<tenantSlug>/anti-vpn.rsc" dst-path=anti-vpn.rsc; :delay 2s; /import anti-vpn.rsc;
+   */
+  app.get(
+    "/:tenantSlug/anti-vpn.rsc",
+    { config: { audience: "customer" }, preHandler: [checkMaintenance] },
+    async (request, reply) => {
+      const { tenantSlug } = tenantParamsSchema.parse(request.params);
+      await resolveTenantBySlug(tenantSlug);
+
+      const rsc = `# MASHUPKGRID ISP — Anti-VPN & Tunnel Shield
+/ip firewall filter remove [find comment~"MASHUPKGRID ANTI-TUNNEL"]
+/ip firewall filter remove [find comment~"MASHUPKGRID ANTI-VPN"]
+/ip firewall nat remove [find comment~"MASHUPKGRID ANTI-VPN"]
+
+# 1. Force unauthenticated DNS to router local resolver (kills SlowDNS, iodine, dnscat)
+/ip firewall nat add chain=dstnat protocol=udp dst-port=53 hotspot=!auth action=redirect to-ports=53 comment="MASHUPKGRID ANTI-VPN"
+/ip firewall nat add chain=dstnat protocol=tcp dst-port=53 hotspot=!auth action=redirect to-ports=53 comment="MASHUPKGRID ANTI-VPN"
+
+# 2. Drop direct outbound DNS from unauthenticated devices
+/ip firewall filter add chain=forward protocol=udp dst-port=53 hotspot=!auth action=drop comment="MASHUPKGRID ANTI-VPN"
+/ip firewall filter add chain=forward protocol=tcp dst-port=53 hotspot=!auth action=drop comment="MASHUPKGRID ANTI-VPN"
+
+# 3. Drop outbound UDP from unauthenticated devices (blocks WireGuard, OpenVPN UDP, V2Ray UDP)
+/ip firewall filter add chain=forward protocol=udp hotspot=!auth action=drop comment="MASHUPKGRID ANTI-VPN"
+
+# 4. Drop common VPN TCP ports from unauthenticated devices
+/ip firewall filter add chain=forward protocol=tcp dst-port=22,1194,3128,8080,8443,8888,51820 hotspot=!auth action=drop comment="MASHUPKGRID ANTI-VPN"
+
+# 5. Limit concurrent TCP connections per IP for unauthenticated devices (breaks HTTP Injector / HA Tunnel)
+/ip firewall filter add chain=forward protocol=tcp hotspot=!auth connection-limit=12,32 action=drop comment="MASHUPKGRID ANTI-VPN"
+
+# 6. Block ICMP ping tunneling from unauthenticated devices
+/ip firewall filter add chain=forward protocol=icmp hotspot=!auth action=drop comment="MASHUPKGRID ANTI-VPN"
+
+# 7. Move rules to top of chains so they execute first
+:do {/ip firewall filter move [find comment~"MASHUPKGRID ANTI-VPN"] destination=0} on-error={}
+:do {/ip firewall nat move [find comment~"MASHUPKGRID ANTI-VPN"] destination=0} on-error={}
+
+:put "========================================================="
+:put "  SUCCESS: Anti-VPN & Tunnel Shield is now ACTIVE!       "
+:put "  SlowDNS, UDP tunnels, and VPN ports are now BLOCKED.   "
+:put "========================================================="
+`;
+
+      reply.header("Content-Type", "text/plain; charset=utf-8").send(rsc);
+    }
+  );
+
+  /**
    * "I paid but I am not online."
    *
    * The single worst moment in a hotspot: the money has left the customer's phone and the network

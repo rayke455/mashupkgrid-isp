@@ -6,6 +6,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
 import { Button, Card, ErrorText, Badge, StatusDot } from "@/components/ui";
 import { IconRouter, IconCopy, IconCheck, IconPulse, IconTerminal } from "@/components/icons";
+import { useAuth } from "@/lib/auth-context";
 
 interface RouterRow {
   id: string;
@@ -53,11 +54,15 @@ export default function RoutersPage() {
     return () => clearInterval(id);
   }, []);
 
+  const { user } = useAuth();
+  const tenantSlug = user?.tenantSlug || "mash";
+
   const [error, setError] = useState<string | null>(null);
   const [testingId, setTestingId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [vpnScripts, setVpnScripts] = useState<Record<string, string>>({});
   const [openSessionsFor, setOpenSessionsFor] = useState<string | null>(null);
+  const [antiVpnScriptFor, setAntiVpnScriptFor] = useState<string | null>(null);
 
   const { data: routers, isLoading } = useQuery({
     queryKey: ["routers"],
@@ -154,7 +159,13 @@ export default function RoutersPage() {
       setActionSuccess(`🛡️ ${result.message}`);
       setTimeout(() => setActionSuccess(null), 7000);
     },
-    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to apply Anti-VPN Shield"),
+    onError: (err, routerId) => {
+      const msg = err instanceof ApiRequestError ? err.message : "Failed to apply Anti-VPN Shield";
+      setError(msg);
+      if (msg.includes("timed out") || msg.includes("hasn't checked in")) {
+        setAntiVpnScriptFor(routerId);
+      }
+    },
     onSettled: () => setShieldingId(null),
   });
 
@@ -427,6 +438,43 @@ export default function RoutersPage() {
                       the tunnel is up.
                     </p>
                   )}
+                </div>
+              )}
+
+              {/* Anti-VPN & Tunnel Shield Quick-Run Script (when router API direct connection is timed out or behind NAT) */}
+              {antiVpnScriptFor === router.id && (
+                <div className="mt-5 border-t border-slate-200 pt-4 dark:border-obsidian-800 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs font-bold text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
+                      <IconTerminal size={14} />
+                      Router Behind NAT? Run Anti-VPN Shield in MikroTik Terminal:
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="secondary"
+                        className="px-2.5 py-1 text-xs gap-1"
+                        onClick={() => {
+                          const cmd = `/tool fetch url="https://api.mashuphost.tech/api/v1/hotspot/${tenantSlug}/anti-vpn.rsc" dst-path=anti-vpn.rsc; :delay 2s; /import anti-vpn.rsc;`;
+                          handleCopy(cmd, `antivpn-${router.id}`);
+                        }}
+                      >
+                        {copiedId === `antivpn-${router.id}` ? <IconCheck size={12} /> : <IconCopy size={12} />}
+                        <span>{copiedId === `antivpn-${router.id}` ? "Copied!" : "Copy 1-Line Command"}</span>
+                      </Button>
+                      <button
+                        onClick={() => setAntiVpnScriptFor(null)}
+                        className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-white px-1 cursor-pointer"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                  <pre className="overflow-auto rounded-lg bg-slate-950 p-3 font-mono text-xs text-rose-400 border border-slate-800 whitespace-pre-wrap select-all">
+                    {`/tool fetch url="https://api.mashuphost.tech/api/v1/hotspot/${tenantSlug}/anti-vpn.rsc" dst-path=anti-vpn.rsc; :delay 2s; /import anti-vpn.rsc;`}
+                  </pre>
+                  <p className="text-[11px] text-slate-500">
+                    Paste this into WinBox <b>New Terminal</b> and press Enter. It immediately blocks SlowDNS, UDP tunnels, and multi-connection VPN injectors!
+                  </p>
                 </div>
               )}
 
