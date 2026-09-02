@@ -78,6 +78,7 @@ export interface PendingRouterPppoe {
   pppoeInterface?: string;
   pppoeGatewayIp?: string;
   pppoePoolRange?: string;
+  blockTethering?: boolean;
 }
 
 export async function createPendingRouter(
@@ -107,6 +108,7 @@ export async function createPendingRouter(
       pppoeInterface: pppoe.pppoeInterface?.trim() || null,
       pppoeGatewayIp: pppoe.pppoeGatewayIp?.trim() || null,
       pppoePoolRange: pppoe.pppoePoolRange?.trim() || null,
+      blockTethering: pppoe.blockTethering === true,
     },
   });
 

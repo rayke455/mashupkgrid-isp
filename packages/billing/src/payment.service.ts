@@ -230,13 +230,17 @@ async function refundPaymentCore(db: Db, tenantId: string, paymentId: string, re
   if (payment.status === "REVERSED") throw new ConflictError("Payment has already been reversed");
   if (payment.status !== "COMPLETED") throw new ConflictError("Only a completed payment can be reversed");
 
-  if (payment.method === "WALLET") {
+  // Both branches move money in a customer's wallet, so both require one. A guest hotspot
+  // purchase has no customer and no wallet: reversing it is purely a status change, and the
+  // refund itself happens outside this system (the operator returns the cash). Guarding here
+  // rather than asserting keeps a hotspot refund from throwing on a null customer.
+  if (payment.customerId && payment.method === "WALLET") {
     // This payment had debited the wallet to pay an invoice — credit it back.
     await creditWallet(db, payment.customerId, payment.amountMinor, `Reversal of payment ${payment.id}`, {
       referenceType: "Payment",
       referenceId: payment.id,
     });
-  } else if (!payment.invoiceId) {
+  } else if (payment.customerId && !payment.invoiceId) {
     // This was a non-wallet-method top-up (no invoice attached) — debit the credit back out.
     await debitWallet(db, payment.customerId, payment.amountMinor, `Reversal of top-up ${payment.id}`, {
       referenceType: "Payment",

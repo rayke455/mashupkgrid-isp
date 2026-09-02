@@ -129,21 +129,34 @@ function forgetRememberedVoucher(tenantSlug: string): void {
   }
 }
 
-function submitRouterLogin(linkLoginOnly: string, username: string, password: string): void {
-  const form = document.createElement("form");
-  form.method = "POST";
-  form.action = linkLoginOnly;
-  form.style.display = "none";
-  const fields: Record<string, string> = { username, password };
-  for (const name of Object.keys(fields)) {
-    const input = document.createElement("input");
-    input.type = "hidden";
-    input.name = name;
-    input.value = fields[name]!;
-    form.appendChild(input);
+/** The URL that hands the router the credentials it should log this device in with.
+ *
+ *  RouterOS accepts them as query parameters on link-login-only, which is what makes this work at
+ *  all from a hosted portal. */
+function routerLoginUrl(linkLoginOnly: string, username: string, password: string): string {
+  try {
+    // Parsed rather than concatenated so an existing query string (RouterOS often appends `dst`)
+    // is preserved instead of being clobbered by a naive "?username=".
+    const url = new URL(linkLoginOnly);
+    url.searchParams.set("username", username);
+    url.searchParams.set("password", password);
+    return url.toString();
+  } catch {
+    const separator = linkLoginOnly.includes("?") ? "&" : "?";
+    return `${linkLoginOnly}${separator}username=${encodeURIComponent(username)}&password=${encodeURIComponent(password)}`;
   }
-  document.body.appendChild(form);
-  form.submit();
+}
+
+/** Hands the customer off to the router to complete their login.
+ *
+ *  A top-level navigation, NOT a form POST. This portal is served over HTTPS while
+ *  link-login-only is a plain-HTTP address on the router's own LAN, and browsers block
+ *  mixed-content form submissions: the POST simply never went anywhere, so the page sat on
+ *  "Authenticating…" forever with nothing in the console to explain it. A top-level navigation
+ *  to http from an https page is not mixed content — it is an ordinary navigation — which is why
+ *  this is the pattern hosted captive portals use. */
+function submitRouterLogin(linkLoginOnly: string, username: string, password: string): void {
+  window.location.href = routerLoginUrl(linkLoginOnly, username, password);
 }
 
 export default function HotspotCaptivePortalPage() {
@@ -181,11 +194,39 @@ export default function HotspotCaptivePortalPage() {
   const [voucherResult, setVoucherResult] = useState<VoucherLoginResult | null>(null);
   const [accountResult, setAccountResult] = useState<AccountLoginResult | null>(null);
   const [completingRouterLogin, setCompletingRouterLogin] = useState(false);
+  /** Set when the handoff to the router did not navigate away. Holds the URL to offer as a tap
+   *  target, since a user-initiated navigation is allowed where an automatic one may not be. */
+  const [stalledLoginUrl, setStalledLoginUrl] = useState<string | null>(null);
 
   // Force-reconnect: replays a still-valid, previously-accepted voucher code without the
   // customer having to type it again after a WiFi disconnect/reconnect.
   const [rememberedVoucher, setRememberedVoucher] = useState<RememberedVoucher | null>(null);
   const [autoReconnecting, setAutoReconnecting] = useState(false);
+
+  /**
+   * Hands off to the router and refuses to spin forever if that handoff does not happen.
+   *
+   * A successful handoff replaces this page, so nothing below the navigation should ever run.
+   * When it does run, the browser declined to leave — and the customer has already PAID, so the
+   * one unacceptable outcome is an endless "Authenticating…" with no way out. They get their
+   * code and a tap-to-connect link instead, which works because a navigation the user starts is
+   * permitted where an automatic one may not be.
+   */
+  const handOffToRouter = (
+    link: string,
+    username: string,
+    password: string,
+    showResultInstead: () => void
+  ) => {
+    setCompletingRouterLogin(true);
+    setStalledLoginUrl(null);
+    submitRouterLogin(link, username, password);
+    window.setTimeout(() => {
+      setCompletingRouterLogin(false);
+      setStalledLoginUrl(routerLoginUrl(link, username, password));
+      showResultInstead();
+    }, 8000);
+  };
   const autoReconnectAttempted = useRef(false);
 
   // M-Pesa / Paystack / Pesapal polling
@@ -290,8 +331,11 @@ export default function HotspotCaptivePortalPage() {
       rememberVoucher(tenantSlug, finalCode, data.expiresAt);
       if (data.expiresAt) setRememberedVoucher({ code: finalCode, expiresAt: data.expiresAt });
       if (linkLoginOnly) {
-        setCompletingRouterLogin(true);
-        submitRouterLogin(linkLoginOnly, finalCode, finalCode);
+        handOffToRouter(linkLoginOnly, finalCode, finalCode, () => {
+          setVoucherResult(data);
+          setShowVoucherModal(false);
+          setSelectedPkg(null);
+        });
         return;
       }
       setVoucherResult(data);
@@ -351,8 +395,10 @@ export default function HotspotCaptivePortalPage() {
     onSuccess: (data) => {
       setError(null);
       if (linkLoginOnly) {
-        setCompletingRouterLogin(true);
-        submitRouterLogin(linkLoginOnly, data.username, accountPassword);
+        handOffToRouter(linkLoginOnly, data.username, accountPassword, () => {
+          setAccountResult(data);
+          setShowAccountModal(false);
+        });
         return;
       }
       setAccountResult(data);
@@ -559,6 +605,24 @@ export default function HotspotCaptivePortalPage() {
           </div>
         )}
       </div>
+
+      {/* The browser would not hand off to the router automatically. The customer has already
+          paid, so this must be an obvious way forward rather than a dead end — and a navigation
+          they tap is permitted where the automatic one was not. */}
+      {stalledLoginUrl && (
+        <div className="fixed inset-x-0 top-0 z-[60] bg-amber-500 px-4 py-3 text-center text-sm text-amber-950 shadow-lg">
+          <p className="font-semibold">Almost there — tap to finish connecting</p>
+          <p className="mt-0.5 text-xs">
+            Your payment went through. Your browser blocked the automatic hand-off to the router.
+          </p>
+          <a
+            href={stalledLoginUrl}
+            className="mt-2 inline-block rounded-full bg-amber-950 px-4 py-1.5 text-xs font-bold text-white"
+          >
+            Connect me now
+          </a>
+        </div>
+      )}
 
       {/* Force Reconnect — visible whenever we have a still-valid voucher from last time and the
           router redirected us here again (link-login-only present), so a customer whose device

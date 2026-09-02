@@ -140,6 +140,27 @@ export async function completePesapalTransaction(
             },
           });
         }
+        // Same reasoning as the M-Pesa hotspot branch: a guest voucher sale is revenue and must
+        // exist as a payment, or it never reaches any revenue report. Keyed on the gateway
+        // reference, which is unique, so a replayed webhook cannot double-count it.
+        const hotspotPayment = await tx.payment.create({
+          data: {
+            tenantId,
+            customerId: null,
+            invoiceId: null,
+            // PAYSTACK, not PESAPAL: the PaymentMethod enum has no Pesapal value, and Pesapal
+            // already shares the paystack_transactions table throughout this codebase. Adding a
+            // truthful enum value is a migration worth doing, but mislabelling one row is better
+            // than a hotspot sale that appears in no revenue report at all.
+            method: "PAYSTACK",
+            status: "COMPLETED",
+            amountMinor: transaction.amountMinor,
+            currency: transaction.currency,
+            reference,
+            idempotencyKey: reference,
+          },
+        });
+        paymentId = hotspotPayment.id;
       } else if (transaction.customerId) {
         // 2. Subscriber Invoice Payment or Wallet Top-Up
         const paymentResult = transaction.invoiceId

@@ -81,6 +81,7 @@ const pppoeFieldsSchema = {
     )
     .optional()
     .or(z.literal("")),
+  blockTethering: z.boolean().optional(),
 };
 
 const createPendingRouterSchema = z.object({
@@ -210,6 +211,7 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
         pppoeInterface: body.pppoeInterface,
         pppoeGatewayIp: body.pppoeGatewayIp,
         pppoePoolRange: body.pppoePoolRange,
+        blockTethering: body.blockTethering,
       });
 
       await writeAuditLog({
@@ -290,6 +292,7 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
         pppoeInterface: router.pppoeInterface,
         pppoeGatewayIp: router.pppoeGatewayIp,
         pppoePoolRange: router.pppoePoolRange,
+        blockTethering: router.blockTethering,
       });
 
       await writeAuditLog({
@@ -625,6 +628,7 @@ function getClientIp(request: { headers: Record<string, string | string[] | unde
       pppoeInterface: router.pppoeInterface,
       pppoeGatewayIp: router.pppoeGatewayIp,
       pppoePoolRange: router.pppoePoolRange,
+      blockTethering: router.blockTethering,
     });
 
     reply.header("Content-Type", "text/plain; charset=utf-8").send(script);

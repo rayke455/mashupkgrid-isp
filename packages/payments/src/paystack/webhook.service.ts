@@ -142,6 +142,23 @@ export async function completePaystackTransaction(
             },
           });
         }
+        // Same reasoning as the M-Pesa hotspot branch: a guest voucher sale is revenue and must
+        // exist as a payment, or it never reaches any revenue report. Keyed on the gateway
+        // reference, which is unique, so a replayed webhook cannot double-count it.
+        const hotspotPayment = await tx.payment.create({
+          data: {
+            tenantId,
+            customerId: null,
+            invoiceId: null,
+            method: "PAYSTACK",
+            status: "COMPLETED",
+            amountMinor: transaction.amountMinor,
+            currency: transaction.currency,
+            reference,
+            idempotencyKey: reference,
+          },
+        });
+        paymentId = hotspotPayment.id;
       } else if (transaction.customerId) {
         // 2. Subscriber Invoice Payment or Wallet Top-Up
         // Always the amount WE requested when the transaction was initialized, never the

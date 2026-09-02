@@ -87,6 +87,7 @@ export default function LinkRouterWizardPage() {
   const [pppoeInterface, setPppoeInterface] = useState("");
   const [pppoeGatewayIp, setPppoeGatewayIp] = useState("10.10.0.1");
   const [pppoePoolRange, setPppoePoolRange] = useState("10.10.0.2-10.10.255.254");
+  const [blockTethering, setBlockTethering] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [oneLiner, setOneLiner] = useState<string>("");
 
@@ -105,6 +106,7 @@ export default function LinkRouterWizardPage() {
                 pppoePoolRange: pppoePoolRange.trim(),
               }
             : {}),
+          blockTethering,
         }),
       }),
     onSuccess: (result) => {
@@ -244,6 +246,25 @@ export default function LinkRouterWizardPage() {
               required
             />
             <div className="mt-5 rounded-xl border border-slate-200 p-4 dark:border-obsidian-800">
+              <label className="flex items-center gap-2.5">
+                <input
+                  type="checkbox"
+                  checked={blockTethering}
+                  onChange={(e) => setBlockTethering(e.target.checked)}
+                  className="h-4 w-4 rounded border-slate-300 dark:border-obsidian-700"
+                />
+                <span className="text-sm font-semibold text-slate-900 dark:text-white">
+                  Block voucher sharing over a phone hotspot
+                </span>
+              </label>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                Stops one customer re-sharing their paid session to a whole room. Detection is by
+                TTL, so it can also block a customer whose own device legitimately sits behind a
+                travel router — leave it off unless sharing is actually costing you.
+              </p>
+            </div>
+
+            <div className="mt-3 rounded-xl border border-slate-200 p-4 dark:border-obsidian-800">
               <label className="flex items-center gap-2.5">
                 <input
                   type="checkbox"

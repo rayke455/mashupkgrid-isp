@@ -646,8 +646,12 @@ model Payment {
   id               String        @id @default(uuid())
   tenantId         String
   tenant           Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  customerId       String
-  customer         Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  /// Null for a guest hotspot purchase: someone who buys a Wi-Fi voucher on the captive portal
+  /// never becomes a Customer row, they just pay and get a code. Requiring a customer here is
+  /// why hotspot sales were not recorded as payments at all, and therefore why every revenue
+  /// report silently excluded them — for a hotspot-first ISP that is most of the money.
+  customerId       String?
+  customer         Customer?     @relation(fields: [customerId], references: [id], onDelete: Cascade)
   invoiceId        String?
   invoice          Invoice?      @relation(fields: [invoiceId], references: [id])
   method           PaymentMethod
@@ -1336,6 +1340,10 @@ model Router {
   pppoeGatewayIp    String?
   /// RouterOS pool range for subscriber addresses, e.g. "10.10.0.2-10.10.255.254".
   pppoePoolRange    String?
+  /// Drop traffic that arrived via a customer's own phone hotspot or travel router, so one
+  /// voucher cannot serve a whole room. Off by default because the detection is TTL-based and
+  /// therefore imperfect — see buildAntiTetheringSection for exactly who it can wrongly block.
+  blockTethering    Boolean      @default(false)
   lastSeenAt        DateTime?
   lastError         String?
   cpuLoadPercent    Int?

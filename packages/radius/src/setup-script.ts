@@ -62,8 +62,13 @@ function walledGardenLines(hosts: readonly string[]): string {
       lines.push(`/ip hotspot walled-garden ip add dst-address=${host} action=accept comment="MASHUPKGRID"`);
       continue;
     }
+    // Restricted to the two web ports. Every host in this list is an HTTPS service, so anything
+    // reaching them on another port is not a payment — it is someone using an allowed name as a
+    // tunnel endpoint. Narrowing the hole costs nothing legitimate.
     lines.push(`/ip hotspot walled-garden add dst-host=${host} action=allow comment="MASHUPKGRID"`);
-    lines.push(`/ip hotspot walled-garden ip add dst-host=${host} action=accept comment="MASHUPKGRID"`);
+    lines.push(
+      `/ip hotspot walled-garden ip add dst-host=${host} protocol=tcp dst-port=80,443 action=accept comment="MASHUPKGRID"`
+    );
   }
   return lines.join("\n");
 }
@@ -108,6 +113,39 @@ function hostWithSubdomains(host: string): string[] {
   if (!host) return [];
   if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return [host];
   return [host, `*.${registrableDomain(host)}`];
+}
+
+/** Blocks a customer re-sharing their paid session over their own phone hotspot or travel router.
+ *
+ *  Detection is by TTL, which is the only signal a router actually has. A packet from the paying
+ *  device arrives with its operating system's default TTL — 64 on Android/iOS/Linux, 128 on
+ *  Windows. When that device re-routes for someone else, the second device's packets pass through
+ *  it and arrive one hop lower: 63, or 127. Dropping those catches sharing without touching the
+ *  customer who paid.
+ *
+ *  It is a heuristic, and honestly so:
+ *    - A customer whose own device legitimately sits behind a router (a travel router in a hotel
+ *      room, some MiFi units) is blocked even though only one person is using it.
+ *    - An operating system with a non-standard default TTL is misjudged in either direction.
+ *    - Anyone who knows this exists can set their TTL to 65 and defeat it in one command.
+ *  So it raises the cost of casual sharing — which is nearly all of it — rather than stopping a
+ *  determined person. That is why it is opt-in per router: an operator turns it on where sharing
+ *  is actually costing them, and leaves it off where a wrongly-blocked customer is worse. */
+function buildAntiTetheringSection(enabled: boolean): string {
+  if (!enabled) {
+    return `# 10. Anti-tethering is OFF for this router. Enable it in the dashboard if customers are
+#     sharing one voucher across a room via their phone's hotspot.`;
+  }
+
+  return `# 10. Anti-tethering. Drops traffic that reached this router through a customer's own
+#     hotspot or travel router, identified by a TTL one hop below the device's own. Scoped to
+#     authenticated hotspot clients: an unauthenticated device is already blocked, and PPPoE
+#     subscribers are not touched.
+/ip firewall filter remove [find comment="MASHUPKGRID ANTI-TETHER"]
+/ip firewall filter add chain=forward hotspot=auth ttl=equal:63 action=drop comment="MASHUPKGRID ANTI-TETHER"
+/ip firewall filter add chain=forward hotspot=auth ttl=equal:127 action=drop comment="MASHUPKGRID ANTI-TETHER"
+:do {/ip firewall filter move [find comment="MASHUPKGRID ANTI-TETHER"] destination=0} on-error={}
+:put "Anti-tethering active — one device per voucher enforced at the network level"`;
 }
 
 /** The PPPoE server half of a router's setup.
@@ -189,6 +227,8 @@ export function buildMikrotikProvisioningScript(
     pppoeInterface?: string | null;
     pppoeGatewayIp?: string | null;
     pppoePoolRange?: string | null;
+    /** See buildAntiTetheringSection — opt-in because TTL detection has real false positives. */
+    blockTethering?: boolean;
   } = {}
 ): string {
   const apiLine = router.useTls
@@ -215,6 +255,7 @@ export function buildMikrotikProvisioningScript(
   // "bridge" / "default-dhcp" are the names MikroTik's own defconf ships with, so they are right
   // on a factory-reset router; the DHCP-derived fallback in the script covers everything else.
   const addressPool = options.addressPool || "default-dhcp";
+  const antiTetheringSection = buildAntiTetheringSection(options.blockTethering === true);
   const pppoeSection = buildPppoeSection(
     options.pppoeInterface,
     options.pppoeGatewayIp,
@@ -269,6 +310,9 @@ ${apiLine}
 #    producing an INVALID hotspot and no portal. Nested :if blocks also plain syntax-error on
 #    the RouterOS v6 console.
 /ip hotspot profile set [find default=yes] use-radius=yes login-by=http-chap,http-pap radius-accounting=yes radius-interim-update=1m html-directory=hotspot
+# One device per voucher. Without this a single code can be passed around a room and every device
+# on it counts as the same paying customer — the most common way hotspot revenue leaks.
+/ip hotspot user profile set [find default=yes] shared-users=1
 /ip hotspot remove [find name=mkg-hotspot]
 :do {/ip hotspot add name=mkg-hotspot interface=${hotspotInterface} address-pool=${addressPool} profile=default disabled=no} on-error={}
 # Fallback for a router whose LAN bridge/pool aren't named the defconf defaults: derive both
@@ -300,6 +344,31 @@ ${walledGardenLines(walledGardenHosts)}
 :do {/tool fetch url="${loginTemplateUrl}" dst-path=hotspot/login.html check-certificate=no} on-error={:put "WARNING: portal login page fetch failed - stock RouterOS login page will be used."}
 
 ${pppoeSection}
+
+# 9. Anti-tunnelling. A captive portal has to let an unauthenticated device do two things before
+#    it has paid: resolve names (DNS) and, on most setups, ping. Those are exactly the two
+#    channels used to carry IP traffic past the portal — iodine and dnscat tunnel over DNS,
+#    various tools tunnel over ICMP echo — and someone doing it gets free internet on your link
+#    while contributing nothing. Everything else is already blocked, because the hotspot drops
+#    anything that is neither authenticated nor in the walled garden.
+#
+#    Both rules are scoped with hotspot=!auth so they apply ONLY to devices that have not logged
+#    in. A paying customer is unaffected: their DNS is unlimited and their pings work.
+/ip firewall filter remove [find comment="MASHUPKGRID ANTI-TUNNEL"]
+# Real browsing before login is a handful of DNS lookups — the portal page and the payment
+# gateway. A tunnel needs a sustained stream of them, so a generous rate ceiling stops the tunnel
+# without touching a normal customer. Accept up to the limit, then drop the excess.
+/ip firewall filter add chain=input protocol=udp dst-port=53 hotspot=!auth limit=30,20:packet action=accept comment="MASHUPKGRID ANTI-TUNNEL"
+/ip firewall filter add chain=input protocol=tcp dst-port=53 hotspot=!auth limit=30,20:packet action=accept comment="MASHUPKGRID ANTI-TUNNEL"
+/ip firewall filter add chain=input protocol=udp dst-port=53 hotspot=!auth action=drop comment="MASHUPKGRID ANTI-TUNNEL"
+/ip firewall filter add chain=input protocol=tcp dst-port=53 hotspot=!auth action=drop comment="MASHUPKGRID ANTI-TUNNEL"
+# An unauthenticated device has no reason to ping the internet; the portal itself never needs it.
+/ip firewall filter add chain=forward protocol=icmp hotspot=!auth action=drop comment="MASHUPKGRID ANTI-TUNNEL"
+# These must sit above any broad accept already in the chain, or they never match.
+:do {/ip firewall filter move [find comment="MASHUPKGRID ANTI-TUNNEL"] destination=0} on-error={}
+:put "Anti-tunnelling rules active (DNS rate-limited, ICMP blocked for unauthenticated devices)"
+
+${antiTetheringSection}
 
 :put "========================================================="
 :put "  SUCCESS! Router & Hotspot captive portal are ONLINE!  "

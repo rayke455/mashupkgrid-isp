@@ -179,6 +179,28 @@ export async function completeStkRequest(
           });
         }
 
+        // A hotspot sale is revenue and has to be recorded as a payment like any other. This
+        // branch used to return without creating one, because payments.customerId was NOT NULL
+        // and a guest voucher buyer never becomes a Customer — so every hotspot shilling was
+        // invisible to getRevenueByDay, the dashboard total and the revenue chart. On a
+        // hotspot-first ISP that was most of the income.
+        //
+        // Keyed on the M-Pesa receipt, which is unique per payment, so a replayed callback
+        // updates nothing rather than double-counting the sale.
+        await tx.payment.create({
+          data: {
+            tenantId,
+            customerId: null,
+            invoiceId: null,
+            method: "MPESA",
+            status: "COMPLETED",
+            amountMinor: request.amountMinor,
+            currency: "KES",
+            reference: receiptNumber,
+            idempotencyKey: receiptNumber,
+          },
+        });
+
         return tx.mpesaStkRequest.update({
           where: { id: request.id },
           data: {
