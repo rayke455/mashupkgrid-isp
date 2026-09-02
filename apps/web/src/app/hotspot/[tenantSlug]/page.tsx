@@ -173,11 +173,37 @@ export default function HotspotCaptivePortalPage() {
 
   // Active Theme Selection
   const [activeThemeId, setActiveThemeId] = useState<ThemeId>(queryTheme || "suntech-blue");
+  const [userSelectedTheme, setUserSelectedTheme] = useState<ThemeId | null>(queryTheme || null);
   const [showThemePicker, setShowThemePicker] = useState(false);
 
   useEffect(() => {
-    if (queryTheme) setActiveThemeId(queryTheme);
+    if (queryTheme) {
+      setActiveThemeId(queryTheme);
+      setUserSelectedTheme(queryTheme);
+    }
   }, [queryTheme]);
+
+  const handleSelectTheme = (themeId: ThemeId) => {
+    setActiveThemeId(themeId);
+    setUserSelectedTheme(themeId);
+    setShowThemePicker(false);
+
+    // Persist to local preview storage so it sticks across reloads
+    try {
+      const existing = localStorage.getItem(`${CAPTIVE_PREVIEW_PREFIX}${tenantSlug}`);
+      const parsed = existing ? JSON.parse(existing) : {};
+      parsed.activeThemeId = themeId;
+      localStorage.setItem(`${CAPTIVE_PREVIEW_PREFIX}${tenantSlug}`, JSON.stringify(parsed));
+      setLocalConfig(parsed);
+    } catch {}
+
+    // Update browser URL with ?theme=... without full page reload
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set("theme", themeId);
+      window.history.replaceState(null, "", url.toString());
+    } catch {}
+  };
 
   // Modals
   const [selectedPkg, setSelectedPkg] = useState<HotspotPackage | null>(null);
@@ -283,14 +309,14 @@ export default function HotspotCaptivePortalPage() {
     } catch {}
   }, [tenantSlug]);
 
-  // Sync theme with tenant backend config or localStorage if no query override
+  // Sync theme with tenant backend config or localStorage if no query override and no manual selection
   useEffect(() => {
-    if (queryTheme) return;
-    const themeToUse = tenant?.activeThemeId || localConfig?.activeThemeId;
+    if (queryTheme || userSelectedTheme) return;
+    const themeToUse = localConfig?.activeThemeId || tenant?.activeThemeId;
     if (themeToUse) {
       setActiveThemeId(themeToUse as ThemeId);
     }
-  }, [queryTheme, tenant?.activeThemeId, localConfig?.activeThemeId]);
+  }, [queryTheme, userSelectedTheme, tenant?.activeThemeId, localConfig?.activeThemeId]);
 
   const { data: liveChat } = useQuery({
     queryKey: ["hotspot-live-chat", tenantSlug],
@@ -668,10 +694,7 @@ export default function HotspotCaptivePortalPage() {
               <button
                 key={theme.id}
                 type="button"
-                onClick={() => {
-                  setActiveThemeId(theme.id);
-                  setShowThemePicker(false);
-                }}
+                onClick={() => handleSelectTheme(theme.id)}
                 className={`w-full text-left px-2.5 py-1.5 rounded-xl font-medium flex items-center justify-between transition-colors ${
                   activeThemeId === theme.id
                     ? "bg-purple-600 text-white font-bold"
@@ -682,6 +705,14 @@ export default function HotspotCaptivePortalPage() {
                 {activeThemeId === theme.id && <span>✓</span>}
               </button>
             ))}
+            <div className="pt-1 mt-1 border-t border-slate-800 text-center">
+              <a
+                href="/themes"
+                className="text-[10px] text-sky-400 hover:text-sky-300 font-semibold block py-1"
+              >
+                ⚙️ Save Default in Studio &rarr;
+              </a>
+            </div>
           </div>
         )}
       </div>
