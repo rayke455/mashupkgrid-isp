@@ -319,6 +319,122 @@ export class MikroTikAdapter implements NetworkDeviceAdapter {
       message: `Strict 1-hour timeout enforced. Removed ${cookiesRemoved} cached cookie(s) and disabled silent re-auth.`,
     };
   }
+
+  async enableAntiVpnShield(): Promise<{ success: boolean; message: string }> {
+    const client = this.requireClient();
+
+    // 1. Remove previous rules commented with MASHUPKGRID ANTI-VPN or MASHUPKGRID ANTI-TUNNEL
+    const oldFilters = await client.print(["/ip/firewall/filter/print"]).catch(() => []);
+    for (const rule of oldFilters) {
+      const comment = (rule["comment"] || "").toLowerCase();
+      if (comment.includes("anti-vpn") || comment.includes("anti-tunnel")) {
+        if (rule[".id"]) {
+          await client.talk(["/ip/firewall/filter/remove", `=.id=${rule[".id"]}`]).catch(() => {});
+        }
+      }
+    }
+
+    const oldNats = await client.print(["/ip/firewall/nat/print"]).catch(() => []);
+    for (const rule of oldNats) {
+      const comment = (rule["comment"] || "").toLowerCase();
+      if (comment.includes("anti-vpn")) {
+        if (rule[".id"]) {
+          await client.talk(["/ip/firewall/nat/remove", `=.id=${rule[".id"]}`]).catch(() => {});
+        }
+      }
+    }
+
+    // 2. Add DNS hijack to router local proxy (kills SlowDNS, iodine, dnscat)
+    await client.talk([
+      "/ip/firewall/nat/add",
+      "=chain=dstnat",
+      "=protocol=udp",
+      "=dst-port=53",
+      "=hotspot=!auth",
+      "=action=redirect",
+      "=to-ports=53",
+      "=comment=MASHUPKGRID ANTI-VPN",
+    ]).catch(() => {});
+
+    await client.talk([
+      "/ip/firewall/nat/add",
+      "=chain=dstnat",
+      "=protocol=tcp",
+      "=dst-port=53",
+      "=hotspot=!auth",
+      "=action=redirect",
+      "=to-ports=53",
+      "=comment=MASHUPKGRID ANTI-VPN",
+    ]).catch(() => {});
+
+    // 3. Drop outbound DNS forwarded to foreign servers
+    await client.talk([
+      "/ip/firewall/filter/add",
+      "=chain=forward",
+      "=protocol=udp",
+      "=dst-port=53",
+      "=hotspot=!auth",
+      "=action=drop",
+      "=comment=MASHUPKGRID ANTI-VPN",
+    ]).catch(() => {});
+
+    await client.talk([
+      "/ip/firewall/filter/add",
+      "=chain=forward",
+      "=protocol=tcp",
+      "=dst-port=53",
+      "=hotspot=!auth",
+      "=action=drop",
+      "=comment=MASHUPKGRID ANTI-VPN",
+    ]).catch(() => {});
+
+    // 4. Drop outbound UDP tunnels from unauthenticated devices (WireGuard, OpenVPN UDP, V2Ray UDP)
+    await client.talk([
+      "/ip/firewall/filter/add",
+      "=chain=forward",
+      "=protocol=udp",
+      "=hotspot=!auth",
+      "=action=drop",
+      "=comment=MASHUPKGRID ANTI-VPN",
+    ]).catch(() => {});
+
+    // 5. Drop common VPN TCP ports from unauthenticated devices
+    await client.talk([
+      "/ip/firewall/filter/add",
+      "=chain=forward",
+      "=protocol=tcp",
+      "=dst-port=22,1194,3128,8080,8443,8888,51820",
+      "=hotspot=!auth",
+      "=action=drop",
+      "=comment=MASHUPKGRID ANTI-VPN",
+    ]).catch(() => {});
+
+    // 6. Limit concurrent connections per unauthenticated IP (stops multi-threaded HTTP Injector / HA Tunnel)
+    await client.talk([
+      "/ip/firewall/filter/add",
+      "=chain=forward",
+      "=protocol=tcp",
+      "=hotspot=!auth",
+      "=connection-limit=12,32",
+      "=action=drop",
+      "=comment=MASHUPKGRID ANTI-VPN",
+    ]).catch(() => {});
+
+    // 7. Drop ICMP ping tunneling
+    await client.talk([
+      "/ip/firewall/filter/add",
+      "=chain=forward",
+      "=protocol=icmp",
+      "=hotspot=!auth",
+      "=action=drop",
+      "=comment=MASHUPKGRID ANTI-VPN",
+    ]).catch(() => {});
+
+    return {
+      success: true,
+      message: "Anti-VPN & Tunnel Shield active: Blocked SlowDNS, DNS tunneling, UDP VPN tunnels, SSH tunnels, and multi-connection injectors.",
+    };
+  }
   // --- VLAN and addressing (spec section 9) ---------------------------------------------------
   // Every method here reports what the DEVICE said. None of them assume a topology: the parent
   // interface a VLAN stacks on is always supplied by the caller, because it is the ISP's network

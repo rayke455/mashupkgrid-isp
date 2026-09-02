@@ -354,22 +354,40 @@ ${pppoeSection}
 #
 #    Both rules are scoped with hotspot=!auth so they apply ONLY to devices that have not logged
 #    in. A paying customer is unaffected: their DNS is unlimited and their pings work.
-/ip firewall filter remove [find comment="MASHUPKGRID ANTI-TUNNEL"]
-# Real browsing before login is a handful of DNS lookups — the portal page and the payment
-# gateway, maybe a dozen names in a short burst at connect time. A DNS tunnel needs a SUSTAINED
-# stream to move any meaningful amount of data, so the ceiling only has to be tight enough that a
-# sustained stream cannot fit under it — 6 queries/sec with a 10-query burst covers a real page
-# load comfortably while making a tunnel too slow to be worth running. Accept up to the limit,
-# then drop the excess.
-/ip firewall filter add chain=input protocol=udp dst-port=53 hotspot=!auth limit=6,10:packet action=accept comment="MASHUPKGRID ANTI-TUNNEL"
-/ip firewall filter add chain=input protocol=tcp dst-port=53 hotspot=!auth limit=6,10:packet action=accept comment="MASHUPKGRID ANTI-TUNNEL"
-/ip firewall filter add chain=input protocol=udp dst-port=53 hotspot=!auth action=drop comment="MASHUPKGRID ANTI-TUNNEL"
-/ip firewall filter add chain=input protocol=tcp dst-port=53 hotspot=!auth action=drop comment="MASHUPKGRID ANTI-TUNNEL"
-# An unauthenticated device has no reason to ping the internet; the portal itself never needs it.
-/ip firewall filter add chain=forward protocol=icmp hotspot=!auth action=drop comment="MASHUPKGRID ANTI-TUNNEL"
-# These must sit above any broad accept already in the chain, or they never match.
-:do {/ip firewall filter move [find comment="MASHUPKGRID ANTI-TUNNEL"] destination=0} on-error={}
-:put "Anti-tunnelling rules active (DNS rate-limited, ICMP blocked for unauthenticated devices)"
+/ip firewall filter remove [find comment~"MASHUPKGRID ANTI-TUNNEL"]
+/ip firewall filter remove [find comment~"MASHUPKGRID ANTI-VPN"]
+/ip firewall nat remove [find comment~"MASHUPKGRID ANTI-VPN"]
+
+# Force all unauthenticated DNS queries to router's local resolver (kills SlowDNS, iodine, dnscat)
+/ip firewall nat add chain=dstnat protocol=udp dst-port=53 hotspot=!auth action=redirect to-ports=53 comment="MASHUPKGRID ANTI-VPN"
+/ip firewall nat add chain=dstnat protocol=tcp dst-port=53 hotspot=!auth action=redirect to-ports=53 comment="MASHUPKGRID ANTI-VPN"
+
+# Drop direct outbound DNS from unauthenticated devices
+/ip firewall filter add chain=forward protocol=udp dst-port=53 hotspot=!auth action=drop comment="MASHUPKGRID ANTI-VPN"
+/ip firewall filter add chain=forward protocol=tcp dst-port=53 hotspot=!auth action=drop comment="MASHUPKGRID ANTI-VPN"
+
+# Drop outbound UDP from unauthenticated devices (blocks WireGuard, OpenVPN UDP, V2Ray UDP tunnels)
+/ip firewall filter add chain=forward protocol=udp hotspot=!auth action=drop comment="MASHUPKGRID ANTI-VPN"
+
+# Drop common VPN TCP ports from unauthenticated devices
+/ip firewall filter add chain=forward protocol=tcp dst-port=22,1194,3128,8080,8443,8888,51820 hotspot=!auth action=drop comment="MASHUPKGRID ANTI-VPN"
+
+# Limit concurrent TCP connections per IP for unauthenticated devices (breaks HTTP Injector / HA Tunnel multi-threading)
+/ip firewall filter add chain=forward protocol=tcp hotspot=!auth connection-limit=12,32 action=drop comment="MASHUPKGRID ANTI-VPN"
+
+# Rate-limit input DNS queries on router to stop high-bandwidth DNS floods
+/ip firewall filter add chain=input protocol=udp dst-port=53 hotspot=!auth limit=6,10:packet action=accept comment="MASHUPKGRID ANTI-VPN"
+/ip firewall filter add chain=input protocol=tcp dst-port=53 hotspot=!auth limit=6,10:packet action=accept comment="MASHUPKGRID ANTI-VPN"
+/ip firewall filter add chain=input protocol=udp dst-port=53 hotspot=!auth action=drop comment="MASHUPKGRID ANTI-VPN"
+/ip firewall filter add chain=input protocol=tcp dst-port=53 hotspot=!auth action=drop comment="MASHUPKGRID ANTI-VPN"
+
+# Block ICMP ping tunneling from unauthenticated devices
+/ip firewall filter add chain=forward protocol=icmp hotspot=!auth action=drop comment="MASHUPKGRID ANTI-VPN"
+
+# Move rules to top of chains so they execute before default accepts
+:do {/ip firewall filter move [find comment~"MASHUPKGRID ANTI-VPN"] destination=0} on-error={}
+:do {/ip firewall nat move [find comment~"MASHUPKGRID ANTI-VPN"] destination=0} on-error={}
+:put "Anti-VPN & Anti-tunnelling shield active (DNS hijacked to router, UDP tunnels & VPN ports dropped)"
 
 ${antiTetheringSection}
 

@@ -121,6 +121,7 @@ export interface NetworkDeviceAdapter {
 
   applySpeedtestBoost?(): Promise<{ success: boolean; message: string }>;
   enforceStrictTimeout?(): Promise<{ success: boolean; cookiesRemoved: number; message: string }>;
+  enableAntiVpnShield?(): Promise<{ success: boolean; message: string }>;
 }
 
 /** Thrown by every not-yet-implemented vendor adapter — never pretend an unsupported

@@ -18,6 +18,7 @@ import {
   disconnectAllRouterSessions,
   applyRouterSpeedtestBoost,
   enforceRouterStrictTimeout,
+  enableRouterAntiVpnShield,
 } from "@mashupkgrid/network";
 import {
   buildMikrotikProvisioningScript,
@@ -537,6 +538,29 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
         tenantId,
         actorUserId: request.user!.id,
         action: "router.strict_timeout_enforced",
+        resourceType: "Router",
+        resourceId: routerId,
+        after: result,
+        ipAddress: request.ip,
+        userAgent: request.headers["user-agent"] ?? null,
+      });
+
+      reply.send(successResponse(result, request.id));
+    }
+  );
+
+  app.post(
+    "/:routerId/enable-anti-vpn-shield",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("routers.manage")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const { routerId } = idParamsSchema.parse(request.params);
+      const result = await enableRouterAntiVpnShield(tenantId, routerId);
+
+      await writeAuditLog({
+        tenantId,
+        actorUserId: request.user!.id,
+        action: "router.anti_vpn_shield_enabled",
         resourceType: "Router",
         resourceId: routerId,
         after: result,

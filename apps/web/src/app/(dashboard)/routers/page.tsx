@@ -108,6 +108,7 @@ export default function RoutersPage() {
   const [kickingId, setKickingId] = useState<string | null>(null);
   const [boostingId, setBoostingId] = useState<string | null>(null);
   const [enforcingId, setEnforcingId] = useState<string | null>(null);
+  const [shieldingId, setShieldingId] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
 
   const applySpeedtestBoost = useMutation({
@@ -139,6 +140,22 @@ export default function RoutersPage() {
     },
     onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to enforce strict timeout"),
     onSettled: () => setEnforcingId(null),
+  });
+
+  const enableAntiVpnShield = useMutation({
+    mutationFn: (routerId: string) => {
+      setShieldingId(routerId);
+      return apiFetch<{ success: boolean; message: string }>(
+        `/api/v1/routers/${routerId}/enable-anti-vpn-shield`,
+        { method: "POST" }
+      );
+    },
+    onSuccess: (result) => {
+      setActionSuccess(`🛡️ ${result.message}`);
+      setTimeout(() => setActionSuccess(null), 7000);
+    },
+    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to apply Anti-VPN Shield"),
+    onSettled: () => setShieldingId(null),
   });
 
   const kickAllSessions = useMutation({
@@ -315,6 +332,17 @@ export default function RoutersPage() {
                       disabled={enforcingId === router.id || !router.host}
                     >
                       {enforcingId === router.id ? "Enforcing..." : "⏱️ Strict 1hr Timeout"}
+                    </Button>
+
+                    {/* 1-Click Anti-VPN & Tunnel Shield Button */}
+                    <Button
+                      variant="secondary"
+                      className="px-3 py-1.5 text-xs bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30 font-bold"
+                      onClick={() => enableAntiVpnShield.mutate(router.id)}
+                      disabled={shieldingId === router.id || !router.host}
+                      title="Block free VPN tunneling (SlowDNS, HA Tunnel, HTTP Injector, SSH tunnels)"
+                    >
+                      {shieldingId === router.id ? "Applying Shield..." : "🛡️ Block VPN Tunnels"}
                     </Button>
 
                     <Button

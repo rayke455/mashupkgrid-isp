@@ -600,3 +600,28 @@ export async function enforceRouterStrictTimeout(
     await adapter.disconnect().catch(() => {});
   }
 }
+
+export async function enableRouterAntiVpnShield(
+  tenantId: string,
+  routerId: string
+): Promise<{ success: boolean; message: string }> {
+  const router = await getRouterOrThrow(tenantId, routerId);
+  if (!router.host) {
+    throw new ConflictError(
+      `"${router.name}" hasn't checked in yet — paste the provisioning script on the router first.`
+    );
+  }
+  const adapter = createAdapterForRouter({ ...router, host: router.host });
+  try {
+    await adapter.connect();
+    if (!adapter.enableAntiVpnShield) {
+      throw new ConflictError("Anti-VPN Shield is not supported on this router model");
+    }
+    return await adapter.enableAntiVpnShield();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new ConflictError(`Failed to apply Anti-VPN Shield on "${router.name}": ${message}`);
+  } finally {
+    await adapter.disconnect().catch(() => {});
+  }
+}
