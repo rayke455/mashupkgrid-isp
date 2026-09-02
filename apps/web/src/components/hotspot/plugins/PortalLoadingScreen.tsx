@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { LoadingScreenConfig } from "@/lib/captive-portal-plugins/types";
 import { MascotRenderer } from "./MascotGallery";
 
@@ -11,21 +11,15 @@ export function PortalLoadingScreen({
   config: LoadingScreenConfig;
   visible: boolean;
 }) {
-  const [progress, setProgress] = useState(15);
-
-  useEffect(() => {
-    if (!visible) {
-      setProgress(15);
-      return;
-    }
-    const interval = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 92) return prev;
-        return prev + Math.floor(Math.random() * 12) + 6;
-      });
-    }, 120);
-    return () => clearInterval(interval);
-  }, [visible]);
+  /**
+   * An indeterminate bar, not a percentage.
+   *
+   * This previously counted up in random increments to 92% and sat there. Nothing measured it —
+   * the page is waiting on the browser to hand off to the router, which either happens or does
+   * not, with no progress to report. A number that climbs to 100% and then keeps spinning tells
+   * the customer the system is working when it has actually failed, and it is the reason a
+   * stuck hand-off looked like a slow one.
+   */
 
   if (!config.enabled || !visible) return null;
 
@@ -44,25 +38,28 @@ export function PortalLoadingScreen({
       </div>
 
       <h3 className="text-xl font-black text-white mb-2 tracking-tight">
-        {config.loadingTitle || "Authenticating Wi-Fi Session…"}
+        {config.loadingTitle || "Connecting you to the Wi-Fi…"}
       </h3>
       <p className="text-xs text-slate-400 mb-6 max-w-xs">
-        {config.loadingSubtitle || "Contacting core RADIUS accounting engine"}
+        {/* Says what is actually happening. The old copy claimed to be "contacting core RADIUS
+            accounting engine", which is not what this moment is: the payment is already done and
+            the page is handing the device over to the router. */}
+        {config.loadingSubtitle || "Handing your device over to the router"}
       </p>
 
-      {/* Progress bar */}
+      {/* Indeterminate: a sweep that shows work is in progress without claiming to know how far
+          along it is, because nothing here can know that. */}
       <div className="w-64 max-w-full h-2 rounded-full bg-slate-800 overflow-hidden p-0.5 border border-slate-700">
         <div
-          className="h-full rounded-full transition-all duration-200"
+          className="h-full w-1/3 rounded-full animate-pulse"
           style={{
-            width: `${progress}%`,
             backgroundColor: config.progressBarColor || "#10b981",
             boxShadow: `0 0 12px ${config.progressBarColor || "#10b981"}`,
           }}
         />
       </div>
 
-      <span className="text-[11px] font-mono text-slate-500 mt-3">{progress}%</span>
+      <span className="text-[11px] text-slate-500 mt-3">This takes a moment…</span>
     </div>
   );
 }

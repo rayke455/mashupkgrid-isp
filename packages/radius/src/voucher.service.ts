@@ -163,6 +163,24 @@ async function createOneVoucher(input: GenerateVouchersInput): Promise<HotspotVo
 /** Marks a voucher ACTIVE and stamps its expiry. Called from the hotspot login flow the moment
  *  a customer's device first authenticates with the code — a voucher's clock starts at first
  *  use, not at creation. */
+/**
+ * Checks a code is usable WITHOUT starting its clock.
+ *
+ * The captive portal calls this to tell a customer their code is good before handing them to the
+ * router. Activating here — as this flow used to — starts the countdown at the moment of
+ * validation rather than the moment of connection, so a customer whose hand-off then fails loses
+ * paid time while never having been online at all. That is exactly what happens when anything
+ * downstream breaks, and it turns one fault into a refund request.
+ *
+ * The clock now starts in the RADIUS Access-Request path instead: the router asking to
+ * authenticate a code is the first moment anyone is actually being let onto the network.
+ */
+export async function validateVoucherForLogin(tenantId: string, code: string): Promise<HotspotVoucher> {
+  const voucher = await prisma.hotspotVoucher.findUnique({ where: { tenantId_code: { tenantId, code } } });
+  if (!voucher) throw new NotFoundError("Voucher");
+  return voucher;
+}
+
 export async function activateVoucher(tenantId: string, code: string): Promise<HotspotVoucher> {
   const voucher = await prisma.hotspotVoucher.findUnique({ where: { tenantId_code: { tenantId, code } } });
   if (!voucher) throw new NotFoundError("Voucher");

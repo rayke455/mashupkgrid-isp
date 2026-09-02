@@ -275,8 +275,16 @@ export function SuntechBlueTheme({
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500 text-slate-950 text-2xl font-black mb-2">
               <CheckIcon className="w-6 h-6" />
             </div>
-            <h2 className="text-xl font-black text-emerald-300">You Are Connected!</h2>
-            <p className="text-xs text-slate-200 mt-1">Your internet session is active.</p>
+            <h2 className="text-xl font-black text-emerald-300">Payment received</h2>
+            {/* NOT "you are connected". This card appears when the voucher was accepted by the
+                ISP's RADIUS — which says nothing about whether the ROUTER logged the device in,
+                and the fact this page is still on screen is evidence it did not. Claiming an
+                active session the customer does not have is worse than saying nothing: they stop
+                troubleshooting and start doubting the payment. */}
+            <p className="text-xs text-slate-200 mt-1">
+              Your Wi-Fi code is active. If you are not online yet, tap
+              &quot;Already paid but not connected?&quot; to finish connecting.
+            </p>
           </div>
         ) : (
           /* 3x3 Blue Ripped Denim Cards with 3D Red Jacket Boy pointing at Signboard */

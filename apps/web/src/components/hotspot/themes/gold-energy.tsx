@@ -373,13 +373,18 @@ export function GoldEnergyTheme({
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500 text-slate-950 text-2xl font-black mb-2">
               <CheckIcon className="w-6 h-6" />
             </div>
-            <h2 className="text-xl font-black text-emerald-400">You Are Connected!</h2>
+            <h2 className="text-xl font-black text-emerald-400">Payment received</h2>
             {voucherResult?.durationMinutes && (
               <p className="text-xs text-slate-200 mt-1">
                 Valid for <span className="font-bold text-amber-300">{voucherResult.durationMinutes} minutes</span>
               </p>
             )}
-            <p className="text-[11px] text-slate-400 mt-2">Enjoy your internet browsing.</p>
+            {/* Same reasoning as suntech-blue: this card means the voucher was accepted, not that
+                the router let the device online. "Enjoy your browsing" to someone still stuck on
+                the portal reads as the system lying to them. */}
+            <p className="text-[11px] text-slate-400 mt-2">
+              If you are not online yet, tap &quot;Already paid but not connected?&quot; to finish.
+            </p>
           </div>
         ) : (
           /* 3x3 Packages Grid with High-Visibility Packages & Speeds */

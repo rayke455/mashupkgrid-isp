@@ -1,7 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "@mashupkgrid/database";
-import { activateVoucher, authenticateHotspotAccount, listHotspotPackages } from "@mashupkgrid/radius";
+import {
+  validateVoucherForLogin,
+  authenticateHotspotAccount,
+  listHotspotPackages,
+} from "@mashupkgrid/radius";
 import { normalizeKenyanPhone } from "@mashupkgrid/payments";
 import { createTicket } from "@mashupkgrid/support";
 import {
@@ -780,7 +784,11 @@ export async function hotspotRoutes(app: FastifyInstance): Promise<void> {
       const { code } = loginBodySchema.parse(request.body);
       const tenant = await resolveTenantBySlug(tenantSlug);
 
-      const voucher = await activateVoucher(tenant.id, code.trim().toUpperCase());
+      // Validates WITHOUT starting the clock. The countdown begins when the router actually
+      // authenticates the code (see activateVoucherOnFirstAuth in radius-server.ts), so a
+      // customer whose hand-off to the router then fails does not lose paid time having never
+      // been online — which is precisely what happened while RADIUS was unreachable.
+      const voucher = await validateVoucherForLogin(tenant.id, code.trim().toUpperCase());
 
       if (voucher.status === "EXPIRED") {
         throw new ConflictError("This voucher has expired — please buy a new one");
@@ -788,8 +796,8 @@ export async function hotspotRoutes(app: FastifyInstance): Promise<void> {
       if (voucher.status === "USED") {
         throw new ConflictError("This voucher has already been used up");
       }
-      // ACTIVE covers both "just activated by this call" and "already active from an earlier
-      // connect on the same code" — both are a legitimate "you're online" outcome for the user.
+      // UNUSED and ACTIVE both mean "good to connect": the first has not been used yet, the
+      // second is a reconnect on a code already running.
 
       reply.send(
         successResponse(

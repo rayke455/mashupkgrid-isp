@@ -236,7 +236,43 @@ async function checkCredentials(username: string, password: string): Promise<boo
   // through response-time differences, letting repeated Access-Requests narrow down a voucher
   // code character by character (the same class of oracle hotspot-account-login.service.ts is
   // deliberately hardened against with this same helper).
-  return timingSafeStringEqual(check.value, password);
+  const matches = timingSafeStringEqual(check.value, password);
+
+  if (matches) {
+    // The clock starts HERE — the router is asking to let this device on, which is the first
+    // moment the customer is actually getting service. Starting it when the portal validated the
+    // code instead meant a failed hand-off silently burned time the customer had paid for.
+    // Idempotent: activateVoucher no-ops once the voucher has left UNUSED, so the many
+    // Access-Requests of a normal session do not restart or extend anything.
+    activateVoucherOnFirstAuth(username).catch((err) =>
+      console.error(`[radius] could not activate voucher for "${username}":`, err)
+    );
+  }
+
+  return matches;
+}
+
+/** Starts a voucher's validity window the first time its code authenticates. A username that is
+ *  not a voucher (a PPPoE subscriber, say) simply has no row to update. */
+async function activateVoucherOnFirstAuth(username: string): Promise<void> {
+  const voucher = await prisma.hotspotVoucher.findFirst({
+    where: { code: username, status: "UNUSED" },
+    select: { id: true, durationMinutes: true },
+  });
+  if (!voucher) return;
+
+  const now = new Date();
+  await prisma.hotspotVoucher.updateMany({
+    // Guarded on UNUSED so two simultaneous Access-Requests cannot both reset the window.
+    where: { id: voucher.id, status: "UNUSED" },
+    data: {
+      status: "ACTIVE",
+      activatedAt: now,
+      expiresAt: voucher.durationMinutes
+        ? new Date(now.getTime() + voucher.durationMinutes * 60_000)
+        : null,
+    },
+  });
 }
 
 const MIKROTIK_VENDOR_ID = 14988;

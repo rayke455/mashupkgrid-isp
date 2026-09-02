@@ -60,7 +60,8 @@ vi.mock("../../lib/maintenance-state.js", () => ({
 }));
 vi.mock("../../services/auth.service.js", () => ({ resolveTenantBySlug: h.resolveTenantBySlug }));
 vi.mock("@mashupkgrid/radius", () => ({
-  activateVoucher: vi.fn(),
+  validateVoucherForLogin: vi.fn(),
+  normalizeKenyanPhone: vi.fn((v: string) => v),
   authenticateHotspotAccount: vi.fn(),
   listHotspotPackages: vi.fn().mockResolvedValue([]),
 }));
