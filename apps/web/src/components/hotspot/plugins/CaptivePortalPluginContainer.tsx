@@ -117,8 +117,8 @@ export function CaptivePortalPluginContainer({
         <AnimatedBackground config={pluginsState.backgroundFx} />
       )}
 
-      {/* 5, 6, 7, 8, 9, 10. Edge Mascot System (Cartoon Edge Physics) */}
-      {toggles.mascots !== false && (
+      {/* 5, 6, 7, 8, 9, 10. Edge Mascot System (Off by default for clean portal) */}
+      {toggles.mascots === true && pluginsState.mascotsMasterEnabled === true && (
         <EdgeMascots
           mascots={pluginsState.mascots}
           masterEnabled={pluginsState.mascotsMasterEnabled}

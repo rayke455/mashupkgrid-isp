@@ -711,12 +711,88 @@ export async function hotspotRoutes(app: FastifyInstance): Promise<void> {
         `${env.APP_WEB_URL}/hotspot/${tenantSlug}` +
         `?mac=$(mac)&ip=$(ip)&link-login-only=$(link-login-only-esc)&link-orig=$(link-orig-esc)&error=$(error-esc)`;
 
-      reply
-        .header("Content-Type", "text/html; charset=utf-8")
-        .send(
-          `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=${target}"></head>` +
-            `<body>Redirecting to your ISP's login page…</body></html>`
-        );
+      const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Connecting to Wi-Fi…</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      background: #090d16;
+      color: #fff;
+      text-align: center;
+    }
+    .box { max-width: 320px; padding: 24px; }
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 3px solid rgba(255,255,255,0.15);
+      border-top-color: #38bdf8;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .title { font-size: 16px; font-weight: 700; margin: 0 0 8px; color: #f8fafc; }
+    .sub { font-size: 12px; color: #94a3b8; margin: 0; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <div class="spinner"></div>
+    <p class="title" id="statusTitle">Connecting…</p>
+    <p class="sub" id="statusMsg">Directing you to your Wi-Fi portal</p>
+    <form name="login" method="post" action="$(link-login-only)" style="display:none;">
+      <input type="hidden" name="username" id="formUser" value="$(username)">
+      <input type="hidden" name="password" id="formPass" value="$(password)">
+      <input type="hidden" name="dst" value="$(link-orig)">
+    </form>
+  </div>
+  <script>
+    (function() {
+      try {
+        var s = window.location.search || '';
+        var h = window.location.hash || '';
+        var query = s.indexOf('?') !== -1 ? s.substring(1) : (h.indexOf('?') !== -1 ? h.substring(h.indexOf('?') + 1) : '');
+        var params = {};
+        if (query) {
+          var pairs = query.split('&');
+          for (var i = 0; i < pairs.length; i++) {
+            var idx = pairs[i].indexOf('=');
+            if (idx > 0) {
+              params[decodeURIComponent(pairs[i].substring(0, idx))] = decodeURIComponent(pairs[i].substring(idx + 1));
+            }
+          }
+        }
+        var u = params['username'] || params['user'] || params['code'];
+        var p = params['password'] || params['pass'] || u;
+        if (u) {
+          document.getElementById('statusTitle').innerText = 'Activating Internet…';
+          document.getElementById('statusMsg').innerText = 'Authenticating your Wi-Fi access code with the router…';
+          document.getElementById('formUser').value = u;
+          document.getElementById('formPass').value = p;
+          document.forms['login'].submit();
+          return;
+        }
+      } catch (e) {}
+      // No credentials in URL — redirect to the hosted captive portal
+      window.location.replace("${target}");
+    })();
+  </script>
+  <noscript>
+    <meta http-equiv="refresh" content="0;url=${target}">
+  </noscript>
+</body>
+</html>`;
+
+      reply.header("Content-Type", "text/html; charset=utf-8").send(html);
     }
   );
 

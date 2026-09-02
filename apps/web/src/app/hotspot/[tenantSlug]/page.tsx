@@ -151,15 +151,29 @@ function routerLoginUrl(linkLoginOnly: string, username: string, password: strin
   }
 }
 
-/** Hands the customer off to the router to complete their login.
- *
- *  A top-level navigation, NOT a form POST. This portal is served over HTTPS while
- *  link-login-only is a plain-HTTP address on the router's own LAN, and browsers block
- *  mixed-content form submissions: the POST simply never went anywhere, so the page sat on
- *  "Authenticating…" forever with nothing in the console to explain it. A top-level navigation
- *  to http from an https page is not mixed content — it is an ordinary navigation — which is why
- *  this is the pattern hosted captive portals use. */
 function submitRouterLogin(linkLoginOnly: string, username: string, password: string): void {
+  // 1. Attempt silent background POST form submission
+  try {
+    const form = document.createElement("form");
+    form.method = "POST";
+    form.action = linkLoginOnly;
+    form.style.display = "none";
+    const u = document.createElement("input");
+    u.type = "hidden";
+    u.name = "username";
+    u.value = username;
+    form.appendChild(u);
+    const p = document.createElement("input");
+    p.type = "hidden";
+    p.name = "password";
+    p.value = password;
+    form.appendChild(p);
+    document.body.appendChild(form);
+    form.submit();
+  } catch {}
+
+  // 2. Primary top-level navigation to router login with credentials in query
+  // Handled by the router's login.html template which executes same-origin local POST
   window.location.href = routerLoginUrl(linkLoginOnly, username, password);
 }
 
@@ -674,48 +688,50 @@ export default function HotspotCaptivePortalPage() {
         </button>
       </div>
 
-      {/* Floating Theme Switcher Badge on Top Right */}
-      <div className="fixed top-2 right-2 z-50">
-        <button
-          type="button"
-          onClick={() => setShowThemePicker((v) => !v)}
-          className="rounded-full bg-slate-900/80 border border-slate-700 px-3 py-1 text-[11px] font-bold text-slate-200 shadow-xl backdrop-blur-md hover:bg-slate-800 transition-all flex items-center gap-1.5"
-        >
-          <span>🎨</span>
-          <span className="capitalize">{activeThemeId.replace("-", " ")}</span>
-        </button>
+      {/* Theme Switcher Badge — only visible in development preview with ?themePicker=true */}
+      {searchParams.get("themePicker") === "true" && (
+        <div className="fixed top-2 right-2 z-50">
+          <button
+            type="button"
+            onClick={() => setShowThemePicker((v) => !v)}
+            className="rounded-full bg-slate-900/80 border border-slate-700 px-3 py-1 text-[11px] font-bold text-slate-200 shadow-xl backdrop-blur-md hover:bg-slate-800 transition-all flex items-center gap-1.5"
+          >
+            <span>🎨</span>
+            <span className="capitalize">{activeThemeId.replace("-", " ")}</span>
+          </button>
 
-        {showThemePicker && (
-          <div className="absolute right-0 mt-2 w-56 rounded-2xl bg-slate-900 border border-slate-700 p-2 shadow-2xl backdrop-blur-xl text-xs space-y-1">
-            <div className="px-2 py-1 text-[10px] font-black uppercase tracking-wider text-slate-400">
-              Select Captive Theme
+          {showThemePicker && (
+            <div className="absolute right-0 mt-2 w-56 rounded-2xl bg-slate-900 border border-slate-700 p-2 shadow-2xl backdrop-blur-xl text-xs space-y-1">
+              <div className="px-2 py-1 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                Select Captive Theme
+              </div>
+              {THEME_CATALOG.map((theme) => (
+                <button
+                  key={theme.id}
+                  type="button"
+                  onClick={() => handleSelectTheme(theme.id)}
+                  className={`w-full text-left px-2.5 py-1.5 rounded-xl font-medium flex items-center justify-between transition-colors ${
+                    activeThemeId === theme.id
+                      ? "bg-purple-600 text-white font-bold"
+                      : "text-slate-300 hover:bg-slate-800"
+                  }`}
+                >
+                  <span>{theme.name.split(" ")[0]} {theme.name.split(" ")[1]}</span>
+                  {activeThemeId === theme.id && <span>✓</span>}
+                </button>
+              ))}
+              <div className="pt-1 mt-1 border-t border-slate-800 text-center">
+                <a
+                  href="/themes"
+                  className="text-[10px] text-sky-400 hover:text-sky-300 font-semibold block py-1"
+                >
+                  ⚙️ Save Default in Studio &rarr;
+                </a>
+              </div>
             </div>
-            {THEME_CATALOG.map((theme) => (
-              <button
-                key={theme.id}
-                type="button"
-                onClick={() => handleSelectTheme(theme.id)}
-                className={`w-full text-left px-2.5 py-1.5 rounded-xl font-medium flex items-center justify-between transition-colors ${
-                  activeThemeId === theme.id
-                    ? "bg-purple-600 text-white font-bold"
-                    : "text-slate-300 hover:bg-slate-800"
-                }`}
-              >
-                <span>{theme.name.split(" ")[0]} {theme.name.split(" ")[1]}</span>
-                {activeThemeId === theme.id && <span>✓</span>}
-              </button>
-            ))}
-            <div className="pt-1 mt-1 border-t border-slate-800 text-center">
-              <a
-                href="/themes"
-                className="text-[10px] text-sky-400 hover:text-sky-300 font-semibold block py-1"
-              >
-                ⚙️ Save Default in Studio &rarr;
-              </a>
-            </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
       {/* The browser would not hand off to the router automatically. A centred overlay, not a
           top bar: the portal already has a language toggle, a QR button and a promo strip pinned
