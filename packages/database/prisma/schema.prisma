@@ -970,6 +970,11 @@ model PlatformMpesaConfig {
   /// operator generates that blob and pastes it — this platform never sees the plain password).
   initiatorName           String?
   initiatorCredentialEncrypted String?
+  /// Smallest balance, in cents, an automatic payout run will send. A platform decision rather
+  /// than an env var: whether a B2B fee is worth paying on a small balance is a commercial
+  /// judgement the operator makes and changes, not something that should need a redeploy.
+  /// Defaults to 1 — every cent collected is remitted.
+  payoutMinimumMinor      Int      @default(1)
   environment             String   @default("sandbox")
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt

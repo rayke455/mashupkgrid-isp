@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "@mashupkgrid/database";
 import { activateVoucher, authenticateHotspotAccount, listHotspotPackages } from "@mashupkgrid/radius";
+import { normalizeKenyanPhone } from "@mashupkgrid/payments";
 import { createTicket } from "@mashupkgrid/support";
 import {
   initiateHotspotPurchaseStkPush,
@@ -22,6 +23,16 @@ import { resolveTenantBySlug } from "../services/auth.service.js";
 
 const tenantParamsSchema = z.object({ tenantSlug: z.string().min(1) });
 const loginBodySchema = z.object({ code: z.string().min(1).max(32) });
+/** Either identifier is accepted: the number they paid from, or the confirmation SMS pasted
+ *  whole. Both are things a stranded customer has on their phone right now. */
+const recoverBodySchema = z
+  .object({
+    phone: z.string().min(9).max(20).optional(),
+    mpesaMessage: z.string().max(500).optional(),
+  })
+  .refine((v) => Boolean(v.phone || v.mpesaMessage), {
+    message: "Enter the phone number you paid with, or paste the M-Pesa message",
+  });
 const accountLoginBodySchema = z.object({ phone: z.string().min(9), password: z.string().min(1) });
 const supportTicketBodySchema = z.object({
   name: z.string().min(1).max(120),
@@ -674,6 +685,87 @@ export async function hotspotRoutes(app: FastifyInstance): Promise<void> {
           `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=${target}"></head>` +
             `<body>Redirecting to your ISP's login page…</body></html>`
         );
+    }
+  );
+
+  /**
+   * "I paid but I am not online."
+   *
+   * The single worst moment in a hotspot: the money has left the customer's phone and the network
+   * still will not let them on. It happens for reasons entirely outside their control — the
+   * browser refused the hand-off to the router, the page was closed while the STK was pending,
+   * the phone dropped Wi-Fi mid-payment — and without a way back they are left with a support
+   * call, a refund request, or simply a customer who never returns.
+   *
+   * Identified by something the stranded customer already has: the number they paid from, or the
+   * confirmation SMS pasted whole. Both are proof of payment in the only sense that matters here,
+   * and neither can be used to fish for someone else's code:
+   *
+   *   - Only purchases from the LAST 24 HOURS are searchable, so an old number is worthless.
+   *   - Only that tenant's own purchases, so one ISP's portal cannot recover another's.
+   *   - Rate-limited exactly like login, because it is a public unauthenticated lookup.
+   *
+   * Returning the code the payer already owns is not a disclosure: they bought it. The receipt
+   * number in the SMS is the stronger of the two proofs, since it is unique per transaction.
+   */
+  app.post(
+    "/:tenantSlug/recover",
+    {
+      config: { audience: "customer", rateLimit: hotspotLoginRateLimitConfig },
+      preHandler: [checkMaintenance],
+    },
+    async (request, reply) => {
+      const { tenantSlug } = tenantParamsSchema.parse(request.params);
+      const body = recoverBodySchema.parse(request.body);
+      const tenant = await resolveTenantBySlug(tenantSlug);
+
+      const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+      // An M-Pesa confirmation opens with its receipt: "TGH7ABC123 Confirmed. Ksh10.00 sent to…".
+      // Ten uppercase alphanumerics is that code's shape, and matching it is far more precise
+      // than trying to parse the rest of a message whose wording Safaricom changes.
+      const receipt = body.mpesaMessage?.toUpperCase().match(/[A-Z0-9]{10}/)?.[0];
+      const phone = body.phone ? normalizeKenyanPhone(body.phone) : undefined;
+
+      const stkRequest = await prisma.mpesaStkRequest.findFirst({
+        where: {
+          tenantId: tenant.id,
+          status: "COMPLETED",
+          hotspotVoucherCode: { not: null },
+          createdAt: { gte: since },
+          ...(receipt ? { mpesaReceiptNumber: receipt } : { phone }),
+        },
+        orderBy: { createdAt: "desc" },
+        select: { hotspotVoucherCode: true, mpesaReceiptNumber: true, createdAt: true },
+      });
+
+      // Paystack and Pesapal purchases live in their own table and are just as strandable.
+      const gatewayTransaction = stkRequest
+        ? null
+        : await prisma.paystackTransaction.findFirst({
+            where: {
+              tenantId: tenant.id,
+              status: "COMPLETED",
+              hotspotVoucherCode: { not: null },
+              createdAt: { gte: since },
+              ...(phone ? { hotspotPhone: phone } : { reference: receipt }),
+            },
+            orderBy: { createdAt: "desc" },
+            select: { hotspotVoucherCode: true, createdAt: true },
+          });
+
+      const code = stkRequest?.hotspotVoucherCode ?? gatewayTransaction?.hotspotVoucherCode ?? null;
+
+      if (!code) {
+        // Deliberately vague about WHICH part did not match, and identical whether the number is
+        // unknown or simply had no purchase — a lookup that confirms "this number paid here" to
+        // anyone who asks is a privacy leak, however small.
+        throw new NotFoundError(
+          "No completed payment found for that in the last 24 hours. Check the number, or paste the M-Pesa confirmation message"
+        );
+      }
+
+      reply.send(successResponse({ code }, request.id));
     }
   );
 

@@ -22,6 +22,8 @@ export interface SetPlatformMpesaConfigInput {
    *  before they have B2B approval. */
   initiatorName?: string;
   initiatorCredential?: string;
+  /** Smallest balance an automatic payout run will send, in cents. */
+  payoutMinimumMinor?: number;
 }
 
 export async function setPlatformMpesaConfig(input: SetPlatformMpesaConfigInput) {
@@ -38,6 +40,9 @@ export async function setPlatformMpesaConfig(input: SetPlatformMpesaConfigInput)
     ...(input.initiatorCredential
       ? { initiatorCredentialEncrypted: encryptAtRest(input.initiatorCredential, env.ENCRYPTION_KEY) }
       : {}),
+    ...(input.payoutMinimumMinor !== undefined
+      ? { payoutMinimumMinor: Math.max(1, Math.floor(input.payoutMinimumMinor)) }
+      : {}),
   };
   return prisma.platformMpesaConfig.upsert({
     where: { id: SINGLETON_ID },
@@ -47,12 +52,25 @@ export async function setPlatformMpesaConfig(input: SetPlatformMpesaConfigInput)
 }
 
 /** Safe-to-display: whether payouts are possible at all, never the credential itself. */
-export async function getPlatformB2BStatus(): Promise<{ configured: boolean; initiatorName: string | null }> {
+export async function getPlatformB2BStatus(): Promise<{
+  configured: boolean;
+  initiatorName: string | null;
+  payoutMinimumMinor: number;
+}> {
   const config = await prisma.platformMpesaConfig.findUnique({ where: { id: SINGLETON_ID } });
   return {
     configured: Boolean(config?.initiatorName && config.initiatorCredentialEncrypted),
     initiatorName: config?.initiatorName ?? null,
+    payoutMinimumMinor: config?.payoutMinimumMinor ?? 1,
   };
+}
+
+/** The configured floor, for the payout run. Falls back to 1 cent — remit everything — when the
+ *  platform has never been configured, which is the safe direction: a tenant is paid rather than
+ *  quietly accumulating a balance nobody set a threshold for. */
+export async function getPayoutMinimumMinor(): Promise<number> {
+  const config = await prisma.platformMpesaConfig.findUnique({ where: { id: SINGLETON_ID } });
+  return config?.payoutMinimumMinor ?? 1;
 }
 
 export async function getPlatformMpesaCredentials(): Promise<MpesaCredentials> {

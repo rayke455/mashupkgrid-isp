@@ -79,6 +79,7 @@ const platformConfigSchema = setConfigSchema.extend({
   // Safaricom's certificate-encrypted blob is long; it is stored encrypted again at rest and
   // never returned to any client.
   initiatorCredential: z.string().max(2048).optional().or(z.literal("")),
+  payoutMinimumMinor: z.coerce.number().int().min(1).optional(),
 });
 
 const setTenantConfigSchema = setConfigSchema.extend({
@@ -363,6 +364,20 @@ export async function mpesaRoutes(app: FastifyInstance): Promise<void> {
           request.id
         )
       );
+    }
+  );
+
+  /** Every payout this platform has made, newest first — the operator's record of money out. */
+  app.get(
+    "/settlement/payouts",
+    { config: { audience: "platform" }, preHandler: [authenticate, checkMaintenance, requirePermission("tenants.read")] },
+    async (request, reply) => {
+      const payouts = await prisma.tenantPayout.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 100,
+        include: { tenant: { select: { name: true, slug: true } } },
+      });
+      reply.send(successResponse(payouts, request.id));
     }
   );
 

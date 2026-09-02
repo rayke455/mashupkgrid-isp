@@ -197,6 +197,10 @@ export default function HotspotCaptivePortalPage() {
   /** Set when the handoff to the router did not navigate away. Holds the URL to offer as a tap
    *  target, since a user-initiated navigation is allowed where an automatic one may not be. */
   const [stalledLoginUrl, setStalledLoginUrl] = useState<string | null>(null);
+  const [showRecover, setShowRecover] = useState(false);
+  const [recoverPhone, setRecoverPhone] = useState("");
+  const [recoverMessage, setRecoverMessage] = useState("");
+  const [recoverError, setRecoverError] = useState<string | null>(null);
 
   // Force-reconnect: replays a still-valid, previously-accepted voucher code without the
   // customer having to type it again after a WiFi disconnect/reconnect.
@@ -389,6 +393,38 @@ export default function HotspotCaptivePortalPage() {
     setAutoReconnecting(true);
     connectWithVoucher.mutate(rememberedVoucher.code);
   };
+
+  /**
+   * Recovers a purchase the customer already paid for but never got connected on.
+   *
+   * On success this behaves exactly like a fresh voucher purchase — the code is remembered and
+   * the router hand-off runs — so a stranded customer ends up online rather than merely being
+   * shown a code and left to work out what to do with it.
+   */
+  const recoverPurchase = useMutation({
+    mutationFn: () =>
+      apiFetch<{ code: string }>(`/api/v1/hotspot/${tenantSlug}/recover`, {
+        method: "POST",
+        skipAuth: true,
+        body: JSON.stringify({
+          phone: recoverPhone.trim() || undefined,
+          mpesaMessage: recoverMessage.trim() || undefined,
+        }),
+      }),
+    onSuccess: (data) => {
+      setRecoverError(null);
+      setShowRecover(false);
+      setVoucherCode(data.code);
+      // Straight into the normal login path: the code is only useful once it is on the router.
+      connectWithVoucher.mutate(data.code);
+    },
+    onError: (err) =>
+      setRecoverError(
+        err instanceof ApiRequestError
+          ? err.message
+          : "Could not find that payment — please try again"
+      ),
+  });
 
   const connectWithAccount = useMutation({
     mutationFn: () =>
@@ -637,6 +673,77 @@ export default function HotspotCaptivePortalPage() {
               className="mt-3 text-xs text-slate-400 underline-offset-2 hover:underline"
             >
               Show my voucher code instead
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Always reachable, not only after a failed hand-off: a customer whose page reloaded, whose
+          phone dropped Wi-Fi mid-payment, or who simply closed the tab has no overlay to fall back
+          to and is otherwise stuck with money spent and no way in. */}
+      <button
+        type="button"
+        onClick={() => {
+          setShowRecover(true);
+          setRecoverError(null);
+        }}
+        className="fixed bottom-20 left-1/2 z-40 -translate-x-1/2 rounded-full border border-white/20 bg-slate-900/90 px-4 py-2 text-xs font-semibold text-white shadow-xl backdrop-blur"
+      >
+        Already paid but not connected?
+      </button>
+
+      {showRecover && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/80 p-5 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl dark:bg-obsidian-900">
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white">Get connected</h2>
+            <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+              Enter the number you paid with, or paste the M-Pesa message. We will find your
+              purchase and connect you.
+            </p>
+
+            <label className="mt-4 block text-xs font-semibold text-slate-700 dark:text-slate-200">
+              Phone number you paid with
+            </label>
+            <input
+              inputMode="tel"
+              placeholder="07XX XXX XXX"
+              value={recoverPhone}
+              onChange={(e) => setRecoverPhone(e.target.value)}
+              className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-base text-slate-900 dark:border-obsidian-700 dark:bg-obsidian-950 dark:text-white"
+            />
+
+            <div className="my-3 flex items-center gap-2 text-[11px] text-slate-400">
+              <span className="h-px flex-1 bg-slate-200 dark:bg-obsidian-800" />
+              or paste the M-Pesa message
+              <span className="h-px flex-1 bg-slate-200 dark:bg-obsidian-800" />
+            </div>
+
+            <textarea
+              rows={3}
+              placeholder="TGH7ABC123 Confirmed. Ksh10.00 sent to…"
+              value={recoverMessage}
+              onChange={(e) => setRecoverMessage(e.target.value)}
+              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 dark:border-obsidian-700 dark:bg-obsidian-950 dark:text-white"
+            />
+
+            {recoverError && (
+              <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{recoverError}</p>
+            )}
+
+            <button
+              type="button"
+              disabled={recoverPurchase.isPending || (!recoverPhone.trim() && !recoverMessage.trim())}
+              onClick={() => recoverPurchase.mutate()}
+              className="mt-4 w-full rounded-xl bg-emerald-600 px-4 py-3 text-base font-bold text-white disabled:opacity-50"
+            >
+              {recoverPurchase.isPending ? "Looking for your payment…" : "Connect me"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowRecover(false)}
+              className="mt-2 w-full py-2 text-xs text-slate-400"
+            >
+              Cancel
             </button>
           </div>
         </div>

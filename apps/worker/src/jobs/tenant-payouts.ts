@@ -1,17 +1,16 @@
-import { runTenantPayouts } from "@mashupkgrid/payments";
+import { runTenantPayouts, getPayoutMinimumMinor } from "@mashupkgrid/payments";
 
 /**
  * Sends every tenant the balance this platform is holding for them.
  *
- * The minimum exists because each B2B call costs a transaction fee: remitting KES 12 would cost
- * more to send than it is worth, and the balance simply rolls into the next run. It is a floor on
- * the payout, never a cap — a tenant owed more is paid in full.
+ * The floor is read fresh each run from the platform settings, so a super admin changing it takes
+ * effect on the next hour rather than needing a redeploy. Default is 1 cent — everything
+ * collected is remitted — and a balance under the floor is not lost, it rolls into the next run.
  */
-const MINIMUM_PAYOUT_MINOR = 10000; // KES 100
-
 export async function handleRunTenantPayouts(): Promise<void> {
-  const result = await runTenantPayouts(MINIMUM_PAYOUT_MINOR);
+  const minimumMinor = await getPayoutMinimumMinor();
+  const result = await runTenantPayouts(minimumMinor);
   console.log(
-    `[payouts] run complete: attempted=${result.attempted} accepted=${result.accepted} failed=${result.failed}`
+    `[payouts] run complete: minimum=${minimumMinor} attempted=${result.attempted} accepted=${result.accepted} failed=${result.failed}`
   );
 }

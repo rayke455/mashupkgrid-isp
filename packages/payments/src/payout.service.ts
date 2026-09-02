@@ -51,8 +51,17 @@ export async function payoutTenantBalance(tenantId: string): Promise<TenantPayou
   }
 
   const balance = await getTenantBalance(tenantId);
-  if (balance.balanceMinor < 100) {
-    throw new ConflictError(`"${tenant.name}" has nothing owing.`);
+
+  // M-Pesa moves whole shillings only. Rounding a balance to the nearest shilling would either
+  // overpay (KES 1.50 becoming 2) or send nothing at all, so only the whole-shilling part is
+  // sent and the remaining cents stay on the ledger for the next run. Nothing is lost — a
+  // tenant's odd cents accumulate until they make up a shilling, and the balance they see always
+  // equals what they are actually owed.
+  const payableMinor = Math.floor(balance.balanceMinor / 100) * 100;
+  if (payableMinor <= 0) {
+    throw new ConflictError(
+      `"${tenant.name}" is owed less than one shilling — it will be sent once it reaches KES 1.`
+    );
   }
 
   const destinationType = tenant.payoutShortcodeType === "TILL" ? "TILL" : "PAYBILL";
@@ -63,7 +72,7 @@ export async function payoutTenantBalance(tenantId: string): Promise<TenantPayou
     const created = await tx.tenantPayout.create({
       data: {
         tenantId,
-        amountMinor: balance.balanceMinor,
+        amountMinor: payableMinor,
         currency: balance.currency,
         destinationShortcode: tenant.payoutShortcode as string,
         destinationType,
@@ -132,8 +141,11 @@ export interface PayoutRunResult {
 }
 
 /** Pays every tenant currently owed money. One failure never stops the rest. */
-export async function runTenantPayouts(minimumMinor = 10000): Promise<PayoutRunResult> {
-  const owed = await listTenantsWithBalance(minimumMinor);
+export async function runTenantPayouts(minimumMinor = 1): Promise<PayoutRunResult> {
+  // Never below one shilling: M-Pesa cannot send a fraction of one, so attempting a smaller
+  // balance would fail every hour and fill the log with noise for money that is not lost, only
+  // waiting to accumulate.
+  const owed = await listTenantsWithBalance(Math.max(minimumMinor, 100));
   let accepted = 0;
   let failed = 0;
 

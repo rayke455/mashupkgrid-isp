@@ -255,6 +255,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const platformItems: NavItem[] = [
     {
+      // Money held on tenants' behalf is the platform's largest liability, so it sits at the top
+      // of the platform section rather than inside a settings page.
+      href: "/money",
+      label: "Money management",
+      icon: <IconInvoice size={18} />,
+      show: has("tenants.read"),
+    },
+    {
       href: "/tenants",
       label: "Tenants",
       icon: <IconTenants size={18} />,
