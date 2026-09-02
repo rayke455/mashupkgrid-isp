@@ -46,7 +46,22 @@ model Tenant {
   /// turned OFF for this specific tenant — empty means every feature is available. Deliberately
   /// a disable-list, not an enable-list: a newly added feature is available to every existing
   /// tenant by default instead of silently missing until someone remembers to grant it.
+  ledgerEntries    TenantLedgerEntry[]
+  payouts          TenantPayout[]
   disabledFeatures String[] @default([])
+  /// Where this tenant's customer payments land.
+  ///
+  /// OWN (the default, and what every existing tenant keeps) means the tenant's own M-Pesa
+  /// credentials collect directly and the money never touches this platform — nothing to remit.
+  /// PLATFORM means the platform's paybill collects on their behalf and owes them the balance,
+  /// which is what the ledger and payouts below settle. Making this explicit per tenant is what
+  /// stops the aggregator model silently changing where an existing tenant's money goes.
+  collectionMode   TenantCollectionMode @default(OWN)
+  /// Where a payout is sent. Not credentials — this platform pushes money TO this number, so it
+  /// needs no secret from the tenant, only the destination.
+  payoutShortcode  String?
+  /// "PAYBILL" | "TILL" — selects the Daraja B2B command (BusinessPayBill vs BusinessBuyGoods).
+  payoutShortcodeType String @default("PAYBILL")
   createdAt  DateTime     @default(now())
   updatedAt  DateTime     @updatedAt
   deletedAt  DateTime?
@@ -868,6 +883,74 @@ model WhatsappConnection {
 /// platform*, collected through the platform's own paybill/till, never a tenant's own M-Pesa
 /// config (that would just be an ISP paying itself). A singleton — application code always
 /// reads/writes the single row, there's no tenantId here at all.
+enum TenantCollectionMode {
+  OWN
+  PLATFORM
+}
+
+enum TenantLedgerDirection {
+  CREDIT
+  DEBIT
+}
+
+enum TenantPayoutStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+/// Double-entry-ish record of what this platform owes a tenant whose payments it collects.
+///
+/// A CREDIT is a customer payment received into the platform's account on the tenant's behalf; a
+/// DEBIT is a payout sent to them. The balance is the sum, and it is derived rather than stored:
+/// a cached balance that drifts from its entries is the classic way money goes missing on paper.
+model TenantLedgerEntry {
+  id          String                @id @default(uuid())
+  tenantId    String
+  tenant      Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  direction   TenantLedgerDirection
+  amountMinor Int
+  currency    String                @default("KES")
+  description String
+  /// What produced this entry — "Payment" or "TenantPayout". Together with sourceId this is
+  /// UNIQUE, which is what makes crediting idempotent: a replayed gateway callback that reaches
+  /// the same payment twice cannot credit the tenant twice.
+  sourceType  String
+  sourceId    String
+  createdAt   DateTime              @default(now())
+
+  @@unique([sourceType, sourceId])
+  @@index([tenantId, createdAt])
+  @@map("tenant_ledger_entries")
+}
+
+/// One attempt to send a tenant their balance over Daraja B2B.
+model TenantPayout {
+  id                      String             @id @default(uuid())
+  tenantId                String
+  tenant                  Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  amountMinor             Int
+  currency                String             @default("KES")
+  destinationShortcode    String
+  destinationType         String
+  status                  TenantPayoutStatus @default(PENDING)
+  /// Daraja's own handles, kept so a payout can be chased with Safaricom by reference and so a
+  /// result callback can find the row it belongs to.
+  conversationId          String?
+  originatorConversationId String?           @unique
+  transactionId           String?
+  resultCode              Int?
+  resultDesc              String?
+  failureReason           String?
+  createdAt               DateTime           @default(now())
+  updatedAt               DateTime           @updatedAt
+  completedAt             DateTime?
+
+  @@index([tenantId, createdAt])
+  @@map("tenant_payouts")
+}
+
 model PlatformMpesaConfig {
   id                      String   @id @default(uuid())
   isActive                Boolean  @default(false)
@@ -875,6 +958,11 @@ model PlatformMpesaConfig {
   consumerSecretEncrypted String?
   shortcode               String?
   passkeyEncrypted        String?
+  /// B2B initiator. Separate Daraja product from STK Push with its own approval: the initiator
+  /// name, and that user's password encrypted against Safaricom's public certificate (the
+  /// operator generates that blob and pastes it — this platform never sees the plain password).
+  initiatorName           String?
+  initiatorCredentialEncrypted String?
   environment             String   @default("sandbox")
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt

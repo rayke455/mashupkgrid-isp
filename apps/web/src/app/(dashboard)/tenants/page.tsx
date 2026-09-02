@@ -35,6 +35,11 @@ interface Tenant {
   platformUrl: string;
   /** Live usage, computed server-side — see loadTenantUsage in apps/api's tenants route. */
   usage?: TenantUsage;
+  /** OWN = they collect on their own M-Pesa account; PLATFORM = this platform collects and owes
+   *  them the balance. */
+  collectionMode?: "OWN" | "PLATFORM";
+  payoutShortcode?: string | null;
+  payoutShortcodeType?: "PAYBILL" | "TILL";
   subscription: {
     id: string;
     status: "TRIALING" | "ACTIVE" | "PAST_DUE" | "EXPIRED" | "CANCELLED";
@@ -104,6 +109,13 @@ function trialCountdown(trialEndsAt: string | null): string | null {
 
 function TenantManagePanel({ tenant, onOpenUpgrade }: { tenant: Tenant; onOpenUpgrade: () => void }) {
   const queryClient = useQueryClient();
+  const [collectionMode, setCollectionMode] = useState<"OWN" | "PLATFORM">(
+    tenant.collectionMode ?? "OWN"
+  );
+  const [payoutShortcode, setPayoutShortcode] = useState(tenant.payoutShortcode ?? "");
+  const [payoutShortcodeType, setPayoutShortcodeType] = useState<"PAYBILL" | "TILL">(
+    tenant.payoutShortcodeType ?? "PAYBILL"
+  );
   const [chargePhone, setChargePhone] = useState("");
   const [announcementTitle, setAnnouncementTitle] = useState("");
   const [announcementBody, setAnnouncementBody] = useState("");
@@ -165,6 +177,17 @@ function TenantManagePanel({ tenant, onOpenUpgrade }: { tenant: Tenant; onOpenUp
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["tenants"] }),
     onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to clear trial"),
+  });
+
+  const saveSettlement = useMutation({
+    mutationFn: () =>
+      apiFetch(`/api/v1/platform/tenants/${tenant.id}/settlement`, {
+        method: "PATCH",
+        body: JSON.stringify({ collectionMode, payoutShortcode, payoutShortcodeType }),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["tenants"] }),
+    onError: (err) =>
+      setError(err instanceof ApiRequestError ? err.message : "Failed to save collection settings"),
   });
 
   const chargeOnboardingFee = useMutation({
@@ -235,6 +258,62 @@ function TenantManagePanel({ tenant, onOpenUpgrade }: { tenant: Tenant; onOpenUp
               </option>
             ))}
           </select>
+        </div>
+      </div>
+
+      {/* Settlement — who collects this tenant's customer payments, and where their money is
+          sent when this platform collects on their behalf. */}
+      <div>
+        <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-slate-500">
+          Money collection
+        </p>
+        <div className="space-y-2 rounded-xl border border-slate-200 p-3 dark:border-obsidian-800">
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs dark:border-obsidian-700 dark:bg-obsidian-950 dark:text-slate-100"
+              value={collectionMode}
+              onChange={(e) => setCollectionMode(e.target.value as "OWN" | "PLATFORM")}
+            >
+              <option value="OWN">They collect (their own M-Pesa)</option>
+              <option value="PLATFORM">I collect (my paybill, I pay them out)</option>
+            </select>
+            <Badge variant={tenant.collectionMode === "PLATFORM" ? "warning" : "neutral"}>
+              Currently: {tenant.collectionMode === "PLATFORM" ? "Platform collects" : "Tenant collects"}
+            </Badge>
+          </div>
+
+          {collectionMode === "PLATFORM" && (
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Input
+                placeholder="Their paybill or till number"
+                value={payoutShortcode}
+                onChange={(e) => setPayoutShortcode(e.target.value)}
+              />
+              <select
+                className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-xs dark:border-obsidian-700 dark:bg-obsidian-950 dark:text-slate-100"
+                value={payoutShortcodeType}
+                onChange={(e) => setPayoutShortcodeType(e.target.value as "PAYBILL" | "TILL")}
+              >
+                <option value="PAYBILL">Paybill</option>
+                <option value="TILL">Till (Buy Goods)</option>
+              </select>
+            </div>
+          )}
+
+          <p className="text-[11px] text-slate-500 dark:text-slate-400">
+            Switching to &quot;I collect&quot; changes where this tenant&apos;s customers&apos; money
+            lands from their account to yours. They are then owed a balance which is paid out
+            automatically to the number above.
+          </p>
+
+          <Button
+            variant="secondary"
+            className="px-2.5 py-1 text-xs"
+            disabled={saveSettlement.isPending}
+            onClick={() => saveSettlement.mutate()}
+          >
+            {saveSettlement.isPending ? "Saving..." : "Save collection settings"}
+          </Button>
         </div>
       </div>
 

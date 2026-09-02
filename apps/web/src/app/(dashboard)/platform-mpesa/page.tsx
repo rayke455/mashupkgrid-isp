@@ -11,6 +11,8 @@ interface ConfigStatus {
   isActive: boolean;
   shortcode: string | null;
   environment: string;
+  /** Whether tenant payouts are possible at all. Never carries the credential itself. */
+  b2b: { configured: boolean; initiatorName: string | null };
 }
 
 export default function PlatformMpesaPage() {
@@ -20,6 +22,8 @@ export default function PlatformMpesaPage() {
   const [shortcode, setShortcode] = useState("");
   const [passkey, setPasskey] = useState("");
   const [environment, setEnvironment] = useState<"sandbox" | "production">("sandbox");
+  const [initiatorName, setInitiatorName] = useState("");
+  const [initiatorCredential, setInitiatorCredential] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   const { data: status } = useQuery({
@@ -31,12 +35,23 @@ export default function PlatformMpesaPage() {
     mutationFn: () =>
       apiFetch("/api/v1/payments/mpesa/platform-config", {
         method: "PUT",
-        body: JSON.stringify({ consumerKey, consumerSecret, shortcode, passkey, environment }),
+        body: JSON.stringify({
+          consumerKey,
+          consumerSecret,
+          shortcode,
+          passkey,
+          environment,
+          // Sent only when filled in: saving collection settings must not wipe payout
+          // credentials entered on a previous visit.
+          ...(initiatorName.trim() ? { initiatorName: initiatorName.trim() } : {}),
+          ...(initiatorCredential.trim() ? { initiatorCredential: initiatorCredential.trim() } : {}),
+        }),
       }),
     onSuccess: () => {
       setConsumerKey("");
       setConsumerSecret("");
       setPasskey("");
+      setInitiatorCredential("");
       queryClient.invalidateQueries({ queryKey: ["platform-mpesa-config"] });
     },
     onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to save configuration"),
@@ -118,6 +133,52 @@ export default function PlatformMpesaPage() {
             </select>
             <HintText>Onboarding fees will not be collectable until this is configured and active.</HintText>
           </div>
+
+          {/* Paying tenants out is a separate Daraja product with its own approval, so it gets
+              its own section rather than being mixed into the collection fields above. */}
+          <div className="sm:col-span-2 rounded-xl border border-slate-200 p-4 dark:border-obsidian-800">
+            <div className="mb-3 flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold text-slate-900 dark:text-white">
+                  Tenant payouts (B2B)
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Required only for tenants whose payments you collect on their behalf.
+                </p>
+              </div>
+              <Badge variant={status?.b2b?.configured ? "success" : "neutral"}>
+                {status?.b2b?.configured ? "Ready" : "Not configured"}
+              </Badge>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <Label htmlFor="initiatorName">Initiator name</Label>
+                <Input
+                  id="initiatorName"
+                  placeholder={status?.b2b?.initiatorName ?? "The Daraja API user allowed to move money"}
+                  value={initiatorName}
+                  onChange={(e) => setInitiatorName(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="initiatorCredential">Security credential</Label>
+                <Input
+                  id="initiatorCredential"
+                  type="password"
+                  placeholder={status?.b2b?.configured ? "Saved — enter a new one to replace" : "Certificate-encrypted password"}
+                  value={initiatorCredential}
+                  onChange={(e) => setInitiatorCredential(e.target.value)}
+                />
+              </div>
+            </div>
+            <HintText>
+              The security credential is your initiator password already encrypted with Safaricom&apos;s
+              public certificate — generate it on the Daraja portal and paste the result. Leave both
+              blank to keep what is saved.
+            </HintText>
+          </div>
+
           <div className="sm:col-span-2 pt-2">
             <Button type="submit" disabled={saveConfig.isPending}>
               {saveConfig.isPending ? "Encrypting & saving..." : "Save Platform Configuration"}

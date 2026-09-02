@@ -52,6 +52,14 @@ const createTenantSchema = z.object({
   ownerPhone: z.string().min(9).optional(),
 });
 
+const settlementSchema = z.object({
+  /** OWN keeps a tenant collecting on their own M-Pesa account; PLATFORM routes their customers'
+   *  payments into this platform's paybill and creates a balance owed to them. */
+  collectionMode: z.enum(["OWN", "PLATFORM"]).optional(),
+  payoutShortcode: z.string().max(20).optional().or(z.literal("")),
+  payoutShortcodeType: z.enum(["PAYBILL", "TILL"]).optional(),
+});
+
 const updateTenantSchema = createTenantSchema.partial().omit({ slug: true, ownerPhone: true }).extend({
   disabledFeatures: z.array(z.enum(TENANT_FEATURES)).optional(),
   // ISO datetime string, or null to clear the trial entirely (treat as never having had one) —
@@ -231,6 +239,69 @@ interface TenantUsage {
       });
       if (!tenant || tenant.deletedAt) throw new NotFoundError("Tenant");
       reply.send(successResponse(withPlatformUrl(tenant), request.id));
+    }
+  );
+
+  /**
+   * Where a tenant's customer money goes, and where their settlement is sent.
+   *
+   * Separate from the general tenant PATCH on purpose: this decides whose bank account the
+   * public's payments land in, and it is audit-logged with before/after so a change of
+   * collection mode is always attributable to a person.
+   */
+  app.patch(
+    "/:tenantId/settlement",
+    { config: { audience: "platform" }, preHandler: [...preHandler, requirePermission("tenants.update")] },
+    async (request, reply) => {
+      const { tenantId } = idParamsSchema.parse(request.params);
+      const body = settlementSchema.parse(request.body);
+
+      const before = await prisma.tenant.findUnique({ where: { id: tenantId } });
+      if (!before || before.deletedAt) throw new NotFoundError("Tenant");
+
+      // Refusing this is the difference between "we owe you and cannot pay you" and a support
+      // ticket after the money is already collected.
+      if (body.collectionMode === "PLATFORM") {
+        const destination = body.payoutShortcode ?? before.payoutShortcode;
+        if (!destination) {
+          throw new ConflictError(
+            "Set this tenant's payout paybill or till before collecting on their behalf — otherwise their money accumulates with no way to send it."
+          );
+        }
+      }
+
+      const after = await prisma.tenant.update({
+        where: { id: tenantId },
+        data: {
+          ...(body.collectionMode ? { collectionMode: body.collectionMode } : {}),
+          ...(body.payoutShortcode !== undefined
+            ? { payoutShortcode: body.payoutShortcode.trim() || null }
+            : {}),
+          ...(body.payoutShortcodeType ? { payoutShortcodeType: body.payoutShortcodeType } : {}),
+        },
+      });
+
+      await writeAuditLog({
+        tenantId,
+        actorUserId: request.user!.id,
+        action: "tenant.settlement_updated",
+        resourceType: "Tenant",
+        resourceId: tenantId,
+        before: {
+          collectionMode: before.collectionMode,
+          payoutShortcode: before.payoutShortcode,
+          payoutShortcodeType: before.payoutShortcodeType,
+        },
+        after: {
+          collectionMode: after.collectionMode,
+          payoutShortcode: after.payoutShortcode,
+          payoutShortcodeType: after.payoutShortcodeType,
+        },
+        ipAddress: request.ip,
+        userAgent: request.headers["user-agent"] ?? null,
+      });
+
+      reply.send(successResponse(withPlatformUrl(after), request.id));
     }
   );
 

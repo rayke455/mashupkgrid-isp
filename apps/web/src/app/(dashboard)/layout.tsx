@@ -166,6 +166,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       show: isTenantScoped && has("billing.read"),
     },
     {
+      href: "/settlement",
+      label: "Settlement",
+      icon: <IconInvoice size={18} />,
+      show: isTenantScoped && has("payments.read"),
+    },
+    {
       href: "/purchase-attempts",
       label: "Purchase attempts",
       icon: <IconPulse size={18} />,

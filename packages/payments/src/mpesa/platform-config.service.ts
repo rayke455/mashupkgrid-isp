@@ -16,6 +16,12 @@ export interface SetPlatformMpesaConfigInput {
   passkey: string;
   environment: "sandbox" | "production";
   isActive?: boolean;
+  /** B2B initiator: the Daraja API user allowed to move money out, and their password already
+   *  encrypted against Safaricom's public certificate. The operator generates that blob — this
+   *  platform never handles the plain password. Optional so an operator can configure collection
+   *  before they have B2B approval. */
+  initiatorName?: string;
+  initiatorCredential?: string;
 }
 
 export async function setPlatformMpesaConfig(input: SetPlatformMpesaConfigInput) {
@@ -26,12 +32,27 @@ export async function setPlatformMpesaConfig(input: SetPlatformMpesaConfigInput)
     passkeyEncrypted: encryptAtRest(input.passkey, env.ENCRYPTION_KEY),
     environment: input.environment,
     isActive: input.isActive ?? true,
+    // Only overwritten when supplied: re-saving collection settings must not silently wipe
+    // payout credentials that were entered separately.
+    ...(input.initiatorName !== undefined ? { initiatorName: input.initiatorName || null } : {}),
+    ...(input.initiatorCredential
+      ? { initiatorCredentialEncrypted: encryptAtRest(input.initiatorCredential, env.ENCRYPTION_KEY) }
+      : {}),
   };
   return prisma.platformMpesaConfig.upsert({
     where: { id: SINGLETON_ID },
     update: data,
     create: { id: SINGLETON_ID, ...data },
   });
+}
+
+/** Safe-to-display: whether payouts are possible at all, never the credential itself. */
+export async function getPlatformB2BStatus(): Promise<{ configured: boolean; initiatorName: string | null }> {
+  const config = await prisma.platformMpesaConfig.findUnique({ where: { id: SINGLETON_ID } });
+  return {
+    configured: Boolean(config?.initiatorName && config.initiatorCredentialEncrypted),
+    initiatorName: config?.initiatorName ?? null,
+  };
 }
 
 export async function getPlatformMpesaCredentials(): Promise<MpesaCredentials> {

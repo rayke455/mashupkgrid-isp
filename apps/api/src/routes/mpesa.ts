@@ -14,7 +14,13 @@ import {
   tryCompleteOnboardingFeeCallback,
   tryCompleteSubscriptionPaymentCallback,
   getPlatformMpesaConfigStatus,
+  getPlatformB2BStatus,
   setPlatformMpesaConfig,
+  applyPayoutResult,
+  getTenantBalance,
+  listTenantLedger,
+  listTenantsWithBalance,
+  payoutTenantBalance,
 } from "@mashupkgrid/payments";
 import { successResponse, ConflictError, timingSafeStringEqual } from "@mashupkgrid/shared";
 import { env } from "@mashupkgrid/config";
@@ -67,6 +73,14 @@ const setConfigSchema = z.object({
 /** Tenant config additionally carries the Paybill/Till distinction. The PLATFORM config (the
  *  account tenants pay their SaaS fees into) deliberately keeps the plain schema above — it is a
  *  single paybill this platform controls, not something an operator picks per deployment. */
+/** The platform's own paybill, plus the B2B initiator used to pay tenants out. */
+const platformConfigSchema = setConfigSchema.extend({
+  initiatorName: z.string().max(64).optional().or(z.literal("")),
+  // Safaricom's certificate-encrypted blob is long; it is stored encrypted again at rest and
+  // never returned to any client.
+  initiatorCredential: z.string().max(2048).optional().or(z.literal("")),
+});
+
 const setTenantConfigSchema = setConfigSchema.extend({
   shortcodeType: z.enum(["PAYBILL", "TILL"]).default("PAYBILL"),
   // Optional even for TILL: Safaricom sometimes issues a till whose store number is the same
@@ -222,6 +236,138 @@ export async function mpesaRoutes(app: FastifyInstance): Promise<void> {
   // entirely (docs/architecture/05-maintenance-and-queues.md §44/45) and carries no auth, since
   // Safaricom cannot send our bearer tokens. -------------------------------------------------
 
+  /**
+   * Daraja's asynchronous result for a B2B payout — the ONLY thing that can say a tenant's money
+   * actually moved. The initiating call returning 0 means Safaricom accepted the instruction, not
+   * that it succeeded, so a payout stays PROCESSING until this lands.
+   *
+   * Always answers 200: Daraja retries anything else, and a retry storm on a payout callback is
+   * how one settlement gets applied repeatedly. Idempotency is handled in applyPayoutResult,
+   * which refuses to re-settle a payout that is already terminal.
+   */
+  /** What this platform currently owes this tenant, and the entries behind it. Derived from the
+   *  ledger, never a cached figure — see getTenantBalance. */
+  app.get(
+    "/settlement",
+    { config: { audience: "staff" }, preHandler: [...staffPreHandler, requirePermission("payments.read")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const [balance, entries, payouts] = await Promise.all([
+        getTenantBalance(tenantId),
+        listTenantLedger(tenantId, 100),
+        prisma.tenantPayout.findMany({
+          where: { tenantId },
+          orderBy: { createdAt: "desc" },
+          take: 50,
+        }),
+      ]);
+      reply.send(successResponse({ balance, entries, payouts }, request.id));
+    }
+  );
+
+  /** Platform-side: everyone owed money, so an operator can see the total exposure before
+   *  releasing a run. */
+  app.get(
+    "/settlement/owed",
+    { config: { audience: "platform" }, preHandler: [authenticate, checkMaintenance, requirePermission("tenants.read")] },
+    async (request, reply) => {
+      const owed = await listTenantsWithBalance(1);
+      const tenants = await prisma.tenant.findMany({
+        where: { id: { in: owed.map((o) => o.tenantId) } },
+        select: { id: true, name: true, slug: true, payoutShortcode: true, payoutShortcodeType: true },
+      });
+      const byId = new Map(tenants.map((t) => [t.id, t]));
+      reply.send(
+        successResponse(
+          owed.map((balance) => ({ ...balance, tenant: byId.get(balance.tenantId) ?? null })),
+          request.id
+        )
+      );
+    }
+  );
+
+  /** Releases one tenant's balance to their paybill/till. Audit-logged: this moves real money. */
+  app.post(
+    "/settlement/:tenantId/payout",
+    { config: { audience: "platform" }, preHandler: [authenticate, checkMaintenance, requirePermission("tenants.update")] },
+    async (request, reply) => {
+      const { tenantId } = z.object({ tenantId: z.string().uuid() }).parse(request.params);
+      const payout = await payoutTenantBalance(tenantId);
+
+      await writeAuditLog({
+        tenantId,
+        actorUserId: request.user!.id,
+        action: "tenant_payout.released",
+        resourceType: "TenantPayout",
+        resourceId: payout.id,
+        after: {
+          amountMinor: payout.amountMinor,
+          destination: payout.destinationShortcode,
+          status: payout.status,
+        },
+        ipAddress: request.ip,
+        userAgent: request.headers["user-agent"] ?? null,
+      });
+
+      reply.send(successResponse(payout, request.id));
+    }
+  );
+
+  app.post("/payout/result", { config: { audience: "system-critical" } }, async (request, reply) => {
+    if (!hasValidCallbackToken(request)) {
+      reply.status(200).send({ ResultCode: 0, ResultDesc: "Accepted" });
+      return;
+    }
+
+    const body = request.body as {
+      Result?: {
+        ResultCode?: number;
+        ResultDesc?: string;
+        OriginatorConversationID?: string;
+        TransactionID?: string;
+      };
+    };
+    const result = body?.Result;
+
+    if (result?.OriginatorConversationID) {
+      try {
+        await applyPayoutResult({
+          originatorConversationId: result.OriginatorConversationID,
+          resultCode: Number(result.ResultCode ?? -1),
+          resultDesc: String(result.ResultDesc ?? ""),
+          transactionId: result.TransactionID,
+        });
+      } catch (err) {
+        // Logged, never surfaced: an error response makes Daraja retry, and this is money.
+        request.log.error({ err }, "Failed to apply M-Pesa payout result");
+      }
+    }
+    reply.status(200).send({ ResultCode: 0, ResultDesc: "Accepted" });
+  });
+
+  /** Daraja calls this when the request sat in its queue too long. Treated as a failure so the
+   *  tenant's balance is restored rather than left reserved against a payout that never ran. */
+  app.post("/payout/timeout", { config: { audience: "system-critical" } }, async (request, reply) => {
+    if (!hasValidCallbackToken(request)) {
+      reply.status(200).send({ ResultCode: 0, ResultDesc: "Accepted" });
+      return;
+    }
+    const body = request.body as { Result?: { OriginatorConversationID?: string } };
+    const id = body?.Result?.OriginatorConversationID;
+    if (id) {
+      try {
+        await applyPayoutResult({
+          originatorConversationId: id,
+          resultCode: -1,
+          resultDesc: "Timed out in the M-Pesa queue before it was processed",
+        });
+      } catch (err) {
+        request.log.error({ err }, "Failed to apply M-Pesa payout timeout");
+      }
+    }
+    reply.status(200).send({ ResultCode: 0, ResultDesc: "Accepted" });
+  });
+
   app.post("/callback", { config: { audience: "system-critical" } }, async (request, reply) => {
     if (!hasValidCallbackToken(request)) {
       // Ack as if handled — never distinguish "wrong token" from "handled" in the response, and
@@ -360,7 +506,8 @@ export async function mpesaRoutes(app: FastifyInstance): Promise<void> {
     "/platform-config",
     { config: { audience: "platform" }, preHandler: [...staffPreHandler, requirePermission("tenants.create")] },
     async (request, reply) => {
-      reply.send(successResponse(await getPlatformMpesaConfigStatus(), request.id));
+      const [config, b2b] = await Promise.all([getPlatformMpesaConfigStatus(), getPlatformB2BStatus()]);
+      reply.send(successResponse({ ...config, b2b }, request.id));
     }
   );
 
@@ -368,7 +515,7 @@ export async function mpesaRoutes(app: FastifyInstance): Promise<void> {
     "/platform-config",
     { config: { audience: "platform" }, preHandler: [...staffPreHandler, requirePermission("tenants.create")] },
     async (request, reply) => {
-      const body = setConfigSchema.parse(request.body);
+      const body = platformConfigSchema.parse(request.body);
       await setPlatformMpesaConfig(body);
 
       await writeAuditLog({
@@ -376,12 +523,18 @@ export async function mpesaRoutes(app: FastifyInstance): Promise<void> {
         actorUserId: request.user!.id,
         action: "platform_mpesa_config.updated",
         resourceType: "PlatformMpesaConfig",
-        after: { shortcode: body.shortcode, environment: body.environment },
+        // The credential itself is never logged — only that payouts became possible and by whom.
+        after: {
+          shortcode: body.shortcode,
+          environment: body.environment,
+          b2bInitiatorSet: Boolean(body.initiatorName),
+        },
         ipAddress: request.ip,
         userAgent: request.headers["user-agent"] ?? null,
       });
 
-      reply.send(successResponse(await getPlatformMpesaConfigStatus(), request.id));
+      const [config, b2b] = await Promise.all([getPlatformMpesaConfigStatus(), getPlatformB2BStatus()]);
+      reply.send(successResponse({ ...config, b2b }, request.id));
     }
   );
 }

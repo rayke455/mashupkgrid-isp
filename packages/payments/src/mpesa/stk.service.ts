@@ -1,10 +1,60 @@
 import { prisma, type MpesaStkRequest } from "@mashupkgrid/database";
 import { ConflictError, NotFoundError, ValidationError } from "@mashupkgrid/shared";
-import { getMpesaCredentials } from "./config.service.js";
+import { getMpesaCredentials, type MpesaCredentials } from "./config.service.js";
+import { getPlatformMpesaCredentials } from "./platform-config.service.js";
 import { initiateStkPush, queryStkPushStatus } from "./daraja-client.js";
 import { normalizeKenyanPhone } from "./phone.js";
 import { completeStkRequest } from "./callback.service.js";
 import { buildMpesaCallbackUrl } from "./callback-url.js";
+
+/**
+ * Whose M-Pesa account collects this payment.
+ *
+ * This is the switch that makes the aggregator model safe. A tenant on OWN mode is charged
+ * through their own credentials and the money reaches them directly — no ledger entry is created
+ * for them, and none should be. A tenant on PLATFORM mode is charged through the platform's
+ * paybill, which is why the ledger then owes them the balance.
+ *
+ * Getting this wrong in either direction is a money bug: collect with the tenant's credentials
+ * while crediting the ledger and they are paid twice; collect with the platform's while skipping
+ * the credit and they are never paid at all. The single source of truth is collectionMode, read
+ * here and in creditTenantForPayment, and nowhere else.
+ */
+async function resolveCollectingCredentials(
+  tenantId: string
+): Promise<{ credentials: MpesaCredentials; collectedByPlatform: boolean; tenantSlug: string }> {
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    select: { collectionMode: true, slug: true },
+  });
+  const collectedByPlatform = tenant?.collectionMode === "PLATFORM";
+  return {
+    credentials: collectedByPlatform
+      ? await getPlatformMpesaCredentials()
+      : await getMpesaCredentials(tenantId),
+    collectedByPlatform,
+    tenantSlug: tenant?.slug ?? "",
+  };
+}
+
+/**
+ * What the payer sees on their M-Pesa statement, and what the receiving statement is grouped by.
+ *
+ * When one paybill collects for many tenants, the reference has to say WHICH tenant the money
+ * belongs to — otherwise a statement is an undifferentiated list and manual reconciliation is
+ * impossible. When a tenant collects on their own paybill every payment is already theirs, so
+ * the more useful thing to show the customer is what they bought.
+ *
+ * Daraja truncates this to 12 characters, so the slug is trimmed rather than the label, keeping
+ * the tenant identifiable even for a long slug.
+ */
+function buildAccountReference(
+  collectedByPlatform: boolean,
+  tenantSlug: string,
+  fallback: string
+): string {
+  return collectedByPlatform && tenantSlug ? tenantSlug.slice(0, 12) : fallback;
+}
 
 export interface InitiateStkPushInput {
   customerId: string;
@@ -42,12 +92,12 @@ export async function initiateStkPushForCustomer(
     accountReference = invoice.invoiceNumber;
   }
 
-  const credentials = await getMpesaCredentials(tenantId);
+  const collection = await resolveCollectingCredentials(tenantId);
   const phone = normalizeKenyanPhone(input.phone);
   const callbackUrl = buildMpesaCallbackUrl();
 
   const response = await initiateStkPush({
-    credentials,
+    credentials: collection.credentials,
     phone,
     amountMinor: input.amountMinor,
     accountReference,
@@ -84,15 +134,19 @@ export async function initiateHotspotPurchaseStkPush(
   });
   if (!pkg) throw new NotFoundError("HotspotPackage");
 
-  const credentials = await getMpesaCredentials(tenantId);
+  const collection = await resolveCollectingCredentials(tenantId);
   const phone = normalizeKenyanPhone(input.phone);
   const callbackUrl = buildMpesaCallbackUrl();
 
   const response = await initiateStkPush({
-    credentials,
+    credentials: collection.credentials,
     phone,
     amountMinor: pkg.priceMinor,
-    accountReference: `WiFi-${pkg.name.slice(0, 7)}`,
+    accountReference: buildAccountReference(
+      collection.collectedByPlatform,
+      collection.tenantSlug,
+      `WiFi-${pkg.name.slice(0, 7)}`
+    ),
     transactionDesc: `WiFi ${pkg.name}`,
     callbackUrl,
   });
@@ -135,8 +189,9 @@ export async function queryAndReconcileStkRequest(
   const request = await getStkRequestOrThrow(tenantId, checkoutRequestId);
   if (request.status !== "PENDING") return { request, unresolvedSuccess: false };
 
-  const credentials = await getMpesaCredentials(tenantId);
-  const result = await queryStkPushStatus(credentials, checkoutRequestId);
+  const collection = await resolveCollectingCredentials(tenantId);
+  // Same account that pushed it: a status query signed by a different shortcode cannot find it.
+  const result = await queryStkPushStatus(collection.credentials, checkoutRequestId);
   const resultCode = Number(result.ResultCode);
 
   if (Number.isNaN(resultCode)) return { request, unresolvedSuccess: false }; // still pending

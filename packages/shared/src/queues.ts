@@ -132,6 +132,7 @@ export const deliverWebhookEventJobSchema = z.object({
 export type DeliverWebhookEventJob = z.infer<typeof deliverWebhookEventJobSchema>;
 
 export const JOB_NAMES = {
+  runTenantPayouts: "run-tenant-payouts",
   sendVerificationEmail: "send-verification-email",
   sendPasswordResetEmail: "send-password-reset-email",
   sendPaymentConfirmationEmail: "send-payment-confirmation-email",

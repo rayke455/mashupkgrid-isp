@@ -1,4 +1,5 @@
 import { prisma, type Prisma } from "@mashupkgrid/database";
+import { creditTenantForPayment } from "../ledger.service.js";
 import { NotFoundError, generateSecureToken } from "@mashupkgrid/shared";
 import { recordPaymentForInvoiceWithDb, topUpWalletWithDb } from "@mashupkgrid/billing";
 import { getPesapalCredentials } from "./config.service.js";
@@ -161,6 +162,13 @@ export async function completePesapalTransaction(
           },
         });
         paymentId = hotspotPayment.id;
+        await creditTenantForPayment(tx, {
+          tenantId,
+          paymentId: hotspotPayment.id,
+          amountMinor: hotspotPayment.amountMinor,
+          currency: hotspotPayment.currency,
+          description: "Hotspot voucher sale",
+        });
       } else if (transaction.customerId) {
         // 2. Subscriber Invoice Payment or Wallet Top-Up
         const paymentResult = transaction.invoiceId
@@ -180,6 +188,13 @@ export async function completePesapalTransaction(
               idempotencyKey: reference,
             });
         paymentId = paymentResult.payment.id;
+        await creditTenantForPayment(tx, {
+          tenantId,
+          paymentId: paymentResult.payment.id,
+          amountMinor: paymentResult.payment.amountMinor,
+          currency: paymentResult.payment.currency,
+          description: transaction.invoiceId ? "Invoice payment" : "Wallet top-up",
+        });
       }
 
       return tx.paystackTransaction.update({

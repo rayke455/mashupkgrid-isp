@@ -26,6 +26,7 @@ import {
   handleSendFinalDunningNotices,
 } from "./jobs/dunning.js";
 import { handleDeliverWebhook } from "./jobs/deliver-webhook.js";
+import { handleRunTenantPayouts } from "./jobs/tenant-payouts.js";
 import { handleSendWhatsappOtp } from "./jobs/send-whatsapp-otp.js";
 import {
   handleSendWhatsappVoucher,
@@ -98,6 +99,8 @@ async function main() {
           return handleSendOverdueNotices();
         case JOB_NAMES.sendFinalDunningNotices:
           return handleSendFinalDunningNotices();
+        case JOB_NAMES.runTenantPayouts:
+          return handleRunTenantPayouts();
         case JOB_NAMES.expireTrials:
           return handleExpireTrials();
         default:
@@ -235,6 +238,14 @@ async function main() {
   // on the next tick, same tolerance already accepted for overdue-customer suspension.
   await billingQueue.add(
     JOB_NAMES.expireTrials,
+    {},
+    { repeat: { every: 60 * 60_000 }, removeOnComplete: true, removeOnFail: 50 }
+  );
+
+  // Settlement runs hourly rather than per payment: batching means one B2B fee per tenant per
+  // hour instead of one per voucher sold, and a tenant owed nothing is skipped entirely.
+  await billingQueue.add(
+    JOB_NAMES.runTenantPayouts,
     {},
     { repeat: { every: 60 * 60_000 }, removeOnComplete: true, removeOnFail: 50 }
   );

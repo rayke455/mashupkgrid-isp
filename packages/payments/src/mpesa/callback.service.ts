@@ -1,4 +1,5 @@
 import { prisma, type MpesaStkRequest, type Prisma } from "@mashupkgrid/database";
+import { creditTenantForPayment } from "../ledger.service.js";
 import { NotFoundError, generateSecureToken } from "@mashupkgrid/shared";
 import { recordPaymentForInvoiceWithDb, topUpWalletWithDb } from "@mashupkgrid/billing";
 
@@ -187,7 +188,7 @@ export async function completeStkRequest(
         //
         // Keyed on the M-Pesa receipt, which is unique per payment, so a replayed callback
         // updates nothing rather than double-counting the sale.
-        await tx.payment.create({
+        const hotspotPayment = await tx.payment.create({
           data: {
             tenantId,
             customerId: null,
@@ -199,6 +200,16 @@ export async function completeStkRequest(
             reference: receiptNumber,
             idempotencyKey: receiptNumber,
           },
+        });
+
+        // Only credits tenants on PLATFORM collection — for everyone else this money went
+        // straight to their own paybill and there is nothing to owe them.
+        await creditTenantForPayment(tx, {
+          tenantId,
+          paymentId: hotspotPayment.id,
+          amountMinor: hotspotPayment.amountMinor,
+          currency: hotspotPayment.currency,
+          description: "Hotspot voucher sale",
         });
 
         return tx.mpesaStkRequest.update({
@@ -241,6 +252,14 @@ export async function completeStkRequest(
             reference: receiptNumber,
             idempotencyKey: receiptNumber,
           });
+
+      await creditTenantForPayment(tx, {
+        tenantId,
+        paymentId: paymentResult.payment.id,
+        amountMinor: paymentResult.payment.amountMinor,
+        currency: paymentResult.payment.currency,
+        description: request.invoiceId ? "Invoice payment" : "Wallet top-up",
+      });
 
       return tx.mpesaStkRequest.update({
         where: { id: request.id },

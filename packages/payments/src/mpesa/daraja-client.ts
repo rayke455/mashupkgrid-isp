@@ -163,3 +163,76 @@ export async function queryStkPushStatus(
   }
   return body;
 }
+
+export interface B2BPaymentParams {
+  credentials: MpesaCredentials;
+  /** The Daraja API user authorised to move money, and their password encrypted against
+   *  Safaricom's public certificate. Separate approval from STK Push. */
+  initiatorName: string;
+  securityCredential: string;
+  /** Where the money goes. */
+  destinationShortcode: string;
+  destinationType: "PAYBILL" | "TILL";
+  amountMinor: number;
+  /** Shown on the receiving statement. */
+  accountReference: string;
+  remarks: string;
+  resultUrl: string;
+  queueTimeoutUrl: string;
+}
+
+export interface B2BPaymentResponse {
+  ConversationID: string;
+  OriginatorConversationID: string;
+  ResponseCode: string;
+  ResponseDescription: string;
+}
+
+/**
+ * Business-to-business payment — how this platform remits a tenant their balance.
+ *
+ * `BusinessPayBill` and `BusinessBuyGoods` are different command IDs for genuinely different
+ * destinations: a paybill expects an account number alongside the shortcode, a till does not.
+ * Sending the wrong one does not simply fail — it can land the money in the wrong place — which
+ * is why the destination type is stored per tenant rather than assumed.
+ *
+ * Unlike STK Push this call is asynchronous in both directions: a 0 response means Safaricom
+ * ACCEPTED the instruction, not that the money moved. Only the result callback says that, so a
+ * payout stays PROCESSING until it arrives.
+ */
+export async function initiateB2BPayment(params: B2BPaymentParams): Promise<B2BPaymentResponse> {
+  const { credentials } = params;
+  const baseUrl = BASE_URLS[credentials.environment];
+  const accessToken = await getAccessToken(credentials);
+
+  const response = await fetch(`${baseUrl}/mpesa/b2b/v1/paymentrequest`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      Initiator: params.initiatorName,
+      SecurityCredential: params.securityCredential,
+      CommandID: params.destinationType === "TILL" ? "BusinessBuyGoods" : "BusinessPayBill",
+      SenderIdentifierType: "4",
+      RecieverIdentifierType: "4",
+      // Whole shillings — M-Pesa has no cents.
+      Amount: Math.round(params.amountMinor / 100),
+      PartyA: credentials.shortcode,
+      PartyB: params.destinationShortcode,
+      AccountReference: params.accountReference.slice(0, 20),
+      Remarks: params.remarks.slice(0, 100),
+      QueueTimeOutURL: params.queueTimeoutUrl,
+      ResultURL: params.resultUrl,
+    }),
+  });
+
+  const body = (await response.json()) as B2BPaymentResponse & {
+    errorMessage?: string;
+    errorCode?: string;
+  };
+  if (!response.ok || body.ResponseCode !== "0") {
+    throw new Error(
+      `M-Pesa B2B payment failed: ${body.errorMessage ?? body.ResponseDescription ?? response.status}`
+    );
+  }
+  return body;
+}
