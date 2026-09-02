@@ -147,6 +147,7 @@ export function SuntechBlueTheme({
   bannerSubtitle,
   installationFee,
   fiberRates,
+  logoUrl,
   packages,
   loadingPackages,
   onSelectPackage,
@@ -191,13 +192,27 @@ export function SuntechBlueTheme({
             <div className="grid grid-cols-12 gap-2">
               {/* Left Column: Brand, Tagline, and 4-tier Fibre Price Grid */}
               <div className="col-span-7 space-y-2">
-                {/* Suntech Fibre Logo */}
+                {/* Tenant logo when set, falling back to the text pill — a tenant who has not
+                    uploaded a logo must still get a rendered brand, not a broken image or a gap. */}
                 <div>
-                  <div className="inline-block border-2 border-blue-900 rounded-full px-3 py-0.5">
-                    <span className="text-xs font-black tracking-wider text-blue-950">
-                      {displayName.includes("FIBRE") ? displayName : `${displayName} FIBRE`}
-                    </span>
-                  </div>
+                  {logoUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- a tenant-supplied
+                    // external URL, not a local asset next/image can optimise.
+                    <img
+                      src={logoUrl}
+                      alt={displayName}
+                      className="h-8 max-w-[140px] object-contain object-left"
+                      onError={(e) => {
+                        e.currentTarget.style.display = "none";
+                      }}
+                    />
+                  ) : (
+                    <div className="inline-block border-2 border-blue-900 rounded-full px-3 py-0.5">
+                      <span className="text-xs font-black tracking-wider text-blue-950">
+                        {displayName.includes("FIBRE") ? displayName : `${displayName} FIBRE`}
+                      </span>
+                    </div>
+                  )}
                   <div className="flex items-center gap-1 mt-1">
                     <span className="rounded bg-blue-900 text-white px-1.5 py-0.2 text-[8px] font-black tracking-widest flex items-center gap-0.5">
                       <WifiIcon className="w-2.5 h-2.5" /> Wi Fi

@@ -181,6 +181,7 @@ export function GoldEnergyTheme({
   supportPhone,
   welcomeTitle,
   bannerSubtitle,
+  logoUrl,
   packages,
   loadingPackages,
   onSelectPackage,
@@ -250,11 +251,28 @@ export function GoldEnergyTheme({
               <div className="col-span-8 space-y-2">
                 {/* Logo & Brand */}
                 <div className="flex items-center gap-2">
-                  <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-blue-700 via-blue-600 to-amber-500 p-0.5 shadow-md flex items-center justify-center shrink-0">
-                    <div className="h-full w-full bg-white rounded-full flex items-center justify-center text-blue-700">
-                      <WifiIcon className="w-5 h-5" />
+                  {/* Tenant logo when set; the WifiIcon badge is the fallback for a tenant who
+                      has not uploaded one, never a broken image. */}
+                  {logoUrl ? (
+                    <div className="h-10 w-10 rounded-full bg-white p-0.5 shadow-md shrink-0 overflow-hidden">
+                      {/* eslint-disable-next-line @next/next/no-img-element -- a tenant-supplied
+                          external URL, not a local asset next/image can optimise. */}
+                      <img
+                        src={logoUrl}
+                        alt={displayName}
+                        className="h-full w-full rounded-full object-cover"
+                        onError={(e) => {
+                          e.currentTarget.style.display = "none";
+                        }}
+                      />
                     </div>
-                  </div>
+                  ) : (
+                    <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-blue-700 via-blue-600 to-amber-500 p-0.5 shadow-md flex items-center justify-center shrink-0">
+                      <div className="h-full w-full bg-white rounded-full flex items-center justify-center text-blue-700">
+                        <WifiIcon className="w-5 h-5" />
+                      </div>
+                    </div>
+                  )}
                   <div>
                     <div className="font-extrabold text-xs tracking-tight text-blue-900 leading-none flex items-center gap-1">
                       <span className="text-blue-700">{displayName.split(" ")[0] || "SPICEZCOM"}</span>

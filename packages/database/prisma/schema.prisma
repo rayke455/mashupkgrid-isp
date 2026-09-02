@@ -825,6 +825,17 @@ model CaptivePortalConfig {
   /// preserved, and every value survives intact - verified against a real database. Compare
   /// these field-by-field, never by JSON.stringify equality.
   fiberRates      Json?
+  /// The ~30-plugin captive-portal customizer's whole state (theme, mascots, announcements,
+  /// support widget, social links, custom CSS/JS, etc — see CaptivePortalPluginsState in
+  /// apps/web/src/lib/captive-portal-plugins/types.ts), stored opaquely: the server does not
+  /// need to understand this shape, only persist and return it verbatim, the same reasoning as
+  /// fiberRates above.
+  ///
+  /// Previously this entire customizer only ever wrote to the editing admin's own browser
+  /// localStorage under an unscoped key — never to this row — so nothing an operator configured
+  /// here (a WhatsApp button, social links, FAQs, custom branding) ever reached a real visitor on
+  /// their own device. This column is what makes it real.
+  pluginsConfig   Json?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

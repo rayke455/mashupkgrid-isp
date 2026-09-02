@@ -14,6 +14,7 @@ import {
   resetCaptivePortalPluginsState,
   exportPluginsConfigJson,
   importPluginsConfigJson,
+  fetchPublishedPluginsState,
 } from "@/lib/captive-portal-plugins/plugin-registry";
 import { MascotRenderer } from "@/components/hotspot/plugins/MascotGallery";
 import { portalSoundEngine } from "@/lib/captive-portal-plugins/sound-effects";
@@ -35,9 +36,13 @@ export default function CaptiveCustomizerPage() {
   const { user } = useAuth();
   const tenantSlug = user?.tenantSlug || "demo-isp";
 
-  const [state, setState] = useState<CaptivePortalPluginsState>(getCaptivePortalPluginsState());
+  // Lazy local default only — a real starting point before the server fetch below resolves,
+  // never the value this page trusts once loaded. See the effect for why.
+  const [state, setState] = useState<CaptivePortalPluginsState>(() => getCaptivePortalPluginsState(tenantSlug));
   const [activeTab, setActiveTab] = useState<TabId>("appearance");
   const [savedToast, setSavedToast] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
   const [selectedMascotIndex, setSelectedMascotIndex] = useState(0);
   const [importJsonText, setImportJsonText] = useState("");
   const [importStatus, setImportStatus] = useState<string | null>(null);
@@ -56,7 +61,13 @@ export default function CaptiveCustomizerPage() {
   const [installationFee, setInstallationFee] = useState("1,500/-");
 
   useEffect(() => {
-    setState(getCaptivePortalPluginsState());
+    // The authoritative load. Previously this read localStorage only, so opening the editor on a
+    // second device — or the first time after a deploy clears a dev machine's storage — showed
+    // factory defaults instead of what a tenant had actually published, and pressing Save from
+    // that state would have overwritten real configuration with defaults. Now it loads the
+    // published state from the server; the local cache is only what a same-tab live preview uses
+    // between saves.
+    void fetchPublishedPluginsState(tenantSlug, apiFetch).then(setState);
 
     // Fetch live backend settings for this specific tenant
     void (async () => {
@@ -77,9 +88,10 @@ export default function CaptiveCustomizerPage() {
     })();
   }, [tenantSlug]);
 
-  const handleSave = async () => {
-    saveCaptivePortalPluginsState(state);
-
+  /** Pushes one plugin state to the server as this tenant's published portal. Shared by Save and
+   *  Reset, which are the same operation — "make this the state real customers see" — just with
+   *  a different starting value. */
+  const persistPluginsToServer = async (next: CaptivePortalPluginsState): Promise<boolean> => {
     const payload = {
       phone: contactPhone.trim(),
       supportPhone: supportPhone.trim(),
@@ -88,14 +100,15 @@ export default function CaptiveCustomizerPage() {
       bannerSubtitle: bannerSubtitle.trim(),
       activeThemeId: activeThemeId,
       installationFee: installationFee.trim(),
+      pluginsConfig: next,
     };
 
-    // Store in browser localStorage
     try {
       localStorage.setItem(`mkg_hotspot_captive_config:${tenantSlug}`, JSON.stringify(payload));
-    } catch {}
+    } catch {
+      // Local cache only — not fatal if storage is unavailable (private browsing, quota).
+    }
 
-    // Persist to backend API for this specific tenant
     try {
       // Saving the captive-portal config is a staff write (see the PUT route in
       // apps/api/src/routes/hotspot.ts) — it must carry the caller's bearer token. Only the
@@ -104,21 +117,49 @@ export default function CaptiveCustomizerPage() {
         method: "PUT",
         body: JSON.stringify(payload),
       });
+      return true;
     } catch (err) {
+      // Surfaced to the operator rather than swallowed: a save that silently fails while the UI
+      // celebrates success is exactly what made this whole customizer a no-op for real
+      // customers in the first place. Never repeat that for the fix itself.
       console.error("Could not save to backend:", err);
+      return false;
     }
-
-    portalSoundEngine.playSuccess();
-    setSavedToast(true);
-    setTimeout(() => setSavedToast(false), 3000);
   };
 
-  const handleReset = () => {
-    if (confirm("Reset all captive portal plugin customizations to default factory settings?")) {
-      const reset = resetCaptivePortalPluginsState();
-      setState(reset);
+  const handleSave = async () => {
+    setIsSaving(true);
+    setSaveError(null);
+    saveCaptivePortalPluginsState(tenantSlug, state);
+
+    const ok = await persistPluginsToServer(state);
+    setIsSaving(false);
+
+    if (ok) {
+      portalSoundEngine.playSuccess();
       setSavedToast(true);
       setTimeout(() => setSavedToast(false), 3000);
+    } else {
+      portalSoundEngine.playError();
+      setSaveError("Could not publish your changes — check your connection and try again. Nothing live has changed.");
+    }
+  };
+
+  const handleReset = async () => {
+    if (!confirm("Reset all captive portal plugin customizations to default factory settings?")) return;
+    setIsSaving(true);
+    setSaveError(null);
+    const reset = resetCaptivePortalPluginsState(tenantSlug);
+    setState(reset);
+
+    const ok = await persistPluginsToServer(reset);
+    setIsSaving(false);
+
+    if (ok) {
+      setSavedToast(true);
+      setTimeout(() => setSavedToast(false), 3000);
+    } else {
+      setSaveError("Reset locally, but could not publish the reset — your live portal still shows the old configuration.");
     }
   };
 
@@ -146,10 +187,12 @@ export default function CaptiveCustomizerPage() {
 
   const handleImportJson = () => {
     if (!importJsonText.trim()) return;
-    const ok = importPluginsConfigJson(importJsonText.trim());
+    const ok = importPluginsConfigJson(tenantSlug, importJsonText.trim());
     if (ok) {
-      setState(getCaptivePortalPluginsState());
-      setImportStatus("Import successful! All 30 plugins restored.");
+      setState(getCaptivePortalPluginsState(tenantSlug));
+      // Loaded into the editor only — this is a draft until Save & Publish is pressed, same as
+      // any other change made on this page. Saying "restored" without that would read as done.
+      setImportStatus("Import loaded — press Save & Publish to make it live.");
       portalSoundEngine.playSuccess();
     } else {
       setImportStatus("Invalid JSON configuration format.");
@@ -178,12 +221,13 @@ export default function CaptiveCustomizerPage() {
         <div className="flex items-center gap-3">
           <button
             onClick={handleReset}
-            className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-all"
+            disabled={isSaving}
+            className="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold transition-all disabled:opacity-50"
           >
             Reset Defaults
           </button>
           <a
-            href="/hotspot/demo-isp"
+            href={`/hotspot/${tenantSlug}`}
             target="_blank"
             rel="noopener noreferrer"
             className="px-3.5 py-2 rounded-xl bg-indigo-950 border border-indigo-500/40 hover:bg-indigo-900 text-indigo-200 text-xs font-bold transition-all flex items-center gap-1.5"
@@ -192,13 +236,20 @@ export default function CaptiveCustomizerPage() {
           </a>
           <button
             onClick={handleSave}
-            className="px-5 py-2 rounded-xl bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white text-xs font-black shadow-lg shadow-brand-500/25 transition-all flex items-center gap-2"
+            disabled={isSaving}
+            className="px-5 py-2 rounded-xl bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white text-xs font-black shadow-lg shadow-brand-500/25 transition-all flex items-center gap-2 disabled:opacity-60"
           >
-            <span>Save &amp; Publish</span>
+            <span>{isSaving ? "Publishing…" : "Save & Publish"}</span>
             {savedToast && <span className="text-emerald-300">✓</span>}
           </button>
         </div>
       </div>
+
+      {saveError && (
+        <p className="rounded-xl border border-rose-500/40 bg-rose-950/40 px-3.5 py-2 text-xs text-rose-300">
+          {saveError}
+        </p>
+      )}
 
       {/* Navigation Tabs */}
       <div className="flex flex-wrap gap-2 p-1.5 rounded-2xl bg-slate-950/80 border border-slate-800 text-xs font-bold">
@@ -1186,7 +1237,7 @@ export default function CaptiveCustomizerPage() {
           <div className="flex gap-3">
             <button
               onClick={() => {
-                const json = exportPluginsConfigJson();
+                const json = exportPluginsConfigJson(tenantSlug);
                 const blob = new Blob([json], { type: "application/json" });
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement("a");

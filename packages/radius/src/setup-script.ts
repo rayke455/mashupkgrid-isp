@@ -356,10 +356,13 @@ ${pppoeSection}
 #    in. A paying customer is unaffected: their DNS is unlimited and their pings work.
 /ip firewall filter remove [find comment="MASHUPKGRID ANTI-TUNNEL"]
 # Real browsing before login is a handful of DNS lookups — the portal page and the payment
-# gateway. A tunnel needs a sustained stream of them, so a generous rate ceiling stops the tunnel
-# without touching a normal customer. Accept up to the limit, then drop the excess.
-/ip firewall filter add chain=input protocol=udp dst-port=53 hotspot=!auth limit=30,20:packet action=accept comment="MASHUPKGRID ANTI-TUNNEL"
-/ip firewall filter add chain=input protocol=tcp dst-port=53 hotspot=!auth limit=30,20:packet action=accept comment="MASHUPKGRID ANTI-TUNNEL"
+# gateway, maybe a dozen names in a short burst at connect time. A DNS tunnel needs a SUSTAINED
+# stream to move any meaningful amount of data, so the ceiling only has to be tight enough that a
+# sustained stream cannot fit under it — 6 queries/sec with a 10-query burst covers a real page
+# load comfortably while making a tunnel too slow to be worth running. Accept up to the limit,
+# then drop the excess.
+/ip firewall filter add chain=input protocol=udp dst-port=53 hotspot=!auth limit=6,10:packet action=accept comment="MASHUPKGRID ANTI-TUNNEL"
+/ip firewall filter add chain=input protocol=tcp dst-port=53 hotspot=!auth limit=6,10:packet action=accept comment="MASHUPKGRID ANTI-TUNNEL"
 /ip firewall filter add chain=input protocol=udp dst-port=53 hotspot=!auth action=drop comment="MASHUPKGRID ANTI-TUNNEL"
 /ip firewall filter add chain=input protocol=tcp dst-port=53 hotspot=!auth action=drop comment="MASHUPKGRID ANTI-TUNNEL"
 # An unauthenticated device has no reason to ping the internet; the portal itself never needs it.

@@ -32,6 +32,11 @@ export interface CaptiveThemeProps {
   bannerSubtitle?: string;
   installationFee?: string;
   fiberRates?: Array<{ speed: string; price: string; subtitle?: string }>;
+  /** Already set by every tenant in Settings; previously never reached the one surface a
+   *  customer actually sees. Absent or invalid means render the existing text-only branding —
+   *  no theme should ever fail to render for a tenant who hasn't set either. */
+  logoUrl?: string | null;
+  brandColor?: string | null;
   packages: HotspotPackage[] | undefined;
   loadingPackages: boolean;
   onSelectPackage: (pkg: HotspotPackage) => void;

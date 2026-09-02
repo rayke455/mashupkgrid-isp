@@ -61,7 +61,6 @@ vi.mock("../../lib/maintenance-state.js", () => ({
 vi.mock("../../services/auth.service.js", () => ({ resolveTenantBySlug: h.resolveTenantBySlug }));
 vi.mock("@mashupkgrid/radius", () => ({
   validateVoucherForLogin: vi.fn(),
-  normalizeKenyanPhone: vi.fn((v: string) => v),
   authenticateHotspotAccount: vi.fn(),
   listHotspotPackages: vi.fn().mockResolvedValue([]),
 }));
@@ -73,6 +72,11 @@ vi.mock("@mashupkgrid/payments", () => ({
   verifyAndReconcilePaystackTransaction: vi.fn(),
   initiatePesapalHotspotPurchase: vi.fn(),
   verifyAndReconcilePesapalTransaction: vi.fn(),
+  // The real implementation lives in @mashupkgrid/payments (packages/payments/src/mpesa/phone.ts)
+  // — it was previously mocked under @mashupkgrid/radius instead, a dead double that exercised
+  // nothing, since /recover imports it from here. A pass-through is enough: the recover tests
+  // below care about which stored purchase gets matched, not about phone normalization itself.
+  normalizeKenyanPhone: vi.fn((v: string) => v),
 }));
 import { signAccessToken } from "@mashupkgrid/auth";
 import { registerErrorHandler } from "../../plugins/error-handler.js";
@@ -233,5 +237,173 @@ describe("PUT /hotspot/:tenantSlug/config authorization", () => {
     const res = await app.inject({ method: "GET", url: `/api/v1/hotspot/${TENANT_A.slug}/config` });
     expect(res.statusCode).toBe(200);
     expect(res.json().success).toBe(true);
+  });
+
+  it("accepts and round-trips pluginsConfig — the ~30-plugin customizer's whole state", async () => {
+    const pluginsConfig = { support: { whatsappNumber: "0700000000" }, social: { facebook: "acme" } };
+    const put = await app.inject({
+      method: "PUT",
+      url: `/api/v1/hotspot/${TENANT_A.slug}/config`,
+      headers: { authorization: `Bearer ${await tokenFor(TENANT_A)}` },
+      payload: { pluginsConfig },
+    });
+    expect(put.statusCode).toBe(200);
+
+    const get = await app.inject({ method: "GET", url: `/api/v1/hotspot/${TENANT_A.slug}/config` });
+    expect(get.json().data.pluginsConfig).toEqual(pluginsConfig);
+  });
+
+  it("rejects pluginsConfig that is not a plain object", async () => {
+    const res = await app.inject({
+      method: "PUT",
+      url: `/api/v1/hotspot/${TENANT_A.slug}/config`,
+      headers: { authorization: `Bearer ${await tokenFor(TENANT_A)}` },
+      payload: { pluginsConfig: ["not", "an", "object"] },
+    });
+    expect(res.statusCode).toBe(422);
+    expect(h.configRows.size).toBe(0);
+  });
+
+  it("rejects a pluginsConfig blob over the size cap — this row is served on every anonymous portal page load", async () => {
+    const res = await app.inject({
+      method: "PUT",
+      url: `/api/v1/hotspot/${TENANT_A.slug}/config`,
+      headers: { authorization: `Bearer ${await tokenFor(TENANT_A)}` },
+      payload: { pluginsConfig: { blob: "x".repeat(310_000) } },
+    });
+    expect(res.statusCode).toBe(422);
+    expect(h.configRows.size).toBe(0);
+  });
+
+  it("serves the tenant's logo and brand colour on both public routes — previously never reached the portal at all", async () => {
+    h.prisma.tenant.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) =>
+      where.id === TENANT_A.id
+        ? { ...tenantRow(TENANT_A), logoUrl: "https://cdn.example.com/acme-logo.png", brandColor: "#ff0000" }
+        : null
+    );
+    h.resolveTenantBySlug.mockImplementation(async (slug: string) =>
+      slug === TENANT_A.slug
+        ? { ...tenantRow(TENANT_A), logoUrl: "https://cdn.example.com/acme-logo.png", brandColor: "#ff0000" }
+        : null
+    );
+
+    const info = await app.inject({ method: "GET", url: `/api/v1/hotspot/${TENANT_A.slug}/info` });
+    expect(info.json().data.logoUrl).toBe("https://cdn.example.com/acme-logo.png");
+    expect(info.json().data.brandColor).toBe("#ff0000");
+
+    const config = await app.inject({ method: "GET", url: `/api/v1/hotspot/${TENANT_A.slug}/config` });
+    expect(config.json().data.logoUrl).toBe("https://cdn.example.com/acme-logo.png");
+    expect(config.json().data.brandColor).toBe("#ff0000");
+  });
+});
+
+/**
+ * "Already paid but not connected?" — the recovery path for a customer whose money left their
+ * phone but whose hand-off to the router then failed. Public and unauthenticated by necessity
+ * (the customer has no session), so the boundaries matter as much as the happy path: last 24h
+ * only, that tenant's own purchases only, and identical failure whether the number is unknown or
+ * simply never paid.
+ */
+describe("POST /hotspot/:tenantSlug/recover", () => {
+  let app: FastifyInstance;
+
+  beforeAll(async () => {
+    app = Fastify();
+    registerErrorHandler(app);
+    await app.register(hotspotRoutes, { prefix: "/api/v1/hotspot" });
+    await app.ready();
+  });
+
+  afterAll(async () => {
+    await app.close();
+  });
+
+  beforeEach(() => {
+    h.resolveTenantBySlug.mockImplementation(async (slug: string) =>
+      slug === TENANT_A.slug ? tenantRow(TENANT_A) : slug === TENANT_B.slug ? tenantRow(TENANT_B) : null
+    );
+    h.prisma.mpesaStkRequest.findFirst.mockReset();
+    h.prisma.paystackTransaction.findFirst.mockReset();
+  });
+
+  it("returns the voucher code for a completed purchase matched by phone", async () => {
+    h.prisma.mpesaStkRequest.findFirst.mockResolvedValueOnce({
+      hotspotVoucherCode: "ABC12345",
+      mpesaReceiptNumber: "TGH7ABC123",
+      createdAt: new Date(),
+    });
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/v1/hotspot/${TENANT_A.slug}/recover`,
+      payload: { phone: "0712345678" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.code).toBe("ABC12345");
+  });
+
+  it("extracts the receipt from a pasted M-Pesa confirmation message and matches on it", async () => {
+    h.prisma.mpesaStkRequest.findFirst.mockImplementationOnce(async ({ where }: any) => {
+      // Proves the route parsed the 10-character receipt out of the free-text message rather
+      // than matching on phone (none was supplied) or ignoring the filter entirely.
+      expect(where.mpesaReceiptNumber).toBe("TGH7ABC123");
+      return { hotspotVoucherCode: "XYZ98765", mpesaReceiptNumber: "TGH7ABC123", createdAt: new Date() };
+    });
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/v1/hotspot/${TENANT_A.slug}/recover`,
+      payload: { mpesaMessage: "TGH7ABC123 Confirmed. Ksh10.00 sent to Acme Fibre on 2/9/26 at 6:06 PM." },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.code).toBe("XYZ98765");
+  });
+
+  it("falls back to the Paystack/Pesapal table when no M-Pesa purchase matches", async () => {
+    h.prisma.mpesaStkRequest.findFirst.mockResolvedValueOnce(null);
+    h.prisma.paystackTransaction.findFirst.mockResolvedValueOnce({
+      hotspotVoucherCode: "PAY55555",
+      createdAt: new Date(),
+    });
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/v1/hotspot/${TENANT_A.slug}/recover`,
+      payload: { phone: "0712345678" },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.code).toBe("PAY55555");
+  });
+
+  it("fails with a vague message when nothing matches — never confirms or denies a number paid here", async () => {
+    h.prisma.mpesaStkRequest.findFirst.mockResolvedValueOnce(null);
+    h.prisma.paystackTransaction.findFirst.mockResolvedValueOnce(null);
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/v1/hotspot/${TENANT_A.slug}/recover`,
+      payload: { phone: "0700000000" },
+    });
+    expect(res.statusCode).toBe(404);
+    expect(res.json().error.message).not.toMatch(/unknown|not found number|no such/i);
+  });
+
+  it("requires at least a phone or a message", async () => {
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/v1/hotspot/${TENANT_A.slug}/recover`,
+      payload: {},
+    });
+    expect(res.statusCode).toBe(422);
+  });
+
+  it("only searches THIS tenant's purchases — one ISP's portal cannot recover another's", async () => {
+    h.prisma.mpesaStkRequest.findFirst.mockImplementationOnce(async ({ where }: any) => {
+      expect(where.tenantId).toBe(TENANT_B.id);
+      return null;
+    });
+    h.prisma.paystackTransaction.findFirst.mockResolvedValueOnce(null);
+    const res = await app.inject({
+      method: "POST",
+      url: `/api/v1/hotspot/${TENANT_B.slug}/recover`,
+      payload: { phone: "0712345678" },
+    });
+    expect(res.statusCode).toBe(404);
   });
 });

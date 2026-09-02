@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import { AdvertisementConfig } from "@/lib/captive-portal-plugins/types";
 import { trackPortalEvent } from "@/lib/captive-portal-plugins/analytics-tracker";
 
-export function PortalAds({ config }: { config: AdvertisementConfig }) {
+export function PortalAds({ config, tenantSlug }: { config: AdvertisementConfig; tenantSlug: string }) {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [dismissed, setDismissed] = useState(false);
 
@@ -25,7 +25,7 @@ export function PortalAds({ config }: { config: AdvertisementConfig }) {
   const currentAd = activeAds[currentIndex] || activeAds[0]!;
 
   const handleClick = () => {
-    trackPortalEvent("ad_click", { adId: currentAd.id, title: currentAd.title });
+    trackPortalEvent(tenantSlug, "ad_click", { adId: currentAd.id, title: currentAd.title });
   };
 
   return (

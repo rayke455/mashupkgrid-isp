@@ -81,6 +81,9 @@ export interface CaptivePortalConfig {
   activeThemeId: string;
   installationFee?: string;
   fiberRates?: Array<{ speed: string; price: string; subtitle?: string }>;
+  /** The ~30-plugin customizer's whole state, opaque to the server — see the schema comment on
+   *  CaptivePortalConfig.pluginsConfig for why this used to never reach here at all. */
+  pluginsConfig?: unknown;
 }
 
 /**
@@ -106,6 +109,7 @@ const DEFAULT_CAPTIVE_CONFIG: CaptivePortalConfig = {
   activeThemeId: "suntech-blue",
   installationFee: "",
   fiberRates: [],
+  pluginsConfig: null,
 };
 
 /** Every column is nullable, so an unset field falls back to the shared default rather than
@@ -121,6 +125,7 @@ function toCaptiveConfig(
     activeThemeId: string | null;
     installationFee: string | null;
     fiberRates: unknown;
+    pluginsConfig: unknown;
   } | null,
   tenantName?: string
 ): CaptivePortalConfig {
@@ -136,6 +141,7 @@ function toCaptiveConfig(
     activeThemeId: row.activeThemeId ?? DEFAULT_CAPTIVE_CONFIG.activeThemeId,
     installationFee: row.installationFee ?? DEFAULT_CAPTIVE_CONFIG.installationFee,
     fiberRates: (row.fiberRates as CaptivePortalConfig["fiberRates"]) ?? DEFAULT_CAPTIVE_CONFIG.fiberRates,
+    pluginsConfig: row.pluginsConfig ?? null,
   };
 }
 
@@ -160,6 +166,7 @@ async function saveTenantCaptiveConfig(
     ...(patch.activeThemeId !== undefined ? { activeThemeId: patch.activeThemeId } : {}),
     ...(patch.installationFee !== undefined ? { installationFee: patch.installationFee } : {}),
     ...(patch.fiberRates !== undefined ? { fiberRates: patch.fiberRates } : {}),
+    ...(patch.pluginsConfig !== undefined ? { pluginsConfig: patch.pluginsConfig as object } : {}),
   };
   const row = await prisma.captivePortalConfig.upsert({
     where: { tenantId },
@@ -190,6 +197,20 @@ const updateConfigSchema = z.object({
     )
     .max(24)
     .optional(),
+  // Opaque to this schema by design — the ~30-plugin customizer's shape lives in the web app,
+  // not here, and duplicating it would only let the two drift apart. Bounded instead: a plain
+  // object, size-capped, because this row is served on every anonymous portal page load and an
+  // unbounded blob here is an unbounded payload for every visitor plus an unbounded write from a
+  // staff-authenticated but still fallible client.
+  pluginsConfig: z
+    .unknown()
+    .optional()
+    .refine((v) => v === undefined || (typeof v === "object" && v !== null && !Array.isArray(v)), {
+      message: "pluginsConfig must be a plain object",
+    })
+    .refine((v) => v === undefined || JSON.stringify(v).length <= 300_000, {
+      message: "pluginsConfig is too large (max ~300KB)",
+    }),
 });
 
 /**
@@ -219,6 +240,11 @@ export async function hotspotRoutes(app: FastifyInstance): Promise<void> {
             activeThemeId: config.activeThemeId,
             installationFee: config.installationFee,
             fiberRates: config.fiberRates,
+            // Already set by every tenant in Settings, and until now never read by the one
+            // surface a customer actually sees — the portal showed generic theme colours and no
+            // logo no matter what a tenant had configured.
+            logoUrl: tenant.logoUrl,
+            brandColor: tenant.brandColor,
           },
           request.id
         )
@@ -233,7 +259,9 @@ export async function hotspotRoutes(app: FastifyInstance): Promise<void> {
       const { tenantSlug } = tenantParamsSchema.parse(request.params);
       const tenant = await resolveTenantBySlug(tenantSlug);
       const config = await loadTenantCaptiveConfig(tenant.id, tenant.name);
-      reply.send(successResponse(config, request.id));
+      reply.send(
+        successResponse({ ...config, logoUrl: tenant.logoUrl, brandColor: tenant.brandColor }, request.id)
+      );
     }
   );
 
@@ -728,7 +756,7 @@ export async function hotspotRoutes(app: FastifyInstance): Promise<void> {
       // An M-Pesa confirmation opens with its receipt: "TGH7ABC123 Confirmed. Ksh10.00 sent to…".
       // Ten uppercase alphanumerics is that code's shape, and matching it is far more precise
       // than trying to parse the rest of a message whose wording Safaricom changes.
-      const receipt = body.mpesaMessage?.toUpperCase().match(/[A-Z0-9]{10}/)?.[0];
+      const receipt = body.mpesaMessage?.toUpperCase().match(/\b[A-Z0-9]{10}\b/)?.[0];
       const phone = body.phone ? normalizeKenyanPhone(body.phone) : undefined;
 
       const stkRequest = await prisma.mpesaStkRequest.findFirst({

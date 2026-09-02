@@ -27,6 +27,10 @@ interface TenantInfo {
   activeThemeId?: ThemeId | null;
   installationFee?: string | null;
   fiberRates?: Array<{ speed: string; price: string; subtitle?: string }> | null;
+  /** Already set by every tenant in Settings; the portal is the one surface that never showed
+   *  either until now. */
+  logoUrl?: string | null;
+  brandColor?: string | null;
 }
 
 interface PaymentMethodsInfo {
@@ -243,7 +247,14 @@ export default function HotspotCaptivePortalPage() {
   const [activePaystackRef, setActivePaystackRef] = useState<string | null>(paystackRef);
   const [activePesapalRef, setActivePesapalRef] = useState<string | null>(pesapalRef);
   const [pollingStatus, setPollingStatus] = useState<"PENDING" | "COMPLETED" | "FAILED" | "CANCELLED" | null>(null);
-  const [pollCountdown, setPollCountdown] = useState(60);
+  // 150s, not 60. Real M-Pesa completion is: the customer notices the push notification, unlocks
+  // their phone, and enters their PIN — routinely 20-40s on its own — plus however long Safaricom
+  // takes to call our server back, which is not instant and occasionally lags well past a minute
+  // under load. A 60s giveup was shorter than the transaction it was timing, so a customer who
+  // was simply a little slow to enter their PIN was told "failed" while the payment went through
+  // moments later — exactly what showed up as "dashboard says paid, customer sees nothing".
+  const POLL_TIMEOUT_SECONDS = 150;
+  const [pollCountdown, setPollCountdown] = useState(POLL_TIMEOUT_SECONDS);
 
   // Contact Support (raises a Ticket for a walk-in customer with no account)
   const [showSupportModal, setShowSupportModal] = useState(false);
@@ -486,7 +497,7 @@ export default function HotspotCaptivePortalPage() {
       if (data.checkoutRequestId) {
         setCheckoutRequestId(data.checkoutRequestId);
         setPollingStatus("PENDING");
-        setPollCountdown(60);
+        setPollCountdown(POLL_TIMEOUT_SECONDS);
       }
     },
     onError: (err) => {
@@ -550,8 +561,36 @@ export default function HotspotCaptivePortalPage() {
         if (prev <= 1) {
           clearInterval(interval);
           clearInterval(countdown);
-          setPollingStatus("FAILED");
-          setError("Payment timed out. If you paid, check SMS or enter the voucher code below.");
+
+          // The last resort before ever telling the customer "it failed": one direct lookup by
+          // the phone number they just paid with. Our own status endpoint above already
+          // live-queries Safaricom on every poll, so giving up here does not mean the payment
+          // failed — it means WE stopped asking. If Safaricom's callback simply landed a few
+          // seconds after our last check (routine under load, or if the customer took a little
+          // longer on their PIN than this window), this recovers it silently and connects the
+          // customer with no action from them at all — the alternative is a customer staring at
+          // "payment timed out" for a payment that the dashboard already shows as received.
+          void (async () => {
+            try {
+              const recovered = await apiFetch<{ code: string }>(
+                `/api/v1/hotspot/${tenantSlug}/recover`,
+                { method: "POST", skipAuth: true, body: JSON.stringify({ phone: buyPhone.trim() }) }
+              );
+              setPollingStatus("COMPLETED");
+              setVoucherCode(recovered.code);
+              connectWithVoucher.mutate(recovered.code);
+            } catch {
+              // Genuinely still pending, or genuinely failed — either way we have exhausted what
+              // this page can check on its own. Point at the always-available recovery button
+              // rather than a dead end: a payment that completes even later is not lost, the
+              // customer can search for it themselves at any time.
+              setPollingStatus("FAILED");
+              setError(
+                "Still waiting on M-Pesa. If you already entered your PIN, tap “Already paid but not connected?” below — your payment is not lost."
+              );
+            }
+          })();
+
           return 0;
         }
         return prev - 1;
@@ -562,7 +601,7 @@ export default function HotspotCaptivePortalPage() {
       clearInterval(interval);
       clearInterval(countdown);
     };
-  }, [checkoutRequestId, pollingStatus, tenantSlug, connectWithVoucher]);
+  }, [checkoutRequestId, pollingStatus, tenantSlug, connectWithVoucher, buyPhone]);
 
   const SelectedThemeComponent = getThemeComponent(activeThemeId);
   // No hardcoded fallback identity. These previously defaulted to one specific ISP's trading
@@ -789,6 +828,8 @@ export default function HotspotCaptivePortalPage() {
         bannerSubtitle={bannerSubtitleToUse}
         installationFee={installationFeeToUse}
         fiberRates={fiberRatesToUse}
+        logoUrl={tenant?.logoUrl}
+        brandColor={tenant?.brandColor}
         packages={packages}
         loadingPackages={loadingPackages}
         onSelectPackage={(pkg) => {

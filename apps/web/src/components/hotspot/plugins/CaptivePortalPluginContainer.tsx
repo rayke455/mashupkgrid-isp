@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect } from "react";
 import { CaptivePortalPluginsState } from "@/lib/captive-portal-plugins/types";
-import { getCaptivePortalPluginsState } from "@/lib/captive-portal-plugins/plugin-registry";
+import { getCaptivePortalPluginsState, fetchPublishedPluginsState } from "@/lib/captive-portal-plugins/plugin-registry";
+import { apiFetch } from "@/lib/api-client";
 import { EdgeMascots } from "./EdgeMascots";
 import { AnimatedBackground } from "./AnimatedBackground";
 import { PortalLoadingScreen } from "./PortalLoadingScreen";
@@ -39,22 +40,38 @@ export function CaptivePortalPluginContainer({
   onVoucherCodeApplied,
   onDisconnect,
 }: CaptivePortalPluginContainerProps) {
-  const [pluginsState, setPluginsState] = useState<CaptivePortalPluginsState>(getCaptivePortalPluginsState());
+  // Synchronous local default for the first paint only — for a real customer this is always the
+  // factory defaults (their browser has never held this tenant's config), so it renders something
+  // sane immediately without a flash of an empty state while the real, authoritative fetch below
+  // is in flight.
+  const [pluginsState, setPluginsState] = useState<CaptivePortalPluginsState>(() =>
+    getCaptivePortalPluginsState(tenantSlug)
+  );
   const [showQrModal, setShowQrModal] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
   const [currentLang, setCurrentLang] = useState<"en" | "sw">(pluginsState.language.defaultLanguage || "en");
 
   useEffect(() => {
-    // Initial state and track impression
-    setPluginsState(getCaptivePortalPluginsState());
-    trackPortalEvent("impression", { tenantSlug });
+    // The authoritative fetch. This is the fix for the whole customizer: previously the only
+    // state a real visitor's browser could ever have was localStorage, which is never populated
+    // for anyone but the editing admin — so every real customer saw factory defaults no matter
+    // what a tenant configured. Falls back to defaults on any failure (API down, tenant
+    // mid-provisioning), since a captive portal must still render when the API is unreachable.
+    let cancelled = false;
+    void fetchPublishedPluginsState(tenantSlug, apiFetch).then((published) => {
+      if (!cancelled) setPluginsState(published);
+    });
+    trackPortalEvent(tenantSlug, "impression", { tenantSlug });
 
+    // Same-tab live preview for the editor only: saveCaptivePortalPluginsState dispatches this
+    // event in the SAME browser tab that just saved. A real customer's tab never receives it.
     const handlePluginChange = (e: CustomEvent<CaptivePortalPluginsState>) => {
       if (e.detail) setPluginsState(e.detail);
     };
 
     window.addEventListener("mkg_portal_plugin_change" as unknown as keyof WindowEventMap, handlePluginChange as EventListener);
     return () => {
+      cancelled = true;
       window.removeEventListener("mkg_portal_plugin_change" as unknown as keyof WindowEventMap, handlePluginChange as EventListener);
     };
   }, [tenantSlug]);
@@ -153,7 +170,7 @@ export function CaptivePortalPluginContainer({
 
       {/* 14. Advertisements */}
       {toggles.ads !== false && (
-        <PortalAds config={pluginsState.ads} />
+        <PortalAds config={pluginsState.ads} tenantSlug={tenantSlug} />
       )}
 
       {/* Core Captive Portal Children (Login Card, Packages, Authentication Modals) */}
