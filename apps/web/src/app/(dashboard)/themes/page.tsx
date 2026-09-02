@@ -12,7 +12,7 @@ const previewKey = (tenantSlug: string) => `mkg_hotspot_captive_config:${tenantS
 
 export default function ThemesPage() {
   const { user } = useAuth();
-  const tenantSlug = user?.tenantSlug || 'demo-isp';
+  const tenantSlug = user?.tenantSlug || 'mash';
 
   const [activeTab, setActiveTab] = useState<'captive' | 'dashboard'>('captive');
 
@@ -68,11 +68,15 @@ export default function ThemesPage() {
     })();
   }, [tenantSlug]);
 
-  const handleSaveCaptiveTheme = async () => {
+  const handleSaveCaptiveTheme = async (themeOverride?: ThemeId) => {
     setSaving(true);
     setError(null);
+    const themeToSave = themeOverride || selectedTheme;
+    if (themeOverride) {
+      setSelectedTheme(themeOverride);
+    }
     const payload = {
-      activeThemeId: selectedTheme,
+      activeThemeId: themeToSave,
       phone: contactPhone.trim(),
       supportPhone: supportPhone.trim(),
       brandName: brandName.trim(),
@@ -335,7 +339,7 @@ export default function ThemesPage() {
               <button
                 type="button"
                 disabled={saving}
-                onClick={handleSaveCaptiveTheme}
+                onClick={() => void handleSaveCaptiveTheme()}
                 className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-black shadow-lg shadow-blue-500/25 transition-all flex items-center gap-2 active:scale-95 cursor-pointer"
               >
                 {saving ? 'Saving...' : 'Save & Publish Changes'}
@@ -387,10 +391,22 @@ export default function ThemesPage() {
                       </p>
                     </div>
 
-                    <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between">
-                      <span className={`text-xs font-bold ${isSelected ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'}`}>
-                        {isSelected ? '● Active Theme' : 'Click to select'}
-                      </span>
+                    <div className="mt-4 pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        disabled={saving}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void handleSaveCaptiveTheme(theme.id);
+                        }}
+                        className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all ${
+                          isSelected
+                            ? 'bg-blue-600 text-white shadow-md'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-blue-600 hover:text-white'
+                        }`}
+                      >
+                        {isSelected ? '✓ Active (Published)' : 'Set & Publish'}
+                      </button>
 
                       <a
                         href={`/hotspot/${tenantSlug}?theme=${theme.id}`}
@@ -405,6 +421,50 @@ export default function ThemesPage() {
                   </div>
                 );
               })}
+            </div>
+
+            {/* Dedicated Bottom Action Bar for Theme Selection */}
+            <div className="mt-8 p-5 sm:p-6 rounded-2xl bg-white dark:bg-slate-900 border-2 border-blue-500/40 shadow-xl flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <div className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <span>Selected Theme:</span>
+                  <span className="text-blue-600 dark:text-sky-400 font-extrabold capitalize text-base">
+                    {selectedTheme.replace('-', ' ')}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Click the button to publish this design to all Wi-Fi clients on your captive portal.
+                </p>
+                {savedSuccess && (
+                  <p className="text-xs font-bold text-emerald-600 dark:text-emerald-400 mt-1 flex items-center gap-1">
+                    ✓ Theme successfully published live to your hotspot!
+                  </p>
+                )}
+                {error && (
+                  <p className="text-xs font-bold text-red-500 mt-1">
+                    {error}
+                  </p>
+                )}
+              </div>
+
+              <div className="flex items-center gap-3">
+                <a
+                  href={`/hotspot/${tenantSlug}?theme=${selectedTheme}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-bold hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                >
+                  Preview Selected
+                </a>
+                <button
+                  type="button"
+                  disabled={saving}
+                  onClick={() => void handleSaveCaptiveTheme()}
+                  className="px-8 py-3 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-black shadow-lg shadow-blue-500/25 transition-all flex items-center gap-2 active:scale-95 cursor-pointer disabled:opacity-60"
+                >
+                  {saving ? 'Publishing...' : '🚀 Save Changes & Publish to Live Hotspot'}
+                </button>
+              </div>
             </div>
           </div>
         </div>

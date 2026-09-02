@@ -34,7 +34,7 @@ type TabId =
 
 export default function CaptiveCustomizerPage() {
   const { user } = useAuth();
-  const tenantSlug = user?.tenantSlug || "demo-isp";
+  const tenantSlug = user?.tenantSlug || "mash";
 
   // Lazy local default only — a real starting point before the server fetch below resolves,
   // never the value this page trusts once loaded. See the effect for why.
