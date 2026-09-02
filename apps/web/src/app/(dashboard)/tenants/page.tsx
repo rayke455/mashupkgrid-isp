@@ -740,6 +740,29 @@ export default function TenantsPage() {
                         {risk.label}
                       </span>
                     )}
+                    {/* Visible without expanding: whose account this tenant's customer payments
+                        land in is the first thing to know about them, and hunting for it inside a
+                        panel is how a tenant ends up collecting the wrong way for a month. */}
+                    {tenant.collectionMode === "PLATFORM" ? (
+                      <span
+                        title={
+                          tenant.payoutShortcode
+                            ? `Paid out to ${tenant.payoutShortcodeType === "TILL" ? "till" : "paybill"} ${tenant.payoutShortcode}`
+                            : "No payout number set — their balance is held until they add one"
+                        }
+                        className={`rounded-md border px-2 py-0.5 text-[11px] font-semibold ${
+                          tenant.payoutShortcode
+                            ? "border-emerald-300 bg-emerald-50 text-emerald-700 dark:border-emerald-800/50 dark:bg-emerald-950/40 dark:text-emerald-300"
+                            : "border-amber-300 bg-amber-50 text-amber-700 dark:border-amber-800/50 dark:bg-amber-950/40 dark:text-amber-300"
+                        }`}
+                      >
+                        {tenant.payoutShortcode ? `Pays to ${tenant.payoutShortcode}` : "No payout number"}
+                      </span>
+                    ) : (
+                      <span className="rounded-md border border-slate-300 px-2 py-0.5 text-[11px] font-medium text-slate-500 dark:border-obsidian-700">
+                        Collects their own
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-slate-400 mt-1">
                     Created {new Date(tenant.createdAt).toLocaleDateString()}

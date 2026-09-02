@@ -126,31 +126,27 @@ export default function SettlementPage() {
 
       {isLoading && <p className="text-sm text-slate-500">Loading settlement…</p>}
 
-      {!isLoading && !aggregated && (
-        <Card className="px-4 py-8 text-center">
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Your customers pay into your own M-Pesa account, so there is nothing for this platform
-            to hold or send on.
-          </p>
-        </Card>
-      )}
-
-      {aggregated && (
+      {/* Always available, whatever the collection mode. A tenant can only be paid once this
+          platform knows where to send it, and making the form conditional created a
+          chicken-and-egg: the number could not be entered until collection was switched on, and
+          switching it on with nowhere to pay is exactly what the API refuses. */}
+      {!isLoading && (
         <Card className="space-y-3">
           <div>
             <h2 className="text-sm font-semibold text-slate-900 dark:text-white">
               Where we send your money
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Your customers pay into our paybill and we pay you automatically. We only need the
-              number you want the money in — no API keys, no passkey, nothing to set up on Safaricom.
+              {aggregated
+                ? "Your customers pay into our paybill and we pay you automatically — every hour, straight to this number. We only need the number: no API keys, no passkey, nothing to set up on Safaricom."
+                : "You currently collect your customers' payments into your own M-Pesa account, so there is nothing for us to send on. Adding your number here means you are ready the moment that changes."}
             </p>
           </div>
 
-          {!destinationSet && (
+          {aggregated && !destinationSet && (
             <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
               Add your number to start receiving payouts. Your earnings are safe in the meantime —
-              they are held and paid out as soon as this is set.
+              they are held and paid out automatically as soon as this is set.
             </p>
           )}
 
