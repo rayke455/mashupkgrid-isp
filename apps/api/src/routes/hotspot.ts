@@ -259,6 +259,88 @@ export async function hotspotRoutes(app: FastifyInstance): Promise<void> {
   );
 
   /**
+   * Staff view of the portal's payment methods: what this tenant COULD offer, and which of those
+   * they have switched off. Separate from the public endpoint above, which only ever reports the
+   * methods a customer can actually use — an anonymous visitor has no business knowing that a
+   * method exists but is disabled.
+   */
+  app.get(
+    "/payment-toggles",
+    {
+      config: { audience: "staff" },
+      preHandler: [authenticate, resolveTenant, checkMaintenance, requirePermission("settings.manage")],
+    },
+    async (request, reply) => {
+      // Platform administration has no captive portal of its own, so there is nothing to toggle.
+      const tenantId = request.tenantCtx?.id;
+      if (!tenantId) throw new ConflictError("Platform administration has no captive portal");
+
+      const [tenant, configs, platformMpesa] = await Promise.all([
+        prisma.tenant.findUniqueOrThrow({
+          where: { id: tenantId },
+          select: { collectionMode: true, portalPaymentsDisabled: true },
+        }),
+        prisma.paymentProviderConfig.findMany({ where: { tenantId, isActive: true } }),
+        prisma.platformMpesaConfig.findFirst({ where: { isActive: true } }),
+      ]);
+
+      const disabled = new Set(tenant.portalPaymentsDisabled);
+      const usable = {
+        MPESA:
+          configs.some((c) => c.provider === "MPESA") ||
+          (tenant.collectionMode === "PLATFORM" && Boolean(platformMpesa)),
+        PAYSTACK: configs.some((c) => c.provider === "PAYSTACK"),
+        PESAPAL: configs.some((c) => (c.provider as string) === "PESAPAL"),
+      };
+
+      reply.send(
+        successResponse(
+          {
+            methods: (["MPESA", "PAYSTACK", "PESAPAL"] as const).map((method) => ({
+              method,
+              usable: usable[method],
+              enabled: usable[method] && !disabled.has(method),
+            })),
+          },
+          request.id
+        )
+      );
+    }
+  );
+
+  app.put(
+    "/payment-toggles",
+    {
+      config: { audience: "staff" },
+      preHandler: [authenticate, resolveTenant, checkMaintenance, requirePermission("settings.manage")],
+    },
+    async (request, reply) => {
+      // Platform administration has no captive portal of its own, so there is nothing to toggle.
+      const tenantId = request.tenantCtx?.id;
+      if (!tenantId) throw new ConflictError("Platform administration has no captive portal");
+      const body = z
+        .object({ method: z.enum(["MPESA", "PAYSTACK", "PESAPAL"]), enabled: z.boolean() })
+        .parse(request.body);
+
+      const tenant = await prisma.tenant.findUniqueOrThrow({
+        where: { id: tenantId },
+        select: { portalPaymentsDisabled: true },
+      });
+
+      const disabled = new Set(tenant.portalPaymentsDisabled);
+      if (body.enabled) disabled.delete(body.method);
+      else disabled.add(body.method);
+
+      await prisma.tenant.update({
+        where: { id: tenantId },
+        data: { portalPaymentsDisabled: [...disabled] },
+      });
+
+      reply.send(successResponse({ method: body.method, enabled: body.enabled }, request.id));
+    }
+  );
+
+  /**
    * Public discovery endpoint reporting which payment methods are enabled for this tenant.
    */
   app.get(
@@ -268,21 +350,35 @@ export async function hotspotRoutes(app: FastifyInstance): Promise<void> {
       const { tenantSlug } = tenantParamsSchema.parse(request.params);
       const tenant = await resolveTenantBySlug(tenantSlug);
 
-      const configs = await prisma.paymentProviderConfig.findMany({
-        where: { tenantId: tenant.id, isActive: true },
-      });
+      const [configs, platformMpesa] = await Promise.all([
+        prisma.paymentProviderConfig.findMany({
+          where: { tenantId: tenant.id, isActive: true },
+        }),
+        // Needed for aggregated tenants, who have no M-Pesa config of their own.
+        prisma.platformMpesaConfig.findFirst({ where: { isActive: true } }),
+      ]);
 
-      const mpesa = configs.some((c) => c.provider === "MPESA");
       const paystackConfig = configs.find((c) => c.provider === "PAYSTACK");
       const pesapalConfig = configs.find((c) => (c.provider as string) === "PESAPAL");
+
+      // A tenant on platform collection has no M-Pesa credentials of their own by design — the
+      // platform's paybill collects for them. Keying availability purely off their own config row
+      // is what made M-Pesa vanish from an aggregated tenant's portal even though it was the one
+      // method that definitely worked for them.
+      const mpesaUsable =
+        configs.some((c) => c.provider === "MPESA") ||
+        (tenant.collectionMode === "PLATFORM" && Boolean(platformMpesa));
+
+      const disabled = new Set(tenant.portalPaymentsDisabled);
+      const enabled = (method: string, usable: boolean) => usable && !disabled.has(method);
 
       reply.send(
         successResponse(
           {
-            mpesa,
-            paystack: !!paystackConfig,
+            mpesa: enabled("MPESA", mpesaUsable),
+            paystack: enabled("PAYSTACK", Boolean(paystackConfig)),
             paystackPublicKey: paystackConfig?.publicKey ?? null,
-            pesapal: !!pesapalConfig,
+            pesapal: enabled("PESAPAL", Boolean(pesapalConfig)),
             pesapalConsumerKey: pesapalConfig?.publicKey ?? null,
           },
           request.id

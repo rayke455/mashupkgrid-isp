@@ -772,7 +772,7 @@ export default function DashboardHomePage() {
               </Link>
 
               <Link
-                href="/mpesa"
+                href="/payments-setup"
                 className="group flex items-center justify-between p-3.5 rounded-xl border border-slate-200/80 bg-slate-50/50 hover:bg-white hover:border-cyan-500/50 hover:shadow-md dark:border-slate-800 dark:bg-slate-950/40 dark:hover:bg-slate-900 transition-all"
               >
                 <div className="flex items-center gap-3">

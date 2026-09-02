@@ -89,24 +89,12 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
       label: "Billing & messaging",
       items: [
         {
-          href: "/mpesa",
-          label: "M-Pesa",
-          hint: "Paybill, STK push",
+          // One entry covering every way of getting paid — see the tabbed page for why these
+          // stopped being three separate destinations.
+          href: "/payments-setup",
+          label: "Getting paid",
+          hint: "Till, paybill, M-Pesa, cards",
           icon: <IconMpesa size={16} />,
-          show: has("settings.manage") || has("payments.reconcile"),
-        },
-        {
-          href: "/paystack",
-          label: "Paystack",
-          hint: "Cards, bank transfer",
-          icon: <IconInvoice size={16} />,
-          show: has("settings.manage") || has("payments.reconcile"),
-        },
-        {
-          href: "/pesapal",
-          label: "Pesapal",
-          hint: "M-Pesa, Airtel, Cards",
-          icon: <IconInvoice size={16} />,
           show: has("settings.manage") || has("payments.reconcile"),
         },
         {

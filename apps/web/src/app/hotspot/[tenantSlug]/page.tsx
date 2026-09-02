@@ -221,11 +221,16 @@ export default function HotspotCaptivePortalPage() {
     setCompletingRouterLogin(true);
     setStalledLoginUrl(null);
     submitRouterLogin(link, username, password);
+    // 2.5s, not 8. A successful hand-off replaces this page within a few hundred milliseconds —
+    // if it has not happened by now it is not going to, and the environment where it fails most
+    // is Android's captive-portal mini-browser, which is stricter than a normal browser about
+    // leaving an HTTPS page for a plain-HTTP one. Waiting longer only means the customer, who has
+    // already paid, watches a progress bar creep toward a number it never reaches.
     window.setTimeout(() => {
       setCompletingRouterLogin(false);
       setStalledLoginUrl(routerLoginUrl(link, username, password));
       showResultInstead();
-    }, 8000);
+    }, 2500);
   };
   const autoReconnectAttempted = useRef(false);
 
@@ -606,21 +611,34 @@ export default function HotspotCaptivePortalPage() {
         )}
       </div>
 
-      {/* The browser would not hand off to the router automatically. The customer has already
-          paid, so this must be an obvious way forward rather than a dead end — and a navigation
-          they tap is permitted where the automatic one was not. */}
+      {/* The browser would not hand off to the router automatically. A centred overlay, not a
+          top bar: the portal already has a language toggle, a QR button and a promo strip pinned
+          to the top, and a banner competing with those is unreadable at the one moment that
+          matters — the customer has paid and is one tap from being online. */}
       {stalledLoginUrl && (
-        <div className="fixed inset-x-0 top-0 z-[60] bg-amber-500 px-4 py-3 text-center text-sm text-amber-950 shadow-lg">
-          <p className="font-semibold">Almost there — tap to finish connecting</p>
-          <p className="mt-0.5 text-xs">
-            Your payment went through. Your browser blocked the automatic hand-off to the router.
-          </p>
-          <a
-            href={stalledLoginUrl}
-            className="mt-2 inline-block rounded-full bg-amber-950 px-4 py-1.5 text-xs font-bold text-white"
-          >
-            Connect me now
-          </a>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 p-6 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-2xl dark:bg-obsidian-900">
+            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-2xl dark:bg-emerald-950/60">
+              ✓
+            </div>
+            <h2 className="text-lg font-bold text-slate-900 dark:text-white">Payment received</h2>
+            <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+              One last tap to get online — your browser needs you to confirm.
+            </p>
+            <a
+              href={stalledLoginUrl}
+              className="mt-4 block w-full rounded-xl bg-emerald-600 px-4 py-3 text-base font-bold text-white shadow-lg active:bg-emerald-700"
+            >
+              Connect me now
+            </a>
+            <button
+              type="button"
+              onClick={() => setStalledLoginUrl(null)}
+              className="mt-3 text-xs text-slate-400 underline-offset-2 hover:underline"
+            >
+              Show my voucher code instead
+            </button>
+          </div>
         </div>
       )}
 

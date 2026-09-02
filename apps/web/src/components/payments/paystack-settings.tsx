@@ -12,7 +12,7 @@ interface PaystackConfigStatus {
   publicKey: string | null;
 }
 
-export default function PaystackPage() {
+export function PaystackSettings() {
   const queryClient = useQueryClient();
   const [secretKey, setSecretKey] = useState("");
   const [publicKey, setPublicKey] = useState("");
@@ -37,18 +37,9 @@ export default function PaystackPage() {
   });
 
   return (
-    <div className="max-w-2xl space-y-6">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="flex items-center gap-2.5 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-500/15 text-sky-600 dark:text-sky-400">
-              <IconInvoice size={18} />
-            </span>
-            Paystack
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Card, bank, and mobile money payments across Africa via Paystack.
-          </p>
         </div>
         {status?.configured && (
           <Badge variant={status.isActive ? "success" : "warning"}>

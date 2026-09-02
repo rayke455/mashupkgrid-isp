@@ -62,6 +62,13 @@ model Tenant {
   payoutShortcode  String?
   /// "PAYBILL" | "TILL" — selects the Daraja B2B command (BusinessPayBill vs BusinessBuyGoods).
   payoutShortcodeType String @default("PAYBILL")
+  /// Payment methods this tenant has switched OFF for their captive portal, e.g. ["PAYSTACK"].
+  ///
+  /// A disable-list rather than an enable-list, matching disabledFeatures above and for the same
+  /// reason: a method that becomes available to a tenant (they configure a gateway, or they are
+  /// switched to platform collection) should appear on their portal without anyone remembering
+  /// to opt them in. Turning one off is the deliberate act, so that is what gets recorded.
+  portalPaymentsDisabled String[] @default([])
   createdAt  DateTime     @default(now())
   updatedAt  DateTime     @updatedAt
   deletedAt  DateTime?

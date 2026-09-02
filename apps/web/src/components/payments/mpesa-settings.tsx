@@ -25,7 +25,7 @@ interface C2BTransaction {
   transactionTime: string;
 }
 
-export default function MpesaPage() {
+export function MpesaSettings() {
   const queryClient = useQueryClient();
   const [consumerKey, setConsumerKey] = useState("");
   const [consumerSecret, setConsumerSecret] = useState("");
@@ -87,18 +87,9 @@ export default function MpesaPage() {
   });
 
   return (
-    <div className="max-w-3xl space-y-6">
+    <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2.5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
-              <IconMpesa size={20} />
-            </span>
-            M-Pesa Daraja Integration
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            Safaricom C2B Paybill webhook processing and STK Push direct collections.
-          </p>
         
           <p className="mt-2 rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600 dark:bg-obsidian-900 dark:text-slate-300">
             Only needed if you collect your customers&apos; payments into your own M-Pesa account.

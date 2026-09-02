@@ -178,15 +178,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       show: isTenantScoped && has("payments.read"),
     },
     {
-      href: "/mpesa",
-      label: "M-Pesa Paybill",
+      // One entry, not four. These were separate pages for M-Pesa, Paystack and Pesapal, which
+      // presented four unrelated features where an operator has one question and needs one answer.
+      href: "/payments-setup",
+      label: "Getting paid",
       icon: <IconMpesa size={18} />,
-      show: isTenantScoped && (has("settings.manage") || has("payments.reconcile")),
-    },
-    {
-      href: "/paystack",
-      label: "Paystack",
-      icon: <IconInvoice size={18} />,
       show: isTenantScoped && (has("settings.manage") || has("payments.reconcile")),
     },
     {
