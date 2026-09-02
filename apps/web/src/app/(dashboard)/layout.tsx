@@ -29,6 +29,7 @@ import {
   IconMessage,
   IconLifeBuoy,
   IconSparkles,
+  IconPalette,
   IconMenu,
   IconClose,
   IconPulse,
@@ -213,6 +214,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       href: "/vouchers",
       label: "Hotspot & Captive Portal",
       icon: <IconTicket size={18} />,
+      show: isTenantScoped && has("radius.manage"),
+    },
+    {
+      href: "/themes",
+      label: "Hotspot Themes",
+      icon: <IconPalette size={18} />,
       show: isTenantScoped && has("radius.manage"),
     },
     {
