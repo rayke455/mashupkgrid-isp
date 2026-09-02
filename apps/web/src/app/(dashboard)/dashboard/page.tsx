@@ -188,16 +188,16 @@ export default function DashboardHomePage() {
   const trialTenantsCount = platformTenants?.items.filter((t) => t.trialEndsAt && new Date(t.trialEndsAt) > new Date()).length ?? 0;
 
   return (
-    <div className="space-y-6 sm:space-y-8 w-full min-w-0">
+    <div className="space-y-6 sm:space-y-8 w-full min-w-0 animate-fade-in-up">
       {/* Top Welcome & Telemetry Header */}
-      <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-4 sm:p-6 lg:p-8 text-white shadow-2xl border border-indigo-500/20 w-full min-w-0">
-        <div className="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-cyan-500/10 blur-3xl pointer-events-none" />
-        <div className="absolute -left-16 -bottom-16 h-64 w-64 rounded-full bg-purple-500/10 blur-3xl pointer-events-none" />
+      <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-900 animate-gradient-flow p-4 sm:p-6 lg:p-8 text-white shadow-2xl border border-indigo-500/20 w-full min-w-0">
+        <div className="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-cyan-500/15 blur-3xl pointer-events-none animate-float-gentle" />
+        <div className="absolute -left-16 -bottom-16 h-64 w-64 rounded-full bg-purple-500/15 blur-3xl pointer-events-none animate-float-gentle" style={{ animationDelay: "2s" }} />
 
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4 sm:gap-6 min-w-0">
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2 mb-1.5">
-              <span className="flex h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-400 animate-ping" />
+              <span className="flex h-2.5 w-2.5 shrink-0 rounded-full bg-emerald-400 animate-pulse-ring" />
               <span className="text-[10px] sm:text-[11px] font-black uppercase tracking-widest text-emerald-400 truncate">
                 {isPlatform ? "Super Admin Master Console" : "Live Operations Telemetry"}
               </span>
@@ -468,21 +468,21 @@ export default function DashboardHomePage() {
 
       {isStaff && <OnboardingChecklist />}
 
-      {/* 4 Colorful Primary KPI Stat Cards */}
+      {/* 4 Colorful Primary KPI Stat Cards with Glassmorphism & Shimmer Animations */}
       {isStaff && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 animate-fade-in-up-delay-1">
           {/* Card 1: Subscribers (Purple / Indigo) */}
-          <div className="group relative overflow-hidden rounded-2xl bg-white dark:bg-slate-900/80 p-5 shadow-lg border border-purple-500/20 hover:border-purple-500/50 transition-all hover:shadow-purple-500/10">
+          <div className="group relative overflow-hidden rounded-2xl bg-white dark:bg-slate-900/80 p-5 shadow-lg border border-purple-500/20 hover:border-purple-500/60 transition-all card-shimmer hover-lift-card hover:shadow-purple-500/15">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 Subscribers
               </span>
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400">
-                <IconUsers size={20} />
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 group-hover:scale-115 group-hover:rotate-6 transition-all duration-300 shadow-sm">
+                <IconUsers size={22} />
               </div>
             </div>
             <div className="mt-3">
-              <span className="text-3xl font-black text-slate-900 dark:text-white tracking-tight">
+              <span className="text-3xl font-black text-slate-900 dark:text-white tracking-tight group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
                 {customers?.pagination.total ?? "—"}
               </span>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1">
@@ -492,17 +492,17 @@ export default function DashboardHomePage() {
           </div>
 
           {/* Card 2: 30-Day Revenue (Emerald / Green) */}
-          <div className="group relative overflow-hidden rounded-2xl bg-white dark:bg-slate-900/80 p-5 shadow-lg border border-emerald-500/20 hover:border-emerald-500/50 transition-all hover:shadow-emerald-500/10">
+          <div className="group relative overflow-hidden rounded-2xl bg-white dark:bg-slate-900/80 p-5 shadow-lg border border-emerald-500/20 hover:border-emerald-500/60 transition-all card-shimmer hover-lift-card hover:shadow-emerald-500/15">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 30-Day Revenue
               </span>
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
-                <IconMpesa size={20} />
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 group-hover:scale-115 group-hover:rotate-6 transition-all duration-300 shadow-sm">
+                <IconMpesa size={22} />
               </div>
             </div>
             <div className="mt-3">
-              <span className="text-3xl font-black text-emerald-600 dark:text-emerald-400 tracking-tight">
+              <span className="text-3xl font-black text-emerald-600 dark:text-emerald-400 tracking-tight group-hover:scale-105 inline-block transition-transform">
                 {revenue30dMinor !== null ? formatMoney(revenue30dMinor) : "—"}
               </span>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
@@ -512,17 +512,17 @@ export default function DashboardHomePage() {
           </div>
 
           {/* Card 3: Network Bandwidth (Cyan / Blue) */}
-          <div className="group relative overflow-hidden rounded-2xl bg-white dark:bg-slate-900/80 p-5 shadow-lg border border-cyan-500/20 hover:border-cyan-500/50 transition-all hover:shadow-cyan-500/10">
+          <div className="group relative overflow-hidden rounded-2xl bg-white dark:bg-slate-900/80 p-5 shadow-lg border border-cyan-500/20 hover:border-cyan-500/60 transition-all card-shimmer hover-lift-card hover:shadow-cyan-500/15">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 Total Bandwidth
               </span>
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-600 dark:text-cyan-400">
-                <IconNetworkPool size={20} />
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 group-hover:scale-115 group-hover:-rotate-6 transition-all duration-300 shadow-sm">
+                <IconNetworkPool size={22} />
               </div>
             </div>
             <div className="mt-3">
-              <span className="text-3xl font-black text-cyan-600 dark:text-cyan-400 tracking-tight">
+              <span className="text-3xl font-black text-cyan-600 dark:text-cyan-400 tracking-tight group-hover:scale-105 inline-block transition-transform">
                 {formatBytes(totalBandwidthBytes)}
               </span>
               <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-2 font-mono">
@@ -534,13 +534,13 @@ export default function DashboardHomePage() {
           </div>
 
           {/* Card 4: Hardware Health (Amber / Rose) */}
-          <div className="group relative overflow-hidden rounded-2xl bg-white dark:bg-slate-900/80 p-5 shadow-lg border border-amber-500/20 hover:border-amber-500/50 transition-all hover:shadow-amber-500/10">
+          <div className="group relative overflow-hidden rounded-2xl bg-white dark:bg-slate-900/80 p-5 shadow-lg border border-amber-500/20 hover:border-amber-500/60 transition-all card-shimmer hover-lift-card hover:shadow-amber-500/15">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
                 MikroTik Routers
               </span>
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400">
-                <IconRouter size={20} />
+              <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 group-hover:scale-115 group-hover:rotate-6 transition-all duration-300 shadow-sm">
+                <IconRouter size={22} />
               </div>
             </div>
             <div className="mt-3">
@@ -549,12 +549,12 @@ export default function DashboardHomePage() {
               </span>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 flex items-center gap-1.5">
                 {downRouters > 0 ? (
-                  <span className="text-rose-600 dark:text-rose-400 font-bold">
+                  <span className="text-rose-600 dark:text-rose-400 font-bold animate-pulse">
                     ⚠️ {downRouters} unreachable
                   </span>
                 ) : (
                   <span className="text-emerald-600 dark:text-emerald-400 font-semibold flex items-center gap-1">
-                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse-ring" />
                     All nodes responding
                   </span>
                 )}
@@ -567,7 +567,7 @@ export default function DashboardHomePage() {
       {/* Revenue trend — previously the dashboard showed only a 30-day total, which cannot
           distinguish a steady month from one good day followed by silence. */}
       {isStaff && (
-        <Card className="space-y-4">
+        <Card className="space-y-4 hover-lift-card animate-fade-in-up-delay-2">
           <div className="border-b border-slate-100 pb-2 dark:border-slate-800">
             <h2 className="text-base font-bold text-slate-900 dark:text-white">Revenue</h2>
             <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -606,9 +606,9 @@ export default function DashboardHomePage() {
 
       {/* Network Bandwidth Telemetry & Heavy Consumers Center */}
       {isStaff && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-fade-in-up-delay-3">
           {/* Daily Traffic Breakdown Chart */}
-          <Card className="lg:col-span-2 space-y-4">
+          <Card className="lg:col-span-2 space-y-4 hover-lift-card">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-100 dark:border-slate-800">
               <div>
                 <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
