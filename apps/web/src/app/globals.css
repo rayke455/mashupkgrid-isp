@@ -3,30 +3,21 @@
 @tailwind utilities;
 
 :root {
-  /* Follows the app's OWN theme (the `dark` class Tailwind's darkMode: "class" keys off, set on
-     <html> in app/layout.tsx), never the operating system's. `color-scheme: light dark` here
-     handed that decision to the OS instead: on a build whose surfaces are always dark, a visitor
-     whose OS is set to light got light-rendered native chrome on top of them — white select
-     dropdowns, light date/time pickers, a light scrollbar gutter, and the browser's own pale
-     autofill highlight on every login and payment field. Splitting the declaration across
-     :root/.dark keeps native controls matching whichever theme is actually rendered. */
-  color-scheme: light;
+  color-scheme: dark;
 
-  /* Default brand palette (the same blue that shipped before white-labeling existed) — R G B
-     triplets, not hex, because Tailwind's `<alpha-value>` opacity-modifier support requires it.
-     <TenantThemeStyle> overrides these on a wrapping element for a tenant with a saved brand
-     color; unset tenants render this default with zero extra markup. */
-  --brand-50: 239 246 255;
-  --brand-100: 219 234 254;
-  --brand-200: 191 219 254;
-  --brand-300: 147 197 253;
-  --brand-400: 96 165 250;
-  --brand-500: 59 130 246;
-  --brand-600: 37 99 235;
-  --brand-700: 29 78 216;
-  --brand-800: 30 64 175;
-  --brand-900: 30 58 138;
-  --brand-950: 15 23 42;
+  /* Authentic Mashupkgrid brand palette (Electric Cyan & Cyber Cobalt matching logo.jpg) — R G B
+     triplets for Tailwind <alpha-value> support. */
+  --brand-50: 240 253 255;
+  --brand-100: 207 250 254;
+  --brand-200: 165 243 252;
+  --brand-300: 103 232 249;
+  --brand-400: 34 211 238;
+  --brand-500: 6 182 212;
+  --brand-600: 2 132 199;
+  --brand-700: 3 105 161;
+  --brand-800: 7 89 133;
+  --brand-900: 12 74 110;
+  --brand-950: 8 47 73;
 }
 
 .dark {
@@ -48,19 +39,11 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background-color: #cbd5e1;
+  background-color: #334155;
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background-color: #94a3b8;
-}
-
-.dark ::-webkit-scrollbar-thumb {
-  background-color: #334155;
-}
-
-.dark ::-webkit-scrollbar-thumb:hover {
   background-color: #475569;
 }
 
@@ -68,27 +51,22 @@ body {
 .bg-grid-pattern {
   background-size: 32px 32px;
   background-image: 
-    linear-gradient(to right, rgba(148, 163, 184, 0.08) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
+    linear-gradient(to right, rgba(0, 242, 254, 0.04) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 242, 254, 0.04) 1px, transparent 1px);
 }
 
 .dark .bg-grid-pattern {
   background-image: 
-    linear-gradient(to right, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+    linear-gradient(to right, rgba(0, 242, 254, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 242, 254, 0.05) 1px, transparent 1px);
 }
 
-/* These three resolve --brand-600 rather than repeating the default blue as a literal. This is a
-   white-label product: <TenantThemeStyle> rewrites --brand-* per tenant, so a hardcoded
-   rgb(37 99 235) left an emerald- or amber-branded ISP with a blue ambient glow behind their own
-   hero and blue slider thumbs on their own forms. Tenants who set no brand color are unaffected
-   — --brand-600 is that exact blue by default (see :root above). */
 .bg-radial-glow {
-  background: radial-gradient(circle at 50% 0%, rgb(var(--brand-600) / 0.12) 0%, transparent 70%);
+  background: radial-gradient(circle at 50% 0%, rgba(6, 182, 212, 0.15) 0%, transparent 70%);
 }
 
 .dark .bg-radial-glow {
-  background: radial-gradient(circle at 50% 0%, rgb(var(--brand-600) / 0.22) 0%, transparent 70%);
+  background: radial-gradient(circle at 50% 0%, rgba(6, 182, 212, 0.22) 0%, transparent 70%);
 }
 
 /* Custom styled range input */
@@ -152,37 +130,26 @@ input[type="range"] {
 
 @keyframes photonic-glow {
   0%, 100% { filter: drop-shadow(0 0 6px rgba(6, 182, 212, 0.7)); }
-  50% { filter: drop-shadow(0 0 16px rgba(6, 182, 212, 1)) drop-shadow(0 0 28px rgba(59, 130, 246, 0.8)); }
+  50% { filter: drop-shadow(0 0 16px rgba(6, 182, 212, 1)) drop-shadow(0 0 28px rgba(16, 185, 129, 0.8)); }
 }
 
 .animate-photonic-glow {
   animation: photonic-glow 2.2s ease-in-out infinite;
 }
 
-/* ---------------------------------------------------------------------------------------------
-   Chart tokens.
-
-   Data marks deliberately do NOT use the tenant brand colour. Brand is a runtime CSS variable
-   that each ISP picks for themselves, so it cannot be checked ahead of time for contrast against
-   the chart surface or for colourblind separation from a second series — a tenant who picks pale
-   yellow would get an unreadable chart. These two hues are fixed and were validated against this
-   app's real surfaces (white / obsidian-900) in both modes: adjacent CVD ΔE 24.7 light / 26.8
-   dark, normal-vision ΔE 33.6 / 31.8, contrast ≥ 3:1. Brand colour still carries the UI chrome.
-
-   Dark values are the same hues re-stepped for the dark surface, not an automatic lightening.
---------------------------------------------------------------------------------------------- */
+/* Chart tokens */
 .viz {
   --viz-surface: #ffffff;
   --viz-grid: #e2e8f0;
-  --viz-series-1: #2a78d6;
-  --viz-series-2: #eb6834;
+  --viz-series-1: #0284c7;
+  --viz-series-2: #10b981;
 }
 
 .dark .viz {
   --viz-surface: #0f172a;
   --viz-grid: #1e293b;
-  --viz-series-1: #3987e5;
-  --viz-series-2: #d95926;
+  --viz-series-1: #38bdf8;
+  --viz-series-2: #059669;
 }
 
 /* ========================================================================= */

@@ -44,10 +44,6 @@ export default function PlatformMpesaPage() {
     enabled: !user?.tenantId,
   });
 
-  if (user?.tenantId) {
-    return null;
-  }
-
   const saveConfig = useMutation({
     mutationFn: () =>
       apiFetch("/api/v1/payments/mpesa/platform-config", {
@@ -73,6 +69,10 @@ export default function PlatformMpesaPage() {
     },
     onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to save configuration"),
   });
+
+  if (user?.tenantId) {
+    return null;
+  }
 
   return (
     <div className="max-w-2xl space-y-6">

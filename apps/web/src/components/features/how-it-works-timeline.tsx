@@ -90,10 +90,10 @@ export function HowItWorksTimeline() {
         <div className="rounded-2xl border border-slate-800 bg-slate-900/70 p-6 space-y-4 relative flex flex-col justify-between shadow-xl">
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <span className="h-9 w-9 rounded-xl bg-indigo-600/20 border border-indigo-500/40 text-indigo-400 font-bold flex items-center justify-center text-sm font-mono">
+              <span className="h-9 w-9 rounded-xl bg-cyan-600/20 border border-cyan-500/40 text-cyan-400 font-bold flex items-center justify-center text-sm font-mono">
                 03
               </span>
-              <span className="text-[10px] font-mono text-indigo-400 bg-indigo-950/60 border border-indigo-800 px-2 py-0.5 rounded">
+              <span className="text-[10px] font-mono text-cyan-400 bg-cyan-950/60 border border-cyan-800 px-2 py-0.5 rounded">
                 Complete Autopilot
               </span>
             </div>

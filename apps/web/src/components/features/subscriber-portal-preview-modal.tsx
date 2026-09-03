@@ -44,7 +44,7 @@ export function SubscriberPortalPreviewModal() {
             </div>
 
             {/* Subscriber Header Card */}
-            <div className="rounded-2xl bg-gradient-to-r from-brand-600/20 via-indigo-600/20 to-emerald-600/20 border border-slate-800 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="rounded-2xl bg-gradient-to-r from-cyan-600/20 via-sky-600/20 to-emerald-600/20 border border-slate-800 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <div>
                 <div className="flex items-center gap-2">
                   <h4 className="text-lg font-bold text-white">Brian Kimani</h4>

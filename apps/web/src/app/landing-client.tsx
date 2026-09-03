@@ -26,6 +26,7 @@ import {
 import { NetworkCablesAnimation } from "@/components/network-cables-animation";
 import { TelecomInnovationsHub } from "@/components/features/telecom-innovations-hub";
 import { SmartNetworkSegmenter } from "@/components/features/smart-network-segmenter";
+import { InstantHowItWorksHero } from "@/components/features/instant-how-it-works-hero";
 import { HowItWorksTimeline } from "@/components/features/how-it-works-timeline";
 import { ComparisonMatrix } from "@/components/features/comparison-matrix";
 import { SubscriberPortalPreviewModal } from "@/components/features/subscriber-portal-preview-modal";
@@ -274,23 +275,23 @@ set accept=yes port=3799
         </div>
       )}
 
-      {/* Dynamic Background Mesh & Ambient Glow */}
+      {/* Dynamic Background Mesh & Ambient Glow matching Logo Colors */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-        <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-gradient-to-tr from-brand-600/20 via-indigo-500/15 to-emerald-500/10 blur-[130px] rounded-full" />
-        <div className="absolute top-[800px] right-0 w-[600px] h-[400px] bg-brand-500/10 blur-[120px] rounded-full" />
+        <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-gradient-to-tr from-cyan-500/20 via-sky-500/15 to-emerald-500/15 blur-[130px] rounded-full" />
+        <div className="absolute top-[800px] right-0 w-[600px] h-[400px] bg-cyan-500/10 blur-[120px] rounded-full" />
         <div className="absolute bottom-10 left-10 w-[500px] h-[500px] bg-emerald-500/10 blur-[120px] rounded-full" />
         <div className="absolute inset-0 bg-grid-pattern opacity-60" />
       </div>
 
       {/* Smart Top Announcement Pill Bar */}
-      <div className="relative z-50 bg-gradient-to-r from-brand-900/60 via-indigo-900/60 to-brand-900/60 border-b border-brand-500/20 py-2 px-4 text-center text-xs font-mono">
+      <div className="relative z-50 bg-gradient-to-r from-cyan-950/80 via-slate-950 to-emerald-950/80 border-b border-cyan-500/20 py-2 px-4 text-center text-xs font-mono">
         <a href={landingContent.announcement.linkUrl || "#innovations"} className="inline-flex items-center gap-2 text-slate-300 hover:text-white transition-colors">
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
-          <span className="px-2 py-0.5 rounded-full bg-brand-500/20 text-brand-300 font-mono text-[10px] font-bold uppercase tracking-wider border border-brand-500/40">
+          <span className="px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 font-mono text-[10px] font-bold uppercase tracking-wider border border-cyan-500/40">
             {landingContent.announcement.badge}
           </span>
           <span>{landingContent.announcement.text}</span>
-          <span className="text-brand-400 font-bold ml-1">{landingContent.announcement.linkText}</span>
+          <span className="text-cyan-400 font-bold ml-1">{landingContent.announcement.linkText}</span>
         </a>
       </div>
 
@@ -416,11 +417,11 @@ set accept=yes port=3799
                       onClick={() => setNavDropdown(null)}
                       className="flex items-start gap-3 p-2.5 rounded-xl hover:bg-slate-900/80 transition-colors group"
                     >
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-purple-500/15 text-purple-400 border border-purple-500/30 text-sm">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-cyan-500/15 text-cyan-400 border border-cyan-500/30 text-sm">
                         <IconTerminal size={15} />
                       </span>
                       <div>
-                        <div className="text-xs font-bold text-white group-hover:text-purple-400 transition-colors">
+                        <div className="text-xs font-bold text-white group-hover:text-cyan-400 transition-colors">
                           RouterOS Scripts
                         </div>
                         <p className="text-[10px] text-slate-400 leading-snug mt-0.5">
@@ -468,11 +469,11 @@ set accept=yes port=3799
                       onClick={() => setNavDropdown(null)}
                       className="flex items-start gap-3 p-2.5 rounded-xl hover:bg-slate-900/80 transition-colors group"
                     >
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-500/15 text-indigo-400 border border-indigo-500/30 text-sm">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-sm">
                         <IconDashboard size={15} />
                       </span>
                       <div>
-                        <div className="text-xs font-bold text-white group-hover:text-indigo-400 transition-colors">
+                        <div className="text-xs font-bold text-white group-hover:text-emerald-400 transition-colors">
                           Platform Features
                         </div>
                         <p className="text-[10px] text-slate-400 leading-snug mt-0.5">
@@ -556,7 +557,7 @@ set accept=yes port=3799
 
               {/* Deploy Console (Direct Centipid-style registration) */}
               <Link href="/isp/registration">
-                <Button className="gap-1.5 px-3.5 sm:px-4 py-1.5 sm:py-2 text-xs font-black shadow-glow bg-gradient-to-r from-brand-600 via-indigo-600 to-cyan-600 hover:from-brand-500 hover:to-cyan-500 rounded-xl transition-all">
+                <Button className="gap-1.5 px-3.5 sm:px-4 py-1.5 sm:py-2 text-xs font-black shadow-glow bg-gradient-to-r from-cyan-500 via-blue-600 to-emerald-500 hover:from-cyan-400 hover:to-emerald-400 rounded-xl transition-all">
                   <span>Deploy Console</span>
                   <IconArrowRight size={13} />
                 </Button>
@@ -589,7 +590,7 @@ set accept=yes port=3799
                   onClick={() => setMobileMenuOpen(false)}
                   className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 text-slate-200 hover:border-cyan-500/50 flex items-center gap-2"
                 >
-                  <span className="h-1.5 w-1.5 rounded-full bg-brand-400" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-cyan-400" />
                   <span className="font-bold">Live Console</span>
                 </a>
                 <a
@@ -611,9 +612,9 @@ set accept=yes port=3799
                 <a
                   href="#scripts"
                   onClick={() => setMobileMenuOpen(false)}
-                  className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 text-purple-300 hover:border-purple-500/50 flex items-center gap-2"
+                  className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 text-cyan-300 hover:border-cyan-500/50 flex items-center gap-2"
                 >
-                  <span className="h-1.5 w-1.5 rounded-full bg-purple-400" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-cyan-400" />
                   <span className="font-bold">RouterOS</span>
                 </a>
                 <a
@@ -621,7 +622,7 @@ set accept=yes port=3799
                   onClick={() => setMobileMenuOpen(false)}
                   className="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800 text-slate-200 hover:border-slate-700 flex items-center gap-2"
                 >
-                  <span className="h-1.5 w-1.5 rounded-full bg-indigo-400" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
                   <span className="font-bold">Features</span>
                 </a>
                 <a
@@ -679,21 +680,21 @@ set accept=yes port=3799
         {/* Hero Title */}
         <h1 className="text-4xl font-black tracking-tight text-white sm:text-6xl lg:text-7xl sm:leading-[1.12]">
           {landingContent.hero.mainHeadingStart}{" "}
-          <span className="bg-gradient-to-r from-brand-400 via-indigo-400 to-emerald-400 bg-clip-text text-transparent">
+          <span className="bg-gradient-to-r from-cyan-400 via-sky-400 to-emerald-400 bg-clip-text text-transparent">
             {landingContent.hero.mainHeadingGradient}
           </span>{" "}
           {landingContent.hero.mainHeadingEnd}
         </h1>
 
         {/* Hero Subtitle */}
-        <p className="mx-auto mt-7 max-w-3xl text-lg text-slate-300 sm:text-xl font-normal leading-relaxed">
+        <p className="mx-auto mt-6 max-w-3xl text-base sm:text-xl text-slate-300 font-normal leading-relaxed">
           {landingContent.hero.description}
         </p>
 
         {/* Hero CTA Buttons */}
-        <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
+        <div className="mt-9 flex flex-wrap items-center justify-center gap-4">
           <Link href={landingContent.hero.primaryCtaUrl || "/register"}>
-            <Button className="px-8 py-3.5 text-base font-bold shadow-glow gap-2">
+            <Button className="px-8 py-3.5 text-base font-bold shadow-glow bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 gap-2">
               <span>{landingContent.hero.primaryCtaText || "Start 14-Day Free Trial"}</span>
               <IconArrowRight size={16} />
             </Button>
@@ -701,7 +702,7 @@ set accept=yes port=3799
           <SubscriberPortalPreviewModal />
           <a href={landingContent.hero.secondaryCtaUrl || "#demo"}>
             <Button variant="secondary" className="px-6 py-3 text-sm font-semibold border-slate-700 bg-slate-800/80 text-white hover:bg-slate-700/80 gap-2">
-              <IconTerminal size={15} className="text-brand-400" />
+              <IconTerminal size={15} className="text-cyan-400" />
               <span>{landingContent.hero.secondaryCtaText || "Live Console Sandbox"}</span>
             </Button>
           </a>
@@ -709,7 +710,7 @@ set accept=yes port=3799
 
         {/* Social Proof Stats Bar */}
         <div className="mt-12 grid grid-cols-2 md:grid-cols-4 gap-6 max-w-4xl mx-auto border-t border-slate-800/80 pt-8 text-left">
-          <div className="border-l-2 border-brand-500 pl-4">
+          <div className="border-l-2 border-cyan-500 pl-4">
             <div className="text-2xl font-black font-mono text-white">120+ ISPs</div>
             <div className="text-xs text-slate-400 font-medium">WISPs &amp; Fiber Carriers Powered</div>
           </div>
@@ -717,20 +718,25 @@ set accept=yes port=3799
             <div className="text-2xl font-black font-mono text-emerald-400">KES 180M+</div>
             <div className="text-xs text-slate-400 font-medium">Monthly M-Pesa Automated</div>
           </div>
-          <div className="border-l-2 border-indigo-500 pl-4">
-            <div className="text-2xl font-black font-mono text-indigo-400">&lt; 1.8s</div>
+          <div className="border-l-2 border-sky-500 pl-4">
+            <div className="text-2xl font-black font-mono text-sky-400">&lt; 1.8s</div>
             <div className="text-xs text-slate-400 font-medium">STK Push to Un-throttle</div>
           </div>
-          <div className="border-l-2 border-cyan-500 pl-4">
-            <div className="text-2xl font-black font-mono text-cyan-400">99.99%</div>
+          <div className="border-l-2 border-emerald-400 pl-4">
+            <div className="text-2xl font-black font-mono text-emerald-400">99.99%</div>
             <div className="text-xs text-slate-400 font-medium">Core RADIUS Uptime SLA</div>
           </div>
         </div>
 
         {/* ========================================================================= */}
+        {/* 3-SECOND COMPREHENSION: INSTANT HOW IT WORKS & INTERACTIVE DEMO */}
+        {/* ========================================================================= */}
+        <InstantHowItWorksHero />
+
+        {/* ========================================================================= */}
         {/* SECTION: SMART NETWORK ARCHITECTURE SEGMENTER */}
         {/* ========================================================================= */}
-        <div className="mt-16 text-left">
+        <div className="text-left">
           <SmartNetworkSegmenter />
         </div>
 
@@ -779,7 +785,7 @@ set accept=yes port=3799
                   onClick={() => setSimTab("vouchers")}
                   className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
                     simTab === "vouchers"
-                      ? "bg-purple-600 text-white font-semibold shadow-sm"
+                      ? "bg-cyan-600 text-white font-semibold shadow-sm"
                       : "text-slate-400 hover:text-white"
                   }`}
                 >
@@ -790,7 +796,7 @@ set accept=yes port=3799
                   onClick={() => setSimTab("ipam")}
                   className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
                     simTab === "ipam"
-                      ? "bg-indigo-600 text-white font-semibold shadow-sm"
+                      ? "bg-blue-600 text-white font-semibold shadow-sm"
                       : "text-slate-400 hover:text-white"
                   }`}
                 >
@@ -806,7 +812,7 @@ set accept=yes port=3799
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div className="rounded-xl bg-slate-900/90 border border-slate-800 p-4">
                     <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                      Core Hardware
+                       Core Hardware
                     </p>
                     <p className="text-xl font-bold font-mono text-white mt-1">CCR2004-16G-2S+</p>
                     <p className="text-xs text-emerald-400 font-mono mt-1">CPU Load: 12% · 44°C</p>
@@ -815,7 +821,7 @@ set accept=yes port=3799
                     <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
                       Active PPPoE Sessions
                     </p>
-                    <p className="text-xl font-bold font-mono text-brand-400 mt-1">1,482 Online</p>
+                    <p className="text-xl font-bold font-mono text-cyan-400 mt-1">1,482 Online</p>
                     <p className="text-xs text-slate-400 font-mono mt-1">0 dropped in 24h</p>
                   </div>
                   <div className="rounded-xl bg-slate-900/90 border border-slate-800 p-4">
@@ -829,7 +835,7 @@ set accept=yes port=3799
                     <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
                       RADIUS Latency
                     </p>
-                    <p className="text-xl font-bold font-mono text-indigo-400 mt-1">1.8 ms</p>
+                    <p className="text-xl font-bold font-mono text-sky-400 mt-1">1.8 ms</p>
                     <p className="text-xs text-slate-400 font-mono mt-1">CoA Port 3799 ACK</p>
                   </div>
                 </div>
@@ -855,20 +861,20 @@ set accept=yes port=3799
                     <div>
                       <div className="flex justify-between text-slate-300 mb-1">
                         <span>ether2-pppoe-distribution (Westlands OLT Trunk)</span>
-                        <span className="text-brand-400 font-bold">940 Mbps / 1,000 Mbps (94%)</span>
+                        <span className="text-cyan-400 font-bold">940 Mbps / 1,000 Mbps (94%)</span>
                       </div>
                       <div className="h-2 rounded-full bg-slate-800 overflow-hidden">
-                        <div className="h-full bg-gradient-to-r from-brand-500 to-indigo-500 rounded-full w-[94%]" />
+                        <div className="h-full bg-gradient-to-r from-cyan-500 to-blue-600 rounded-full w-[94%]" />
                       </div>
                     </div>
 
                     <div>
                       <div className="flex justify-between text-slate-300 mb-1">
                         <span>ether3-hotspot-mall (CBD Public Wi-Fi)</span>
-                        <span className="text-purple-400 font-bold">142 Mbps / 300 Mbps (47%)</span>
+                        <span className="text-emerald-400 font-bold">142 Mbps / 300 Mbps (47%)</span>
                       </div>
                       <div className="h-2 rounded-full bg-slate-800 overflow-hidden">
-                        <div className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full w-[47%]" />
+                        <div className="h-full bg-gradient-to-r from-emerald-500 to-cyan-500 rounded-full w-[47%]" />
                       </div>
                     </div>
                   </div>
@@ -999,12 +1005,12 @@ set accept=yes port=3799
               <div className="p-6 md:p-8 space-y-6">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   {/* Voucher Card 1 */}
-                  <div className="rounded-xl border border-dashed border-purple-500/50 bg-gradient-to-br from-purple-950/40 to-slate-950 p-5 space-y-3 relative overflow-hidden">
-                    <div className="absolute top-2 right-2 text-[10px] font-mono uppercase bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded">
+                  <div className="rounded-xl border border-dashed border-cyan-500/50 bg-gradient-to-br from-cyan-950/40 to-slate-950 p-5 space-y-3 relative overflow-hidden">
+                    <div className="absolute top-2 right-2 text-[10px] font-mono uppercase bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded">
                       HOTSPOT PASS
                     </div>
                     <div className="text-lg font-black text-white">1 Hour Unlimited</div>
-                    <div className="text-2xl font-mono font-bold text-purple-400">KES 20</div>
+                    <div className="text-2xl font-mono font-bold text-cyan-400">KES 20</div>
                     <div className="space-y-1 font-mono text-xs text-slate-300 pt-2 border-t border-slate-800">
                       <div className="flex justify-between">
                         <span className="text-slate-500">Voucher Code:</span>
@@ -1079,10 +1085,10 @@ set accept=yes port=3799
                 <div className="space-y-4">
                   <div className="flex items-center justify-between text-xs font-mono">
                     <span className="text-white font-bold">IPv4 CGNAT Pool: 100.64.0.0/20 (Nairobi Metro Core)</span>
-                    <span className="text-brand-400">3,480 / 4,096 Allocated (85%)</span>
+                    <span className="text-cyan-400">3,480 / 4,096 Allocated (85%)</span>
                   </div>
                   <div className="h-3 rounded-full bg-slate-800 overflow-hidden">
-                    <div className="h-full bg-gradient-to-r from-brand-500 via-indigo-500 to-emerald-400 rounded-full w-[85%]" />
+                    <div className="h-full bg-gradient-to-r from-cyan-500 via-sky-500 to-emerald-400 rounded-full w-[85%]" />
                   </div>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs font-mono text-slate-300 pt-2">
                     <div className="bg-slate-900 p-2.5 rounded border border-slate-800">
@@ -1223,8 +1229,8 @@ set accept=yes port=3799
               </p>
             </div>
 
-            <div className="rounded-2xl bg-gradient-to-br from-indigo-950/60 to-slate-950 border border-indigo-500/30 p-6 space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wider text-indigo-400">
+            <div className="rounded-2xl bg-gradient-to-br from-cyan-950/60 to-slate-950 border border-cyan-500/30 p-6 space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-cyan-400">
                 Recovered Revenue Leakage
               </p>
               <p className="text-3xl font-black font-mono text-white">
@@ -1235,8 +1241,8 @@ set accept=yes port=3799
               </p>
             </div>
 
-            <div className="rounded-2xl bg-gradient-to-br from-purple-950/60 to-slate-950 border border-purple-500/30 p-6 space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-wider text-purple-400">
+            <div className="rounded-2xl bg-gradient-to-br from-sky-950/60 to-slate-950 border border-sky-500/30 p-6 space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-sky-400">
                 Subscriber Retention
               </p>
               <p className="text-3xl font-black font-mono text-white">
@@ -1304,14 +1310,14 @@ set accept=yes port=3799
 
             {/* Step 3 */}
             <div className="p-5 rounded-xl bg-slate-900 border border-slate-800 space-y-3">
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">
                 <IconShield size={24} />
               </div>
               <h3 className="font-bold text-white text-sm">3. Mashupkgrid RADIUS</h3>
               <p className="text-xs text-slate-400 leading-relaxed">
                 FreeRADIUS 3.x cluster validates subscriber balance, speed tier, and IP lease.
               </p>
-              <span className="inline-block text-[10px] font-mono bg-indigo-950 border border-indigo-800 text-indigo-300 px-2 py-0.5 rounded">
+              <span className="inline-block text-[10px] font-mono bg-cyan-950 border border-cyan-800 text-cyan-300 px-2 py-0.5 rounded">
                 RFC 2865 / 2866 &amp; CoA 3799
               </span>
             </div>
@@ -1471,10 +1477,10 @@ set accept=yes port=3799
 
           {/* Feature 3 */}
           <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-7 hover:border-brand-500/50 transition-all hover:shadow-glow group">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 mb-5 group-hover:scale-110 transition-transform">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 mb-5 group-hover:scale-110 transition-transform">
               <IconShield size={24} />
             </div>
-            <span className="text-[11px] font-bold text-indigo-400 uppercase tracking-wider">
+            <span className="text-[11px] font-bold text-cyan-400 uppercase tracking-wider">
               Carrier Core Security
             </span>
             <h3 className="text-xl font-bold text-white mt-1">
@@ -1487,10 +1493,10 @@ set accept=yes port=3799
 
           {/* Feature 4 */}
           <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-7 hover:border-brand-500/50 transition-all hover:shadow-glow group">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/20 mb-5 group-hover:scale-110 transition-transform">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 mb-5 group-hover:scale-110 transition-transform">
               <IconTicket size={24} />
             </div>
-            <span className="text-[11px] font-bold text-purple-400 uppercase tracking-wider">
+            <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider">
               Public Wi-Fi &amp; Malls
             </span>
             <h3 className="text-xl font-bold text-white mt-1">
@@ -1626,8 +1632,8 @@ set accept=yes port=3799
           </div>
 
           {/* Plan 2: Most Popular */}
-          <div className="rounded-2xl border-2 border-brand-500 bg-slate-950 p-8 space-y-6 flex flex-col justify-between relative shadow-glow">
-            <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-brand-600 to-indigo-600 text-white text-[11px] font-black uppercase tracking-wider px-3.5 py-1 rounded-full shadow-md">
+          <div className="rounded-2xl border-2 border-cyan-500 bg-slate-950 p-8 space-y-6 flex flex-col justify-between relative shadow-glow">
+            <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 font-black text-[11px] uppercase tracking-wider px-3.5 py-1 rounded-full shadow-md">
               Most Popular for ISPs
             </div>
 

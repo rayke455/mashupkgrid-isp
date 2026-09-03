@@ -176,7 +176,7 @@ export function PortalSpeedometer() {
             </div>
             <div className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-1">
               <span className="text-slate-400 text-[11px] block">Upload</span>
-              <span className="text-xl font-bold text-indigo-400">{uploadSpeed > 0 ? `${uploadSpeed} Mbps` : "--"}</span>
+              <span className="text-xl font-bold text-emerald-400">{uploadSpeed > 0 ? `${uploadSpeed} Mbps` : "--"}</span>
             </div>
           </div>
 

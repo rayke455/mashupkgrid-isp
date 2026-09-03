@@ -94,11 +94,11 @@ export function TelecomInnovationsHub() {
             onClick={() => setActiveTab("noc")}
             className={`px-3.5 py-2 rounded-xl border text-xs font-bold transition-all flex items-center gap-2 ${
               activeTab === "noc"
-                ? "bg-indigo-600 border-indigo-500 text-white shadow-glow"
+                ? "bg-cyan-600 border-cyan-500 text-white shadow-glow"
                 : "bg-slate-950/80 border-slate-800 text-slate-400 hover:text-white"
             }`}
           >
-            <span className="h-1.5 w-1.5 rounded-full bg-indigo-400" />
+            <span className="h-1.5 w-1.5 rounded-full bg-cyan-400" />
             <span>Telegram NOC Alerts</span>
           </button>
 
