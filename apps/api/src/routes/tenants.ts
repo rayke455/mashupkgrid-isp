@@ -94,10 +94,9 @@ async function loadTenantUsage(tenantIds: string[]): Promise<Map<string, TenantU
   const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 
   const [routers, customers, revenue] = await Promise.all([
-    prisma.router.groupBy({
-      by: ["tenantId", "status"],
+    prisma.router.findMany({
       where: { tenantId: { in: tenantIds }, deletedAt: null },
-      _count: { _all: true },
+      select: { tenantId: true, status: true, lastSeenAt: true },
     }),
     prisma.customer.groupBy({
       by: ["tenantId"],
@@ -120,10 +119,15 @@ async function loadTenantUsage(tenantIds: string[]): Promise<Map<string, TenantU
   });
 
   for (const id of tenantIds) usage.set(id, blank());
+  const nowMs = Date.now();
   for (const row of routers) {
     const entry = usage.get(row.tenantId)!;
-    entry.routerCount += row._count._all;
-    if (row.status === "ONLINE") entry.routersOnline += row._count._all;
+    entry.routerCount += 1;
+    const isReallyOnline =
+      row.status === "ONLINE" &&
+      row.lastSeenAt !== null &&
+      nowMs - new Date(row.lastSeenAt).getTime() <= 150_000;
+    if (isReallyOnline) entry.routersOnline += 1;
   }
   for (const row of customers) usage.get(row.tenantId)!.customerCount = row._count._all;
   for (const row of revenue) usage.get(row.tenantId)!.revenue30dMinor = row._sum.amountMinor ?? 0;

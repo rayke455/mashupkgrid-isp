@@ -131,10 +131,48 @@ function requireTenant(tenantId: string | null): string {
  *  latent 500 waiting for the first router that ever actually connected and reported real
  *  memory stats. Converting to `Number` here is safe: even a device with gigabytes of RAM stays
  *  many orders of magnitude under Number.MAX_SAFE_INTEGER measured in bytes. */
+function computeLiveRouterStatus(
+  status: "UNKNOWN" | "ONLINE" | "WARNING" | "DOWN",
+  lastSeenAt: Date | string | null
+): "UNKNOWN" | "ONLINE" | "WARNING" | "DOWN" {
+  if (status === "UNKNOWN" || !lastSeenAt) {
+    return "UNKNOWN";
+  }
+  const lastSeenMs = new Date(lastSeenAt).getTime();
+  if (isNaN(lastSeenMs)) return status;
+
+  const elapsedMs = Date.now() - lastSeenMs;
+  // Heartbeat is scheduled every 60s (1 minute).
+  // 1. Within 2.5 minutes (150s) = Healthy ONLINE.
+  if (elapsedMs <= 150_000) {
+    return "ONLINE";
+  }
+  // 2. Between 2.5m and 4m (240s) = WARNING (delayed / lagging heartbeat).
+  if (elapsedMs <= 240_000) {
+    return "WARNING";
+  }
+  // 3. Over 4 minutes without a single heartbeat = The router is OFF / DOWN.
+  return "DOWN";
+}
+
 function toRouterSummary(router: RouterRow) {
   const { usernameEncrypted: _u, passwordEncrypted: _p, provisionTokenHash: _t, ...summary } = router;
+  const effectiveStatus = computeLiveRouterStatus(summary.status, summary.lastSeenAt);
+
+  // Auto-sync database row if a router has silently died / been powered off
+  if (summary.status === "ONLINE" && effectiveStatus !== "ONLINE") {
+    prisma.router.update({
+      where: { id: router.id },
+      data: {
+        status: effectiveStatus,
+        lastError: "Router stopped sending heartbeats (device is offline or powered off)",
+      },
+    }).catch(() => {});
+  }
+
   return {
     ...summary,
+    status: effectiveStatus,
     memoryUsedBytes: summary.memoryUsedBytes === null ? null : Number(summary.memoryUsedBytes),
     memoryTotalBytes: summary.memoryTotalBytes === null ? null : Number(summary.memoryTotalBytes),
   };

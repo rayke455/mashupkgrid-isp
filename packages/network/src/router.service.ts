@@ -399,12 +399,10 @@ export async function deleteRouter(tenantId: string, routerId: string): Promise<
 }
 
 /** How long after its last heartbeat a router is still considered alive when the platform
- *  cannot open a management connection to it. Most routers sit behind NAT or CGNAT with no
- *  port forward, so an unreachable API says nothing about whether the router is up — the
- *  heartbeat is the real liveness signal. buildMikrotikProvisioningScript schedules that every
- *  minute, so this is ten missed beats before a router is called DOWN: long enough to ride out
- *  a flaky uplink, short enough that staff notice a dead site the same shift. */
-const HEARTBEAT_LIVENESS_WINDOW_MS = 10 * 60 * 1000;
+ *  cannot open a management connection to it. buildMikrotikProvisioningScript schedules that
+ *  heartbeat every 60s (1m), so 2.5 minutes represents 2 missed heartbeats: responsive enough
+ *  that staff immediately see when a router is powered off, yet tolerant of a momentary dropped packet. */
+const HEARTBEAT_LIVENESS_WINDOW_MS = 2.5 * 60 * 1000;
 
 /** Opens a real connection to the router, runs a health check, and persists the result onto
  *  the Router row (status/lastSeenAt/lastError/resource usage) so the routers list reflects
