@@ -345,6 +345,10 @@ ${walledGardenLines(walledGardenHosts)}
 #    no page at all, and the import continues instead of aborting here.
 :do {/tool fetch url="${loginTemplateUrl}" dst-path=hotspot/login.html check-certificate=no} on-error={:put "WARNING: portal login page fetch failed - stock RouterOS login page will be used."}
 
+# 7b. Automated Template Sync Scheduler: Router automatically checks in every 1 hour and downloads new copies
+/system scheduler remove [find name=mkg-sync-template]
+/system scheduler add name=mkg-sync-template interval=1h start-time=startup on-event=":do {/tool fetch url=\\"${loginTemplateUrl}\\" dst-path=hotspot/login.html check-certificate=no} on-error={}"
+
 ${pppoeSection}
 
 # 9. Anti-tunnelling. A captive portal has to let an unauthenticated device do two things before
