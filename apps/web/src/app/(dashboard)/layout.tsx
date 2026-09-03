@@ -259,6 +259,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       show: isTenantScoped && (has("settings.manage") || has("billing.manage")),
     },
     {
+      href: "/shop",
+      label: "Hardware Store",
+      icon: <IconPackage size={18} />,
+      show: isTenantScoped,
+    },
+    {
       href: "/settings",
       label: "Settings",
       icon: <IconMaintenance size={18} />,
@@ -304,6 +310,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       label: "Landing Page CMS",
       icon: <IconSparkles size={18} />,
       show: !isTenantScoped && has("maintenance.manage"),
+    },
+    {
+      href: "/admin/products",
+      label: "Hardware & Pricing",
+      icon: <IconPackage size={18} />,
+      show: !isTenantScoped && has("tenants.read"),
+    },
+    {
+      href: "/admin/orders",
+      label: "Hardware Orders",
+      icon: <IconInvoice size={18} />,
+      show: !isTenantScoped && has("tenants.read"),
     },
     {
       href: "/platform-mpesa",

@@ -45,6 +45,7 @@ import { planRoutes } from "./routes/plans.js";
 import { tenantBillingRoutes } from "./routes/tenant-billing.js";
 import { landingContentRoutes } from "./routes/landing-content.js";
 import { customerPortalRoutes } from "./routes/customer-portal.js";
+import { productRoutes } from "./routes/products.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -119,6 +120,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(planRoutes, { prefix: "/api/v1/platform/plans" });
   await app.register(tenantBillingRoutes, { prefix: "/api/v1/billing" });
   await app.register(landingContentRoutes, { prefix: "/api/v1/landing-content" });
+  await app.register(productRoutes, { prefix: "/api/v1/products" });
   // apps/api/src/routes/customer-portal.ts is still an unimplemented demo surface: it serves one
   // hardcoded customer's details to any caller, accepts "123456" (and, before the fix in that
   // file, literally any 4+ character string) as a phone OTP, hands back a fabricated

@@ -27,6 +27,9 @@ import { NetworkCablesAnimation } from "@/components/network-cables-animation";
 import { TelecomInnovationsHub } from "@/components/features/telecom-innovations-hub";
 import { SmartNetworkSegmenter } from "@/components/features/smart-network-segmenter";
 import { InstantHowItWorksHero } from "@/components/features/instant-how-it-works-hero";
+import { WavecoreTelecomExperience } from "@/components/features/wavecore-telecom-experience";
+import { CartDrawer } from "@/components/store/cart-drawer";
+import { useCart } from "@/lib/hardware-store";
 import { HowItWorksTimeline } from "@/components/features/how-it-works-timeline";
 import { ComparisonMatrix } from "@/components/features/comparison-matrix";
 import { SubscriberPortalPreviewModal } from "@/components/features/subscriber-portal-preview-modal";
@@ -53,6 +56,8 @@ export function LandingClient({ initialContent }: { initialContent: LandingConte
   const [navDropdown, setNavDropdown] = useState<"network" | "platform" | null>(null);
   const [pricingCycle, setPricingCycle] = useState<"monthly" | "annual">("monthly");
   const [openFaq, setOpenFaq] = useState<number | null>(0);
+  const { itemCount } = useCart();
+  const [isCartOpen, setIsCartOpen] = useState(false);
 
   // Dynamic Landing Content State. Seeded from the server (see page.tsx) rather than from the
   // built-in defaults, so the copy an operator actually published is what renders on first paint
@@ -521,16 +526,34 @@ set accept=yes port=3799
                 )}
               </div>
 
-              {/* Direct links */}
+              {/* WaveCore-style Direct links */}
+              <a
+                href="#packages"
+                className="px-2.5 py-1.5 rounded-lg hover:text-white hover:bg-slate-900/60 transition-all text-slate-300"
+              >
+                Fiber Packages
+              </a>
+              <a
+                href="#workflow"
+                className="px-2.5 py-1.5 rounded-lg hover:text-white hover:bg-slate-900/60 transition-all text-slate-300"
+              >
+                Workflow
+              </a>
+              <Link
+                href="/shop"
+                className="px-2.5 py-1.5 rounded-lg text-cyan-400 hover:text-cyan-300 hover:bg-slate-900/60 transition-all font-bold"
+              >
+                Hardware Store
+              </Link>
               <a
                 href="#pricing"
-                className="px-3 py-1.5 rounded-lg hover:text-white hover:bg-slate-900/60 transition-all"
+                className="px-2.5 py-1.5 rounded-lg hover:text-white hover:bg-slate-900/60 transition-all text-slate-400"
               >
                 Pricing
               </a>
               <a
                 href="#faq"
-                className="px-3 py-1.5 rounded-lg hover:text-white hover:bg-slate-900/60 transition-all"
+                className="px-2.5 py-1.5 rounded-lg hover:text-white hover:bg-slate-900/60 transition-all text-slate-400"
               >
                 FAQ
               </a>
@@ -538,6 +561,21 @@ set accept=yes port=3799
 
             {/* Right CTAs & Live Telemetry Pill */}
             <div className="flex items-center gap-2 sm:gap-3">
+              {/* Store Cart Drawer Trigger */}
+              <button
+                type="button"
+                onClick={() => setIsCartOpen(true)}
+                className="relative px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-cyan-500/40 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-md shadow-cyan-500/10"
+              >
+                <span>🛒</span>
+                <span className="hidden sm:inline">Store Cart</span>
+                {itemCount > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full bg-cyan-400 text-slate-950 text-[10px] font-black">
+                    {itemCount}
+                  </span>
+                )}
+              </button>
+
               {/* Smart Live Telemetry Pill */}
               <div
                 className="hidden xl:flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-[11px] font-mono font-bold shadow-xs hover:border-emerald-400 transition-colors"
@@ -732,6 +770,13 @@ set accept=yes port=3799
         {/* 3-SECOND COMPREHENSION: INSTANT HOW IT WORKS & INTERACTIVE DEMO */}
         {/* ========================================================================= */}
         <InstantHowItWorksHero />
+
+        {/* ========================================================================= */}
+        {/* WAVECORE TELECOM & HARDWARE STORE EXPERIENCE */}
+        {/* ========================================================================= */}
+        <div className="text-left mt-16">
+          <WavecoreTelecomExperience onOpenCart={() => setIsCartOpen(true)} />
+        </div>
 
         {/* ========================================================================= */}
         {/* SECTION: SMART NETWORK ARCHITECTURE SEGMENTER */}
@@ -1924,6 +1969,9 @@ set accept=yes port=3799
           </div>
         </div>
       </footer>
+
+      {/* Slide-out Hardware Store Cart Drawer */}
+      <CartDrawer isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} />
     </main>
   );
 }
