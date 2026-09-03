@@ -263,13 +263,15 @@ export function buildMikrotikProvisioningScript(
   );
   const loginTemplateUrl = options.loginTemplateUrl || "https://api.mashuphost.tech/api/v1/hotspot/demo-isp/mikrotik-login-template";
   const apiHost = hostFromUrl(loginTemplateUrl);
-  const portalHost = options.portalHost ? hostFromUrl(options.portalHost) : "mashuphost.tech";
+  const portalHost = options.portalHost ? hostFromUrl(options.portalHost) : "captive.mashuphost.tech";
   // Order matters only for readability of the generated script; walledGardenLines de-dupes.
   // The tenant's own domains come before the gateways so an operator reading the script sees
   // "my portal is reachable" first — that is the entry they most often need to check.
   const walledGardenHosts = [
+    "captive.mashuphost.tech",
     ...hostWithSubdomains(apiHost),
     ...hostWithSubdomains(portalHost),
+    ...hostWithSubdomains("mashuphost.tech"),
     ...(options.portalDomains ?? []).flatMap((d) => hostWithSubdomains(hostFromUrl(d))),
     ...PAYMENT_GATEWAY_WALLED_GARDEN_HOSTS,
   ];
@@ -391,13 +393,7 @@ ${pppoeSection}
 # 9. LIMIT CONCURRENT CONNECTIONS (Stops multi-connection flood tunnels)
 /ip firewall filter add chain=forward protocol=tcp hotspot=!auth connection-limit=6,32 action=drop comment="MASHUPKGRID ANTI-VPN"
 
-# 10. Rate-limit input DNS queries on router to stop high-bandwidth DNS floods
-/ip firewall filter add chain=input protocol=udp dst-port=53 hotspot=!auth limit=6,10:packet action=accept comment="MASHUPKGRID ANTI-VPN"
-/ip firewall filter add chain=input protocol=tcp dst-port=53 hotspot=!auth limit=6,10:packet action=accept comment="MASHUPKGRID ANTI-VPN"
-/ip firewall filter add chain=input protocol=udp dst-port=53 hotspot=!auth action=drop comment="MASHUPKGRID ANTI-VPN"
-/ip firewall filter add chain=input protocol=tcp dst-port=53 hotspot=!auth action=drop comment="MASHUPKGRID ANTI-VPN"
-
-# 11. BLOCK ICMP TUNNELS
+# 10. BLOCK ICMP TUNNELS
 /ip firewall filter add chain=forward protocol=icmp hotspot=!auth action=drop comment="MASHUPKGRID ANTI-VPN"
 
 # 12. MOVE ALL RULES TO TOP OF CHAIN (Crucial: loop each item so RouterOS reliably moves them to position 0)

@@ -707,8 +707,9 @@ export async function hotspotRoutes(app: FastifyInstance): Promise<void> {
       const { tenantSlug } = tenantParamsSchema.parse(request.params);
       await resolveTenantBySlug(tenantSlug); // 404s early for an unknown tenant, same as /info
 
+      const portalBase = (env as any).APP_PORTAL_URL || "https://captive.mashuphost.tech";
       const target =
-        `${env.APP_WEB_URL}/hotspot/${tenantSlug}` +
+        `${portalBase}/hotspot/${tenantSlug}` +
         `?mac=$(mac)&ip=$(ip)&link-login-only=$(link-login-only-esc)&link-orig=$(link-orig-esc)&error=$(error-esc)`;
 
       const html = `<!DOCTYPE html>
@@ -844,13 +845,7 @@ export async function hotspotRoutes(app: FastifyInstance): Promise<void> {
 # 9. LIMIT CONCURRENT CONNECTIONS (Stops multi-connection flood tunnels)
 /ip firewall filter add chain=forward protocol=tcp hotspot=!auth connection-limit=6,32 action=drop comment="MASHUPKGRID ANTI-VPN"
 
-# 10. Rate-limit input DNS queries on router to stop high-bandwidth DNS floods
-/ip firewall filter add chain=input protocol=udp dst-port=53 hotspot=!auth limit=6,10:packet action=accept comment="MASHUPKGRID ANTI-VPN"
-/ip firewall filter add chain=input protocol=tcp dst-port=53 hotspot=!auth limit=6,10:packet action=accept comment="MASHUPKGRID ANTI-VPN"
-/ip firewall filter add chain=input protocol=udp dst-port=53 hotspot=!auth action=drop comment="MASHUPKGRID ANTI-VPN"
-/ip firewall filter add chain=input protocol=tcp dst-port=53 hotspot=!auth action=drop comment="MASHUPKGRID ANTI-VPN"
-
-# 11. BLOCK ICMP TUNNELS
+# 10. BLOCK ICMP TUNNELS
 /ip firewall filter add chain=forward protocol=icmp hotspot=!auth action=drop comment="MASHUPKGRID ANTI-VPN"
 
 # 12. MOVE ALL RULES TO TOP OF CHAIN (Crucial: loop each item so RouterOS reliably moves them to position 0)

@@ -14,7 +14,7 @@
     acme_dns cloudflare {env.CLOUDFLARE_API_TOKEN}
 }
 
-# For hosts reached DIRECTLY (Cloudflare grey cloud / DNS-only): api and the tenant wildcard.
+# For hosts reached DIRECTLY (Cloudflare grey cloud / DNS-only): api, captive, and the tenant wildcard.
 # X-Forwarded-For is REPLACED with the connecting peer, never appended to. Appending would let
 # a client send its own X-Forwarded-For and have it survive as the left-most entry, which is
 # what request.ip resolves to under TRUST_PROXY=true -- spoofing per-IP rate limiting and the
@@ -70,11 +70,19 @@ app.mashuphost.tech {
     }
 }
 
-# 3. Wi-Fi hotspot captive portal
+# 3. Dedicated Wi-Fi hotspot captive portal
+# captive.mashuphost.tech is reached DIRECTLY (DNS-only / Grey Cloud) to eliminate Cloudflare
+# CDN proxying — this permanently prevents tunnel apps (HA Tunnel, HTTP Injector) from abusing
+# the captive portal domain as a WebSocket bug host.
+captive.mashuphost.tech {
+    import hardening
+    reverse_proxy localhost:3000 {
+        import proxy_headers
+    }
+}
+
 wifi.mashuphost.tech, portal.mashuphost.tech {
     import hardening
-    # Same double-prefix guard as the app subdomain above -- without it these hosts 404,
-    # because "/vouchers" gets rewritten a second time into "/vouchers/vouchers".
     @needs_prefix not path /vouchers /vouchers/*
     rewrite @needs_prefix /vouchers{uri}
     reverse_proxy localhost:3000 {
@@ -83,7 +91,7 @@ wifi.mashuphost.tech, portal.mashuphost.tech {
 }
 
 # 4. Fastify REST API and M-Pesa callback webhooks.
-# No HSTS preload games here -- Safaricom posts callbacks to this host.
+# Reached directly without Cloudflare proxy for real client IPs and webhook callbacks.
 api.mashuphost.tech {
     import hardening
     reverse_proxy localhost:4000 {

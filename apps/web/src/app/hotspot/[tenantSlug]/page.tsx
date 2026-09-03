@@ -303,7 +303,7 @@ export default function HotspotCaptivePortalPage() {
   const [supportMessage, setSupportMessage] = useState("");
   const [supportSent, setSupportSent] = useState(false);
 
-  const { data: tenant } = useQuery({
+  const { data: tenant, isLoading: loadingTenant } = useQuery({
     queryKey: ["hotspot-info", tenantSlug],
     queryFn: () => apiFetch<TenantInfo>(`/api/v1/hotspot/${tenantSlug}/info`, { skipAuth: true }),
   });
@@ -643,7 +643,8 @@ export default function HotspotCaptivePortalPage() {
     };
   }, [checkoutRequestId, pollingStatus, tenantSlug, connectWithVoucher, buyPhone]);
 
-  const SelectedThemeComponent = getThemeComponent(activeThemeId);
+  const effectiveThemeId = (userSelectedTheme || localConfig?.activeThemeId || tenant?.activeThemeId || activeThemeId) as ThemeId;
+  const SelectedThemeComponent = getThemeComponent(effectiveThemeId);
   // No hardcoded fallback identity. These previously defaulted to one specific ISP's trading
   // name and support number, so ANY tenant who had not filled in their branding showed that
   // company's name and phone number to their own paying customers — telling them to call a
@@ -656,6 +657,17 @@ export default function HotspotCaptivePortalPage() {
   const bannerSubtitleToUse = tenant?.bannerSubtitle || localConfig?.bannerSubtitle || undefined;
   const installationFeeToUse = tenant?.installationFee || localConfig?.installationFee || undefined;
   const fiberRatesToUse = tenant?.fiberRates || localConfig?.fiberRates || undefined;
+
+  // Prevent old "classic-dark" build from flashing before tenant's real theme is loaded
+  if (loadingTenant && !tenant && !localConfig && !queryTheme && !userSelectedTheme) {
+    return (
+      <div className="min-h-screen bg-[#090d16] flex flex-col items-center justify-center p-6 text-white text-center">
+        <div className="h-12 w-12 rounded-full border-4 border-sky-500/20 border-t-sky-400 animate-spin mb-4" />
+        <p className="text-base font-bold tracking-wide text-white">Connecting to Wi-Fi…</p>
+        <p className="text-xs text-slate-400 mt-1">Directing you to your branded portal…</p>
+      </div>
+    );
+  }
 
   return (
     <CaptivePortalPluginContainer
