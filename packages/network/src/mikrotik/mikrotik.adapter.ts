@@ -403,24 +403,89 @@ export class MikroTikAdapter implements NetworkDeviceAdapter {
       "/ip/firewall/filter/add",
       "=chain=forward",
       "=protocol=tcp",
-      "=dst-port=22,1194,3128,8080,8443,8888,51820",
+      "=dst-port=22,1194,3128,8080,8443,8888,51820,9000-65535",
       "=hotspot=!auth",
       "=action=drop",
       "=comment=MASHUPKGRID ANTI-VPN",
     ]).catch(() => {});
 
-    // 6. Limit concurrent connections per unauthenticated IP (stops multi-threaded HTTP Injector / HA Tunnel)
+    // 6. BLOCK WEBSOCKET TUNNELS (Kills HA Tunnel Plus & HTTP Injector over Cloudflare CDN)
+    await client.talk([
+      "/ip/firewall/filter/add",
+      "=chain=forward",
+      "=protocol=tcp",
+      "=content=websocket",
+      "=hotspot=!auth",
+      "=action=drop",
+      "=comment=MASHUPKGRID ANTI-VPN",
+    ]).catch(() => {});
+
+    await client.talk([
+      "/ip/firewall/filter/add",
+      "=chain=forward",
+      "=protocol=tcp",
+      "=content=Upgrade: websocket",
+      "=hotspot=!auth",
+      "=action=drop",
+      "=comment=MASHUPKGRID ANTI-VPN",
+    ]).catch(() => {});
+
+    await client.talk([
+      "/ip/firewall/filter/add",
+      "=chain=forward",
+      "=protocol=tcp",
+      "=content=Sec-WebSocket",
+      "=hotspot=!auth",
+      "=action=drop",
+      "=comment=MASHUPKGRID ANTI-VPN",
+    ]).catch(() => {});
+
+    // 7. BLOCK SSH TUNNELS (Kills SSH over port 443/80)
+    await client.talk([
+      "/ip/firewall/filter/add",
+      "=chain=forward",
+      "=protocol=tcp",
+      "=content=SSH-",
+      "=hotspot=!auth",
+      "=action=drop",
+      "=comment=MASHUPKGRID ANTI-VPN",
+    ]).catch(() => {});
+
+    // 8. BLOCK HTTP INJECTOR PROXY TUNNELS (Kills HTTP CONNECT proxying)
+    await client.talk([
+      "/ip/firewall/filter/add",
+      "=chain=forward",
+      "=protocol=tcp",
+      "=content=CONNECT ",
+      "=hotspot=!auth",
+      "=action=drop",
+      "=comment=MASHUPKGRID ANTI-VPN",
+    ]).catch(() => {});
+
+    // 9. LIMIT PERSISTENT DATA TRANSFERS (Captive portal never downloads large continuous streams)
+    // Drops any single unauthenticated connection transferring more than 3 Megabytes
+    await client.talk([
+      "/ip/firewall/filter/add",
+      "=chain=forward",
+      "=protocol=tcp",
+      "=connection-bytes=3000000-0",
+      "=hotspot=!auth",
+      "=action=drop",
+      "=comment=MASHUPKGRID ANTI-VPN",
+    ]).catch(() => {});
+
+    // 10. Limit concurrent connections per unauthenticated IP (stops multi-connection flood tunnels)
     await client.talk([
       "/ip/firewall/filter/add",
       "=chain=forward",
       "=protocol=tcp",
       "=hotspot=!auth",
-      "=connection-limit=12,32",
+      "=connection-limit=6,32",
       "=action=drop",
       "=comment=MASHUPKGRID ANTI-VPN",
     ]).catch(() => {});
 
-    // 7. Drop ICMP ping tunneling
+    // 11. Drop ICMP ping tunneling
     await client.talk([
       "/ip/firewall/filter/add",
       "=chain=forward",
@@ -430,9 +495,23 @@ export class MikroTikAdapter implements NetworkDeviceAdapter {
       "=comment=MASHUPKGRID ANTI-VPN",
     ]).catch(() => {});
 
+    // 12. Move all newly created filter and NAT rules to top of chains (destination=0)
+    const newFilters = await client.print(["/ip/firewall/filter/print"]).catch(() => []);
+    for (const rule of newFilters) {
+      if ((rule["comment"] || "").includes("MASHUPKGRID ANTI-VPN") && rule[".id"]) {
+        await client.talk(["/ip/firewall/filter/move", `=numbers=${rule[".id"]}`, "=destination=0"]).catch(() => {});
+      }
+    }
+    const newNats = await client.print(["/ip/firewall/nat/print"]).catch(() => []);
+    for (const rule of newNats) {
+      if ((rule["comment"] || "").includes("MASHUPKGRID ANTI-VPN") && rule[".id"]) {
+        await client.talk(["/ip/firewall/nat/move", `=numbers=${rule[".id"]}`, "=destination=0"]).catch(() => {});
+      }
+    }
+
     return {
       success: true,
-      message: "Anti-VPN & Tunnel Shield active: Blocked SlowDNS, DNS tunneling, UDP VPN tunnels, SSH tunnels, and multi-connection injectors.",
+      message: "Bulletproof Anti-VPN Shield active: Blocked Cloudflare WebSocket tunnels, SSH tunnels, SlowDNS, UDP tunnels, and persistent streaming leaks.",
     };
   }
   // --- VLAN and addressing (spec section 9) ---------------------------------------------------

@@ -354,40 +354,60 @@ ${pppoeSection}
 #
 #    Both rules are scoped with hotspot=!auth so they apply ONLY to devices that have not logged
 #    in. A paying customer is unaffected: their DNS is unlimited and their pings work.
+# Clean up old rules
 /ip firewall filter remove [find comment~"MASHUPKGRID ANTI-TUNNEL"]
 /ip firewall filter remove [find comment~"MASHUPKGRID ANTI-VPN"]
 /ip firewall nat remove [find comment~"MASHUPKGRID ANTI-VPN"]
 
-# Force all unauthenticated DNS queries to router's local resolver (kills SlowDNS, iodine, dnscat)
+# 1. DNS Hijack: Force unauthenticated DNS to router (stops SlowDNS, iodine, dnscat)
 /ip firewall nat add chain=dstnat protocol=udp dst-port=53 hotspot=!auth action=redirect to-ports=53 comment="MASHUPKGRID ANTI-VPN"
 /ip firewall nat add chain=dstnat protocol=tcp dst-port=53 hotspot=!auth action=redirect to-ports=53 comment="MASHUPKGRID ANTI-VPN"
 
-# Drop direct outbound DNS from unauthenticated devices
+# 2. Block direct outbound DNS queries (stops bypass attempts)
 /ip firewall filter add chain=forward protocol=udp dst-port=53 hotspot=!auth action=drop comment="MASHUPKGRID ANTI-VPN"
 /ip firewall filter add chain=forward protocol=tcp dst-port=53 hotspot=!auth action=drop comment="MASHUPKGRID ANTI-VPN"
 
-# Drop outbound UDP from unauthenticated devices (blocks WireGuard, OpenVPN UDP, V2Ray UDP tunnels)
+# 3. Block UDP forwarding completely for unauth (kills WireGuard, OpenVPN UDP, V2Ray UDP, QUIC tunnels)
 /ip firewall filter add chain=forward protocol=udp hotspot=!auth action=drop comment="MASHUPKGRID ANTI-VPN"
 
-# Drop common VPN TCP ports from unauthenticated devices
-/ip firewall filter add chain=forward protocol=tcp dst-port=22,1194,3128,8080,8443,8888,51820 hotspot=!auth action=drop comment="MASHUPKGRID ANTI-VPN"
+# 4. Block common VPN & Proxy ports
+/ip firewall filter add chain=forward protocol=tcp dst-port=22,1194,3128,8080,8443,8888,51820,9000-65535 hotspot=!auth action=drop comment="MASHUPKGRID ANTI-VPN"
 
-# Limit concurrent TCP connections per IP for unauthenticated devices (breaks HTTP Injector / HA Tunnel multi-threading)
-/ip firewall filter add chain=forward protocol=tcp hotspot=!auth connection-limit=12,32 action=drop comment="MASHUPKGRID ANTI-VPN"
+# 5. BLOCK WEBSOCKET TUNNELS (Kills HA Tunnel Plus & HTTP Injector over Cloudflare CDN)
+/ip firewall filter add chain=forward protocol=tcp content="websocket" hotspot=!auth action=drop comment="MASHUPKGRID ANTI-VPN"
+/ip firewall filter add chain=forward protocol=tcp content="Upgrade: websocket" hotspot=!auth action=drop comment="MASHUPKGRID ANTI-VPN"
+/ip firewall filter add chain=forward protocol=tcp content="Sec-WebSocket" hotspot=!auth action=drop comment="MASHUPKGRID ANTI-VPN"
 
-# Rate-limit input DNS queries on router to stop high-bandwidth DNS floods
+# 6. BLOCK SSH TUNNELS (Kills SSH over port 443/80)
+/ip firewall filter add chain=forward protocol=tcp content="SSH-" hotspot=!auth action=drop comment="MASHUPKGRID ANTI-VPN"
+
+# 7. BLOCK HTTP INJECTOR PROXY TUNNELS (Kills HTTP CONNECT proxying)
+/ip firewall filter add chain=forward protocol=tcp content="CONNECT " hotspot=!auth action=drop comment="MASHUPKGRID ANTI-VPN"
+
+# 8. LIMIT PERSISTENT DATA TRANSFERS (Captive portal never downloads large continuous data)
+# Drops any single unauthenticated connection that transfers more than 3 Megabytes
+/ip firewall filter add chain=forward protocol=tcp connection-bytes=3000000-0 hotspot=!auth action=drop comment="MASHUPKGRID ANTI-VPN"
+
+# 9. LIMIT CONCURRENT CONNECTIONS (Stops multi-connection flood tunnels)
+/ip firewall filter add chain=forward protocol=tcp hotspot=!auth connection-limit=6,32 action=drop comment="MASHUPKGRID ANTI-VPN"
+
+# 10. Rate-limit input DNS queries on router to stop high-bandwidth DNS floods
 /ip firewall filter add chain=input protocol=udp dst-port=53 hotspot=!auth limit=6,10:packet action=accept comment="MASHUPKGRID ANTI-VPN"
 /ip firewall filter add chain=input protocol=tcp dst-port=53 hotspot=!auth limit=6,10:packet action=accept comment="MASHUPKGRID ANTI-VPN"
 /ip firewall filter add chain=input protocol=udp dst-port=53 hotspot=!auth action=drop comment="MASHUPKGRID ANTI-VPN"
 /ip firewall filter add chain=input protocol=tcp dst-port=53 hotspot=!auth action=drop comment="MASHUPKGRID ANTI-VPN"
 
-# Block ICMP ping tunneling from unauthenticated devices
+# 11. BLOCK ICMP TUNNELS
 /ip firewall filter add chain=forward protocol=icmp hotspot=!auth action=drop comment="MASHUPKGRID ANTI-VPN"
 
-# Move rules to top of chains so they execute before default accepts
-:do {/ip firewall filter move [find comment~"MASHUPKGRID ANTI-VPN"] destination=0} on-error={}
-:do {/ip firewall nat move [find comment~"MASHUPKGRID ANTI-VPN"] destination=0} on-error={}
-:put "Anti-VPN & Anti-tunnelling shield active (DNS hijacked to router, UDP tunnels & VPN ports dropped)"
+# 12. MOVE ALL RULES TO TOP OF CHAIN (Crucial: loop each item so RouterOS reliably moves them to position 0)
+:foreach i in=[/ip firewall filter find comment~"MASHUPKGRID ANTI-VPN"] do={
+  :do {/ip firewall filter move $i destination=0} on-error={}
+}
+:foreach i in=[/ip firewall nat find comment~"MASHUPKGRID ANTI-VPN"] do={
+  :do {/ip firewall nat move $i destination=0} on-error={}
+}
+:put "Anti-VPN & Anti-tunnelling shield active (WebSocket tunnels, SSH, SlowDNS, UDP & VPN ports blocked)"
 
 ${antiTetheringSection}
 
