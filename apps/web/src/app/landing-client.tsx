@@ -1914,6 +1914,7 @@ set accept=yes port=3799
             <Link href="/refund-policy" className="hover:text-white transition-colors">Refund Policy</Link>
             <Link href="/referral-policy" className="hover:text-white transition-colors">Referral Policy</Link>
             <Link href="/age-policy" className="hover:text-white transition-colors">Age Policy</Link>
+            <Link href="/donate" className="text-amber-400 hover:text-amber-300 font-bold transition-colors">☕ Buy Me a Coffee</Link>
           </div>
         </div>
       </footer>

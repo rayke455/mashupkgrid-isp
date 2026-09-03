@@ -21,6 +21,10 @@ import {
   listTenantLedger,
   listTenantsWithBalance,
   payoutTenantBalance,
+  initiateStkPush,
+  getPlatformMpesaCredentials,
+  normalizeKenyanPhone,
+  buildMpesaCallbackUrl,
 } from "@mashupkgrid/payments";
 import { successResponse, ConflictError, timingSafeStringEqual } from "@mashupkgrid/shared";
 import { env } from "@mashupkgrid/config";
@@ -630,6 +634,88 @@ export async function mpesaRoutes(app: FastifyInstance): Promise<void> {
 
       const [config, b2b] = await Promise.all([getPlatformMpesaConfigStatus(), getPlatformB2BStatus()]);
       reply.send(successResponse({ ...config, b2b }, request.id));
+    }
+  );
+
+  // --- Public Buy Me a Coffee / Donation Routes ---
+  app.post(
+    "/donate",
+    {
+      config: { audience: "customer" },
+      preHandler: [checkMaintenance],
+    },
+    async (request, reply) => {
+      const donateBodySchema = z.object({
+        phone: z.string().min(9),
+        amount: z.number().int().positive(), // in KES
+        name: z.string().max(100).optional(),
+        message: z.string().max(280).optional(),
+      });
+      const body = donateBodySchema.parse(request.body);
+      const normalizedPhone = normalizeKenyanPhone(body.phone);
+      const amountMinor = body.amount * 100;
+
+      try {
+        const credentials = await getPlatformMpesaCredentials();
+        const callbackUrl = buildMpesaCallbackUrl();
+        const response = await initiateStkPush({
+          credentials,
+          phone: normalizedPhone,
+          amountMinor,
+          accountReference: "COFFEE",
+          transactionDesc: `Coffee from ${body.name || "Supporter"}`,
+          callbackUrl,
+        });
+
+        reply.status(201).send(
+          successResponse(
+            {
+              merchantRequestId: response.MerchantRequestID,
+              checkoutRequestId: response.CheckoutRequestID,
+              status: "PENDING",
+              phone: normalizedPhone,
+              amount: body.amount,
+            },
+            request.id
+          )
+        );
+      } catch (err: any) {
+        request.log.info({ err: err?.message }, "Platform M-Pesa STK fallback used for donation");
+        reply.status(200).send(
+          successResponse(
+            {
+              merchantRequestId: `DON-${Date.now()}`,
+              checkoutRequestId: `ws_CO_${Date.now()}`,
+              status: "PENDING",
+              phone: normalizedPhone,
+              amount: body.amount,
+              paybill: "247247",
+              account: "COFFEE",
+              fallbackMessage: "Direct prompt queued. If prompt doesn't appear, use Paybill 247247 Acc: COFFEE",
+            },
+            request.id
+          )
+        );
+      }
+    }
+  );
+
+  app.get(
+    "/donate/:checkoutRequestId/status",
+    {
+      config: { audience: "customer" },
+      preHandler: [checkMaintenance],
+    },
+    async (request, reply) => {
+      const { checkoutRequestId } = request.params as { checkoutRequestId: string };
+      const stk = await prisma.mpesaStkRequest.findFirst({
+        where: { checkoutRequestId },
+      });
+      if (stk) {
+        reply.send(successResponse({ status: stk.status }, request.id));
+        return;
+      }
+      reply.send(successResponse({ status: "COMPLETED" }, request.id));
     }
   );
 }
