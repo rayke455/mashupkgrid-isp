@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
 import { Button, Card, ErrorText, HintText, Input, Label, Badge, StatusDot } from "@/components/ui";
-import { IconMpesa } from "@/components/icons";
+import { IconMpesa, IconShield } from "@/components/icons";
+import { useAuth } from "@/lib/auth-context";
 
 interface ConfigStatus {
   configured: boolean;
@@ -16,7 +18,17 @@ interface ConfigStatus {
 }
 
 export default function PlatformMpesaPage() {
+  const router = useRouter();
+  const { user } = useAuth();
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    // If a tenant tries to access platform M-Pesa, redirect them to their own payment setup
+    if (user?.tenantId) {
+      router.replace("/payments-setup");
+    }
+  }, [user, router]);
+
   const [consumerKey, setConsumerKey] = useState("");
   const [consumerSecret, setConsumerSecret] = useState("");
   const [shortcode, setShortcode] = useState("");
@@ -29,7 +41,12 @@ export default function PlatformMpesaPage() {
   const { data: status } = useQuery({
     queryKey: ["platform-mpesa-config"],
     queryFn: () => apiFetch<ConfigStatus>("/api/v1/payments/mpesa/platform-config"),
+    enabled: !user?.tenantId,
   });
+
+  if (user?.tenantId) {
+    return null;
+  }
 
   const saveConfig = useMutation({
     mutationFn: () =>
