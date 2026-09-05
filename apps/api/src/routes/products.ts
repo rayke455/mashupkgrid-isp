@@ -72,7 +72,7 @@ const DEFAULT_PRODUCTS: HardwareProduct[] = [
     badge: "Bestseller",
     shortDescription: "5x Gigabit Ethernet, Dual Core 880MHz CPU, 256MB RAM, RouterOS L4. The gold standard for Kenyan hotspots.",
     description: "The MikroTik hEX is a 5-port Gigabit Ethernet router for locations where wireless connectivity is not required. Compact, affordable, and incredibly powerful with hardware encryption and full RouterOS v7 support.",
-    imageUrl: "https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=800&q=80",
+    imageUrl: "/products/mikrotik-hex.jpg",
     specs: [
       "5x 10/100/1000 Gigabit Ethernet Ports",
       "Dual Core 880MHz MT7621A CPU",
@@ -100,7 +100,7 @@ const DEFAULT_PRODUCTS: HardwareProduct[] = [
     badge: "WiFi 6 High Speed",
     shortDescription: "WiFi 6 (802.11ax), Quad-Core 864MHz ARM CPU, 1GB RAM, 5x Gigabit Ports, PoE Out.",
     description: "Supercharge your café, restaurant, or residential hotspot with state-of-the-art WiFi 6 speeds up to 1800Mbps. Handles heavy simultaneous streaming effortlessly.",
-    imageUrl: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=800&q=80",
+    imageUrl: "/products/mikrotik-hap-ax2.jpg",
     specs: [
       "WiFi 6 802.11ax/ac Dual-Band (574 + 1200 Mbps)",
       "Quad-Core 864MHz IPQ-6010 ARM64 CPU",
@@ -128,7 +128,7 @@ const DEFAULT_PRODUCTS: HardwareProduct[] = [
     badge: "High Power",
     shortDescription: "Quad-Core 1.8GHz ARM, 1GB RAM, 1x 2.5G Port, 4x Gigabit Ports, External High-Gain Antennas.",
     description: "MikroTik's flagship residential and SME router. Extreme processing muscle for advanced firewall filtering, wireguard VPN encryption, and high-density WiFi 6 coverage.",
-    imageUrl: "https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=800&q=80",
+    imageUrl: "/products/mikrotik-hap-ax3.jpg",
     specs: [
       "1x 2.5 Gigabit Ethernet Port + 4x Gigabit Ports",
       "Quad-Core 1.8GHz Qualcomm IPQ-6010 CPU",
@@ -156,7 +156,7 @@ const DEFAULT_PRODUCTS: HardwareProduct[] = [
     badge: "Carrier Grade",
     shortDescription: "7x 1G Ports, 1x 2.5G Port, 1x 10G SFP+ Cage, Quad-Core 1.4GHz, 1GB DDR4 RAM.",
     description: "The ultimate ISP aggregation router. Compact enough to mount four in a 1U rack, yet powerful enough to route 10Gbps line rate traffic with complex PPPoE queues and FreeRADIUS authentication.",
-    imageUrl: "https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=800&q=80",
+    imageUrl: "/products/mikrotik-rb5009.jpg",
     specs: [
       "1x 10G SFP+ Port for Fiber Uplink",
       "1x 2.5G Ultra-Fast Ethernet Port",
@@ -184,7 +184,7 @@ const DEFAULT_PRODUCTS: HardwareProduct[] = [
     badge: "Enterprise NOC Core",
     shortDescription: "16x Gigabit Ports, 2x 10G SFP+ Cages, 4GB RAM, 4-Core 1.7GHz AL32400 64-bit CPU.",
     description: "Engineered for regional Kenyan ISPs serving thousands of PPPoE and Hotspot customers. Dual redundant power supplies prevent downtime even during mains power outages.",
-    imageUrl: "https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=800&q=80",
+    imageUrl: "/products/mikrotik-ccr2004.jpg",
     specs: [
       "16x Gigabit Ethernet Ports",
       "2x 10G SFP+ Fiber Transceiver Ports",
@@ -212,7 +212,7 @@ const DEFAULT_PRODUCTS: HardwareProduct[] = [
     badge: "Top Value",
     shortDescription: "Dual-mode GPON/EPON optical ONU with built-in 300Mbps WiFi & 2 LAN Ports.",
     description: "The standard subscriber unit deployed by leading Kenyan fiber ISPs. Auto-adapts to EPON and GPON OLTs with OMCI remote management, TR-069, and PPPoE dialer built-in.",
-    imageUrl: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=800&q=80",
+    imageUrl: "/products/hsgq-xpon-onu.jpg",
     specs: [
       "SC/UPC or SC/APC Fiber Input",
       "1x Gigabit + 1x Fast Ethernet LAN",
@@ -240,7 +240,7 @@ const DEFAULT_PRODUCTS: HardwareProduct[] = [
     badge: "Ultra Compact",
     shortDescription: "1x GE Gigabit Port, SC/UPC optical input, plug & play bridge mode for external routers.",
     description: "Reliable optical network terminal designed for FTTH subscribers paired with a dedicated MikroTik or customer router. Ultra-low power consumption and exceptional stability.",
-    imageUrl: "https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=800&q=80",
+    imageUrl: "/products/huawei-hg8310m.jpg",
     specs: [
       "1x Gigabit Ethernet LAN Port",
       "SC/UPC GPON Class B+ Optical Interface",
@@ -268,7 +268,7 @@ const DEFAULT_PRODUCTS: HardwareProduct[] = [
     badge: "All-in-One",
     shortDescription: "1x GE + 3x FE Ports, 300Mbps WiFi, 1x Voice (POTS), GPON subscriber gateway.",
     description: "Versatile subscriber gateway with built-in Wi-Fi routing and telephone port. Ideal for residential FTTH deployments needing multi-port wired and wireless connectivity.",
-    imageUrl: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=800&q=80",
+    imageUrl: "/products/huawei-hg8546m.jpg",
     specs: [
       "1x Gigabit + 3x Fast Ethernet RJ45 Ports",
       "300Mbps 2.4GHz 802.11n Wi-Fi",
@@ -298,7 +298,7 @@ const DEFAULT_PRODUCTS: HardwareProduct[] = [
     badge: "10G Uplink",
     shortDescription: "24x Gigabit RJ45 Ports, 2x 10G SFP+ Ports, Dual Boot (RouterOS / SwOS), 1U Rackmount.",
     description: "Non-blocking wire-speed Layer 3 switch with dual SFP+ cages for 10Gbps fiber links. SwOS mode delivers lightning-fast switching, while RouterOS provides full L3 routing capabilities.",
-    imageUrl: "https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=800&q=80",
+    imageUrl: "/products/mikrotik-crs326.jpg",
     specs: [
       "24x 10/100/1000 Gigabit RJ45 Ethernet Ports",
       "2x 10G SFP+ Optical Transceiver Cages",
@@ -326,7 +326,7 @@ const DEFAULT_PRODUCTS: HardwareProduct[] = [
     badge: "500W PoE Core",
     shortDescription: "24x Gigabit PoE+ Ports, 4x 10G SFP+ Cages, 500W Auto-Sensing Power Budget, 1U.",
     description: "The ultimate switch for large ISP POPs and CCTV installations. Auto-detects 802.3af/at PoE and passive 24V PoE, letting you power access points and cameras directly.",
-    imageUrl: "https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=800&q=80",
+    imageUrl: "/products/mikrotik-crs328.jpg",
     specs: [
       "24x Gigabit Ethernet Ports with Auto PoE Out",
       "4x 10G SFP+ Optical Uplink Cages",
@@ -354,7 +354,7 @@ const DEFAULT_PRODUCTS: HardwareProduct[] = [
     badge: "Essential",
     shortDescription: "8x Gigabit PoE+ Ports (802.3af/at) + 2x Gigabit Uplinks. Powers APs & CCTV cameras.",
     description: "Reliable plug-and-play PoE switch for powering access points and security cameras with built-in surge protection and 250m long-distance CCTV transmission mode.",
-    imageUrl: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=800&q=80",
+    imageUrl: "/products/poe-switch-8port.jpg",
     specs: [
       "8x 10/100/1000 Mbps PoE Ports (IEEE 802.3af/at)",
       "2x 10/100/1000 Mbps Gigabit Uplink Ports",
@@ -382,7 +382,7 @@ const DEFAULT_PRODUCTS: HardwareProduct[] = [
     badge: "High Capacity",
     shortDescription: "16x Gigabit PoE+ Ports, 2x Gigabit Uplinks + 2x Gigabit SFP slots, 250W PSU.",
     description: "Industrial-grade 16-port PoE switch equipped with optical SFP fiber uplinks. Features AI PoE watchdog to automatically reboot unresponsive cameras and APs.",
-    imageUrl: "https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=800&q=80",
+    imageUrl: "/products/poe-switch-16port.jpg",
     specs: [
       "16x 10/100/1000 Mbps PoE+ Ports",
       "2x Gigabit Uplinks + 2x Gigabit SFP Fiber Slots",
@@ -410,7 +410,7 @@ const DEFAULT_PRODUCTS: HardwareProduct[] = [
     badge: "L2 Managed",
     shortDescription: "24x Gigabit Ports, 4x Gigabit SFP Uplinks, Web GUI, CLI, SNMP, VLAN & QoS.",
     description: "Carrier-class enterprise access switch with full L2 management suite including 802.1Q VLANs, Link Aggregation (LACP), Spanning Tree (STP/RSTP), and ACL packet filtering.",
-    imageUrl: "https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=800&q=80",
+    imageUrl: "/products/switch-24port-managed.jpg",
     specs: [
       "24x 10/100/1000 Mbps Gigabit Ports",
       "4x Gigabit SFP Combo Optical Ports",
@@ -440,7 +440,7 @@ const DEFAULT_PRODUCTS: HardwareProduct[] = [
     badge: "Popular AP",
     shortDescription: "WiFi 6 2x2 MIMO, 1.5 Gbps aggregate throughput, PoE powered, sleek low-profile mount.",
     description: "Compact ceiling or wall-mounted access point with WiFi 6 technology. Perfect for high-density hotspot environments like hotel lobbies, shopping arcades, and student hostels.",
-    imageUrl: "https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=800&q=80",
+    imageUrl: "/products/ubiquiti-unifi-6-lite.jpg",
     specs: [
       "WiFi 6 (802.11ax) 2x2 High-Efficiency MIMO",
       "5 GHz band (2x2 MU-MIMO and OFDMA) up to 1.2 Gbps",
@@ -468,7 +468,7 @@ const DEFAULT_PRODUCTS: HardwareProduct[] = [
     badge: "High Density",
     shortDescription: "WiFi 6 4x4 MIMO, 5.3 Gbps aggregate throughput, 300+ client capacity, IP54 rated.",
     description: "High-performance access point engineered for stadium lounges, large offices, campuses, and busy coffee shops. Massive 4x4 spatial streams guarantee zero buffering.",
-    imageUrl: "https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=800&q=80",
+    imageUrl: "/products/ubiquiti-unifi-6-pro.jpg",
     specs: [
       "4x4 MU-MIMO 5 GHz band (4.8 Gbps)",
       "2x2 MIMO 2.4 GHz band (573.5 Mbps)",
@@ -496,7 +496,7 @@ const DEFAULT_PRODUCTS: HardwareProduct[] = [
     badge: "Outdoor Ready",
     shortDescription: "Weatherproof 802.11ac outdoor AP with dual omni antennas. Mesh multi-hop coverage.",
     description: "Built for extreme weather resistance in Kenyan outdoor parks, swimming pools, market squares, and perimeter security. Can be pole mounted or wall mounted anywhere.",
-    imageUrl: "https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=800&q=80",
+    imageUrl: "/products/ubiquiti-ac-mesh.jpg",
     specs: [
       "Simultaneous Dual-Band 2x2 MIMO",
       "Speeds up to 867 Mbps on 5GHz & 300 Mbps on 2.4GHz",
@@ -524,7 +524,7 @@ const DEFAULT_PRODUCTS: HardwareProduct[] = [
     badge: "Long Range PtP",
     shortDescription: "5GHz airMAX ac CPE with 23dBi directional antenna for links up to 20km+.",
     description: "Lightweight and ultra-rugged point-to-point wireless bridge. Delivers 450+ Mbps throughput across long distances to connect remote base stations or estate towers.",
-    imageUrl: "https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=800&q=80",
+    imageUrl: "/products/ubiquiti-litebeam-5ac.jpg",
     specs: [
       "5GHz airMAX ac technology (450+ Mbps)",
       "23dBi directional reflector antenna",
@@ -552,7 +552,7 @@ const DEFAULT_PRODUCTS: HardwareProduct[] = [
     badge: "High Gain 25dBi",
     shortDescription: "5GHz 25dBi dish PtP bridge, 450+ Mbps, improved noise immunity for noisy RF areas.",
     description: "Tight beamwidth directional dish bridge designed to cut through dense RF interference in urban estates. Ideal for long-distance tower-to-tower backhaul links up to 25km.",
-    imageUrl: "https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=800&q=80",
+    imageUrl: "/products/ubiquiti-powerbeam-5ac.jpg",
     specs: [
       "400mm 25dBi precision reflector dish",
       "Dedicated Wi-Fi management radio for UNMS/UISP",
@@ -580,7 +580,7 @@ const DEFAULT_PRODUCTS: HardwareProduct[] = [
     badge: "CAPsMAN Core",
     shortDescription: "WiFi 6 Dual-Band ceiling AP, Quad-Core 1.8GHz, 1GB RAM, 2x Gigabit Ports, PoE Out.",
     description: "Powerful ceiling AP seamlessly controlled by MikroTik CAPsMAN centralized controller. Features an auxiliary Gigabit port with PoE-out to power another AP or CCTV camera.",
-    imageUrl: "https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=800&q=80",
+    imageUrl: "/products/mikrotik-cap-ax.jpg",
     specs: [
       "Dual-Band WiFi 6 (802.11ax/ac/n) up to 1.77 Gbps",
       "Quad-Core 1.8GHz IPQ-6010 ARM64 CPU",
@@ -610,7 +610,7 @@ const DEFAULT_PRODUCTS: HardwareProduct[] = [
     badge: "Bulk Saver",
     shortDescription: "G657A1 Bend-Insensitive 2-Core Fiber with steel strength messenger wire for aerial spans.",
     description: "Premium FTTH outdoor drop cable on a heavy wooden drum. Engineered to withstand intense tropical sun, wind tension, and tree branch friction without signal loss.",
-    imageUrl: "https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=800&q=80",
+    imageUrl: "/products/fiber-drop-cable-1000m.jpg",
     specs: [
       "1000 Meters per wooden drum",
       "2-Core G657A1 Single Mode 9/125um fiber",
@@ -638,7 +638,7 @@ const DEFAULT_PRODUCTS: HardwareProduct[] = [
     badge: "Technician Favorite",
     shortDescription: "Field assembly optical connectors. Insertion loss <0.3dB, no fusion splicer needed.",
     description: "Terminate subscriber drops in under 90 seconds in the field. Pre-embedded fiber core and ceramic ferrule ensure low insertion loss and high return loss.",
-    imageUrl: "https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=800&q=80",
+    imageUrl: "/products/sc-upc-connectors-100pk.jpg",
     specs: [
       "Standard SC/UPC Blue connector",
       "Insertion Loss: <= 0.3dB, Return Loss: >= 50dB",
@@ -666,7 +666,7 @@ const DEFAULT_PRODUCTS: HardwareProduct[] = [
     badge: "Low Return Loss",
     shortDescription: "Angled Polish SC/APC (Green), Return Loss >=60dB, perfect for GPON and CATV video.",
     description: "Precision 8-degree angled physical contact fiber connector. Dramatically lowers optical back-reflection, preventing laser damage and ensuring clean fiber TV/broadband signals.",
-    imageUrl: "https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=800&q=80",
+    imageUrl: "/products/sc-apc-connectors-100pk.jpg",
     specs: [
       "SC/APC Angled Physical Contact (Green)",
       "Return Loss: >= 60dB, Insertion Loss: <= 0.3dB",
@@ -694,7 +694,7 @@ const DEFAULT_PRODUCTS: HardwareProduct[] = [
     badge: "10G Speed",
     shortDescription: "10Gbps Dual LC 1310nm 10km DDM SFP+ Module, MikroTik & Ubiquiti 100% compatible.",
     description: "Plug-and-play 10 Gigabit optical transceiver for connecting MikroTik CCR routers, CRS switches, and OLT uplinks with live DDM temperature and optical power monitoring.",
-    imageUrl: "https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=800&q=80",
+    imageUrl: "/products/sfp-plus-10g-module.jpg",
     specs: [
       "10 Gbps data rate (10GBASE-LR)",
       "1310nm DFB Laser transmitter up to 10km reach",
@@ -722,7 +722,7 @@ const DEFAULT_PRODUCTS: HardwareProduct[] = [
     badge: "Single Fiber Pair",
     shortDescription: "1-Core Bi-Directional Gigabit SFP pair. Doubles existing fiber cable capacity.",
     description: "Run gigabit connections over a single fiber optic strand. Uses 1310nm and 1550nm wavelength multiplexing to transmit and receive on the same optical core up to 20km.",
-    imageUrl: "https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=800&q=80",
+    imageUrl: "/products/sfp-1g-bidi-pair.jpg",
     specs: [
       "Transmits & receives over 1 single optical strand",
       "Data Rate: 1.25 Gbps (1000BASE-BX)",
@@ -750,7 +750,7 @@ const DEFAULT_PRODUCTS: HardwareProduct[] = [
     badge: "IP65 Outdoor",
     shortDescription: "Wall/pole mount outdoor distribution box with 16 drop ports & PLC splitter slot.",
     description: "Heavy-duty outdoor distribution box for residential fiber rollouts. Includes lock and key, internal splice tray, adapter panel, and rubber weather seals for all 16 subscriber lines.",
-    imageUrl: "https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=800&q=80",
+    imageUrl: "/products/fiber-nap-box-16core.jpg",
     specs: [
       "16 Subscriber Drop Ports + 2 Main Trunk Cable Ports",
       "IP65 waterproof & UV-resistant engineering ABS plastic",
@@ -778,7 +778,7 @@ const DEFAULT_PRODUCTS: HardwareProduct[] = [
     badge: "Tech Essential",
     shortDescription: "Handheld OPM (-70 to +10 dBm) + 30mW Red Laser Pen (30km) + FC/SC/ST adapters.",
     description: "Every fiber technician's indispensable field diagnostics toolkit. Accurately measures optical power loss and instantly pinpoints breaks, microbends, and bad splices using red laser light.",
-    imageUrl: "https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=800&q=80",
+    imageUrl: "/products/optical-toolkit-opm-vfl.jpg",
     specs: [
       "Optical Power Meter: -70 to +10 dBm range (850/1300/1310/1490/1550/1625nm)",
       "Visual Fault Locator: 30mW High-Intensity Red Laser (up to 30km)",
@@ -808,7 +808,7 @@ const DEFAULT_PRODUCTS: HardwareProduct[] = [
     badge: "Must-Have",
     shortDescription: "Keeps your MikroTik, ONU & fiber router running for 4-6 hours during KPLC blackouts.",
     description: "Never lose hotspot sales or client internet during power cuts. Automatically switches to lithium battery in zero milliseconds with multiple DC voltage outputs (9V/12V/15V/24V PoE).",
-    imageUrl: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=800&q=80",
+    imageUrl: "/products/mini-dc-ups-8800.jpg",
     specs: [
       "8800mAh High-Capacity Li-Ion Battery Pack",
       "Outputs: 9V DC, 12V DC, 15V/24V Passive PoE & 5V USB",
@@ -836,7 +836,7 @@ const DEFAULT_PRODUCTS: HardwareProduct[] = [
     badge: "Extended Runtime",
     shortDescription: "10,400mAh lithium battery. 6-8 hours continuous router runtime. Multi-voltage DC + USB.",
     description: "Upgraded capacity for dual-band WiFi 6 routers and multiple subscriber terminals. Keeps your residential or commercial connection completely active through prolonged blackouts.",
-    imageUrl: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=800&q=80",
+    imageUrl: "/products/mini-dc-ups-10400.jpg",
     specs: [
       "10,400mAh (4x 2600mAh grade-A lithium cells)",
       "Outputs: 5V USB (phone charging), 9V/12V DC selector, 15V/24V PoE",
@@ -864,7 +864,7 @@ const DEFAULT_PRODUCTS: HardwareProduct[] = [
     badge: "10-Year Life",
     shortDescription: "4000+ Cycles, Smart BMS, 1.28kWh capacity. The ultimate battery for ISP base stations.",
     description: "Replaces 4x heavy lead-acid gel batteries with one compact lithium unit. Built-in smart BMS protects against over-discharge, overheating, and short circuits during heavy solar cycling.",
-    imageUrl: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=800&q=80",
+    imageUrl: "/products/lifepo4-battery-100ah.jpg",
     specs: [
       "12.8V Nominal Voltage / 100Ah Capacity (1280Wh)",
       "Grade-A LiFePO4 Prismatic Cells with 4,000+ deep cycles",
@@ -892,7 +892,7 @@ const DEFAULT_PRODUCTS: HardwareProduct[] = [
     badge: "Pure Sine Wave",
     shortDescription: "Built-in 50A PWM solar charger, AC mains bypass, 1000W continuous pure sine wave power.",
     description: "Compact all-in-one power station for telecom towers, server racks, and remote POP cabinets. Combines inverter, solar charge controller, and intelligent battery charger in one unit.",
-    imageUrl: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=800&q=80",
+    imageUrl: "/products/hybrid-inverter-1kva.jpg",
     specs: [
       "1000W Continuous Pure Sine Wave AC 230V output",
       "12V DC battery input compatible with LiFePO4 & Gel",
@@ -922,7 +922,7 @@ const DEFAULT_PRODUCTS: HardwareProduct[] = [
     badge: "Weatherproof IP67",
     shortDescription: "1080P Full HD, 30m Smart IR Night Vision, PoE Powered, IP67 Weatherproof metal case.",
     description: "Industry-standard outdoor security camera for compound security, gate entrances, and building perimeters. Features smart IR illumination that prevents overexposure at night.",
-    imageUrl: "https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800&q=80",
+    imageUrl: "/products/hikvision-2mp-bullet.jpg",
     specs: [
       "1/2.8 Progressive Scan CMOS 1080P Full HD",
       "Fixed 2.8mm or 4mm lens with wide 103-degree field of view",
@@ -950,7 +950,7 @@ const DEFAULT_PRODUCTS: HardwareProduct[] = [
     badge: "24/7 Color Night",
     shortDescription: "4MP Quad-HD, 24/7 Full Color in pitch darkness, built-in microphone, AI human detection.",
     description: "Delivers vivid full-color video even in zero ambient lighting. Built-in high-sensitivity microphone captures clear audio, while onboard AI human and vehicle detection stops false alarms.",
-    imageUrl: "https://images.unsplash.com/photo-1557597774-9d273605dfa9?w=800&q=80",
+    imageUrl: "/products/dahua-4mp-dome.jpg",
     specs: [
       "4-Megapixel Quad-HD resolution (2560 x 1440)",
       "Full-Color Starlight sensor with warm LED illuminator (30m)",
@@ -978,7 +978,7 @@ const DEFAULT_PRODUCTS: HardwareProduct[] = [
     badge: "4K Ready",
     shortDescription: "8x Independent PoE Ports, supports up to 8MP/4K cameras, H.265+, 1x SATA up to 10TB.",
     description: "Plug cameras directly into the back with zero IP configuration. Automatically provides power and video through single Ethernet cables, with seamless mobile viewing app for iOS & Android.",
-    imageUrl: "https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=800&q=80",
+    imageUrl: "/products/nvr-8ch-poe.jpg",
     specs: [
       "8 Independent Gigabit PoE Network Interfaces",
       "Decodes up to 4K / 8MP Ultra-HD resolution per channel",
@@ -1006,7 +1006,7 @@ const DEFAULT_PRODUCTS: HardwareProduct[] = [
     badge: "100% Solid Copper",
     shortDescription: "23AWG Solid Bare Copper, double PE outdoor jacket, waterproof tape, Fluke tested.",
     description: "Crucial for long PoE runs up to 100 meters without voltage drop. Built with 100% solid oxygen-free pure copper (NOT cheap copper-clad aluminium) and heavy double jacket for outdoor exposure.",
-    imageUrl: "https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=800&q=80",
+    imageUrl: "/products/cat6-cable-305m.jpg",
     specs: [
       "305 Meters (1000 ft) per pull-box drum",
       "23AWG Solid Bare Copper conductors (0.57mm)",
@@ -1034,7 +1034,7 @@ const DEFAULT_PRODUCTS: HardwareProduct[] = [
     badge: "Heavy Duty",
     shortDescription: "600x450mm, toughened glass lockable door, removable side panels, cooling fan included.",
     description: "Secures routers, PoE switches, NVRs, and fiber patch panels neatly off the floor. Keeps delicate telecom gear safe from tampering, dust, rodents, and overheating.",
-    imageUrl: "https://images.unsplash.com/photo-1558494949-ef010cbdcc31?w=800&q=80",
+    imageUrl: "/products/network-cabinet-9u.jpg",
     specs: [
       "9U Standard 19-inch mounting profile (600mm width x 450mm depth)",
       "Toughened safety glass front door with security cylinder lock",
