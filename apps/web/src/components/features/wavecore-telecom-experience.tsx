@@ -152,7 +152,7 @@ const STORE_TABS = [
   { id: "solar", label: "Solar Backup" },
 ];
 
-export function WavecoreTelecomExperience({ onOpenCart }: { onOpenCart: () => void }) {
+export function CarrierTelecomExperience({ onOpenCart }: { onOpenCart: () => void }) {
   const [fiberTab, setFiberTab] = useState<"home" | "business">("home");
   const [storeTab, setStoreTab] = useState("all");
   const [products, setProducts] = useState<HardwareProduct[]>([]);
@@ -174,14 +174,14 @@ export function WavecoreTelecomExperience({ onOpenCart }: { onOpenCart: () => vo
 
   return (
     <div className="space-y-28">
-      {/* SECTION 1: WaveCore Workflow ("How It Works") */}
+      {/* SECTION 1: Automated Workflow ("How It Works") */}
       <section id="workflow" className="relative pt-12 scroll-mt-24">
         <div className="text-center max-w-3xl mx-auto space-y-4 mb-16">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs font-mono font-bold uppercase tracking-wider">
-            <span>⚡</span> WaveCore Automated Workflow
+            <span>⚡</span> Automated Workflow
           </div>
           <h2 className="text-3xl sm:text-5xl font-black tracking-tight text-white">
-            How WaveCore Delivers High-Speed Telecom
+            How MashupKGrid Delivers High-Speed Telecom
           </h2>
           <p className="text-sm sm:text-base text-slate-400 leading-relaxed">
             From purchasing equipment to provisioning high-speed fiber across Kenya, our end-to-end workflow handles everything on automated autopilot.
@@ -331,7 +331,7 @@ export function WavecoreTelecomExperience({ onOpenCart }: { onOpenCart: () => vo
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-10">
           <div className="space-y-3">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs font-mono font-bold uppercase tracking-wider">
-              <span>🛒</span> WaveCore Hardware Store
+              <span>🛒</span> Hardware Store
             </div>
             <h2 className="text-3xl sm:text-5xl font-black tracking-tight text-white">
               Carrier-Grade Hardware Store

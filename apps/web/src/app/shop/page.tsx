@@ -74,7 +74,7 @@ export default function ShopPage() {
                   MASHUP<span className="text-cyan-400">STORE</span>
                 </span>
                 <span className="hidden sm:inline-block ml-2 px-1.5 py-0.2 rounded bg-cyan-500/10 border border-cyan-500/30 text-[10px] font-bold text-cyan-400">
-                  WaveCore Hardware
+                  Carrier Hardware
                 </span>
               </div>
             </Link>

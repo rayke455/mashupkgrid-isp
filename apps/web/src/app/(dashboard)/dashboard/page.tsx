@@ -210,18 +210,18 @@ export default function DashboardHomePage() {
     const secret = "mkg_radius_live_x91";
 
     if (provisionTab === "pppoe") {
-      return `/radius add address=${host} secret="${secret}" service=ppp comment="WaveCore PPPoE AAA" timeout=3000ms
+      return `/radius add address=${host} secret="${secret}" service=ppp comment="MashupKGrid PPPoE AAA" timeout=3000ms
 /radius incoming set accept=yes port=3799
 /ppp aaa set use-radius=yes accounting=yes interim-update=00:05:00
-/interface pppoe-server server add service-name="WAVECORE-FIBER" interface=ether2 authentication=chap,mschap2 default-profile=default disabled=no`;
+/interface pppoe-server server add service-name="MASHUP-FIBER" interface=ether2 authentication=chap,mschap2 default-profile=default disabled=no`;
     }
     if (provisionTab === "hotspot") {
-      return `/radius add address=${host} secret="${secret}" service=hotspot comment="WaveCore Hotspot AAA" timeout=2500ms
+      return `/radius add address=${host} secret="${secret}" service=hotspot comment="MashupKGrid Hotspot AAA" timeout=2500ms
 /radius incoming set accept=yes port=3799
 /ip hotspot profile set [ find default=yes ] use-radius=yes radius-accounting=yes radius-interim-update=00:02:00 login-by=http-chap,http-pap
 /ip hotspot user profile set [ find default=yes ] rate-limit="10M/10M" transparent-proxy=no`;
     }
-    return `/radius add address=${host} secret="${secret}" service=ppp,hotspot,login comment="WaveCore Core Engine" timeout=3000ms
+    return `/radius add address=${host} secret="${secret}" service=ppp,hotspot,login comment="MashupKGrid Core Engine" timeout=3000ms
 /radius incoming set accept=yes port=3799
 /tool fetch url="https://api.mashuphost.tech/v1/routers/health-beacon" keep-result=no`;
   };
@@ -243,7 +243,7 @@ export default function DashboardHomePage() {
 
   return (
     <div className="space-y-6 sm:space-y-8 w-full min-w-0 font-sans text-slate-100 selection:bg-cyan-500 selection:text-slate-950">
-      {/* Top WaveCore Carrier Operations & NOC Header */}
+      {/* Top MashupKGrid Carrier Operations & NOC Header */}
       <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-950 via-[#07111e] to-slate-950 p-6 sm:p-8 text-white shadow-2xl border border-cyan-500/20 w-full min-w-0">
         <div className="absolute -right-20 -top-20 h-72 w-72 rounded-full bg-cyan-500/15 blur-3xl pointer-events-none" />
         <div className="absolute -left-20 -bottom-20 h-72 w-72 rounded-full bg-emerald-500/10 blur-3xl pointer-events-none" />
@@ -501,7 +501,7 @@ export default function DashboardHomePage() {
       {isStaff && <OnboardingChecklist />}
 
       {/* ========================================================================= */}
-      {/* WAVECORE 1-CLICK MIKROTIK PROVISIONING TERMINAL TOOL */}
+      {/* 1-CLICK MIKROTIK PROVISIONING TERMINAL TOOL */}
       {/* ========================================================================= */}
       {isStaff && (
         <div className="rounded-2xl bg-gradient-to-b from-slate-950 to-[#080d1a] border border-cyan-500/30 p-5 shadow-xl space-y-3">
@@ -512,7 +512,7 @@ export default function DashboardHomePage() {
               </div>
               <div>
                 <h3 className="font-bold text-sm text-white flex items-center gap-2">
-                  <span>WaveCore 1-Click MikroTik Provisioning Script</span>
+                  <span>1-Click MikroTik Provisioning Script</span>
                   <span className="px-2 py-0.2 rounded text-[10px] font-mono font-bold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40">
                     RouterOS v6 &amp; v7
                   </span>
@@ -583,7 +583,7 @@ export default function DashboardHomePage() {
       )}
 
       {/* ========================================================================= */}
-      {/* 4 PRIMARY WAVECORE ISP KPI CARDS */}
+      {/* 4 PRIMARY CARRIER ISP KPI CARDS */}
       {/* ========================================================================= */}
       {isStaff && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -912,7 +912,7 @@ export default function DashboardHomePage() {
       )}
 
       {/* ========================================================================= */}
-      {/* QUICK M-PESA STK PUSH MODAL (WAVECORE STYLE) */}
+      {/* QUICK M-PESA STK PUSH MODAL */}
       {/* ========================================================================= */}
       {showStkModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
