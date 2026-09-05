@@ -286,12 +286,12 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
           </span>
           <span>FREE Installation &amp; Dual-Band WiFi Router on all 20M+ Home Fiber Plans.</span>
           <a
-            href="https://wa.me/254702537372?text=Hello%20MashupKGrid%2C%20I%20want%20to%20get%20connected%20to%20Fiber"
+            href="https://wa.me/254703605266?text=Hello%20MashupKGrid%2C%20I%20want%20to%20get%20connected%20to%20Fiber"
             target="_blank"
             rel="noopener noreferrer"
             className="text-emerald-400 hover:text-emerald-300 font-bold underline flex items-center gap-1"
           >
-            <span>WhatsApp Dispatch: +254 702 537 372</span>
+            <span>WhatsApp Dispatch: +254 703 605 266</span>
             <span>&rarr;</span>
           </a>
         </div>
@@ -981,7 +981,7 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
               Get Connected Now
             </a>
             <a
-              href="https://wa.me/254702537372?text=Hello%20MashupKGrid%2C%20I%20want%20to%20consult%20an%20engineer"
+              href="https://wa.me/254703605266?text=Hello%20MashupKGrid%2C%20I%20want%20to%20consult%20an%20engineer"
               target="_blank"
               rel="noopener noreferrer"
               className="px-8 py-3.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-white font-bold text-sm transition-all flex items-center gap-2"
@@ -1015,7 +1015,7 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
               <div className="pt-1 flex items-center gap-4 text-slate-400 text-sm">
                 <span>📍 Nairobi, Kenya</span>
                 <span>•</span>
-                <span>📞 +254 702 537 372</span>
+                <span>📞 +254 703 605 266</span>
               </div>
             </div>
 

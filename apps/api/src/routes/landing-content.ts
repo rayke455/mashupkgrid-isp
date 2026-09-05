@@ -189,7 +189,7 @@ export const DEFAULT_LANDING_CONTENT: LandingContent = {
       "Precision billing, native MikroTik RouterOS API control, FreeRADIUS subscriber accounting, and automated Safaricom M-Pesa collections for telecom operators in East Africa.",
     copyrightYear: "2026",
     supportEmail: "support@mashupkgrid.com",
-    supportPhone: "+254 700 000 000",
+    supportPhone: "+254 703 605 266",
   },
 };
 
