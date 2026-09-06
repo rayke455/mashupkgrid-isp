@@ -533,14 +533,26 @@ export async function getRouterConnectedAccessPoints(
   routerId: string
 ): Promise<ConnectedAccessPoint[]> {
   const router = await getRouterOrThrow(tenantId, routerId);
-  if (!router.host) {
+  const primaryHost = router.host || router.vpnIp;
+  if (!primaryHost) {
     throw new ConflictError(
       `"${router.name}" hasn't checked in yet — paste the provisioning script on the router, or link it manually.`
     );
   }
-  const adapter = createAdapterForRouter({ ...router, host: router.host });
+  let adapter = createAdapterForRouter({ ...router, host: primaryHost });
   try {
-    await adapter.connect();
+    try {
+      await adapter.connect();
+    } catch (err) {
+      if (router.vpnIp && router.vpnIp !== primaryHost) {
+        const vpnAdapter = createAdapterForRouter({ ...router, host: router.vpnIp });
+        await vpnAdapter.connect();
+        adapter = vpnAdapter;
+        await prisma.router.update({ where: { id: router.id }, data: { host: router.vpnIp } }).catch(() => {});
+      } else {
+        throw err;
+      }
+    }
     if (adapter.getConnectedAccessPoints) {
       return await adapter.getConnectedAccessPoints();
     }
@@ -557,14 +569,26 @@ export async function getRouterConnectedAccessPoints(
  *  router currently has, all at once. Returns how many were actually removed. */
 export async function disconnectAllRouterSessions(tenantId: string, routerId: string): Promise<number> {
   const router = await getRouterOrThrow(tenantId, routerId);
-  if (!router.host) {
+  const primaryHost = router.host || router.vpnIp;
+  if (!primaryHost) {
     throw new ConflictError(
       `"${router.name}" hasn't checked in yet — paste the provisioning script on the router, or link it manually.`
     );
   }
-  const adapter = createAdapterForRouter({ ...router, host: router.host });
+  let adapter = createAdapterForRouter({ ...router, host: primaryHost });
   try {
-    await adapter.connect();
+    try {
+      await adapter.connect();
+    } catch (err) {
+      if (router.vpnIp && router.vpnIp !== primaryHost) {
+        const vpnAdapter = createAdapterForRouter({ ...router, host: router.vpnIp });
+        await vpnAdapter.connect();
+        adapter = vpnAdapter;
+        await prisma.router.update({ where: { id: router.id }, data: { host: router.vpnIp } }).catch(() => {});
+      } else {
+        throw err;
+      }
+    }
     return await adapter.disconnectAllSessions();
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

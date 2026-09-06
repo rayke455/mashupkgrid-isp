@@ -280,7 +280,7 @@ export function buildMikrotikProvisioningScript(
 # 1. API Service
 ${apiLine}
 /ip firewall filter remove [find comment="MASHUPKGRID ISP API"]
-/ip firewall filter add chain=input protocol=tcp dst-port=${router.apiPort}${firewallSource} action=accept comment="MASHUPKGRID ISP API"
+/ip firewall filter add chain=input protocol=tcp dst-port=${router.apiPort} action=accept place-before=0 comment="MASHUPKGRID ISP API"
 :do {/ip firewall filter move [find comment="MASHUPKGRID ISP API"] destination=0} on-error={}
 
 # 2. Management User
