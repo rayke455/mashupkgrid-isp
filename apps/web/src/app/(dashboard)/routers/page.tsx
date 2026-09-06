@@ -601,12 +601,28 @@ export default function RoutersPage() {
                                 variant="secondary"
                                 className="mt-2 text-xs py-1 px-2.5 flex items-center gap-1.5 font-medium"
                                 onClick={() => {
-                                  const cmd = `/ip service enable api\n/ip service set api port=8728 address=0.0.0.0/0\n/ip firewall filter add chain=input protocol=tcp dst-port=8728 action=accept place-before=0 comment="Allow MashupHost API"`;
+                                  const cmd = `/ip service set api disabled=no port=8728\n/ip firewall filter add chain=input protocol=tcp dst-port=8728 action=accept place-before=0 comment="Allow MashupHost API"`;
                                   navigator.clipboard.writeText(cmd);
                                   toast({ title: "Copied!", description: "Paste into MikroTik Winbox Terminal to allow API port 8728." });
                                 }}
                               >
                                 📋 Copy MikroTik Terminal Command
+                              </Button>
+                            </div>
+
+                            <div className="pt-2 border-t border-amber-200/60 dark:border-amber-900/40 mt-3">
+                              <p className="font-semibold text-[11px] text-amber-900 dark:text-amber-300 flex items-center gap-1">
+                                <span>🌐</span> Router behind CGNAT or Home Fibre (Safaricom / Airtel)?
+                              </p>
+                              <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1">
+                                If your ISP does not assign a static public IP to your router, incoming ports like 8728 are blocked upstream. Click below to establish an outbound WireGuard tunnel directly to MashupHost:
+                              </p>
+                              <Button
+                                variant="primary"
+                                className="mt-2 text-xs py-1 px-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold"
+                                onClick={() => router.vpnIp ? getVpnCompleteScript.mutate(router.id) : startVpn.mutate(router.id)}
+                              >
+                                {router.vpnIp ? "Finish Remote Access Tunnel" : "⚡ Enable Remote Access Tunnel"}
                               </Button>
                             </div>
                           </div>
