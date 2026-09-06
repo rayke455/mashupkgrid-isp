@@ -602,11 +602,11 @@ export default function RoutersPage() {
                                 className="mt-2 text-xs py-1 px-2.5 flex items-center gap-1.5 font-medium"
                                 onClick={() => {
                                   const cmd = `/ip service set api disabled=no port=8728\n/ip firewall filter add chain=input protocol=tcp dst-port=8728 action=accept place-before=0 comment="Allow MashupHost API"`;
-                                  navigator.clipboard.writeText(cmd);
-                                  toast({ title: "Copied!", description: "Paste into MikroTik Winbox Terminal to allow API port 8728." });
+                                  handleCopy(cmd, "fix-api-8728");
                                 }}
                               >
-                                📋 Copy MikroTik Terminal Command
+                                {copiedId === "fix-api-8728" ? <IconCheck size={12} /> : <IconCopy size={12} />}
+                                <span>{copiedId === "fix-api-8728" ? "Copied Command!" : "Copy MikroTik Terminal Command"}</span>
                               </Button>
                             </div>
 
