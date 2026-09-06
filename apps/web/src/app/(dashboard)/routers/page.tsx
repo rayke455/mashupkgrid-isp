@@ -615,15 +615,21 @@ export default function RoutersPage() {
                                   {vendorBadge} {ap.version ? `· ${ap.version}` : ""}
                                 </span>
                               </div>
-                              <Badge
-                                variant={isRuijie || isTplink || isUbnt || isMikrotik ? "success" : "neutral"}
-                                className="text-[10px] uppercase font-bold shrink-0 font-mono"
-                              >
-                                {ap.interface || "LAN"}
-                              </Badge>
+                              <div className="shrink-0 text-right">
+                                <span className="inline-flex items-center gap-1 rounded-md border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 font-mono text-[11px] font-bold text-cyan-700 dark:text-cyan-300">
+                                  <span>🔌</span>
+                                  <span>{ap.interface || "LAN"}</span>
+                                </span>
+                              </div>
                             </div>
 
                             <div className="space-y-1.5 text-[11px] font-mono text-slate-600 dark:text-slate-300 py-2 border-y border-slate-100 dark:border-obsidian-800/80">
+                              <div className="flex items-center justify-between">
+                                <span className="text-slate-400 font-sans">MikroTik Port:</span>
+                                <span className="font-bold text-cyan-600 dark:text-cyan-400 flex items-center gap-1">
+                                  <span>Port {ap.interface}</span>
+                                </span>
+                              </div>
                               {ap.ipAddress && (
                                 <div className="flex items-center justify-between">
                                   <span className="text-slate-400 font-sans">IP Address:</span>

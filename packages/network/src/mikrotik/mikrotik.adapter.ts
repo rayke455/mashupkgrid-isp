@@ -105,24 +105,48 @@ export class MikroTikAdapter implements NetworkDeviceAdapter {
     const accessPoints: ConnectedAccessPoint[] = [];
     const seenMacs = new Set<string>();
 
+    // 0. Build physical port mapping from Bridge Host table (/interface/bridge/host/print)
+    // When ports (e.g. ether2, ether3) are bridged, this maps the AP MAC directly to the physical port.
+    const macToPort = new Map<string, string>();
+    try {
+      const bridgeHosts = await client.print(["/interface/bridge/host/print"]);
+      for (const bh of bridgeHosts) {
+        const mac = (bh["mac-address"] || "").trim().toUpperCase();
+        const port = bh["on-interface"] || bh["interface"];
+        if (mac && port) {
+          macToPort.set(mac, port);
+        }
+      }
+    } catch {
+      // ignore bridge host lookup failure (e.g. unbridged router)
+    }
+
     // 1. Check /ip/neighbor/print (MNDP, CDP, LLDP) - identifies connected APs, bridges, Ubiquiti, TP-Link, Ruijie, MikroTik
     try {
       const neighbors = await client.print(["/ip/neighbor/print"]);
       for (const row of neighbors) {
         const mac = (row["mac-address"] || "").trim().toUpperCase();
         const identity = row["identity"] || row["system-description"] || "Access Point";
-        const iface = row["interface"] || "";
+        let iface = row["interface"] || "";
         const address = row["address"] || row["ipv4-address"] || "";
         const board = row["board"] || row["platform"] || row["model"] || "";
         const version = row["version"] || "";
         const uptime = row["uptime"] || "";
+
+        // If interface is a bridge, resolve exact physical port from bridge host table
+        if (mac && macToPort.has(mac)) {
+          const physicalPort = macToPort.get(mac)!;
+          if (physicalPort && (!iface || iface.toLowerCase().includes("bridge"))) {
+            iface = physicalPort;
+          }
+        }
 
         if (mac) seenMacs.add(mac);
         accessPoints.push({
           identity,
           ipAddress: address || undefined,
           macAddress: mac,
-          interface: iface,
+          interface: iface || "LAN",
           board: board || undefined,
           platform: row["platform"] || undefined,
           version: version || undefined,
@@ -164,11 +188,12 @@ export class MikroTikAdapter implements NetworkDeviceAdapter {
         // If it looks like an AP, CPE, antenna or has a name, or matches AP vendors
         if (mac && !seenMacs.has(mac) && hostName) {
           seenMacs.add(mac);
+          const physicalPort = macToPort.get(mac);
           accessPoints.push({
             identity: hostName,
             ipAddress: row["address"] || undefined,
             macAddress: mac,
-            interface: row["server"] || "dhcp",
+            interface: physicalPort || row["server"] || "LAN",
             uptime: row["last-seen"] || row["expires-after"] || undefined,
             detectionSource: "DHCP",
           });
