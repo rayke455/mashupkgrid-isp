@@ -531,47 +531,70 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
 
   // Outbound push from router: receives AP discovery report from MikroTik /tool fetch
   // Works behind any locked modem, double-NAT, or carrier-grade NAT.
-  app.all(
-    "/:routerId/push-aps",
-    { config: { audience: "system-critical" } },
-    async (request, reply) => {
-      const { routerId } = idParamsSchema.parse(request.params);
-      const router = await prisma.router.findFirst({ where: { id: routerId, deletedAt: null } });
-      if (!router) throw new NotFoundError("Router");
+  const handlePushAps = async (request: any, reply: any) => {
+    const params = (request.params || {}) as Record<string, string>;
+    const rawRouterId = (params.routerId || "").trim();
+    let router: RouterRow | null = null;
 
-      const query = (request.query as Record<string, string>) || {};
-      let raw = typeof request.body === "string" ? request.body : "";
-      if (!raw && query.data) raw = query.data;
+    if (rawRouterId && rawRouterId !== "<ROUTER_ID>" && !rawRouterId.includes("<")) {
+      router = await prisma.router.findFirst({ where: { id: rawRouterId, deletedAt: null } });
+    }
 
-      const aps: ConnectedAccessPoint[] = [];
-      const records = raw.split("|").map((s) => s.trim()).filter(Boolean);
-      for (const rec of records) {
-        const parts = rec.split(";").map((s) => s.trim());
-        if (parts.length >= 2) {
-          const iface = parts[0] || "ether2";
-          const mac = parts[1] || "";
-          const identity = parts[2] || "Access Point";
-          const ip = parts[3] || undefined;
-          const board = parts[4] || undefined;
-          if (mac) {
-            aps.push({
-              identity,
-              macAddress: mac.toUpperCase(),
-              interface: iface,
-              ipAddress: ip && ip !== "0.0.0.0" && ip !== "none" ? ip : undefined,
-              board,
-              detectionSource: "NEIGHBOR",
-            });
-          }
+    if (!router) {
+      const clientIp = getClientIp(request);
+      router = await prisma.router.findFirst({
+        where: {
+          deletedAt: null,
+          OR: [{ host: clientIp }, { vpnIp: clientIp }],
+        },
+      });
+    }
+
+    if (!router) {
+      const activeRouters = await prisma.router.findMany({ where: { deletedAt: null }, take: 2 });
+      if (activeRouters.length === 1) {
+        router = activeRouters[0];
+      }
+    }
+
+    if (!router) throw new NotFoundError("Router");
+
+    const query = (request.query as Record<string, string>) || {};
+    let raw = typeof request.body === "string" ? request.body : "";
+    if (!raw && query.data) raw = query.data;
+
+    const aps: ConnectedAccessPoint[] = [];
+    const records = raw.split("|").map((s: string) => s.trim()).filter(Boolean);
+    for (const rec of records) {
+      const parts = rec.split(";").map((s: string) => s.trim());
+      if (parts.length >= 2) {
+        const iface = parts[0] || "ether2";
+        const mac = parts[1] || "";
+        const identity = parts[2] || "Access Point";
+        const ip = parts[3] || undefined;
+        const board = parts[4] || undefined;
+        if (mac) {
+          aps.push({
+            identity,
+            macAddress: mac.toUpperCase(),
+            interface: iface,
+            ipAddress: ip && ip !== "0.0.0.0" && ip !== "none" ? ip : undefined,
+            board,
+            detectionSource: "NEIGHBOR",
+          });
         }
       }
-
-      if (aps.length > 0) {
-        recordRouterReportedAccessPoints(router.id, aps);
-      }
-
-      reply.status(200).send({ success: true, count: aps.length });
     }
+
+    if (aps.length > 0) {
+      recordRouterReportedAccessPoints(router.id, aps);
+    }
+
+    reply.status(200).send({ success: true, routerId: router.id, count: aps.length });
+  };
+
+  app.all("/:routerId/push-aps", { config: { audience: "system-critical" } }, handlePushAps);
+  app.all("/push-aps", { config: { audience: "system-critical" } }, handlePushAps);
 
   /** Bulk maintenance/incident-response action, not a routine one — requires the same
    *  `routers.manage` permission as deleting a router, not just `routers.read`. */
