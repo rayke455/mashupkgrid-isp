@@ -905,7 +905,7 @@ export async function hotspotRoutes(app: FastifyInstance): Promise<void> {
       const receipt = body.mpesaMessage?.toUpperCase().match(/\b[A-Z0-9]{10}\b/)?.[0];
       const phone = body.phone ? normalizeKenyanPhone(body.phone) : undefined;
 
-      const stkRequest = await prisma.mpesaStkRequest.findFirst({
+      let stkRequest = await prisma.mpesaStkRequest.findFirst({
         where: {
           tenantId: tenant.id,
           status: "COMPLETED",
@@ -916,6 +916,35 @@ export async function hotspotRoutes(app: FastifyInstance): Promise<void> {
         orderBy: { createdAt: "desc" },
         select: { hotspotVoucherCode: true, mpesaReceiptNumber: true, createdAt: true },
       });
+
+      // If not yet completed, check if there is a recent PENDING request for this phone.
+      // Defensively live-query Safaricom right now to reconcile it on-demand!
+      if (!stkRequest && phone) {
+        const pendingStk = await prisma.mpesaStkRequest.findFirst({
+          where: {
+            tenantId: tenant.id,
+            status: "PENDING",
+            phone,
+            createdAt: { gte: new Date(Date.now() - 2 * 60 * 60 * 1000) },
+          },
+          orderBy: { createdAt: "desc" },
+        });
+
+        if (pendingStk) {
+          try {
+            const res = await queryAndReconcileStkRequest(tenant.id, pendingStk.checkoutRequestId);
+            if (res.request.status === "COMPLETED" && res.request.hotspotVoucherCode) {
+              stkRequest = {
+                hotspotVoucherCode: res.request.hotspotVoucherCode,
+                mpesaReceiptNumber: res.request.mpesaReceiptNumber,
+                createdAt: res.request.createdAt,
+              };
+            }
+          } catch {
+            // ignore query failure in recovery fallback
+          }
+        }
+      }
 
       // Paystack and Pesapal purchases live in their own table and are just as strandable.
       const gatewayTransaction = stkRequest

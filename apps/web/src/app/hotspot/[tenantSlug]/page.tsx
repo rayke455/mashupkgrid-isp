@@ -913,7 +913,23 @@ export default function HotspotCaptivePortalPage() {
       {selectedPkg && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-xs">
           <div className="w-full max-w-sm rounded-3xl bg-slate-900 border border-slate-700 p-6 text-slate-100 shadow-2xl text-center">
-            {pollingStatus === "PENDING" ? (
+            {pollingStatus === "COMPLETED" ? (
+              <div className="space-y-4 py-3">
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400 text-3xl font-black">
+                  ✓
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-emerald-400">Payment Confirmed!</h3>
+                  <p className="text-xs text-slate-300 mt-1">
+                    Your M-Pesa payment was received. Activating your Wi-Fi access now...
+                  </p>
+                </div>
+                <div className="rounded-xl bg-slate-950 p-2.5 text-xs font-mono text-emerald-300 border border-slate-800 flex items-center justify-center gap-2">
+                  <span className="inline-block h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
+                  Connecting to Wi-Fi...
+                </div>
+              </div>
+            ) : pollingStatus === "PENDING" ? (
               <div className="space-y-4 py-3">
                 <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400 animate-pulse text-3xl font-black">
                   M

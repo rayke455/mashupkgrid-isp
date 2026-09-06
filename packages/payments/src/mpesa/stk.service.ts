@@ -197,7 +197,18 @@ export async function queryAndReconcileStkRequest(
   if (Number.isNaN(resultCode)) return { request, unresolvedSuccess: false }; // still pending
 
   if (resultCode === 0) {
-    return { request, unresolvedSuccess: true };
+    const provisionalReceipt = `PRV-${checkoutRequestId.replace(/[^A-Za-z0-9]/g, "").slice(-12).toUpperCase()}`;
+    const updated = await completeStkRequest(tenantId, checkoutRequestId, {
+      resultCode: 0,
+      resultDesc: result.ResultDesc || "The service request is processed successfully.",
+      metadata: {
+        mpesaReceiptNumber: provisionalReceipt,
+        amount: request.amountMinor / 100,
+        phone: request.phone,
+      },
+      raw: result,
+    });
+    return { request: updated, unresolvedSuccess: false };
   }
 
   const updated = await completeStkRequest(tenantId, checkoutRequestId, {

@@ -101,25 +101,43 @@ export async function completeStkRequest(
   return prisma.$transaction(async (tx) => {
     const request = await tx.mpesaStkRequest.findUnique({ where: { checkoutRequestId } });
     if (!request || request.tenantId !== tenantId) throw new NotFoundError("STK push request");
-    if (request.status !== "PENDING") return request;
+    // Idempotent: if already completed, check if this is the real Safaricom callback arriving
+    // with the official MpesaReceiptNumber to upgrade a provisional receipt (PRV-...) issued
+    // during STK query reconciliation.
+    if (request.status !== "PENDING") {
+      if (
+        request.status === "COMPLETED" &&
+        result.resultCode === 0 &&
+        result.metadata?.mpesaReceiptNumber &&
+        request.mpesaReceiptNumber?.startsWith("PRV-")
+      ) {
+        const realReceipt = result.metadata.mpesaReceiptNumber;
+        const updated = await tx.mpesaStkRequest.update({
+          where: { id: request.id },
+          data: {
+            mpesaReceiptNumber: realReceipt,
+            rawCallback: result.raw as Prisma.InputJsonValue,
+          },
+        });
+        if (request.paymentId) {
+          await tx.payment.update({
+            where: { id: request.paymentId },
+            data: { reference: realReceipt },
+          });
+        }
+        return updated;
+      }
+      return request;
+    }
 
     const rawCallback = result.raw as Prisma.InputJsonValue;
 
     if (result.resultCode === 0) {
-      const receiptNumber = result.metadata?.mpesaReceiptNumber;
-      if (!receiptNumber) {
-        // A "successful" callback with no receipt number is malformed — fail closed rather
-        // than crediting an amount we can't attribute a Safaricom receipt to.
-        return tx.mpesaStkRequest.update({
-          where: { id: request.id },
-          data: {
-            status: "FAILED",
-            resultCode: result.resultCode,
-            resultDesc: "Malformed success callback: missing MpesaReceiptNumber",
-            rawCallback,
-          },
-        });
-      }
+      // Use official Safaricom receipt if provided; fallback to deterministic provisional receipt
+      // when completed via verified STK push status query (Daraja STK Query API doesn't return CallbackMetadata).
+      const receiptNumber =
+        result.metadata?.mpesaReceiptNumber ||
+        `PRV-${checkoutRequestId.replace(/[^A-Za-z0-9]/g, "").slice(-12).toUpperCase()}`;
 
       if (request.hotspotPackageId) {
         const pkg = await tx.hotspotPackage.findUniqueOrThrow({
@@ -219,6 +237,7 @@ export async function completeStkRequest(
             resultCode: result.resultCode,
             resultDesc: result.resultDesc,
             mpesaReceiptNumber: receiptNumber,
+            paymentId: hotspotPayment.id,
             hotspotVoucherCode: code,
             rawCallback,
           },
