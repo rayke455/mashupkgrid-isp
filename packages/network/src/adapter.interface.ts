@@ -27,6 +27,19 @@ export interface DeviceSession {
   bytesOut?: number;
 }
 
+export interface ConnectedAccessPoint {
+  identity: string;
+  ipAddress?: string;
+  macAddress: string;
+  interface: string;
+  board?: string;
+  platform?: string;
+  version?: string;
+  uptime?: string;
+  signal?: string;
+  detectionSource: "NEIGHBOR" | "WIRELESS" | "DHCP";
+}
+
 export interface NetworkUserSpec {
   username: string;
   password: string;
@@ -80,6 +93,7 @@ export interface NetworkDeviceAdapter {
   disconnect(): Promise<void>;
   healthCheck(): Promise<DeviceHealth>;
   getActiveSessions(): Promise<DeviceSession[]>;
+  getConnectedAccessPoints?(): Promise<ConnectedAccessPoint[]>;
   createUser(user: NetworkUserSpec): Promise<void>;
   updateUser(username: string, patch: Partial<NetworkUserSpec>): Promise<void>;
   disableUser(username: string): Promise<void>;

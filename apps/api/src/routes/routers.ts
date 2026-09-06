@@ -15,6 +15,7 @@ import {
   deleteRouter,
   testRouterConnection,
   getRouterActiveSessions,
+  getRouterConnectedAccessPoints,
   disconnectAllRouterSessions,
   applyRouterSpeedtestBoost,
   enforceRouterStrictTimeout,
@@ -512,6 +513,17 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
       const { routerId } = idParamsSchema.parse(request.params);
       const sessions = await getRouterActiveSessions(tenantId, routerId);
       reply.send(successResponse(sessions, request.id));
+    }
+  );
+
+  app.get(
+    "/:routerId/access-points",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("routers.read")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const { routerId } = idParamsSchema.parse(request.params);
+      const accessPoints = await getRouterConnectedAccessPoints(tenantId, routerId);
+      reply.send(successResponse(accessPoints, request.id));
     }
   );
 

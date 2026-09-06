@@ -9,7 +9,7 @@ import {
 } from "@mashupkgrid/shared";
 import { env } from "@mashupkgrid/config";
 import { createAdapterForRouter } from "./factory.js";
-import type { DeviceHealth, DeviceSession } from "./adapter.interface.js";
+import type { DeviceHealth, DeviceSession, ConnectedAccessPoint } from "./adapter.interface.js";
 import { allocateNextVpnIp, registerWireguardPeer, removeWireguardPeer } from "./wireguard-peer.service.js";
 
 export interface RouterHeartbeatMetrics {
@@ -523,6 +523,31 @@ export async function getRouterActiveSessions(tenantId: string, routerId: string
     // nothing); a clear "couldn't check" error is what the caller actually needs to show.
     const message = err instanceof Error ? err.message : String(err);
     throw new ConflictError(`Could not reach "${router.name}" to list active sessions: ${message}`);
+  } finally {
+    await adapter.disconnect().catch(() => {});
+  }
+}
+
+export async function getRouterConnectedAccessPoints(
+  tenantId: string,
+  routerId: string
+): Promise<ConnectedAccessPoint[]> {
+  const router = await getRouterOrThrow(tenantId, routerId);
+  if (!router.host) {
+    throw new ConflictError(
+      `"${router.name}" hasn't checked in yet — paste the provisioning script on the router, or link it manually.`
+    );
+  }
+  const adapter = createAdapterForRouter({ ...router, host: router.host });
+  try {
+    await adapter.connect();
+    if (adapter.getConnectedAccessPoints) {
+      return await adapter.getConnectedAccessPoints();
+    }
+    return [];
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new ConflictError(`Could not reach "${router.name}" to detect connected access points: ${message}`);
   } finally {
     await adapter.disconnect().catch(() => {});
   }

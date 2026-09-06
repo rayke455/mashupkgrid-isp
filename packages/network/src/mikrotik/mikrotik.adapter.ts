@@ -4,6 +4,7 @@ import type {
   NetworkUserSpec,
   DeviceHealth,
   DeviceSession,
+  ConnectedAccessPoint,
   DeviceVlanInterface,
   CreateVlanInterfaceSpec,
   DeviceIpPool,
@@ -97,6 +98,87 @@ export class MikroTikAdapter implements NetworkDeviceAdapter {
       bytesOut: row["bytes-out"] ? Number(row["bytes-out"]) : undefined,
     }));
     return [...ppp, ...hotspot];
+  }
+
+  async getConnectedAccessPoints(): Promise<ConnectedAccessPoint[]> {
+    const client = this.requireClient();
+    const accessPoints: ConnectedAccessPoint[] = [];
+    const seenMacs = new Set<string>();
+
+    // 1. Check /ip/neighbor/print (MNDP, CDP, LLDP) - identifies connected APs, bridges, Ubiquiti, TP-Link, Ruijie, MikroTik
+    try {
+      const neighbors = await client.print(["/ip/neighbor/print"]);
+      for (const row of neighbors) {
+        const mac = (row["mac-address"] || "").trim().toUpperCase();
+        const identity = row["identity"] || row["system-description"] || "Access Point";
+        const iface = row["interface"] || "";
+        const address = row["address"] || row["ipv4-address"] || "";
+        const board = row["board"] || row["platform"] || row["model"] || "";
+        const version = row["version"] || "";
+        const uptime = row["uptime"] || "";
+
+        if (mac) seenMacs.add(mac);
+        accessPoints.push({
+          identity,
+          ipAddress: address || undefined,
+          macAddress: mac,
+          interface: iface,
+          board: board || undefined,
+          platform: row["platform"] || undefined,
+          version: version || undefined,
+          uptime: uptime || undefined,
+          detectionSource: "NEIGHBOR",
+        });
+      }
+    } catch {
+      // ignore neighbor lookup failure
+    }
+
+    // 2. Check /interface/wireless/registration-table/print (Local Wi-Fi / CAPsMAN / wireless clients)
+    try {
+      const wirelessClients = await client.print(["/interface/wireless/registration-table/print"]);
+      for (const row of wirelessClients) {
+        const mac = (row["mac-address"] || "").trim().toUpperCase();
+        if (mac && !seenMacs.has(mac)) {
+          seenMacs.add(mac);
+          accessPoints.push({
+            identity: row["comment"] || row["radio-name"] || `Wireless Client (${mac.slice(-8)})`,
+            macAddress: mac,
+            interface: row["interface"] || "wlan",
+            signal: row["signal-strength"] || undefined,
+            uptime: row["uptime"] || undefined,
+            detectionSource: "WIRELESS",
+          });
+        }
+      }
+    } catch {
+      // not a wireless router or wireless pkg not installed
+    }
+
+    // 3. Check /ip/dhcp-server/lease/print for APs/CPEs that got DHCP leases
+    try {
+      const leases = await client.print(["/ip/dhcp-server/lease/print", "?status=bound"]);
+      for (const row of leases) {
+        const mac = (row["mac-address"] || "").trim().toUpperCase();
+        const hostName = (row["host-name"] || "").trim();
+        // If it looks like an AP, CPE, antenna or has a name, or matches AP vendors
+        if (mac && !seenMacs.has(mac) && hostName) {
+          seenMacs.add(mac);
+          accessPoints.push({
+            identity: hostName,
+            ipAddress: row["address"] || undefined,
+            macAddress: mac,
+            interface: row["server"] || "dhcp",
+            uptime: row["last-seen"] || row["expires-after"] || undefined,
+            detectionSource: "DHCP",
+          });
+        }
+      }
+    } catch {
+      // ignore DHCP lease check failure
+    }
+
+    return accessPoints;
   }
 
   async createUser(user: NetworkUserSpec): Promise<void> {

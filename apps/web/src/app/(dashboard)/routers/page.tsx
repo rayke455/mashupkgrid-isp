@@ -31,6 +31,19 @@ interface DeviceSession {
   callerId?: string;
 }
 
+interface ConnectedAccessPoint {
+  identity: string;
+  ipAddress?: string;
+  macAddress: string;
+  interface: string;
+  board?: string;
+  platform?: string;
+  version?: string;
+  uptime?: string;
+  signal?: string;
+  detectionSource: "NEIGHBOR" | "WIRELESS" | "DHCP";
+}
+
 function formatUptime(seconds: number | null): string {
   if (seconds === null) return "—";
   const days = Math.floor(seconds / 86400);
@@ -62,7 +75,12 @@ export default function RoutersPage() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [vpnScripts, setVpnScripts] = useState<Record<string, string>>({});
   const [openSessionsFor, setOpenSessionsFor] = useState<string | null>(null);
+  const [openAccessPointsFor, setOpenAccessPointsFor] = useState<string | null>(null);
   const [antiVpnScriptFor, setAntiVpnScriptFor] = useState<string | null>(null);
+  const [showVpnScriptFor, setShowVpnScriptFor] = useState<string | null>(null);
+  const [showSpeedtestScript, setShowSpeedtestScript] = useState(false);
+  const [showTimeoutScript, setShowTimeoutScript] = useState(false);
+  const [showAntiVpnScript, setShowAntiVpnScript] = useState(false);
 
   const { data: routers, isLoading } = useQuery({
     queryKey: ["routers"],
@@ -191,6 +209,19 @@ export default function RoutersPage() {
     queryFn: () => apiFetch<DeviceSession[]>(`/api/v1/routers/${openSessionsFor}/sessions`),
     enabled: openSessionsFor !== null,
     refetchInterval: openSessionsFor !== null ? 10_000 : false,
+    retry: false,
+  });
+
+  const {
+    data: connectedAps,
+    isFetching: apsLoading,
+    error: apsError,
+    refetch: refetchAps,
+  } = useQuery({
+    queryKey: ["router-access-points", openAccessPointsFor],
+    queryFn: () => apiFetch<ConnectedAccessPoint[]>(`/api/v1/routers/${openAccessPointsFor}/access-points`),
+    enabled: openAccessPointsFor !== null,
+    refetchInterval: openAccessPointsFor !== null ? 15_000 : false,
     retry: false,
   });
 
@@ -367,10 +398,29 @@ export default function RoutersPage() {
                     <Button
                       variant="secondary"
                       className="px-3 py-1.5 text-xs"
-                      onClick={() => setOpenSessionsFor(openSessionsFor === router.id ? null : router.id)}
+                      onClick={() => {
+                        setOpenAccessPointsFor(null);
+                        setOpenSessionsFor(openSessionsFor === router.id ? null : router.id);
+                      }}
                       disabled={!router.host}
                     >
                       {openSessionsFor === router.id ? "Hide Sessions" : "Live Sessions"}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      className={`px-3 py-1.5 text-xs font-semibold gap-1.5 transition-all ${
+                        openAccessPointsFor === router.id
+                          ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/40 shadow-xs"
+                          : "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30"
+                      }`}
+                      onClick={() => {
+                        setOpenSessionsFor(null);
+                        setOpenAccessPointsFor(openAccessPointsFor === router.id ? null : router.id);
+                      }}
+                      disabled={!router.host}
+                    >
+                      <span>📡</span>
+                      <span>{openAccessPointsFor === router.id ? "Hide APs" : "Connected APs"}</span>
                     </Button>
                     <Button
                       variant="danger"
@@ -412,47 +462,65 @@ export default function RoutersPage() {
                 </div>
               </div>
 
-              {/* VPN (Remote Access) Script Section */}
+              {/* VPN (Remote Access) Script Section - Compact Bar */}
               {vpnScripts[router.id] && (
-                <div className="mt-5 border-t border-slate-200 pt-4 dark:border-obsidian-800">
-                  <div className="mb-1.5 flex items-center justify-between">
-                    <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                      <IconTerminal size={14} className="text-brand-600" />
-                      Paste into MikroTik WinBox &quot;New Terminal&quot; or SSH:
-                    </p>
-                    <Button
-                      variant="secondary"
-                      className="px-2.5 py-1 text-xs gap-1"
-                      onClick={() => handleCopy(vpnScripts[router.id]!, `vpn-${router.id}`)}
-                    >
-                      {copiedId === `vpn-${router.id}` ? <IconCheck size={12} /> : <IconCopy size={12} />}
-                      <span>{copiedId === `vpn-${router.id}` ? "Copied!" : "Copy script"}</span>
-                    </Button>
+                <div className="mt-5 border-t border-slate-200 pt-3 dark:border-obsidian-800">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-xl bg-slate-900 border border-slate-800">
+                    <div className="flex items-center gap-2">
+                      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400">
+                        <IconTerminal size={14} />
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-white">Remote Access Terminal Script</p>
+                        <p className="text-[11px] text-slate-400">Ready to paste into MikroTik WinBox &quot;New Terminal&quot;</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="secondary"
+                        className="px-2.5 py-1 text-xs gap-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold"
+                        onClick={() => handleCopy(vpnScripts[router.id]!, `vpn-${router.id}`)}
+                      >
+                        {copiedId === `vpn-${router.id}` ? <IconCheck size={12} /> : <IconCopy size={12} />}
+                        <span>{copiedId === `vpn-${router.id}` ? "Copied Script!" : "Copy Script"}</span>
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        className="px-2.5 py-1 text-xs text-slate-300"
+                        onClick={() => setShowVpnScriptFor(showVpnScriptFor === router.id ? null : router.id)}
+                      >
+                        {showVpnScriptFor === router.id ? "Hide Code" : "View Code"}
+                      </Button>
+                    </div>
                   </div>
-                  <pre className="max-h-56 overflow-auto rounded-lg bg-slate-950 p-3 font-mono text-xs text-emerald-400 border border-slate-800">
-                    {vpnScripts[router.id]}
-                  </pre>
+                  {showVpnScriptFor === router.id && (
+                    <pre className="mt-2 max-h-48 overflow-auto rounded-lg bg-slate-950 p-3 font-mono text-xs text-emerald-400 border border-slate-800 select-all">
+                      {vpnScripts[router.id]}
+                    </pre>
+                  )}
                   {router.vpnIp && router.status !== "ONLINE" && (
-                    <p className="mt-2 text-xs text-slate-500">
-                      Once this runs, click <span className="font-medium">Test Connection</span> above to confirm
-                      the tunnel is up.
+                    <p className="mt-1.5 text-[11px] text-slate-500">
+                      Once this runs on your router, click <span className="font-semibold text-slate-400">Test Connection</span> above to confirm the tunnel.
                     </p>
                   )}
                 </div>
               )}
 
-              {/* Anti-VPN & Tunnel Shield Quick-Run Script (when router API direct connection is timed out or behind NAT) */}
+              {/* Anti-VPN & Tunnel Shield Quick-Run - Compact Bar */}
               {antiVpnScriptFor === router.id && (
-                <div className="mt-5 border-t border-slate-200 pt-4 dark:border-obsidian-800 space-y-2">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs font-bold text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
-                      <IconTerminal size={14} />
-                      Router Behind NAT? Run Anti-VPN Shield in MikroTik Terminal:
-                    </p>
+                <div className="mt-4 border-t border-slate-200 pt-3 dark:border-obsidian-800">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-xl bg-rose-950/40 border border-rose-900/60">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">🛡️</span>
+                      <div>
+                        <p className="text-xs font-bold text-rose-300">Router Behind NAT? Run Anti-VPN Command</p>
+                        <p className="text-[11px] text-rose-400/80">Blocks SlowDNS, HA Tunnel, &amp; HTTP Injector bypasses</p>
+                      </div>
+                    </div>
                     <div className="flex items-center gap-2">
                       <Button
                         variant="secondary"
-                        className="px-2.5 py-1 text-xs gap-1"
+                        className="px-2.5 py-1 text-xs gap-1 bg-rose-600 hover:bg-rose-500 text-white font-bold"
                         onClick={() => {
                           const cmd = `/tool fetch url="https://api.mashuphost.tech/api/v1/hotspot/${tenantSlug}/anti-vpn.rsc" dst-path=anti-vpn.rsc; :delay 2s; /import anti-vpn.rsc;`;
                           handleCopy(cmd, `antivpn-${router.id}`);
@@ -463,18 +531,168 @@ export default function RoutersPage() {
                       </Button>
                       <button
                         onClick={() => setAntiVpnScriptFor(null)}
-                        className="text-xs text-slate-400 hover:text-slate-600 dark:hover:text-white px-1 cursor-pointer"
+                        className="text-xs text-slate-400 hover:text-white px-1 cursor-pointer"
                       >
                         ✕
                       </button>
                     </div>
                   </div>
-                  <pre className="overflow-auto rounded-lg bg-slate-950 p-3 font-mono text-xs text-rose-400 border border-slate-800 whitespace-pre-wrap select-all">
-                    {`/tool fetch url="https://api.mashuphost.tech/api/v1/hotspot/${tenantSlug}/anti-vpn.rsc" dst-path=anti-vpn.rsc; :delay 2s; /import anti-vpn.rsc;`}
-                  </pre>
-                  <p className="text-[11px] text-slate-500">
-                    Paste this into WinBox <b>New Terminal</b> and press Enter. It immediately blocks SlowDNS, UDP tunnels, and multi-connection VPN injectors!
-                  </p>
+                </div>
+              )}
+
+              {/* Connected Access Points (APs) Section */}
+              {openAccessPointsFor === router.id && (
+                <div className="mt-5 border-t border-slate-200 pt-4 dark:border-obsidian-800">
+                  <div className="mb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base">📡</span>
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">
+                        Connected Access Points &amp; Antennas
+                      </h4>
+                      {connectedAps && (
+                        <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                          {connectedAps.length} {connectedAps.length === 1 ? "AP" : "APs"} Discovered
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {apsLoading && (
+                        <span className="text-xs text-slate-400 flex items-center gap-1.5 font-sans">
+                          <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
+                          Scanning neighbors...
+                        </span>
+                      )}
+                      <Button
+                        variant="secondary"
+                        className="px-2.5 py-1 text-xs font-medium"
+                        onClick={() => refetchAps()}
+                        disabled={apsLoading}
+                      >
+                        {apsLoading ? "Scanning..." : "🔄 Rescan APs"}
+                      </Button>
+                    </div>
+                  </div>
+
+                  {apsError ? (
+                    <p className="rounded-lg border border-rose-200 bg-rose-50 p-2.5 font-mono text-xs text-rose-600 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-400">
+                      {apsError instanceof ApiRequestError ? apsError.message : "Failed to load connected access points."}
+                    </p>
+                  ) : connectedAps && connectedAps.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {connectedAps.map((ap, idx) => {
+                        const nameLower = (ap.identity || "").toLowerCase();
+                        const boardLower = (ap.board || ap.platform || "").toLowerCase();
+
+                        const isUbnt = nameLower.includes("ubnt") || boardLower.includes("ubnt") || nameLower.includes("nanostation") || nameLower.includes("litebeam") || nameLower.includes("unifi") || nameLower.includes("rocket") || nameLower.includes("airmax");
+                        const isTplink = nameLower.includes("tp-link") || nameLower.includes("eap") || boardLower.includes("eap") || boardLower.includes("omada") || nameLower.includes("cpe");
+                        const isRuijie = nameLower.includes("ruijie") || nameLower.includes("reyee") || boardLower.includes("rg-") || boardLower.includes("reyee");
+                        const isMikrotik = nameLower.includes("mikrotik") || boardLower.includes("routerboard") || boardLower.includes("cap") || boardLower.includes("wap");
+
+                        const vendorBadge = isUbnt
+                          ? "Ubiquiti"
+                          : isTplink
+                          ? "TP-Link Omada"
+                          : isRuijie
+                          ? "Ruijie Reyee"
+                          : isMikrotik
+                          ? "MikroTik cAP"
+                          : ap.board || ap.platform || "Access Point";
+
+                        return (
+                          <div
+                            key={`${ap.macAddress}-${idx}`}
+                            className="rounded-xl border border-slate-200/80 dark:border-obsidian-700/80 bg-white dark:bg-obsidian-900/90 p-3.5 shadow-xs transition-all hover:border-emerald-500/40 hover:shadow-md"
+                          >
+                            <div className="flex items-start justify-between gap-2 mb-2">
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-sm">📶</span>
+                                  <h5 className="font-bold text-xs text-slate-900 dark:text-white truncate" title={ap.identity}>
+                                    {ap.identity || "Unnamed Access Point"}
+                                  </h5>
+                                </div>
+                                <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 block truncate mt-0.5">
+                                  {vendorBadge} {ap.version ? `· ${ap.version}` : ""}
+                                </span>
+                              </div>
+                              <Badge
+                                variant={isRuijie || isTplink || isUbnt || isMikrotik ? "success" : "neutral"}
+                                className="text-[10px] uppercase font-bold shrink-0 font-mono"
+                              >
+                                {ap.interface || "LAN"}
+                              </Badge>
+                            </div>
+
+                            <div className="space-y-1.5 text-[11px] font-mono text-slate-600 dark:text-slate-300 py-2 border-y border-slate-100 dark:border-obsidian-800/80">
+                              {ap.ipAddress && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-slate-400 font-sans">IP Address:</span>
+                                  <span className="font-bold text-emerald-600 dark:text-emerald-400">{ap.ipAddress}</span>
+                                </div>
+                              )}
+                              <div className="flex items-center justify-between">
+                                <span className="text-slate-400 font-sans">MAC:</span>
+                                <span className="text-slate-500 dark:text-slate-400 truncate max-w-[150px]">{ap.macAddress}</span>
+                              </div>
+                              {ap.uptime && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-slate-400 font-sans">Uptime:</span>
+                                  <span>{ap.uptime}</span>
+                                </div>
+                              )}
+                              {ap.signal && (
+                                <div className="flex items-center justify-between">
+                                  <span className="text-slate-400 font-sans">Signal:</span>
+                                  <span className="text-emerald-500 font-bold">{ap.signal}</span>
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="mt-2.5 flex items-center justify-between pt-0.5 text-[11px]">
+                              <span className="text-[10px] text-slate-400">
+                                {ap.detectionSource === "NEIGHBOR"
+                                  ? "MNDP/LLDP Neighbor"
+                                  : ap.detectionSource === "WIRELESS"
+                                  ? "Wireless Table"
+                                  : "DHCP Lease"}
+                              </span>
+                              {ap.ipAddress ? (
+                                <a
+                                  href={`http://${ap.ipAddress}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 font-bold text-brand-600 hover:text-brand-500 dark:text-brand-400 hover:underline"
+                                >
+                                  <span>Open Admin UI</span>
+                                  <span>↗</span>
+                                </a>
+                              ) : (
+                                <span className="text-[10px] text-slate-400">Bridged L2</span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-slate-200 dark:border-obsidian-800 p-6 text-center bg-slate-50/50 dark:bg-obsidian-900/40">
+                      <span className="text-2xl mb-1 block">📡</span>
+                      <h5 className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                        No Access Points Discovered on this Router
+                      </h5>
+                      <p className="text-[11px] text-slate-500 max-w-md mx-auto mt-1 mb-3">
+                        When APs (Ubiquiti NanoStation/Rocket/UniFi, TP-Link Omada EAP, Ruijie Reyee, MikroTik cAP) are connected to your router&apos;s LAN ports, MikroTik automatically discovers them via MNDP/LLDP discovery and DHCP leases.
+                      </p>
+                      <Button
+                        variant="secondary"
+                        className="text-xs px-3 py-1"
+                        onClick={() => refetchAps()}
+                        disabled={apsLoading}
+                      >
+                        Rescan Neighbors
+                      </Button>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -540,8 +758,8 @@ export default function RoutersPage() {
         )}
       </div>
 
-      {/* MikroTik Speedtest 100M Boost & Strict 1-Hour Expiry Optimization Hub */}
-      <Card className="space-y-5 border-cyan-500/30 bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950/40 text-white">
+      {/* MikroTik Network Performance & Session Optimization Hub */}
+      <Card className="space-y-5 border-cyan-500/20 bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950/40 text-white shadow-xl">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
           <div>
             <div className="flex items-center gap-2 mb-1">
@@ -551,55 +769,67 @@ export default function RoutersPage() {
               </span>
             </div>
             <h2 className="text-lg font-bold text-white">
-              ⚡ Speedtest 100 Mbps Boost &amp; Strict 1-Hour Expiry Hub
+              ⚡ Network Performance, Speedtest &amp; Security Tools
             </h2>
             <p className="text-xs text-slate-300 mt-0.5">
-              1-click scripts to boost Fast.com / Ookla Speedtests to 100 Mbps and enforce strict 1-hour session logouts.
+              1-click tools to boost speedtests to 100 Mbps, enforce strict voucher timeouts, and block VPN tunnel bypasses.
             </p>
           </div>
         </div>
 
-        {/* Feature 1: 100 Mbps Speedtest Booster Script */}
-        <div className="space-y-3 rounded-2xl bg-slate-950/80 p-4 border border-cyan-500/20">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <span className="text-lg">🚀</span>
-              <div>
-                <h3 className="text-sm font-bold text-white">100 Mbps Speedtest Booster (Ookla &amp; Fast.com Bypass)</h3>
-                <p className="text-[11px] text-slate-400">
-                  Prioritizes traffic to Speedtest.net &amp; Fast.com with a dedicated 100M Queue Tree, bypassing voucher throttles during tests.
-                </p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {/* Card 1: 100 Mbps Speedtest Booster */}
+          <div className="flex flex-col justify-between rounded-2xl bg-slate-950/80 p-4 border border-cyan-500/20 shadow-xs transition-all hover:border-cyan-500/40">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-2xl">🚀</span>
+                <span className="rounded-full bg-cyan-500/10 px-2 py-0.5 text-[10px] font-bold text-cyan-400 border border-cyan-500/30 uppercase">
+                  Bandwidth Boost
+                </span>
               </div>
+              <h3 className="text-sm font-bold text-white">100 Mbps Speedtest Booster</h3>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Prioritizes Ookla (Speedtest.net) &amp; Fast.com in a dedicated 100M Queue Tree, bypassing customer voucher caps during speed tests.
+              </p>
             </div>
-            <div className="flex items-center gap-2">
-              {routers && routers.filter((r) => r.status === "ONLINE").length > 0 && (
-                <Button
-                  className="text-xs py-1.5 px-3 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black shadow-lg"
-                  onClick={() => {
-                    const online = routers.filter((r) => r.status === "ONLINE");
-                    online.forEach((r) => applySpeedtestBoost.mutate(r.id));
-                  }}
-                  disabled={boostingId !== null}
-                >
-                  {boostingId !== null ? "Applying..." : "⚡ 1-Click Auto Apply"}
-                </Button>
-              )}
-              <Button
-                variant="secondary"
-                className="text-xs py-1.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold border-slate-700"
-                onClick={() =>
-                  handleCopy(
-                    `/ip firewall address-list\nadd list=SPEEDTEST_SERVERS address=speedtest.net comment="Ookla Speedtest"\nadd list=SPEEDTEST_SERVERS address=fast.com comment="Fast.com Speedtest"\nadd list=SPEEDTEST_SERVERS address=speedtestcustom.com comment="Custom Speedtest"\nadd list=SPEEDTEST_SERVERS address=ookla.com comment="Ookla"\n\n/ip firewall mangle\nadd chain=prerouting dst-address-list=SPEEDTEST_SERVERS action=mark-connection new-connection-mark=speedtest_conn passthrough=yes comment="Speedtest Boost Connection"\nadd chain=prerouting connection-mark=speedtest_conn action=mark-packet new-packet-mark=speedtest_pkt passthrough=no comment="Speedtest Boost Packet"\n\n/queue tree\nadd name="SPEEDTEST_BOOST_DOWNLOAD" parent=global packet-mark=speedtest_pkt max-limit=100M limit-at=100M priority=1 comment="100M Speedtest Boost"\nadd name="SPEEDTEST_BOOST_UPLOAD" parent=global packet-mark=speedtest_pkt max-limit=100M limit-at=100M priority=1 comment="100M Speedtest Boost"`,
-                    "speedtest-script"
-                  )
-                }
-              >
-                {copiedId === "speedtest-script" ? "✓ Copied Script" : "Copy Script"}
-              </Button>
-            </div>
-          </div>
 
-          <pre className="overflow-x-auto rounded-xl bg-slate-900 p-3 font-mono text-[11px] text-cyan-300 border border-slate-800 leading-relaxed select-all">
+            <div className="pt-4 mt-3 border-t border-slate-800/80 space-y-2">
+              <div className="flex items-center gap-2">
+                {routers && routers.filter((r) => r.status === "ONLINE").length > 0 && (
+                  <Button
+                    className="text-xs py-1.5 px-3 flex-1 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black shadow-md"
+                    onClick={() => {
+                      const online = routers.filter((r) => r.status === "ONLINE");
+                      online.forEach((r) => applySpeedtestBoost.mutate(r.id));
+                    }}
+                    disabled={boostingId !== null}
+                  >
+                    {boostingId !== null ? "Applying..." : "⚡ 1-Click Apply"}
+                  </Button>
+                )}
+                <Button
+                  variant="secondary"
+                  className="text-xs py-1.5 px-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold border-slate-700"
+                  onClick={() =>
+                    handleCopy(
+                      `/ip firewall address-list\nadd list=SPEEDTEST_SERVERS address=speedtest.net comment="Ookla Speedtest"\nadd list=SPEEDTEST_SERVERS address=fast.com comment="Fast.com Speedtest"\nadd list=SPEEDTEST_SERVERS address=speedtestcustom.com comment="Custom Speedtest"\nadd list=SPEEDTEST_SERVERS address=ookla.com comment="Ookla"\n\n/ip firewall mangle\nadd chain=prerouting dst-address-list=SPEEDTEST_SERVERS action=mark-connection new-connection-mark=speedtest_conn passthrough=yes comment="Speedtest Boost Connection"\nadd chain=prerouting connection-mark=speedtest_conn action=mark-packet new-packet-mark=speedtest_pkt passthrough=no comment="Speedtest Boost Packet"\n\n/queue tree\nadd name="SPEEDTEST_BOOST_DOWNLOAD" parent=global packet-mark=speedtest_pkt max-limit=100M limit-at=100M priority=1 comment="100M Speedtest Boost"\nadd name="SPEEDTEST_BOOST_UPLOAD" parent=global packet-mark=speedtest_pkt max-limit=100M limit-at=100M priority=1 comment="100M Speedtest Boost"`,
+                      "speedtest-script"
+                    )
+                  }
+                >
+                  {copiedId === "speedtest-script" ? "✓ Copied" : "Copy"}
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => setShowSpeedtestScript(!showSpeedtestScript)}
+                  className="text-[11px] text-slate-400 hover:text-white px-1.5 py-1"
+                >
+                  {showSpeedtestScript ? "Hide" : "Script"}
+                </button>
+              </div>
+
+              {showSpeedtestScript && (
+                <pre className="mt-2 max-h-48 overflow-x-auto rounded-xl bg-slate-900 p-2.5 font-mono text-[10px] text-cyan-300 border border-slate-800 select-all leading-relaxed">
 {`/ip firewall address-list
 add list=SPEEDTEST_SERVERS address=speedtest.net comment="Ookla Speedtest"
 add list=SPEEDTEST_SERVERS address=fast.com comment="Fast.com Speedtest"
@@ -613,50 +843,63 @@ add chain=prerouting connection-mark=speedtest_conn action=mark-packet new-packe
 /queue tree
 add name="SPEEDTEST_BOOST_DOWNLOAD" parent=global packet-mark=speedtest_pkt max-limit=100M limit-at=100M priority=1 comment="100M Speedtest Boost"
 add name="SPEEDTEST_BOOST_UPLOAD" parent=global packet-mark=speedtest_pkt max-limit=100M limit-at=100M priority=1 comment="100M Speedtest Boost"`}
-          </pre>
-        </div>
-
-        {/* Feature 2: Strict 1-Hour Timeout & Cookie Cleaner */}
-        <div className="space-y-3 rounded-2xl bg-slate-950/80 p-4 border border-purple-500/20">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-2">
-              <span className="text-lg">⏱️</span>
-              <div>
-                <h3 className="text-sm font-bold text-white">Strict 1-Hour Timeout &amp; Hotspot Cookie Removal</h3>
-                <p className="text-[11px] text-slate-400">
-                  Disables silent browser cookie re-authentication and sets 1-minute RADIUS interim accounting to kick expired vouchers on the dot.
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              {routers && routers.filter((r) => r.status === "ONLINE").length > 0 && (
-                <Button
-                  className="text-xs py-1.5 px-3 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black shadow-lg"
-                  onClick={() => {
-                    const online = routers.filter((r) => r.status === "ONLINE");
-                    online.forEach((r) => enforceStrictTimeout.mutate(r.id));
-                  }}
-                  disabled={enforcingId !== null}
-                >
-                  {enforcingId !== null ? "Enforcing..." : "⏱️ 1-Click Enforce"}
-                </Button>
+                </pre>
               )}
-              <Button
-                variant="secondary"
-                className="text-xs py-1.5 px-3 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold border-slate-700"
-                onClick={() =>
-                  handleCopy(
-                    `/ip hotspot profile set [find] login-by=http-chap,http-pap\n/ip hotspot cookie remove [find]\n/radius set [find service=hotspot] interim-update=1m`,
-                    "cookie-script"
-                  )
-                }
-              >
-                {copiedId === "cookie-script" ? "✓ Copied Script" : "Copy Script"}
-              </Button>
             </div>
           </div>
 
-          <pre className="overflow-x-auto rounded-xl bg-slate-900 p-3 font-mono text-[11px] text-purple-300 border border-slate-800 leading-relaxed select-all">
+          {/* Card 2: Strict 1-Hour Timeout & Cookie Cleaner */}
+          <div className="flex flex-col justify-between rounded-2xl bg-slate-950/80 p-4 border border-purple-500/20 shadow-xs transition-all hover:border-purple-500/40">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-2xl">⏱️</span>
+                <span className="rounded-full bg-purple-500/10 px-2 py-0.5 text-[10px] font-bold text-purple-400 border border-purple-500/30 uppercase">
+                  Session Expiry
+                </span>
+              </div>
+              <h3 className="text-sm font-bold text-white">Strict 1-Hour Timeout &amp; Cookie Flush</h3>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Disables silent browser cookie auto-reconnects, flushes cached hotspot cookies, and sets 1-minute RADIUS interim accounting.
+              </p>
+            </div>
+
+            <div className="pt-4 mt-3 border-t border-slate-800/80 space-y-2">
+              <div className="flex items-center gap-2">
+                {routers && routers.filter((r) => r.status === "ONLINE").length > 0 && (
+                  <Button
+                    className="text-xs py-1.5 px-3 flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black shadow-md"
+                    onClick={() => {
+                      const online = routers.filter((r) => r.status === "ONLINE");
+                      online.forEach((r) => enforceStrictTimeout.mutate(r.id));
+                    }}
+                    disabled={enforcingId !== null}
+                  >
+                    {enforcingId !== null ? "Enforcing..." : "⏱️ 1-Click Enforce"}
+                  </Button>
+                )}
+                <Button
+                  variant="secondary"
+                  className="text-xs py-1.5 px-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold border-slate-700"
+                  onClick={() =>
+                    handleCopy(
+                      `/ip hotspot profile set [find] login-by=http-chap,http-pap\n/ip hotspot cookie remove [find]\n/radius set [find service=hotspot] interim-update=1m`,
+                      "cookie-script"
+                    )
+                  }
+                >
+                  {copiedId === "cookie-script" ? "✓ Copied" : "Copy"}
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => setShowTimeoutScript(!showTimeoutScript)}
+                  className="text-[11px] text-slate-400 hover:text-white px-1.5 py-1"
+                >
+                  {showTimeoutScript ? "Hide" : "Script"}
+                </button>
+              </div>
+
+              {showTimeoutScript && (
+                <pre className="mt-2 max-h-48 overflow-x-auto rounded-xl bg-slate-900 p-2.5 font-mono text-[10px] text-purple-300 border border-slate-800 select-all leading-relaxed">
 {`# 1. Disable cookie login so expired vouchers cannot silently re-authenticate
 /ip hotspot profile set [find] login-by=http-chap,http-pap
 
@@ -665,7 +908,66 @@ add name="SPEEDTEST_BOOST_UPLOAD" parent=global packet-mark=speedtest_pkt max-li
 
 # 3. Set RADIUS interim accounting updates to 1 minute
 /radius set [find service=hotspot] interim-update=1m`}
-          </pre>
+                </pre>
+              )}
+            </div>
+          </div>
+
+          {/* Card 3: Anti-VPN & Tunnel Shield */}
+          <div className="flex flex-col justify-between rounded-2xl bg-slate-950/80 p-4 border border-rose-500/20 shadow-xs transition-all hover:border-rose-500/40">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-2xl">🛡️</span>
+                <span className="rounded-full bg-rose-500/10 px-2 py-0.5 text-[10px] font-bold text-rose-400 border border-rose-500/30 uppercase">
+                  Tunnel Defense
+                </span>
+              </div>
+              <h3 className="text-sm font-bold text-white">Anti-VPN &amp; Tunnel Protection</h3>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Blocks free internet tunnel apps (SlowDNS, HA Tunnel, HTTP Injector, and DNS port 53 evasion) on captive portal.
+              </p>
+            </div>
+
+            <div className="pt-4 mt-3 border-t border-slate-800/80 space-y-2">
+              <div className="flex items-center gap-2">
+                {routers && routers.filter((r) => r.status === "ONLINE").length > 0 && (
+                  <Button
+                    className="text-xs py-1.5 px-3 flex-1 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white font-black shadow-md"
+                    onClick={() => {
+                      const online = routers.filter((r) => r.status === "ONLINE");
+                      online.forEach((r) => enableAntiVpnShield.mutate(r.id));
+                    }}
+                    disabled={shieldingId !== null}
+                  >
+                    {shieldingId !== null ? "Applying..." : "🛡️ 1-Click Shield"}
+                  </Button>
+                )}
+                <Button
+                  variant="secondary"
+                  className="text-xs py-1.5 px-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold border-slate-700"
+                  onClick={() => {
+                    const cmd = `/tool fetch url="https://api.mashuphost.tech/api/v1/hotspot/${tenantSlug}/anti-vpn.rsc" dst-path=anti-vpn.rsc; :delay 2s; /import anti-vpn.rsc;`;
+                    handleCopy(cmd, "antivpn-hub");
+                  }}
+                >
+                  {copiedId === "antivpn-hub" ? "✓ Copied" : "Copy"}
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => setShowAntiVpnScript(!showAntiVpnScript)}
+                  className="text-[11px] text-slate-400 hover:text-white px-1.5 py-1"
+                >
+                  {showAntiVpnScript ? "Hide" : "Script"}
+                </button>
+              </div>
+
+              {showAntiVpnScript && (
+                <pre className="mt-2 max-h-48 overflow-x-auto rounded-xl bg-slate-900 p-2.5 font-mono text-[10px] text-rose-300 border border-slate-800 select-all leading-relaxed whitespace-pre-wrap">
+{`/tool fetch url="https://api.mashuphost.tech/api/v1/hotspot/${tenantSlug}/anti-vpn.rsc" dst-path=anti-vpn.rsc; :delay 2s; /import anti-vpn.rsc;`}
+                </pre>
+              )}
+            </div>
+          </div>
         </div>
       </Card>
     </div>
