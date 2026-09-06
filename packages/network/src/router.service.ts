@@ -530,12 +530,14 @@ export async function getRouterActiveSessions(tenantId: string, routerId: string
 
 const routerReportedApsCache = new Map<string, ConnectedAccessPoint[]>();
 
-export function recordRouterReportedAccessPoints(routerId: string, aps: ConnectedAccessPoint[]): void {
+export function recordRouterReportedAccessPoints(routerId: string, aps: ConnectedAccessPoint[], tenantId?: string): void {
   routerReportedApsCache.set(routerId, aps);
+  if (tenantId) routerReportedApsCache.set(tenantId, aps);
+  routerReportedApsCache.set("global_last_reported", aps);
 }
 
 export function getRouterReportedAccessPoints(routerId: string): ConnectedAccessPoint[] | undefined {
-  return routerReportedApsCache.get(routerId);
+  return routerReportedApsCache.get(routerId) || routerReportedApsCache.get("global_last_reported");
 }
 
 export async function getRouterConnectedAccessPoints(
@@ -543,7 +545,10 @@ export async function getRouterConnectedAccessPoints(
   routerId: string
 ): Promise<ConnectedAccessPoint[]> {
   const router = await getRouterOrThrow(tenantId, routerId);
-  const cached = routerReportedApsCache.get(router.id);
+  const cached =
+    routerReportedApsCache.get(router.id) ||
+    routerReportedApsCache.get(router.tenantId) ||
+    routerReportedApsCache.get("global_last_reported");
   const primaryHost = router.host || router.vpnIp;
   if (!primaryHost) {
     if (cached && cached.length > 0) return cached;

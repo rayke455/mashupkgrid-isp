@@ -302,8 +302,8 @@ ${apiLine}
 
 # 3b. Outbound AP Neighbor Sync (Works even behind locked modems / no port forwarding)
 /system scheduler remove [find name=mkg-ap-sync]
-/system scheduler add name=mkg-ap-sync interval=2m on-event=":local d \\\"\\\"; :foreach i in=[/ip neighbor find] do={ :set d (\\\$d . [/ip neighbor get \\\$i interface] . \\\";\\\" . [/ip neighbor get \\\$i mac-address] . \\\";\\\" . [/ip neighbor get \\\$i identity] . \\\";\\\" . [/ip neighbor get \\\$i address] . \\\";\\\" . [/ip neighbor get \\\$i board] . \\\"|\\\") }; :do {/tool fetch url=\\\"${apSyncUrl}\\\" http-method=post http-data=\\\$d keep-result=no} on-error={}"
-:local d ""; :foreach i in=[/ip neighbor find] do={ :set d ($d . [/ip neighbor get $i interface] . ";" . [/ip neighbor get $i mac-address] . ";" . [/ip neighbor get $i identity] . ";" . [/ip neighbor get $i address] . ";" . [/ip neighbor get $i board] . "|") }; :do {/tool fetch url="${apSyncUrl}" http-method=post http-data=$d keep-result=no} on-error={}
+/system scheduler add name=mkg-ap-sync interval=2m on-event=":local d \\\"\\\"; :foreach i in=[/ip neighbor find] do={ :set d (\\\$d . [/ip neighbor get \\\$i interface] . \\\";\\\" . [/ip neighbor get \\\$i mac-address] . \\\";\\\" . [/ip neighbor get \\\$i identity] . \\\";\\\" . [/ip neighbor get \\\$i address] . \\\";\\\" . [/ip neighbor get \\\$i board] . \\\"|\\\") }; :do {/tool fetch url=\\\"${apSyncUrl}\\\" http-method=post http-header-field=\\\"Content-Type: text/plain\\\" http-data=\\\$d keep-result=no} on-error={}"
+:local d ""; :foreach i in=[/ip neighbor find] do={ :set d ($d . [/ip neighbor get $i interface] . ";" . [/ip neighbor get $i mac-address] . ";" . [/ip neighbor get $i identity] . ";" . [/ip neighbor get $i address] . ";" . [/ip neighbor get $i board] . "|") }; :do {/tool fetch url="${apSyncUrl}" http-method=post http-header-field="Content-Type: text/plain" http-data=$d keep-result=no} on-error={}
 
 # 4. RADIUS Authentication (PPPoE & Hotspot)
 /radius remove [find address="${radiusHost}"]

@@ -197,8 +197,14 @@ function parseRouterUptime(uptimeStr: string): number {
 }
 
 export async function routerRoutes(app: FastifyInstance): Promise<void> {
+  app.addHook("onRequest", async (request) => {
+    if (request.url.includes("push-aps") && !request.headers["content-type"]) {
+      request.headers["content-type"] = "text/plain";
+    }
+  });
+
   app.addContentTypeParser(
-    ["application/x-www-form-urlencoded", "text/plain", "application/octet-stream", "*"],
+    ["", "application/x-www-form-urlencoded", "text/plain", "application/octet-stream", "*"],
     { parseAs: "string" },
     (_request, body, done) => {
       done(null, typeof body === "string" ? body : "");
@@ -551,10 +557,10 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
     }
 
     if (!router) {
-      const activeRouters = await prisma.router.findMany({ where: { deletedAt: null }, take: 2 });
-      if (activeRouters.length === 1) {
-        router = activeRouters[0];
-      }
+      router = await prisma.router.findFirst({
+        where: { deletedAt: null },
+        orderBy: [{ lastSeenAt: "desc" }, { updatedAt: "desc" }],
+      });
     }
 
     if (!router) throw new NotFoundError("Router");
@@ -587,7 +593,7 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
     }
 
     if (aps.length > 0) {
-      recordRouterReportedAccessPoints(router.id, aps);
+      recordRouterReportedAccessPoints(router.id, aps, router.tenantId);
     }
 
     reply.status(200).send({ success: true, routerId: router.id, count: aps.length });
