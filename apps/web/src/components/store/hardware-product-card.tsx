@@ -6,9 +6,10 @@ import { HardwareProduct, useCart } from "@/lib/hardware-store";
 interface HardwareProductCardProps {
   product: HardwareProduct;
   onQuickBuy?: (product: HardwareProduct) => void;
+  onViewDetails?: (product: HardwareProduct) => void;
 }
 
-export function HardwareProductCard({ product, onQuickBuy }: HardwareProductCardProps) {
+export function HardwareProductCard({ product, onQuickBuy, onViewDetails }: HardwareProductCardProps) {
   const { addItem } = useCart();
   const [showSpecs, setShowSpecs] = useState(false);
   const [addedAnimation, setAddedAnimation] = useState(false);
@@ -51,14 +52,24 @@ export function HardwareProductCard({ product, onQuickBuy }: HardwareProductCard
       )}
 
       {/* Image Thumbnail */}
-      <div className="relative h-48 w-full bg-slate-950 overflow-hidden flex items-center justify-center p-4">
+      <div 
+        onClick={() => onViewDetails?.(product)}
+        className="relative h-48 w-full bg-slate-950 overflow-hidden flex items-center justify-center p-4 cursor-pointer"
+      >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={product.imageUrl}
           alt={product.name}
-          className="w-full h-full object-cover rounded-xl group-hover:scale-105 transition-transform duration-500"
+          className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent opacity-60" />
+        
+        {/* Quick View Button overlay on hover */}
+        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+          <span className="px-3 py-1.5 rounded-xl bg-cyan-500 text-slate-950 font-bold text-xs shadow-lg shadow-cyan-500/30 flex items-center gap-1.5 transform translate-y-2 group-hover:translate-y-0 transition-transform">
+            <span>👁️</span> Quick View
+          </span>
+        </div>
       </div>
 
       {/* Card Body */}
@@ -78,7 +89,10 @@ export function HardwareProductCard({ product, onQuickBuy }: HardwareProductCard
             </span>
           </div>
 
-          <h4 className="font-bold text-sm text-white line-clamp-2 group-hover:text-cyan-400 transition-colors">
+          <h4 
+            onClick={() => onViewDetails?.(product)}
+            className="font-bold text-sm text-white line-clamp-2 group-hover:text-cyan-400 transition-colors cursor-pointer"
+          >
             {product.name}
           </h4>
 

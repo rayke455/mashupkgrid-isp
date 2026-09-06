@@ -18,11 +18,24 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
   const [completedOrder, setCompletedOrder] = useState<HardwareOrder | null>(null);
   const [stkStatus, setStkStatus] = useState<"idle" | "prompting" | "success">("idle");
   const [errorMessage, setErrorMessage] = useState("");
+  const [countdown, setCountdown] = useState(45);
 
   if (!isOpen) return null;
 
   const shippingFee = county.toLowerCase().includes("nairobi") ? 350 : 600;
   const grandTotal = subtotal + shippingFee;
+
+  const normalizePhone = (p: string): string => {
+    let clean = p.replace(/\s+/g, "").replace(/-/g, "");
+    if (clean.startsWith("+")) clean = clean.substring(1);
+    if (clean.startsWith("0")) clean = "254" + clean.substring(1);
+    return clean;
+  };
+
+  const isPhoneValid = (p: string): boolean => {
+    const norm = normalizePhone(p);
+    return /^254[71]\d{8}$/.test(norm);
+  };
 
   const handleCheckout = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,6 +43,12 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
       setErrorMessage("Please fill in your name, phone number, and delivery address.");
       return;
     }
+
+    if (!isPhoneValid(phone)) {
+      setErrorMessage("Please enter a valid Kenyan Safaricom phone number (e.g. 0712345678 or 0112345678).");
+      return;
+    }
+
     if (items.length === 0) {
       setErrorMessage("Your cart is empty.");
       return;
@@ -38,15 +57,28 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
     setIsSubmitting(true);
     setErrorMessage("");
     setStkStatus("prompting");
+    setCountdown(45);
+
+    // Start countdown timer
+    const timer = setInterval(() => {
+      setCountdown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
 
     try {
       // Simulate STK Push to phone
-      await new Promise((res) => setTimeout(res, 1800));
+      await new Promise((res) => setTimeout(res, 2600));
+      clearInterval(timer);
 
       const receipt = `QHK${Math.floor(1000000 + Math.random() * 9000000)}`;
       const order = await submitHardwareOrder({
         customerName: customerName.trim(),
-        phone: phone.trim(),
+        phone: normalizePhone(phone.trim()),
         county,
         deliveryAddress: deliveryAddress.trim(),
         items: items.map((i) => ({ productId: i.product.id, quantity: i.quantity })),
@@ -57,11 +89,18 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
       setCompletedOrder(order);
       clearCart();
     } catch (err: unknown) {
+      clearInterval(timer);
       const msg = err instanceof Error ? err.message : "Payment processing failed";
       setErrorMessage(msg);
       setStkStatus("idle");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handlePrintReceipt = () => {
+    if (typeof window !== "undefined") {
+      window.print();
     }
   };
 
@@ -95,7 +134,40 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
 
         {/* Drawer Content */}
         <div className="flex-1 overflow-y-auto p-5 space-y-6">
-          {completedOrder ? (
+          {stkStatus === "prompting" ? (
+            <div className="text-center py-10 space-y-5 animate-in fade-in">
+              <div className="relative w-20 h-20 mx-auto flex items-center justify-center">
+                <div className="absolute inset-0 rounded-full border-4 border-emerald-500/20 border-t-emerald-400 animate-spin" />
+                <div className="w-14 h-14 rounded-full bg-emerald-500/20 text-emerald-400 text-2xl flex items-center justify-center">
+                  📱
+                </div>
+              </div>
+
+              <div>
+                <h4 className="text-lg font-black text-white">Safaricom STK Push Sent!</h4>
+                <p className="text-xs text-slate-300 mt-1 max-w-xs mx-auto">
+                  A payment prompt of <span className="text-emerald-400 font-bold">KES {grandTotal.toLocaleString()}</span> was sent to <span className="text-cyan-300 font-mono font-bold">{phone}</span>.
+                </p>
+              </div>
+
+              <div className="p-4 rounded-2xl bg-slate-900/90 border border-emerald-500/30 text-left space-y-2.5 max-w-sm mx-auto shadow-xl">
+                <div className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center justify-between">
+                  <span>M-Pesa Instructions</span>
+                  <span className="text-slate-400 font-mono text-[11px]">{countdown}s remaining</span>
+                </div>
+                <ol className="text-xs text-slate-300 space-y-1.5 list-decimal list-inside">
+                  <li>Unlock your Safaricom phone.</li>
+                  <li>Verify payee is <strong className="text-white">MASHUPKGRID LTD</strong>.</li>
+                  <li>Enter your secret 4-digit <strong className="text-emerald-300">M-Pesa PIN</strong>.</li>
+                  <li>Press <strong className="text-cyan-300">OK / Send</strong> to complete.</li>
+                </ol>
+              </div>
+
+              <div className="text-[11px] text-slate-500">
+                Awaiting confirmation from Safaricom Daraja gateway...
+              </div>
+            </div>
+          ) : completedOrder ? (
             <div className="text-center py-8 space-y-4">
               <div className="w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 text-3xl flex items-center justify-center mx-auto animate-bounce">
                 ✓
@@ -117,6 +189,10 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                   <span className="text-white font-medium">{completedOrder.customerName}</span>
                 </div>
                 <div className="flex justify-between">
+                  <span className="text-slate-400">Phone:</span>
+                  <span className="text-cyan-300 font-mono">{completedOrder.phone}</span>
+                </div>
+                <div className="flex justify-between">
                   <span className="text-slate-400">Destination:</span>
                   <span className="text-white">
                     {completedOrder.county} — {completedOrder.deliveryAddress}
@@ -132,12 +208,20 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
               <p className="text-xs text-slate-400">
                 You will receive an SMS dispatch alert with rider contact once parcel leaves our Nairobi hub.
               </p>
-              <button
-                onClick={handleReset}
-                className="w-full py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold transition-colors shadow-lg shadow-cyan-500/20"
-              >
-                Continue Shopping
-              </button>
+              <div className="grid grid-cols-2 gap-2.5">
+                <button
+                  onClick={handlePrintReceipt}
+                  className="py-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-white font-bold text-xs transition-colors flex items-center justify-center gap-1.5"
+                >
+                  <span>🖨️</span> Print Receipt
+                </button>
+                <button
+                  onClick={handleReset}
+                  className="py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs transition-colors shadow-lg shadow-cyan-500/20"
+                >
+                  Continue Shopping
+                </button>
+              </div>
             </div>
           ) : items.length === 0 ? (
             <div className="text-center py-16 space-y-3">
@@ -285,10 +369,10 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                   disabled={isSubmitting}
                   className="w-full py-3.5 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-slate-950 font-bold transition-all shadow-lg shadow-emerald-500/20 flex items-center justify-center gap-2 text-sm disabled:opacity-50"
                 >
-                  {stkStatus === "prompting" ? (
+                  {isSubmitting ? (
                     <>
                       <span className="w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
-                      Sending STK Prompt to {phone || "Phone"}...
+                      Initiating Safaricom STK Push...
                     </>
                   ) : (
                     <>

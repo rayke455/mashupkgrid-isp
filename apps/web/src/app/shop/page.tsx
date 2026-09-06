@@ -5,6 +5,7 @@ import Link from "next/link";
 import { HardwareProduct, getProducts, useCart } from "@/lib/hardware-store";
 import { HardwareProductCard } from "@/components/store/hardware-product-card";
 import { CartDrawer } from "@/components/store/cart-drawer";
+import { ProductDetailModal } from "@/components/store/product-detail-modal";
 import { useAuth } from "@/lib/auth-context";
 
 const CATEGORIES = [
@@ -28,6 +29,7 @@ export default function ShopPage() {
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedBrand, setSelectedBrand] = useState("all");
+  const [selectedProductForModal, setSelectedProductForModal] = useState<HardwareProduct | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -245,6 +247,7 @@ export default function ShopPage() {
                 <HardwareProductCard
                   key={product.id}
                   product={product}
+                  onViewDetails={(p) => setSelectedProductForModal(p)}
                   onQuickBuy={() => setIsCartOpen(true)}
                 />
               ))}
@@ -252,6 +255,17 @@ export default function ShopPage() {
           )}
         </div>
       </main>
+
+      {/* Product Detail Modal */}
+      <ProductDetailModal
+        product={selectedProductForModal}
+        isOpen={!!selectedProductForModal}
+        onClose={() => setSelectedProductForModal(null)}
+        onInstantBuy={() => {
+          setSelectedProductForModal(null);
+          setIsCartOpen(true);
+        }}
+      />
 
       {/* Cart Drawer */}
       <CartDrawer isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} />
