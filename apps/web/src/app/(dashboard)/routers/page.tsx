@@ -610,20 +610,41 @@ export default function RoutersPage() {
                               </Button>
                             </div>
 
-                            <div className="pt-2 border-t border-amber-200/60 dark:border-amber-900/40 mt-3">
-                              <p className="font-semibold text-[11px] text-amber-900 dark:text-amber-300 flex items-center gap-1">
-                                <span>🌐</span> Router behind CGNAT or Home Fibre (Safaricom / Airtel)?
+                            <div className="pt-3 border-t border-amber-200/60 dark:border-amber-900/40 mt-3 space-y-2">
+                              <p className="font-semibold text-xs text-amber-900 dark:text-amber-300 flex items-center gap-1.5">
+                                <span>🚀</span> <strong>Locked Modem / No Port Forwarding? Auto-Sync APs Outbound:</strong>
                               </p>
-                              <p className="text-[11px] text-slate-600 dark:text-slate-400 mt-1">
-                                If your ISP does not assign a static public IP to your router, incoming ports like 8728 are blocked upstream. Click below to establish an outbound WireGuard tunnel directly to MashupHost:
+                              <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
+                                If your home modem doesn&apos;t allow port forwarding, paste this command into Winbox. Your MikroTik will push its connected APs directly to MashupHost via outbound HTTPS every 2 minutes:
                               </p>
-                              <Button
-                                variant="primary"
-                                className="mt-2 text-xs py-1 px-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold"
-                                onClick={() => router.vpnIp ? getVpnCompleteScript.mutate(router.id) : startVpn.mutate(router.id)}
-                              >
-                                {router.vpnIp ? "Finish Remote Access Tunnel" : "⚡ Enable Remote Access Tunnel"}
-                              </Button>
+                              <div className="relative">
+                                <pre className="overflow-x-auto rounded bg-slate-950 p-2.5 font-mono text-[11px] text-emerald-400 border border-slate-800">
+{`/system scheduler remove [find name=mkg-ap-sync]
+/system scheduler add name=mkg-ap-sync interval=2m on-event=":local d \\"\\"; :foreach i in=[/ip neighbor find] do={ :set d (\\$d . [/ip neighbor get \\$i interface] . \\";\\" . [/ip neighbor get \\$i mac-address] . \\";\\" . [/ip neighbor get \\$i identity] . \\";\\" . [/ip neighbor get \\$i address] . \\";\\" . [/ip neighbor get \\$i board] . \\"|\\") }; :do {/tool fetch url=\\"https://api.mashuphost.tech/api/v1/routers/${router.id}/push-aps\\" http-method=post http-data=\\$d keep-result=no} on-error={}"
+:local d ""; :foreach i in=[/ip neighbor find] do={ :set d ($d . [/ip neighbor get $i interface] . ";" . [/ip neighbor get $i mac-address] . ";" . [/ip neighbor get $i identity] . ";" . [/ip neighbor get $i address] . ";" . [/ip neighbor get $i board] . "|") }; :do {/tool fetch url="https://api.mashuphost.tech/api/v1/routers/${router.id}/push-aps" http-method=post http-data=$d keep-result=no} on-error={}`}
+                                </pre>
+                                <div className="mt-2 flex items-center gap-2">
+                                  <Button
+                                    variant="primary"
+                                    className="text-xs py-1 px-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold flex items-center gap-1.5"
+                                    onClick={() => {
+                                      const cmd = `/system scheduler remove [find name=mkg-ap-sync]\n/system scheduler add name=mkg-ap-sync interval=2m on-event=":local d \\"\\"; :foreach i in=[/ip neighbor find] do={ :set d (\\$d . [/ip neighbor get \\$i interface] . \\";\\" . [/ip neighbor get \\$i mac-address] . \\";\\" . [/ip neighbor get \\$i identity] . \\";\\" . [/ip neighbor get \\$i address] . \\";\\" . [/ip neighbor get \\$i board] . \\"|\\") }; :do {/tool fetch url=\\"https://api.mashuphost.tech/api/v1/routers/${router.id}/push-aps\\" http-method=post http-data=\\$d keep-result=no} on-error={}"\n:local d ""; :foreach i in=[/ip neighbor find] do={ :set d ($d . [/ip neighbor get $i interface] . ";" . [/ip neighbor get $i mac-address] . ";" . [/ip neighbor get $i identity] . ";" . [/ip neighbor get $i address] . ";" . [/ip neighbor get $i board] . "|") }; :do {/tool fetch url="https://api.mashuphost.tech/api/v1/routers/${router.id}/push-aps" http-method=post http-data=$d keep-result=no} on-error={}`;
+                                      handleCopy(cmd, `apsync-${router.id}`);
+                                      setTimeout(() => refetchAps(), 2500);
+                                    }}
+                                  >
+                                    {copiedId === `apsync-${router.id}` ? <IconCheck size={12} /> : <IconCopy size={12} />}
+                                    <span>{copiedId === `apsync-${router.id}` ? "Copied Auto-Sync Script!" : "📋 Copy Auto-Sync AP Script"}</span>
+                                  </Button>
+                                  <Button
+                                    variant="secondary"
+                                    className="text-xs py-1 px-2.5 font-medium"
+                                    onClick={() => refetchAps()}
+                                  >
+                                    🔄 Refresh AP List
+                                  </Button>
+                                </div>
+                              </div>
                             </div>
                           </div>
                         </div>

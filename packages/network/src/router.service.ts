@@ -528,13 +528,25 @@ export async function getRouterActiveSessions(tenantId: string, routerId: string
   }
 }
 
+const routerReportedApsCache = new Map<string, ConnectedAccessPoint[]>();
+
+export function recordRouterReportedAccessPoints(routerId: string, aps: ConnectedAccessPoint[]): void {
+  routerReportedApsCache.set(routerId, aps);
+}
+
+export function getRouterReportedAccessPoints(routerId: string): ConnectedAccessPoint[] | undefined {
+  return routerReportedApsCache.get(routerId);
+}
+
 export async function getRouterConnectedAccessPoints(
   tenantId: string,
   routerId: string
 ): Promise<ConnectedAccessPoint[]> {
   const router = await getRouterOrThrow(tenantId, routerId);
+  const cached = routerReportedApsCache.get(router.id);
   const primaryHost = router.host || router.vpnIp;
   if (!primaryHost) {
+    if (cached && cached.length > 0) return cached;
     throw new ConflictError(
       `"${router.name}" hasn't checked in yet — paste the provisioning script on the router, or link it manually.`
     );
@@ -554,10 +566,19 @@ export async function getRouterConnectedAccessPoints(
       }
     }
     if (adapter.getConnectedAccessPoints) {
-      return await adapter.getConnectedAccessPoints();
+      const aps = await adapter.getConnectedAccessPoints();
+      if (aps.length > 0) {
+        routerReportedApsCache.set(router.id, aps);
+      }
+      return aps;
     }
-    return [];
+    return cached || [];
   } catch (err) {
+    // If live connection to port 8728 timed out / failed (e.g. router behind locked modem/CGNAT)
+    // but the router reported its access points via outbound sync, return them!
+    if (cached && cached.length > 0) {
+      return cached;
+    }
     const message = err instanceof Error ? err.message : String(err);
     throw new ConflictError(`Could not reach "${router.name}" to detect connected access points: ${message}`);
   } finally {
