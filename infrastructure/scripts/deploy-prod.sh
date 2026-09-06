@@ -73,14 +73,14 @@ docker image prune -f || true
 
 # 5. Check Container Status
 log_info "4/5 Checking running container health..."
-docker compose -f docker-compose.prod.yml ps
+docker compose -f docker-compose.prod.yml --env-file .env.production ps
 
 # 6. Tail summary logs
 log_info "5/5 Service logs check:"
 echo "--- Web Container Logs (last 10 lines) ---"
-docker compose -f docker-compose.prod.yml logs --tail 10 web || true
+docker compose -f docker-compose.prod.yml --env-file .env.production logs --tail 10 web || true
 
 echo "--- API Container Logs (last 10 lines) ---"
-docker compose -f docker-compose.prod.yml logs --tail 10 api || true
+docker compose -f docker-compose.prod.yml --env-file .env.production logs --tail 10 api || true
 
 log_success "Deployment completed successfully! Live at https://mashuphost.tech"
