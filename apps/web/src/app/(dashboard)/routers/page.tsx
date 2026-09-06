@@ -574,9 +574,45 @@ export default function RoutersPage() {
                   </div>
 
                   {apsError ? (
-                    <p className="rounded-lg border border-rose-200 bg-rose-50 p-2.5 font-mono text-xs text-rose-600 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-400">
-                      {apsError instanceof ApiRequestError ? apsError.message : "Failed to load connected access points."}
-                    </p>
+                    <div className="rounded-xl border border-amber-300/80 bg-amber-50/70 p-4 dark:border-amber-900/60 dark:bg-amber-950/30">
+                      <div className="flex items-start gap-3">
+                        <span className="text-xl">⚠️</span>
+                        <div className="flex-1 min-w-0">
+                          <h5 className="font-bold text-xs text-amber-900 dark:text-amber-300">
+                            Cannot Connect to MikroTik API (Port 8728)
+                          </h5>
+                          <p className="mt-1 font-mono text-[11px] text-amber-800 dark:text-amber-400 break-words">
+                            {apsError instanceof ApiRequestError ? apsError.message : "Failed to load connected access points."}
+                          </p>
+                          <div className="mt-3 rounded-lg border border-amber-200 dark:border-amber-900/50 bg-white/80 dark:bg-obsidian-900/80 p-3 text-xs text-slate-700 dark:text-slate-300 space-y-2">
+                            <p className="font-semibold text-[11px] text-slate-900 dark:text-white">
+                              💡 How to fix this in 10 seconds on your MikroTik:
+                            </p>
+                            <p className="text-[11px] text-slate-600 dark:text-slate-400">
+                              By default, MikroTik drops outside connections. Paste this into your <strong>MikroTik Winbox Terminal</strong> to allow the MashupHost cloud server to connect:
+                            </p>
+                            <div className="relative">
+                              <pre className="overflow-x-auto rounded bg-slate-950 p-2.5 font-mono text-[11px] text-emerald-400 border border-slate-800">
+{`/ip service enable api
+/ip service set api port=8728 address=0.0.0.0/0
+/ip firewall filter add chain=input protocol=tcp dst-port=8728 action=accept place-before=0 comment="Allow MashupHost API"`}
+                              </pre>
+                              <Button
+                                variant="secondary"
+                                className="mt-2 text-xs py-1 px-2.5 flex items-center gap-1.5 font-medium"
+                                onClick={() => {
+                                  const cmd = `/ip service enable api\n/ip service set api port=8728 address=0.0.0.0/0\n/ip firewall filter add chain=input protocol=tcp dst-port=8728 action=accept place-before=0 comment="Allow MashupHost API"`;
+                                  navigator.clipboard.writeText(cmd);
+                                  toast({ title: "Copied!", description: "Paste into MikroTik Winbox Terminal to allow API port 8728." });
+                                }}
+                              >
+                                📋 Copy MikroTik Terminal Command
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   ) : connectedAps && connectedAps.length > 0 ? (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                       {connectedAps.map((ap, idx) => {
