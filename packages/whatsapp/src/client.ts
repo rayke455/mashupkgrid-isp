@@ -197,13 +197,16 @@ export function extractMessageText(msg: any): string | undefined {
 }
 
 export function isSelfChat(sock: WASocket, remoteJid?: string | null): boolean {
-  if (!remoteJid || !sock.user) return false;
-  const myDigits = sock.user.id?.split(":")[0]?.replace(/\D/g, "");
+  if (!remoteJid) return false;
+  // Any 1-on-1 LID chat with fromMe is the WhatsApp "Message yourself" chat
+  if (remoteJid.endsWith("@lid")) return true;
+
+  const myDigits = (sock.user?.id || (sock.authState?.creds?.me as any)?.id)?.split(":")[0]?.replace(/\D/g, "");
   const remoteDigits = remoteJid.split("@")[0]?.replace(/\D/g, "");
   if (myDigits && remoteDigits && myDigits === remoteDigits) return true;
 
-  const myLid = (sock.user as any)?.lid?.split("@")[0];
-  if (myLid && remoteJid.startsWith(myLid)) return true;
+  const myLid = ((sock.authState?.creds?.me as any)?.lid || (sock.user as any)?.lid)?.split(":")[0]?.replace(/\D/g, "");
+  if (myLid && remoteDigits && myLid === remoteDigits) return true;
 
   return false;
 }

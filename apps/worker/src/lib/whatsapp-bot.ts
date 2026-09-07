@@ -228,12 +228,14 @@ export async function handleIncomingWhatsAppMessage(
     return;
   }
 
-  const phone = `+${fromJid.split("@")[0]!.replace(/\D/g, "")}`;
+  const isLid = fromJid.endsWith("@lid");
+  const selfDigits = (sock.user?.id || (sock.authState?.creds?.me as any)?.id)?.split(":")[0]?.replace(/\D/g, "");
+  const phone = (isLid && selfDigits) ? `+${selfDigits}` : `+${fromJid.split("@")[0]!.replace(/\D/g, "")}`;
   const replyTarget = fromJid;
   const input = text.trim();
   const lower = input.toLowerCase();
 
-  console.log(`[whatsapp-bot] processing incoming message from=${fromJid} (phone=${phone}) tenant=${tenantId}: "${input}"`);
+  console.log(`[whatsapp-bot] processing incoming message from=${fromJid} (resolved phone=${phone}) tenant=${tenantId}: "${input}"`);
 
   try {
     // The tenant is no longer inferred — the message arrived on that ISP's own WhatsApp session,
