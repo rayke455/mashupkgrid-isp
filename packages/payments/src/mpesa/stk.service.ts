@@ -203,7 +203,7 @@ export async function queryAndReconcileStkRequest(
       resultDesc: result.ResultDesc || "The service request is processed successfully.",
       metadata: {
         mpesaReceiptNumber: provisionalReceipt,
-        amount: request.amountMinor / 100,
+        amountMinor: request.amountMinor,
         phone: request.phone,
       },
       raw: result,

@@ -19,6 +19,8 @@ import {
   IconSparkles,
   IconPulse,
   IconUsers,
+  IconEye,
+  IconEyeOff,
 } from "@/components/icons";
 import { NetworkCablesAnimation } from "@/components/network-cables-animation";
 
@@ -91,7 +93,7 @@ function LoginContent() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-900 text-slate-100 selection:bg-brand-500 selection:text-white font-sans antialiased flex flex-col justify-between">
+    <main className="min-h-screen bg-[#070b14] text-slate-100 selection:bg-brand-500 selection:text-white font-sans antialiased flex flex-col justify-between">
       {/* Background Ambient Glow & Grid Pattern */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
         <div className="absolute -top-40 left-1/4 w-[800px] h-[500px] bg-brand-600/15 blur-[140px] rounded-full" />
@@ -100,17 +102,17 @@ function LoginContent() {
       </div>
 
       {/* Top Header */}
-      <header className="relative z-10 mx-auto w-full max-w-7xl px-6 py-4 flex items-center justify-between">
+      <header className="relative z-10 mx-auto w-full max-w-7xl px-5 sm:px-6 py-5 flex items-center justify-between">
         <Link href="/" className="flex items-center gap-2.5 group">
           <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl overflow-hidden ring-1 ring-cyan-500/40 shadow-md group-hover:scale-105 transition-transform bg-slate-950">
             <img
               src="/logo.jpg"
-              alt="Mashupkgrid ISP Logo"
+              alt="MashupHost Logo"
               className="h-full w-full object-cover"
             />
           </div>
           <span className="text-base font-extrabold tracking-tight text-white">
-            MASHUPKGRID
+            MASHUPHOST
           </span>
           <span className="hidden sm:inline-block rounded-full bg-brand-500/15 border border-brand-500/30 px-2 py-0.5 text-[10px] font-bold text-brand-400 uppercase tracking-wider">
             ISP Console
@@ -121,16 +123,16 @@ function LoginContent() {
           {detectedTenant ? (
             <Link
               href={`/register?tenant=${encodeURIComponent(detectedTenant)}`}
-              className="px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800/80 font-medium text-white hover:bg-slate-700 transition-colors"
+              className="px-3.5 py-2 rounded-xl border border-slate-700/80 bg-slate-900/70 font-semibold text-white hover:border-brand-500/50 hover:bg-slate-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
             >
               Subscriber Sign Up
             </Link>
           ) : (
             <>
-              <span className="text-slate-400 hidden sm:inline">New to Mashupkgrid?</span>
+              <span className="text-slate-400 hidden sm:inline">New to MashupHost?</span>
               <Link
                 href="/register"
-                className="px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800/80 font-medium text-white hover:bg-slate-700 transition-colors"
+                className="px-3.5 py-2 rounded-xl border border-slate-700/80 bg-slate-900/70 font-semibold text-white hover:border-brand-500/50 hover:bg-slate-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
               >
                 Create Account
               </Link>
@@ -140,63 +142,75 @@ function LoginContent() {
       </header>
 
       {/* Main Container */}
-      <div className="relative z-10 mx-auto w-full max-w-7xl px-6 py-6 lg:py-10">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
-          {/* Left Column: Console Telemetry Showcase */}
-          <div className="lg:col-span-5 space-y-6 text-left hidden lg:block">
-            <div className="inline-flex items-center gap-2 rounded-full border border-slate-700/80 bg-slate-800/60 px-3.5 py-1 text-xs font-medium text-slate-300 backdrop-blur">
+      <div className="relative z-10 mx-auto w-full max-w-6xl px-4 sm:px-6 py-6 lg:py-10">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-0 items-stretch overflow-hidden rounded-[2rem] border border-slate-700/80 bg-slate-950/60 shadow-2xl shadow-black/40 backdrop-blur-xl">
+          <div className="lg:hidden space-y-3 text-left">
+            <div className="inline-flex items-center gap-2 rounded-full border border-slate-700/80 bg-slate-800/60 px-3 py-1 text-[11px] font-medium text-slate-300 backdrop-blur">
               <StatusDot status="ONLINE" pulse={true} />
-              <span>Operator Session · Port 8729 API-TLS</span>
+              <span>MashupHost network services online</span>
+            </div>
+            <h1 className="max-w-xl text-3xl font-black tracking-tight text-white">
+              Your network, clearly managed.
+            </h1>
+            <p className="max-w-xl text-sm leading-relaxed text-slate-400">
+              Access billing, subscribers, routers, and support from one focused console.
+            </p>
+          </div>
+
+          {/* Left Column: Console Telemetry Showcase */}
+          <div className="lg:col-span-5 space-y-7 text-left hidden lg:flex lg:flex-col lg:justify-between bg-gradient-to-br from-cyan-950 via-slate-950 to-slate-950 p-8 xl:p-10 border-r border-slate-800">
+            <div className="inline-flex w-fit items-center gap-2 rounded-full border border-cyan-400/20 bg-cyan-400/5 px-3.5 py-1 text-xs font-medium text-cyan-100 backdrop-blur">
+              <StatusDot status="ONLINE" pulse={true} />
+              <span>Network services online</span>
             </div>
 
             <div>
-              <h1 className="text-3xl lg:text-4xl font-black tracking-tight text-white leading-tight">
-                Operator Control &amp; Subscriber Management.
+              <p className="mb-3 text-xs font-mono uppercase tracking-[0.2em] text-cyan-300">
+                One console. Every connection.
+              </p>
+              <h1 className="text-4xl font-black tracking-tight text-white leading-[1.08]">
+                Keep your network moving.
               </h1>
               <p className="mt-3 text-sm text-slate-300 leading-relaxed">
-                Sign in to manage live MikroTik RouterOS gateways, monitor FreeRADIUS subscriber auth sessions, reconcile Safaricom M-Pesa payments, and manage captive portal vouchers.
+                Manage subscribers, routers, payments, and support from one calm operational workspace.
               </p>
             </div>
 
-            {/* Quick Live Telemetry Widget */}
-            <div className="rounded-xl border border-slate-800 bg-slate-950/80 p-4 space-y-3 font-mono text-xs shadow-xl">
-              <div className="flex items-center justify-between text-slate-400 pb-2 border-b border-slate-800">
+            <div className="rounded-2xl border border-cyan-400/15 bg-black/20 p-4 space-y-3 font-mono text-xs shadow-xl">
+              <div className="flex items-center justify-between text-slate-400 pb-3 border-b border-slate-800/80">
                 <span className="flex items-center gap-1.5 text-white font-semibold">
                   <IconRouter size={14} className="text-brand-400" />
-                  <span>core-gw-nairobi-01</span>
+                  <span>mashuphost / core network</span>
                 </span>
-                <span className="text-emerald-400">RouterOS v7.16</span>
+                <span className="text-emerald-400">LIVE</span>
               </div>
 
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Active PPPoE Sessions:</span>
-                  <span className="font-bold text-white">1,482 connected</span>
+              <div className="grid grid-cols-3 gap-2 pt-1">
+                <div>
+                  <span className="block text-lg font-bold text-white">1,482</span>
+                  <span className="text-[10px] text-slate-500">sessions</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">Throughput Aggregation:</span>
-                  <span className="font-bold text-brand-400">2.41 Gbps</span>
+                <div>
+                  <span className="block text-lg font-bold text-brand-400">2.41</span>
+                  <span className="text-[10px] text-slate-500">Gbps live</span>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-500">M-Pesa STK Webhook:</span>
-                  <span className="font-bold text-emerald-400">Listening · 0 pending</span>
+                <div>
+                  <span className="block text-lg font-bold text-emerald-400">0.0%</span>
+                  <span className="text-[10px] text-slate-500">packet loss</span>
                 </div>
               </div>
             </div>
 
             {/* Role-Based Access Badges */}
             <div className="pt-1 flex flex-wrap gap-2 text-[11px] font-mono text-slate-400">
-              <span className="px-2.5 py-1 rounded bg-slate-900 border border-slate-800 text-slate-300">
-                Super Admin
+              <span className="px-2.5 py-1 rounded-full bg-slate-900/80 border border-slate-800 text-slate-400">
+                MikroTik
               </span>
-              <span className="px-2.5 py-1 rounded bg-slate-900 border border-slate-800 text-slate-300">
-                Network Engineer
+              <span className="px-2.5 py-1 rounded-full bg-slate-900/80 border border-slate-800 text-slate-400">
+                FreeRADIUS
               </span>
-              <span className="px-2.5 py-1 rounded bg-slate-900 border border-slate-800 text-slate-300">
-                Billing Manager
-              </span>
-              <span className="px-2.5 py-1 rounded bg-slate-900 border border-slate-800 text-slate-300">
-                Support Agent
+              <span className="px-2.5 py-1 rounded-full bg-slate-900/80 border border-slate-800 text-slate-400">
+                M-Pesa
               </span>
             </div>
 
@@ -205,30 +219,30 @@ function LoginContent() {
           </div>
 
           {/* Right Column: Login Card */}
-          <div className="lg:col-span-7 flex justify-center">
-            <Card className="relative w-full max-w-lg p-6 sm:p-8 bg-slate-950/90 border-slate-800 shadow-2xl backdrop-blur-xl text-left">
+          <div className="lg:col-span-7 flex justify-center bg-slate-950/90 p-5 sm:p-8 lg:p-10">
+            <Card className="relative w-full max-w-lg p-2 sm:p-5 bg-transparent border-0 shadow-none text-left">
               {/* Card Header */}
               <div className="mb-6">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-brand-400 flex items-center gap-1.5">
+                <div className="flex items-center justify-between gap-4">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.18em] text-brand-400 flex items-center gap-1.5">
                     <IconSparkles size={13} />
                     <span>Control Console</span>
                   </span>
-                  <span className="text-[11px] font-mono text-emerald-400 flex items-center gap-1">
+                  <span className="text-[10px] font-mono text-emerald-400 flex items-center gap-1 whitespace-nowrap">
                     <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
                     RADIUS: 1.8ms
                   </span>
                 </div>
-                <h2 className="mt-1 text-2xl font-black tracking-tight text-white">
-                  Sign In to Console
+                <h2 className="mt-2 text-3xl sm:text-4xl font-black tracking-tight text-white">
+                  Welcome back
                 </h2>
-                <p className="mt-1 text-xs text-slate-400">
-                  Authenticate with your operator credentials or tenant subscriber account.
+                <p className="mt-2 max-w-sm text-sm text-slate-400 leading-relaxed">
+                  Sign in to manage your network, billing, and subscriber services.
                 </p>
               </div>
 
               {/* Form */}
-              <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+              <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
                 {/* Tenant Slug Field */}
                 <div>
                   <div className="flex items-center justify-between mb-1.5">
@@ -239,7 +253,7 @@ function LoginContent() {
                       <button
                         type="button"
                         onClick={() => setManualOverride(true)}
-                        className="text-[11px] text-brand-400 hover:underline"
+                        className="text-[11px] text-brand-400 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 rounded"
                       >
                         Change manually
                       </button>
@@ -251,7 +265,7 @@ function LoginContent() {
                     id="tenantSlug"
                     placeholder="e.g. demo-isp"
                     readOnly={isTenantLocked}
-                    className={`bg-slate-900 border-slate-800 text-white font-mono text-sm focus:border-brand-500 ${
+                    className={`bg-slate-900/80 border-slate-700/80 text-white font-mono text-sm focus:border-brand-500 ${
                       isTenantLocked ? "opacity-75 cursor-default" : ""
                     }`}
                     {...register("tenantSlug")}
@@ -270,7 +284,7 @@ function LoginContent() {
                     id="email"
                     type="email"
                     placeholder="admin@isp.co.ke"
-                    className="bg-slate-900 border-slate-800 text-white text-sm focus:border-brand-500"
+                    className="bg-slate-900/80 border-slate-700/80 text-white text-sm focus:border-brand-500"
                     {...register("email")}
                   />
                   {errors.email && <ErrorText>{errors.email.message}</ErrorText>}
@@ -283,16 +297,9 @@ function LoginContent() {
                       Security Password
                     </Label>
                     <div className="flex items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="text-[11px] text-slate-400 hover:text-white transition-colors"
-                      >
-                        {showPassword ? "Hide" : "Show"} password
-                      </button>
                       <Link
                         href="/forgot-password"
-                        className="text-[11px] text-brand-400 hover:underline"
+                        className="text-[11px] text-brand-400 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 rounded"
                       >
                         Forgot password?
                       </Link>
@@ -303,18 +310,25 @@ function LoginContent() {
                       id="password"
                       type={showPassword ? "text" : "password"}
                       placeholder="••••••••••••"
-                      className="bg-slate-900 border-slate-800 text-white text-sm focus:border-brand-500 pr-10"
+                      className="bg-slate-900/80 border-slate-700/80 text-white text-sm focus:border-brand-500 pr-12"
                       {...register("password")}
                     />
-                    <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-500">
-                      <IconLock size={16} />
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      aria-pressed={showPassword}
+                      aria-label={showPassword ? "Hide password" : "Show password"}
+                      title={showPassword ? "Hide password" : "Show password"}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-800 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+                    >
+                      {showPassword ? <IconEyeOff size={16} /> : <IconEye size={16} />}
+                    </button>
                   </div>
                   {errors.password && <ErrorText>{errors.password.message}</ErrorText>}
                 </div>
 
                 {serverError && (
-                  <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-xs font-medium text-rose-400">
+                  <div role="alert" className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs font-medium text-rose-300">
                     {serverError}
                   </div>
                 )}
@@ -323,7 +337,7 @@ function LoginContent() {
                 <Button
                   type="submit"
                   disabled={isSubmitting}
-                  className="w-full py-3 font-bold text-sm shadow-glow gap-2 mt-2"
+                  className="w-full py-3.5 font-bold text-sm shadow-glow gap-2 mt-2 rounded-xl"
                 >
                   {isSubmitting ? (
                     <>
@@ -387,7 +401,7 @@ function LoginContent() {
       {/* Simple Footer */}
       <footer className="relative z-10 mx-auto w-full max-w-7xl px-6 py-4 flex flex-col sm:flex-row items-center justify-between text-xs text-slate-500 border-t border-slate-800/60 gap-2">
         <div>
-          &copy; {new Date().getFullYear()} MASHUPKGRID ISP Platform. Telecom Billing &amp; MikroTik Cloud.
+          &copy; {new Date().getFullYear()} MashupHost. Telecom Billing &amp; MikroTik Cloud.
         </div>
         <div className="flex flex-wrap items-center gap-3 sm:gap-4">
           <Link href="/terms" className="hover:text-slate-300 transition-colors">

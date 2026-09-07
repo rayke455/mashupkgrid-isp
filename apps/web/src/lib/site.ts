@@ -11,7 +11,7 @@ const BASE_DOMAIN = process.env.NEXT_PUBLIC_PLATFORM_BASE_DOMAIN?.trim();
 
 export const SITE_URL = BASE_DOMAIN
   ? `https://${BASE_DOMAIN.replace(/^https?:\/\//, "").replace(/\/+$/, "")}`
-  : "http://localhost:3000";
+  : "https://mashuphost.tech";
 
 export const SITE_NAME = "MashupHost";
 

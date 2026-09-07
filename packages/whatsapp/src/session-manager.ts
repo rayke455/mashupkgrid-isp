@@ -126,7 +126,7 @@ export class WhatsAppSessionManager {
     const { state, saveCreds } = await useMultiFileAuthState(path.join(this.baseAuthPath, id));
     const { version } = await fetchLatestBaileysVersion();
 
-    const sock = makeWASocket({ version, auth: state, logger: silentLogger });
+    const sock = makeWASocket({ version, auth: state, logger: silentLogger, printQRInTerminal: false });
     sock.ev.on("creds.update", saveCreds);
 
     // Phone-number pairing is an alternative to the QR, not an addition to it: WhatsApp issues
@@ -136,6 +136,8 @@ export class WhatsAppSessionManager {
     if (options.pairWithPhoneNumber && !sock.authState.creds.registered) {
       const digits = options.pairWithPhoneNumber.replace(/\D/g, "");
       try {
+        // Allow the socket handshake to initialize before requesting the code
+        await new Promise((resolve) => setTimeout(resolve, 1500));
         const code = await sock.requestPairingCode(digits);
         this.events.onPairingCode?.(id, code);
       } catch (err) {
@@ -151,7 +153,8 @@ export class WhatsAppSessionManager {
     sock.ev.on("connection.update", (update) => {
       const { connection, lastDisconnect, qr } = update;
 
-      if (qr) this.events.onQr?.(id, qr);
+      // When pairing with phone number, ignore QR emissions so the pairing code is not clobbered
+      if (qr && !options.pairWithPhoneNumber) this.events.onQr?.(id, qr);
 
       if (connection === "open") {
         session.socket = sock;

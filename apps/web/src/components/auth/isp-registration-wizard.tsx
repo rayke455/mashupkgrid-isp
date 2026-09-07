@@ -490,14 +490,14 @@ export function IspRegistrationWizard() {
       </div>
 
       {/* Top Navbar */}
-      <header className="relative z-10 flex items-center justify-between px-6 py-5 max-w-6xl w-full mx-auto">
+      <header className="relative z-10 flex items-center justify-between px-5 sm:px-6 py-5 max-w-6xl w-full mx-auto">
         <Link href="/" className="flex items-center gap-3 group">
           <div className="h-10 w-10 rounded-xl overflow-hidden ring-2 ring-brand-500/40 shadow-glow bg-slate-900 flex items-center justify-center transition-transform group-hover:scale-105">
-            <img src="/logo.jpg" alt="MashupKgrid Logo" className="h-full w-full object-cover" />
+            <img src="/logo.jpg" alt="MashupHost Logo" className="h-full w-full object-cover" />
           </div>
           <div>
             <span className="text-base font-black tracking-tight text-white block">
-              MASHUPKGRID
+              MASHUPHOST
             </span>
             <span className="text-[10px] font-mono text-cyan-400 tracking-wider uppercase block">
               ISP Telecom Engine
@@ -509,7 +509,7 @@ export function IspRegistrationWizard() {
           <span className="hidden sm:inline text-slate-400">Already have an ISP console?</span>
           <Link
             href="/login"
-            className="px-3.5 py-1.5 rounded-lg border border-slate-700 bg-slate-900/80 hover:bg-slate-800 text-white font-bold transition-all"
+            className="px-3.5 py-2 rounded-xl border border-slate-700 bg-slate-900/80 hover:border-brand-500/50 hover:bg-slate-800 text-white font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
           >
             Sign in &rarr;
           </Link>
@@ -518,7 +518,7 @@ export function IspRegistrationWizard() {
 
       {/* Main Registration Card */}
       <main className="relative z-10 flex-1 flex items-center justify-center px-4 py-8">
-        <div className="w-full max-w-md rounded-3xl border border-slate-800/80 bg-slate-950/85 backdrop-blur-2xl p-6 sm:p-8 shadow-2xl shadow-black/80">
+        <div className="w-full max-w-md rounded-3xl border border-slate-700/80 bg-slate-950/90 backdrop-blur-2xl p-6 sm:p-9 shadow-2xl shadow-black/50">
           {/* 5-Step Progress Track */}
           <div className="mb-6">
             <div className="flex items-center justify-between relative" aria-label={`Step ${step} of 5`}>
@@ -1009,6 +1009,8 @@ export function IspRegistrationWizard() {
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
+                      aria-pressed={showPassword}
+                      aria-label={showPassword ? "Hide password" : "Show password"}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 text-xs"
                     >
                       {showPassword ? "Hide" : "Show"}
@@ -1062,6 +1064,8 @@ export function IspRegistrationWizard() {
                     <button
                       type="button"
                       onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      aria-pressed={showConfirmPassword}
+                      aria-label={showConfirmPassword ? "Hide confirmed password" : "Show confirmed password"}
                       className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 text-xs"
                     >
                       {showConfirmPassword ? "Hide" : "Show"}

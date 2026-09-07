@@ -11,8 +11,15 @@ import {
   IconRouter,
   IconShield,
   IconPulse,
-  IconTerminal,
+  IconPackage,
   IconUsers,
+  IconUser,
+  IconLock,
+  IconLifeBuoy,
+  IconGlobe,
+  IconSpeed,
+  IconMessage,
+  IconMpesa,
 } from "@/components/icons";
 
 interface PlanItem {
@@ -197,7 +204,7 @@ const TESTIMONIALS = [
     name: "Sarah Kimani",
     role: "Business Owner, Westlands",
     avatar: "SK",
-    content: "MashupKGrid transformed our office connectivity. The speed and reliability are outstanding.",
+    content: "MashupHost transformed our office connectivity. The speed and reliability are outstanding.",
     stars: 5,
   },
   {
@@ -309,7 +316,7 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
         id: `plan_${plan.id}`,
         name: `${plan.name} (${plan.speed}) - Monthly Fiber Subscription`,
         slug: plan.id,
-        brand: "MashupKGrid Fiber",
+        brand: "MashupHost Fiber",
         category: "fiber",
         price: plan.price,
         stock: 999,
@@ -341,7 +348,7 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
           </span>
           <span>Free Installation on select packages &bull; Enterprise equipment at great rates.</span>
           <a
-            href="https://wa.me/254703605266?text=Hello%20MashupKGrid%2C%20I%20want%20to%20order%20internet%20packages%20or%20hardware"
+            href="https://wa.me/254703605266?text=Hello%20MashupHost%2C%20I%20want%20to%20order%20internet%20packages%20or%20hardware"
             target="_blank"
             rel="noopener noreferrer"
             className="text-amber-400 hover:text-amber-300 font-bold underline flex items-center gap-1"
@@ -354,16 +361,16 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
 
       {/* 2. STICKY MODERN HEADER */}
       <header className="sticky top-0 z-40 backdrop-blur-xl bg-[#060A12]/90 border-b border-slate-800/80 transition-all">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-18 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 min-h-[4.5rem] flex items-center justify-between gap-4">
           {/* Brand Logo */}
           <Link href="/" className="flex items-center gap-3 group">
             <div className="relative h-10 w-10 rounded-xl overflow-hidden shadow-lg shadow-amber-500/10 border border-amber-500/40 group-hover:scale-105 transition-transform">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/logo.jpg" alt="MashupKGrid Logo" className="h-full w-full object-cover" />
+              <img src="/logo.jpg" alt="MashupHost Logo" className="h-full w-full object-cover" />
             </div>
             <div>
               <span className="text-xl font-black tracking-tight text-white group-hover:text-amber-400 transition-colors">
-                MASHUP<span className="text-amber-400">KGRID</span>
+                MASHUP<span className="text-amber-400">HOST</span>
               </span>
               <span className="hidden sm:block text-[10px] font-mono tracking-widest text-slate-400 uppercase font-semibold">
                 High-Speed Telecom &amp; Hardware
@@ -372,7 +379,7 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
           </Link>
 
           {/* Navigation Links */}
-          <nav className="hidden lg:flex items-center gap-7 text-xs font-bold text-slate-300 tracking-wide uppercase">
+          <nav className="hidden xl:flex items-center gap-6 text-[11px] font-bold text-slate-300 tracking-wide uppercase">
             <a href="#packages" className="hover:text-amber-400 transition-colors">Internet Packages</a>
             <a href="#hardware" className="hover:text-amber-400 transition-colors flex items-center gap-1.5">
               <span>Hardware Shop</span>
@@ -381,8 +388,6 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
             <a href="#solutions" className="hover:text-amber-400 transition-colors">Solutions</a>
             <a href="#why-us" className="hover:text-amber-400 transition-colors">Why Us</a>
             <a href="#coverage" className="hover:text-amber-400 transition-colors">Coverage</a>
-            <a href="#testimonials" className="hover:text-amber-400 transition-colors">Testimonials</a>
-            <a href="#faq" className="hover:text-amber-400 transition-colors">FAQs</a>
           </nav>
 
           {/* Action Buttons */}
@@ -390,10 +395,11 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
             {/* Cart Trigger */}
             <button
               onClick={() => setIsCartOpen(true)}
-              className="relative p-2.5 rounded-xl bg-slate-900 border border-slate-700 hover:border-amber-400 text-slate-200 hover:text-white transition-all active:scale-95 shadow-md"
+              aria-label="View shopping cart"
+              className="relative p-2.5 rounded-xl bg-slate-900 border border-slate-700 hover:border-amber-400 text-slate-200 hover:text-white transition-all active:scale-95 shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
               title="View Cart"
             >
-              <span className="text-base">🛒</span>
+              <IconPackage size={17} />
               {itemCount > 0 && (
                 <span className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 font-black text-[10px] flex items-center justify-center shadow-lg">
                   {itemCount}
@@ -404,26 +410,18 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
             {/* Client Portal */}
             <Link
               href="/login"
-              className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 hover:border-amber-400/50 text-xs font-bold text-slate-200 hover:text-white transition-all"
+              className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 hover:border-amber-400/50 text-xs font-bold text-slate-200 hover:text-white transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
             >
-              <span>👤</span>
+              <IconUser size={15} />
               <span>Portal</span>
             </Link>
 
-            {/* Admin Dashboard */}
-            <Link
-              href="/dashboard"
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 text-xs font-black shadow-lg shadow-amber-500/20 transition-all active:scale-95"
-            >
-              <span>⚡</span>
-              <span>Admin Panel</span>
-            </Link>
           </div>
         </div>
       </header>
 
       {/* 3. HERO SECTION (THE FUTURE OF CONNECTIVITY) */}
-      <section id="hero" className="relative pt-12 pb-16 md:pt-20 md:pb-24 overflow-hidden">
+      <section id="hero" className="relative pt-10 pb-14 md:pt-16 md:pb-20 overflow-hidden">
         {/* Ambient Gradient Glows */}
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-96 bg-amber-500/10 blur-[130px] pointer-events-none" />
         <div className="absolute top-40 right-10 w-80 h-80 bg-cyan-500/10 blur-[120px] pointer-events-none" />
@@ -435,7 +433,7 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
               {/* Badge */}
               <div className="inline-flex items-center gap-2 px-4 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-mono font-bold uppercase tracking-wider shadow-sm">
                 <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
-                <span>⚡ Premium Internet Solutions</span>
+                <span>Premium Internet Solutions</span>
               </div>
 
               {/* Exact Target Headline */}
@@ -455,24 +453,24 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
               <div className="flex flex-wrap items-center gap-3.5 pt-2">
                 <a
                   href="#packages"
-                  className="px-7 py-4 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs sm:text-sm tracking-wide uppercase shadow-xl shadow-amber-500/25 transition-all flex items-center gap-2 active:scale-95"
+                    className="px-7 py-4 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs sm:text-sm tracking-wide uppercase shadow-xl shadow-amber-500/25 transition-all flex items-center gap-2 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-200"
                 >
                   <span>View Packages</span>
                   <IconArrowRight size={16} />
                 </a>
                 <a
                   href="#hardware"
-                  className="px-7 py-4 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-700 hover:border-amber-400 text-white font-bold text-xs sm:text-sm tracking-wide transition-all flex items-center gap-2 shadow-lg"
+                    className="px-7 py-4 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-700 hover:border-amber-400 text-white font-bold text-xs sm:text-sm tracking-wide transition-all flex items-center gap-2 shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
                 >
-                  <span>🛒</span>
+                  <IconPackage size={16} />
                   <span>Explore Hardware</span>
                 </a>
                 <button
                   type="button"
                   onClick={runSpeedTest}
-                  className="px-5 py-4 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 font-bold text-xs sm:text-sm transition-all flex items-center gap-2"
+                    className="px-5 py-4 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 font-bold text-xs sm:text-sm transition-all flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
                 >
-                  <span>▶</span>
+                  <IconPulse size={16} />
                   <span>{speedTestRunning ? "Testing Speed..." : "Backhaul Test"}</span>
                 </button>
               </div>
@@ -505,7 +503,7 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-base font-black text-white flex items-center gap-2">
-                      <span className="text-amber-400">⚡</span>
+                      <IconPulse size={16} className="text-amber-400" />
                       <span>Backhaul Speed Test</span>
                     </h3>
                     <p className="text-xs text-slate-400 mt-0.5">
@@ -617,7 +615,7 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
             {/* Badge 1 */}
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 text-lg shrink-0">
-                🔒
+                <IconLock size={18} />
               </div>
               <div>
                 <h4 className="text-xs font-black text-white">Secure Payments</h4>
@@ -628,7 +626,7 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
             {/* Badge 2 */}
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 text-lg shrink-0">
-                🛡️
+                <IconShield size={18} />
               </div>
               <div>
                 <h4 className="text-xs font-black text-white">Quality Guaranteed</h4>
@@ -639,7 +637,7 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
             {/* Badge 3 */}
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 text-lg shrink-0">
-                🚚
+                <IconPackage size={18} />
               </div>
               <div>
                 <h4 className="text-xs font-black text-white">Fast Delivery</h4>
@@ -650,7 +648,7 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
             {/* Badge 4 */}
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center text-yellow-400 text-lg shrink-0">
-                📞
+                <IconLifeBuoy size={18} />
               </div>
               <div>
                 <h4 className="text-xs font-black text-white">24/7 Support</h4>
@@ -661,7 +659,7 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
             {/* Badge 5 */}
             <div className="flex items-center gap-3 col-span-2 sm:col-span-1">
               <div className="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400 text-lg shrink-0">
-                ⚙️
+                <IconRouter size={18} />
               </div>
               <div>
                 <h4 className="text-xs font-black text-white">Quick Setup</h4>
@@ -691,7 +689,7 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
             {/* Card 1: High-Speed Internet */}
             <div className="rounded-3xl bg-slate-950 p-6 border border-slate-800 hover:border-amber-400/50 transition-all space-y-4 shadow-xl group">
               <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-2xl text-amber-400 group-hover:scale-110 transition-transform">
-                🚀
+                <IconSpeed size={22} />
               </div>
               <h3 className="text-lg font-black text-white">High-Speed Internet</h3>
               <p className="text-xs text-slate-300 leading-relaxed">
@@ -706,7 +704,7 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
             {/* Card 2: Premium Hardware */}
             <div className="rounded-3xl bg-slate-950 p-6 border border-slate-800 hover:border-cyan-400/50 transition-all space-y-4 shadow-xl group">
               <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-2xl text-cyan-400 group-hover:scale-110 transition-transform">
-                🛒
+                <IconPackage size={22} />
               </div>
               <h3 className="text-lg font-black text-white">Premium Hardware</h3>
               <p className="text-xs text-slate-300 leading-relaxed">
@@ -721,13 +719,13 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
             {/* Card 3: Network Solutions */}
             <div className="rounded-3xl bg-slate-950 p-6 border border-slate-800 hover:border-emerald-400/50 transition-all space-y-4 shadow-xl group">
               <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-2xl text-emerald-400 group-hover:scale-110 transition-transform">
-                ⚡
+                <IconRouter size={22} />
               </div>
               <h3 className="text-lg font-black text-white">Network Solutions</h3>
               <p className="text-xs text-slate-300 leading-relaxed">
                 Custom PPPoE, Hotspot, and fiber installations tailored to your needs.
               </p>
-              <a href="https://wa.me/254703605266?text=Hello%20MashupKGrid%2C%20I%20need%20Network%20Engineering%20Solutions" target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-emerald-400 hover:text-emerald-300 inline-flex items-center gap-1">
+              <a href="https://wa.me/254703605266?text=Hello%20MashupHost%2C%20I%20need%20Network%20Engineering%20Solutions" target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-emerald-400 hover:text-emerald-300 inline-flex items-center gap-1">
                 <span>Talk to Engineer</span>
                 <span>&rarr;</span>
               </a>
@@ -736,7 +734,7 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
             {/* Card 4: Power Backup */}
             <div className="rounded-3xl bg-slate-950 p-6 border border-slate-800 hover:border-yellow-400/50 transition-all space-y-4 shadow-xl group">
               <div className="w-12 h-12 rounded-2xl bg-yellow-500/10 border border-yellow-500/30 flex items-center justify-center text-2xl text-yellow-400 group-hover:scale-110 transition-transform">
-                🔋
+                <IconPulse size={22} />
               </div>
               <h3 className="text-lg font-black text-white">Power Backup</h3>
               <p className="text-xs text-slate-300 leading-relaxed">
@@ -751,12 +749,12 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
         </div>
       </section>
 
-      {/* 6. WHY MASHUPKGRID (BUILT FOR PERFORMANCE - 6 FEATURES) */}
+      {/* 6. WHY MASHUPHOST (BUILT FOR PERFORMANCE - 6 FEATURES) */}
       <section id="why-us" className="py-20 bg-[#090D16] border-y border-slate-800/80 relative">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
           <div className="text-center max-w-3xl mx-auto space-y-3">
             <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-mono font-bold uppercase">
-              <span>Why MashupKGrid</span>
+              <span>Why MashupHost</span>
             </div>
             <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight">
               Built for Performance
@@ -770,7 +768,7 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
             {/* Feature 1 */}
             <div className="rounded-3xl bg-slate-950 p-6 border border-slate-800 space-y-3 hover:border-amber-400/40 transition-all">
               <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 text-xl">
-                ⚡
+                <IconSpeed size={20} />
               </div>
               <h3 className="text-base font-black text-white">Maximum Speed</h3>
               <p className="text-xs text-slate-400 leading-relaxed">
@@ -781,7 +779,7 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
             {/* Feature 2 */}
             <div className="rounded-3xl bg-slate-950 p-6 border border-slate-800 space-y-3 hover:border-cyan-400/40 transition-all">
               <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 text-xl">
-                🛡️
+                <IconShield size={20} />
               </div>
               <h3 className="text-base font-black text-white">Uptime Guarantee</h3>
               <p className="text-xs text-slate-400 leading-relaxed">
@@ -792,7 +790,7 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
             {/* Feature 3 */}
             <div className="rounded-3xl bg-slate-950 p-6 border border-slate-800 space-y-3 hover:border-emerald-400/40 transition-all">
               <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 text-xl">
-                📞
+                <IconLifeBuoy size={20} />
               </div>
               <h3 className="text-base font-black text-white">Expert Support</h3>
               <p className="text-xs text-slate-400 leading-relaxed">
@@ -803,7 +801,7 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
             {/* Feature 4 */}
             <div className="rounded-3xl bg-slate-950 p-6 border border-slate-800 space-y-3 hover:border-sky-400/40 transition-all">
               <div className="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400 text-xl">
-                📍
+                <IconGlobe size={20} />
               </div>
               <h3 className="text-base font-black text-white">Coverage Areas</h3>
               <p className="text-xs text-slate-400 leading-relaxed">
@@ -814,7 +812,7 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
             {/* Feature 5 */}
             <div className="rounded-3xl bg-slate-950 p-6 border border-slate-800 space-y-3 hover:border-purple-400/40 transition-all">
               <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 text-xl">
-                👥
+                <IconUsers size={20} />
               </div>
               <h3 className="text-base font-black text-white">Active Customers</h3>
               <p className="text-xs text-slate-400 leading-relaxed">
@@ -825,7 +823,7 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
             {/* Feature 6 */}
             <div className="rounded-3xl bg-slate-950 p-6 border border-slate-800 space-y-3 hover:border-yellow-400/40 transition-all">
               <div className="w-10 h-10 rounded-xl bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center text-yellow-400 text-xl">
-                🌐
+                <IconRouter size={20} />
               </div>
               <h3 className="text-base font-black text-white">Backhaul Capacity</h3>
               <p className="text-xs text-slate-400 leading-relaxed">
@@ -853,19 +851,19 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
             {/* 4 Benefit Pills */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 text-xs font-semibold text-slate-300">
               <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-center gap-1.5">
-                <span className="text-amber-400">⚡</span>
+                <IconSpeed size={15} className="text-amber-400" />
                 <span>Fiber Technology</span>
               </div>
               <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-center gap-1.5">
-                <span className="text-cyan-400">⏱️</span>
+                <IconPulse size={15} className="text-cyan-400" />
                 <span>Quick Setup (24-48h)</span>
               </div>
               <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-center gap-1.5">
-                <span className="text-emerald-400">🛡️</span>
+                <IconShield size={15} className="text-emerald-400" />
                 <span>Secure &amp; Reliable</span>
               </div>
               <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-center gap-1.5">
-                <span className="text-yellow-400">📞</span>
+                <IconLifeBuoy size={15} className="text-yellow-400" />
                 <span>Expert Support</span>
               </div>
             </div>
@@ -887,7 +885,7 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
                     : "text-slate-400 hover:text-white"
                 }`}
               >
-                🏠 Home Internet Plans
+                Home Internet Plans
               </button>
               <button
                 type="button"
@@ -898,7 +896,7 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
                     : "text-slate-400 hover:text-white"
                 }`}
               >
-                🏢 Business Elite
+                Business Elite
               </button>
               <button
                 type="button"
@@ -909,7 +907,7 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
                     : "text-slate-400 hover:text-white"
                 }`}
               >
-                🚀 Ultra Fiber (1 Gbps)
+                Ultra Fiber (1 Gbps)
               </button>
             </div>
           </div>
@@ -975,7 +973,7 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
                         : "bg-slate-900 hover:bg-slate-800 border border-slate-700 text-white"
                     }`}
                   >
-                    <span>⚡</span>
+                    <IconMpesa size={15} />
                     <span>Order via M-Pesa</span>
                   </button>
                 </div>
@@ -1029,7 +1027,7 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
                 Enterprise-Grade Equipment from World Leaders
               </h3>
               <p className="text-xs text-slate-300 max-w-md mt-1">
-                MikroTik, Ubiquiti, Huawei, and MashupKGrid Certified optics with 100% manufacturer warranty.
+                MikroTik, Ubiquiti, Huawei, and MashupHost Certified optics with 100% manufacturer warranty.
               </p>
             </div>
           </div>
@@ -1101,7 +1099,7 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
               Trusted by Thousands
             </h2>
             <p className="text-sm sm:text-base text-slate-300">
-              Hear from our customers about their experience with MashupKGrid.
+              Hear from our customers about their experience with MashupHost.
             </p>
           </div>
 
@@ -1255,13 +1253,13 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
             >
               View Internet Packages
             </a>
-            <a
-              href="https://wa.me/254703605266?text=Hello%20MashupKGrid%2C%20I%20want%20to%20get%20connected%20to%20Fiber"
+              <a
+                href="https://wa.me/254703605266?text=Hello%20MashupHost%2C%20I%20want%20to%20get%20connected%20to%20Fiber"
               target="_blank"
               rel="noopener noreferrer"
               className="px-8 py-4 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-white font-bold text-sm transition-all flex items-center gap-2 active:scale-95"
             >
-              <span>💬</span>
+              <IconMessage size={15} />
               <span>WhatsApp Us (+254 703 605 266)</span>
             </a>
           </div>
@@ -1277,10 +1275,10 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
               <div className="flex items-center gap-3">
                 <div className="h-9 w-9 rounded-xl overflow-hidden border border-amber-500/40">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src="/logo.jpg" alt="MashupKGrid" className="h-full w-full object-cover" />
+                  <img src="/logo.jpg" alt="MashupHost" className="h-full w-full object-cover" />
                 </div>
                 <span className="text-lg font-black text-white">
-                  MASHUP<span className="text-amber-400">KGRID</span>
+                  MASHUP<span className="text-amber-400">HOST</span>
                 </span>
               </div>
               <p className="text-slate-400 leading-relaxed max-w-sm">
@@ -1288,9 +1286,9 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
                 High-speed fiber connections, carrier hardware, PPPoE setup, and 24/7 expert support.
               </p>
               <div className="pt-1 flex flex-col gap-1 text-slate-400 text-xs">
-                <span>📍 Location: Utawala &amp; Dandora, Nairobi, Kenya</span>
-                <span>📞 Telephone: +254 703 605 266</span>
-                <span>✉️ Email: support@mashupkgrid.co.ke</span>
+                <span className="flex items-center gap-1.5"><IconGlobe size={13} /> Location: Utawala &amp; Dandora, Nairobi, Kenya</span>
+                <span className="flex items-center gap-1.5"><IconLifeBuoy size={13} /> Telephone: +254 703 605 266</span>
+                <span className="flex items-center gap-1.5"><IconMessage size={13} /> Email: support@mashuphost.tech</span>
               </div>
             </div>
 
@@ -1321,9 +1319,8 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
 
             {/* Col 4: Portals & Legal */}
             <div className="space-y-3">
-              <p className="font-bold text-white uppercase text-[11px] tracking-wider font-mono">Admin &amp; Portals</p>
+              <p className="font-bold text-white uppercase text-[11px] tracking-wider font-mono">Portals &amp; Legal</p>
               <ul className="space-y-2">
-                <li><Link href="/dashboard" className="hover:text-amber-400 transition-colors">Admin Panel</Link></li>
                 <li><Link href="/login" className="hover:text-amber-400 transition-colors">Client Login</Link></li>
                 <li><Link href="/terms" className="hover:text-amber-400 transition-colors">Terms of Service</Link></li>
                 <li><Link href="/refund-policy" className="hover:text-amber-400 transition-colors">Privacy Policy</Link></li>
@@ -1333,7 +1330,7 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
           </div>
 
           <div className="pt-8 border-t border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-[11px] text-slate-500">
-            <p>&copy; {new Date().getFullYear()} MashupKGrid Technologies Ltd. All rights reserved.</p>
+            <p>&copy; {new Date().getFullYear()} MashupHost Technologies Ltd. All rights reserved.</p>
             <div className="flex items-center gap-4">
               <span className="flex items-center gap-1 text-emerald-400">
                 <span className="h-2 w-2 rounded-full bg-emerald-400" />

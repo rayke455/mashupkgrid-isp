@@ -16,6 +16,8 @@ import {
   IconShield,
   IconUsers,
   IconCheck,
+  IconEye,
+  IconEyeOff,
 } from "@/components/icons";
 
 const customerRegisterSchema = z
@@ -42,6 +44,7 @@ export function CustomerRegistrationForm({ tenantSlug }: CustomerRegistrationFor
   const [serverError, setServerError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const {
     register,
@@ -109,7 +112,7 @@ export function CustomerRegistrationForm({ tenantSlug }: CustomerRegistrationFor
   }
 
   return (
-    <main className="min-h-screen bg-slate-900 text-slate-100 selection:bg-brand-500 selection:text-white font-sans antialiased flex flex-col justify-between">
+    <main className="min-h-screen bg-[#070b14] text-slate-100 selection:bg-brand-500 selection:text-white font-sans antialiased flex flex-col justify-between">
       {/* Ambient background */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
         <div className="absolute -top-40 left-1/3 w-[800px] h-[500px] bg-brand-600/15 blur-[140px] rounded-full" />
@@ -118,7 +121,7 @@ export function CustomerRegistrationForm({ tenantSlug }: CustomerRegistrationFor
       </div>
 
       {/* Header */}
-      <header className="relative z-10 mx-auto w-full max-w-7xl px-6 py-4 flex items-center justify-between">
+      <header className="relative z-10 mx-auto w-full max-w-7xl px-5 sm:px-6 py-5 flex items-center justify-between">
         <Link href={`/login?tenant=${encodeURIComponent(tenantSlug)}`} className="flex items-center gap-2.5 group">
           <div className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-xl overflow-hidden ring-1 ring-cyan-500/40 shadow-md group-hover:scale-105 transition-transform bg-slate-950">
             <img src="/logo.jpg" alt="Logo" className="h-full w-full object-cover" />
@@ -135,7 +138,7 @@ export function CustomerRegistrationForm({ tenantSlug }: CustomerRegistrationFor
           <span className="text-slate-400 hidden sm:inline">Already have an account?</span>
           <Link
             href={`/login?tenant=${encodeURIComponent(tenantSlug)}`}
-            className="px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-800/80 font-medium text-white hover:bg-slate-700 transition-colors"
+            className="px-3.5 py-2 rounded-xl border border-slate-700/80 bg-slate-900/70 font-semibold text-white hover:border-brand-500/50 hover:bg-slate-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
           >
             Sign In
           </Link>
@@ -143,8 +146,24 @@ export function CustomerRegistrationForm({ tenantSlug }: CustomerRegistrationFor
       </header>
 
       {/* Main Content */}
-      <div className="relative z-10 mx-auto w-full max-w-lg px-6 py-8">
-        <Card className="p-6 sm:p-8 bg-slate-950/90 border-slate-800 shadow-2xl backdrop-blur-xl text-left">
+      <div className="relative z-10 mx-auto w-full max-w-5xl px-4 sm:px-6 py-8">
+        <div className="grid grid-cols-1 lg:grid-cols-5 overflow-hidden rounded-[2rem] border border-slate-700/80 bg-slate-950/90 shadow-2xl shadow-black/40 backdrop-blur-xl">
+          <div className="hidden lg:flex lg:col-span-2 flex-col justify-between bg-gradient-to-br from-brand-950 via-slate-950 to-slate-950 p-9 border-r border-slate-800 text-left">
+            <div>
+              <p className="text-xs font-mono uppercase tracking-[0.2em] text-cyan-300">Subscriber access</p>
+              <h2 className="mt-4 text-4xl font-black leading-tight text-white">Good internet should feel simple.</h2>
+              <p className="mt-4 text-sm leading-relaxed text-slate-300">
+                Keep your plan, payments, and connection details together in one place.
+              </p>
+            </div>
+            <div className="space-y-3 text-xs text-slate-400">
+              <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-emerald-400" /> Instant M-Pesa payment updates</div>
+              <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-cyan-400" /> Service and invoice history</div>
+              <div className="flex items-center gap-2"><span className="h-2 w-2 rounded-full bg-brand-400" /> Support when you need it</div>
+            </div>
+          </div>
+
+          <Card className="lg:col-span-3 p-6 sm:p-9 bg-transparent border-0 shadow-none text-left rounded-none">
           <div className="mb-6">
             <div className="flex items-center justify-between">
               <span className="text-[11px] font-bold uppercase tracking-wider text-brand-400 flex items-center gap-1.5">
@@ -155,11 +174,11 @@ export function CustomerRegistrationForm({ tenantSlug }: CustomerRegistrationFor
                 Tenant: {tenantSlug}
               </span>
             </div>
-            <h1 className="mt-1 text-2xl font-black tracking-tight text-white">
-              Create Subscriber Account
+            <h1 className="mt-2 text-3xl font-black tracking-tight text-white">
+              Get connected
             </h1>
             <p className="mt-1 text-xs text-slate-400">
-              Sign up to manage your home fiber subscriptions, view invoices, and buy hotspot vouchers.
+              Create your subscriber account to manage fiber service, invoices, and hotspot access.
             </p>
           </div>
 
@@ -202,7 +221,9 @@ export function CustomerRegistrationForm({ tenantSlug }: CustomerRegistrationFor
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="text-[11px] text-slate-400 hover:text-white transition-colors"
+                  aria-pressed={showPassword}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  className="text-[11px] text-slate-400 hover:text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400 rounded"
                 >
                   {showPassword ? "Hide" : "Show"} password
                 </button>
@@ -212,12 +233,19 @@ export function CustomerRegistrationForm({ tenantSlug }: CustomerRegistrationFor
                   id="password"
                   type={showPassword ? "text" : "password"}
                   placeholder="At least 10 characters"
-                  className="bg-slate-900 border-slate-800 text-white text-sm focus:border-brand-500 pr-10"
+                  className="bg-slate-900 border-slate-800 text-white text-sm focus:border-brand-500 pr-12"
                   {...register("password")}
                 />
-                <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-500">
-                  <IconLock size={16} />
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-pressed={showPassword}
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  title={showPassword ? "Hide password" : "Show password"}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-800 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+                >
+                  {showPassword ? <IconEyeOff size={16} /> : <IconEye size={16} />}
+                </button>
               </div>
               {errors.password && <ErrorText>{errors.password.message}</ErrorText>}
             </div>
@@ -225,13 +253,24 @@ export function CustomerRegistrationForm({ tenantSlug }: CustomerRegistrationFor
             {/* Confirm Password */}
             <div>
               <Label htmlFor="confirmPassword">Confirm Password</Label>
-              <Input
-                id="confirmPassword"
-                type={showPassword ? "text" : "password"}
-                placeholder="Re-enter your password"
-                className="bg-slate-900 border-slate-800 text-white text-sm focus:border-brand-500"
-                {...register("confirmPassword")}
-              />
+              <div className="relative">
+                <Input
+                  id="confirmPassword"
+                  type={showConfirmPassword ? "text" : "password"}
+                  placeholder="Re-enter your password"
+                  className="bg-slate-900 border-slate-800 text-white text-sm focus:border-brand-500 pr-20"
+                  {...register("confirmPassword")}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  aria-pressed={showConfirmPassword}
+                  aria-label={showConfirmPassword ? "Hide confirmed password" : "Show confirmed password"}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition-colors hover:bg-slate-800 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
+                >
+                  {showConfirmPassword ? <IconEyeOff size={16} /> : <IconEye size={16} />}
+                </button>
+              </div>
               {errors.confirmPassword && <ErrorText>{errors.confirmPassword.message}</ErrorText>}
             </div>
 
@@ -244,7 +283,7 @@ export function CustomerRegistrationForm({ tenantSlug }: CustomerRegistrationFor
             <Button
               type="submit"
               disabled={isSubmitting}
-              className="w-full py-3 font-bold text-sm shadow-glow gap-2 mt-2"
+              className="w-full py-3.5 font-bold text-sm shadow-glow gap-2 mt-2 rounded-xl"
             >
               {isSubmitting ? (
                 <>
@@ -269,7 +308,8 @@ export function CustomerRegistrationForm({ tenantSlug }: CustomerRegistrationFor
               Sign In here
             </Link>
           </div>
-        </Card>
+          </Card>
+        </div>
       </div>
 
       {/* Footer */}

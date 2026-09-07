@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
 import { apiFetch } from "@/lib/api-client";
 import { TrendChart } from "@/components/charts/trend-chart";
@@ -23,6 +23,7 @@ import {
   IconCheck,
   IconPulse,
   IconSpeed,
+  IconLayers,
 } from "@/components/icons";
 
 interface OutstandingSummary {
@@ -100,6 +101,27 @@ interface MaintenanceStatus {
   message?: string | null;
 }
 
+interface VlanOverview {
+  total: number;
+  enabled: number;
+  disabled: number;
+  provisioningFailed: number;
+}
+
+interface DashboardVlan {
+  id: string;
+  vlanTag: number;
+  name: string;
+  type: string;
+  customTypeLabel?: string | null;
+  routerId?: string | null;
+  router?: { id: string; name: string } | null;
+  subnetCidr?: string | null;
+  gateway?: string | null;
+  isEnabled: boolean;
+  provisioningStatus: "NOT_PROVISIONED" | "PENDING" | "ACTIVE" | "FAILED";
+}
+
 function formatBytes(bytes: number): string {
   if (!bytes || bytes <= 0) return "0 B";
   const k = 1024;
@@ -128,9 +150,12 @@ export default function DashboardHomePage() {
   const isStaff = !isPlatform && Boolean(user?.permissions.includes("reports.read"));
   const [bandwidthRange, setBandwidthRange] = useState<number>(14);
 
+  const queryClient = useQueryClient();
+
   // Quick Terminal Provisioning Script state
-  const [provisionTab, setProvisionTab] = useState<"pppoe" | "hotspot" | "radius">("pppoe");
+  const [provisionTab, setProvisionTab] = useState<"pppoe" | "hotspot" | "radius" | "auto-vlan">("pppoe");
   const [copiedScript, setCopiedScript] = useState(false);
+  const [autoProvisionMsg, setAutoProvisionMsg] = useState<string | null>(null);
 
   // Quick M-Pesa STK Push Simulation State
   const [showStkModal, setShowStkModal] = useState(false);
@@ -187,12 +212,43 @@ export default function DashboardHomePage() {
     queryKey: ["routers"],
     queryFn: () => apiFetch<RouterRow[]>("/api/v1/routers"),
     enabled: isStaff && Boolean(user?.permissions.includes("routers.read")),
+    refetchInterval: 15_000,
   });
 
   const { data: recentPayments } = useQuery({
     queryKey: ["recent-payments-dashboard"],
     queryFn: () => apiFetch<PaginatedPayments>("/api/v1/payments?limit=5"),
     enabled: isStaff && Boolean(user?.permissions.includes("payments.read")),
+  });
+
+  const canReadVlans = isStaff && Boolean(user?.permissions.includes("vlans.read"));
+
+  const { data: vlanOverview } = useQuery({
+    queryKey: ["vlans-overview-dashboard"],
+    queryFn: () => apiFetch<VlanOverview>("/api/v1/vlans/overview"),
+    enabled: canReadVlans,
+    refetchInterval: 15_000,
+  });
+
+  const { data: dashboardVlans } = useQuery({
+    queryKey: ["vlans-list-dashboard"],
+    queryFn: () => apiFetch<DashboardVlan[]>("/api/v1/vlans"),
+    enabled: canReadVlans,
+    refetchInterval: 15_000,
+  });
+
+  const autoProvision = useMutation({
+    mutationFn: () => apiFetch<{ provisioned: number }>("/api/v1/vlans/auto-provision", { method: "POST" }),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ["vlans-overview-dashboard"] });
+      queryClient.invalidateQueries({ queryKey: ["vlans-list-dashboard"] });
+      setAutoProvisionMsg(`Successfully configured ${res.provisioned} standard VLAN segments!`);
+      setTimeout(() => setAutoProvisionMsg(null), 5000);
+    },
+    onError: (err) => {
+      setAutoProvisionMsg(`Failed: ${err instanceof Error ? err.message : String(err)}`);
+      setTimeout(() => setAutoProvisionMsg(null), 6000);
+    },
   });
 
   const revenue30dMinor = revenue?.reduce((sum, day) => sum + day.totalMinor, 0) ?? null;
@@ -229,6 +285,23 @@ export default function DashboardHomePage() {
 /radius incoming set accept=yes port=3799
 /ip hotspot profile set [ find default=yes ] use-radius=yes radius-accounting=yes radius-interim-update=00:02:00 login-by=http-chap,http-pap
 /ip hotspot user profile set [ find default=yes ] rate-limit="10M/10M" transparent-proxy=no`;
+    }
+    if (provisionTab === "auto-vlan") {
+      return `# ==========================================================
+# 1-CLICK AUTOMATIC VLAN PROVISIONING FOR MIKROTIK
+# ==========================================================
+# 1. Create standard 802.1Q VLANs on ether2 (or your LAN bridge)
+/interface vlan add name=vlan100-subscribers vlan-id=100 interface=ether2 comment="VLAN 100 - PPPoE Fiber Subscribers" disabled=no
+/interface vlan add name=vlan200-hotspot vlan-id=200 interface=ether2 comment="VLAN 200 - Hotspot & Captive Portal" disabled=no
+/interface vlan add name=vlan99-mgmt vlan-id=99 interface=ether2 comment="VLAN 99 - Network Management" disabled=no
+
+# 2. Assign Gateway IP Subnets to each VLAN
+/ip address add address=10.100.0.1/24 interface=vlan100-subscribers comment="VLAN 100 Gateway"
+/ip address add address=10.200.0.1/24 interface=vlan200-hotspot comment="VLAN 200 Gateway"
+/ip address add address=10.99.0.1/24 interface=vlan99-mgmt comment="VLAN 99 Gateway"
+
+# 3. Bind PPPoE Server to the Subscriber VLAN
+/interface pppoe-server server add service-name="MASHUP-FIBER" interface=vlan100-subscribers authentication=chap,mschap2 default-profile=default disabled=no`;
     }
     return `/radius add address=${host} secret="${secret}" service=ppp,hotspot,login comment="MashupKGrid Core Engine" timeout=3000ms
 /radius incoming set accept=yes port=3799
@@ -328,6 +401,15 @@ export default function DashboardHomePage() {
                   <span>🔀</span>
                   <span>+ Router</span>
                 </Link>
+                {canReadVlans && (
+                  <Link
+                    href="/vlans"
+                    className="rounded-xl bg-[#172233] hover:bg-[#1f2d42] border border-cyan-500/30 px-3.5 py-2.5 text-xs font-bold text-cyan-300 shadow-md transition-all flex items-center gap-1.5"
+                  >
+                    <IconLayers size={14} />
+                    <span>+ VLAN</span>
+                  </Link>
+                )}
                 <Link
                   href="/customers"
                   className="rounded-xl bg-[#172233] hover:bg-[#1f2d42] border border-[#26374e] px-3.5 py-2.5 text-xs font-bold text-slate-200 shadow-md transition-all flex items-center gap-1.5"
@@ -563,6 +645,17 @@ export default function DashboardHomePage() {
               >
                 Full AAA + CoA
               </button>
+              <button
+                onClick={() => setProvisionTab("auto-vlan")}
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1 ${
+                  provisionTab === "auto-vlan"
+                    ? "bg-cyan-500 text-slate-950 font-bold shadow-sm"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                <span>⚡</span>
+                <span>Auto-VLANs</span>
+              </button>
             </div>
           </div>
 
@@ -590,9 +683,9 @@ export default function DashboardHomePage() {
         </div>
       )}
 
-      {/* 4. FOUR PRIMARY CARRIER OPERATOR KPI METRICS */}
+      {/* 4. PRIMARY CARRIER OPERATOR KPI METRICS */}
       {isStaff && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className={`grid grid-cols-1 sm:grid-cols-2 ${canReadVlans ? "lg:grid-cols-3 xl:grid-cols-5" : "lg:grid-cols-4"} gap-4`}>
           {/* Card 1: Revenue (Emerald / KES) */}
           <div className="relative overflow-hidden rounded-3xl bg-[#131d2c] p-6 shadow-[6px_6px_18px_#090e17,-6px_-6px_18px_#1c293d] border border-emerald-500/30 hover:border-emerald-500/60 transition-all">
             <div className="flex items-center justify-between">
@@ -694,6 +787,40 @@ export default function DashboardHomePage() {
               </p>
             </div>
           </div>
+
+          {/* Card 5: VLAN Segments (Electric Cyan) */}
+          {canReadVlans && (
+            <div className="relative overflow-hidden rounded-3xl bg-[#131d2c] p-6 shadow-[6px_6px_18px_#090e17,-6px_-6px_18px_#1c293d] border border-cyan-500/30 hover:border-cyan-500/60 transition-all">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  VLAN Segments
+                </span>
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-cyan-500/10 text-cyan-400 shadow-sm border border-cyan-500/30">
+                  <IconLayers size={22} />
+                </div>
+              </div>
+              <div className="mt-4">
+                <span className="text-3xl font-black text-white tracking-tight font-mono">
+                  {vlanOverview ? vlanOverview.total : "—"}
+                </span>
+                <div className="text-xs text-slate-400 mt-2 flex items-center justify-between">
+                  <span>
+                    <span className="font-bold text-emerald-400">{vlanOverview?.enabled ?? 0}</span> active
+                    {vlanOverview?.disabled ? ` · ${vlanOverview.disabled} off` : ""}
+                  </span>
+                  {vlanOverview && vlanOverview.provisioningFailed > 0 ? (
+                    <span className="px-2 py-0.5 rounded bg-rose-500/15 text-rose-300 font-mono text-[10px] font-bold border border-rose-500/30 animate-pulse">
+                      {vlanOverview.provisioningFailed} failed
+                    </span>
+                  ) : (
+                    <Link href="/vlans" className="text-[10px] text-cyan-400 font-mono font-semibold hover:underline">
+                      View all &rarr;
+                    </Link>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -780,6 +907,159 @@ export default function DashboardHomePage() {
                   <tr>
                     <td colSpan={6} className="py-8 text-center text-slate-500">
                       No MikroTik routers linked yet. Use the 1-click provisioning tool above to link your first router.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* 5B. LIVE VLAN NETWORK SEGMENTS MONITOR */}
+      {canReadVlans && (
+        <div className="rounded-3xl bg-[#131d2c] border border-[#24364e] p-6 shadow-[6px_6px_18px_#090e17,-6px_-6px_18px_#1c293d] space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#24364e]">
+            <div>
+              <h2 className="text-base font-bold text-white flex items-center gap-2">
+                <span className="text-cyan-400">
+                  <IconLayers size={20} />
+                </span>
+                <span>VLAN Network Segments &amp; Subnets</span>
+              </h2>
+              <p className="text-xs text-slate-400">
+                802.1Q tagged network segments, assigned gateway subnets, and RouterOS provisioning status
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => autoProvision.mutate()}
+                disabled={autoProvision.isPending}
+                className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-slate-950 text-xs font-black transition-all shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                <span>⚡</span>
+                <span>{autoProvision.isPending ? "Configuring..." : "Auto-Setup Standard VLANs"}</span>
+              </button>
+              <Link
+                href="/vlans"
+                className="px-3 py-1.5 rounded-xl bg-[#1a2638] hover:bg-[#223348] border border-cyan-500/30 text-cyan-300 text-xs font-bold transition-all shadow-md flex items-center gap-1.5"
+              >
+                <span>+ Custom VLAN</span>
+              </Link>
+              <Link
+                href="/vlans"
+                className="px-3 py-1.5 rounded-xl bg-[#1a2638] hover:bg-[#223348] text-slate-200 text-xs font-semibold border border-[#26374e] transition-colors"
+              >
+                <span>Manage All ({vlanOverview?.total ?? 0}) &rarr;</span>
+              </Link>
+            </div>
+          </div>
+
+          {autoProvisionMsg && (
+            <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-semibold flex items-center gap-2 animate-fadeIn">
+              <span>✓</span>
+              <span>{autoProvisionMsg}</span>
+            </div>
+          )}
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-[#24364e] text-slate-400 font-bold uppercase text-[10px]">
+                  <th className="pb-2.5">VLAN ID / Tag</th>
+                  <th className="pb-2.5">Segment Name</th>
+                  <th className="pb-2.5">Type</th>
+                  <th className="pb-2.5">Assigned Router</th>
+                  <th className="pb-2.5">Subnet / Gateway</th>
+                  <th className="pb-2.5">Provisioning</th>
+                  <th className="pb-2.5 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#1e2c40]">
+                {dashboardVlans && dashboardVlans.length > 0 ? (
+                  dashboardVlans.slice(0, 5).map((v) => (
+                    <tr key={v.id} className="hover:bg-[#1a2638]/50 transition-colors">
+                      <td className="py-3 font-mono font-bold text-cyan-400">
+                        VLAN {v.vlanTag}
+                      </td>
+                      <td className="py-3 font-semibold text-white">
+                        {v.name}
+                      </td>
+                      <td className="py-3">
+                        <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-[#1a2638] text-slate-300 border border-[#2b3d56]">
+                          {v.customTypeLabel || v.type.replace(/_/g, " ")}
+                        </span>
+                      </td>
+                      <td className="py-3 text-slate-300">
+                        {v.router?.name ?? <span className="text-slate-500 italic">Unassigned</span>}
+                      </td>
+                      <td className="py-3 font-mono text-slate-300">
+                        {v.subnetCidr ? (
+                          <span>{v.subnetCidr}</span>
+                        ) : (
+                          <span className="text-slate-500">—</span>
+                        )}
+                        {v.gateway && (
+                          <span className="text-slate-500 text-[10px] block">gw: {v.gateway}</span>
+                        )}
+                      </td>
+                      <td className="py-3">
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold ${
+                            v.provisioningStatus === "ACTIVE"
+                              ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30"
+                              : v.provisioningStatus === "FAILED"
+                              ? "bg-rose-500/15 text-rose-400 border border-rose-500/30"
+                              : "bg-amber-500/15 text-amber-400 border border-amber-500/30"
+                          }`}
+                        >
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full ${
+                              v.provisioningStatus === "ACTIVE"
+                                ? "bg-emerald-400"
+                                : v.provisioningStatus === "FAILED"
+                                ? "bg-rose-400"
+                                : "bg-amber-400"
+                            }`}
+                          />
+                          <span>{v.provisioningStatus}</span>
+                        </span>
+                      </td>
+                      <td className="py-3 text-right">
+                        <Link
+                          href="/vlans"
+                          className="rounded-lg bg-[#1a2638] hover:bg-cyan-500 hover:text-slate-950 px-2.5 py-1 text-[11px] font-bold text-slate-300 transition-colors"
+                        >
+                          Configure &rarr;
+                        </Link>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={7} className="py-10 text-center text-slate-400">
+                      <p className="text-sm font-semibold text-slate-200">No VLAN segments configured yet</p>
+                      <p className="text-xs text-slate-400 max-w-lg mx-auto mt-1">
+                        VLANs isolate PPPoE Fiber, Hotspot, and Management traffic into separate virtual networks on your MikroTik router.
+                      </p>
+                      <div className="mt-4 flex flex-wrap items-center justify-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => autoProvision.mutate()}
+                          disabled={autoProvision.isPending}
+                          className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-slate-950 text-xs font-black transition-all shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                        >
+                          <span>⚡</span>
+                          <span>{autoProvision.isPending ? "Generating..." : "Auto-Setup Standard ISP VLANs (100, 200, 99)"}</span>
+                        </button>
+                        <Link
+                          href="/vlans"
+                          className="px-4 py-2 rounded-xl bg-[#1a2638] hover:bg-[#223348] border border-cyan-500/30 text-cyan-300 text-xs font-bold transition-all shadow-md"
+                        >
+                          + Custom Manual VLAN
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 )}

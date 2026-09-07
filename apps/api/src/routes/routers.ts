@@ -204,7 +204,7 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.addContentTypeParser(
-    ["", "application/x-www-form-urlencoded", "text/plain", "application/octet-stream", "*"],
+    ["application/x-www-form-urlencoded", "text/plain", "application/octet-stream", "*"],
     { parseAs: "string" },
     (_request, body, done) => {
       done(null, typeof body === "string" ? body : "");

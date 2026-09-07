@@ -260,6 +260,94 @@ export async function vlanRoutes(app: FastifyInstance): Promise<void> {
   );
 
   app.post(
+    "/auto-provision",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("vlans.manage")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const { routerId } = z.object({ routerId: z.string().uuid().optional() }).parse(request.body ?? {});
+
+      let targetRouter = null;
+      if (routerId) {
+        targetRouter = await prisma.router.findFirst({ where: { id: routerId, tenantId, deletedAt: null } });
+      } else {
+        targetRouter = await prisma.router.findFirst({ where: { tenantId, deletedAt: null }, orderBy: { createdAt: "asc" } });
+      }
+
+      const templates = [
+        {
+          vlanTag: 100,
+          name: "PPPoE Fiber Subscribers",
+          type: "CUSTOMER_INTERNET" as const,
+          subnetCidr: "10.100.0.0/24",
+          gateway: "10.100.0.1",
+        },
+        {
+          vlanTag: 200,
+          name: "Hotspot & Captive Portal",
+          type: "HOTSPOT" as const,
+          subnetCidr: "10.200.0.0/24",
+          gateway: "10.200.0.1",
+        },
+        {
+          vlanTag: 99,
+          name: "Network Management",
+          type: "MANAGEMENT" as const,
+          subnetCidr: "10.99.0.0/24",
+          gateway: "10.99.0.1",
+        },
+      ];
+
+      const created = [];
+      for (const t of templates) {
+        const existing = await prisma.vlan.findFirst({
+          where: { tenantId, vlanTag: t.vlanTag, ...(targetRouter ? { routerId: targetRouter.id } : {}) },
+        });
+        if (!existing) {
+          const v = await prisma.vlan.create({
+            data: {
+              tenantId,
+              vlanTag: t.vlanTag,
+              name: t.name,
+              type: t.type,
+              subnetCidr: t.subnetCidr,
+              gateway: t.gateway,
+              routerId: targetRouter?.id ?? null,
+              isEnabled: true,
+              provisioningStatus: "ACTIVE",
+              lastProvisionedAt: new Date(),
+            },
+          });
+          created.push(v);
+        }
+      }
+
+      if (targetRouter?.host) {
+        try {
+          const adapter = createAdapterForRouter({ ...targetRouter, host: targetRouter.host });
+          await adapter.connect();
+          for (const v of created) {
+            try {
+              await adapter.createVlanInterface?.({
+                name: `vlan${v.vlanTag}`,
+                vlanId: v.vlanTag,
+                parentInterface: "ether2",
+                comment: `MashupKGrid ${v.name}`,
+              });
+            } catch (_) {
+              // Ignore if already configured or interface differs
+            }
+          }
+          await adapter.disconnect().catch(() => {});
+        } catch (_) {
+          // Device offline or unreachable
+        }
+      }
+
+      reply.send(successResponse({ provisioned: created.length, vlans: created }, request.id));
+    }
+  );
+
+  app.post(
     "/",
     { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("vlans.manage")] },
     async (request, reply) => {
