@@ -222,12 +222,18 @@ export async function handleIncomingWhatsAppMessage(
 ): Promise<void> {
   // Groups, channels/newsletters and status broadcasts all arrive on this same event — a bot
   // that answered those would spam every group the paired account belongs to.
-  if (!fromJid.endsWith("@s.whatsapp.net")) return;
-  if (!sock) return;
+  if (fromJid.endsWith("@g.us") || fromJid.endsWith("@broadcast") || fromJid.endsWith("@newsletter")) return;
+  if (!sock) {
+    console.warn(`[whatsapp-bot] cannot reply: socket is null for tenant ${tenantId}`);
+    return;
+  }
 
   const phone = `+${fromJid.split("@")[0]!.replace(/\D/g, "")}`;
+  const replyTarget = fromJid;
   const input = text.trim();
   const lower = input.toLowerCase();
+
+  console.log(`[whatsapp-bot] processing incoming message from=${fromJid} (phone=${phone}) tenant=${tenantId}: "${input}"`);
 
   try {
     // The tenant is no longer inferred — the message arrived on that ISP's own WhatsApp session,
@@ -251,34 +257,34 @@ export async function handleIncomingWhatsAppMessage(
       const reply = await handleTicket(tenantId, phone, input, "outage");
       session.state = "main";
       await saveSession(phone, session);
-      await sendWhatsAppMessage(sock, phone, reply);
+      await sendWhatsAppMessage(sock, replyTarget, reply);
       return;
     }
     if (!isReset && session.state === "support_awaiting_message") {
       const reply = await handleTicket(tenantId, phone, input, "support");
       session.state = "main";
       await saveSession(phone, session);
-      await sendWhatsAppMessage(sock, phone, reply);
+      await sendWhatsAppMessage(sock, replyTarget, reply);
       return;
     }
 
     if (!isReset && session.state === "buy_pick_package" && /^\d+$/.test(input)) {
       const reply = await handleBuyPick(tenantId, phone, session, Number(input));
       await saveSession(phone, session);
-      await sendWhatsAppMessage(sock, phone, reply);
+      await sendWhatsAppMessage(sock, replyTarget, reply);
       return;
     }
 
     if (!isReset && input === "1") {
       const reply = await handleBalance(tenantId, phone);
       await saveSession(phone, session);
-      await sendWhatsAppMessage(sock, phone, reply);
+      await sendWhatsAppMessage(sock, replyTarget, reply);
       return;
     }
     if (!isReset && input === "2") {
       const reply = await handleBuyList(tenantId, session);
       await saveSession(phone, session);
-      await sendWhatsAppMessage(sock, phone, reply);
+      await sendWhatsAppMessage(sock, replyTarget, reply);
       return;
     }
     if (!isReset && input === "3") {
@@ -286,7 +292,7 @@ export async function handleIncomingWhatsAppMessage(
       await saveSession(phone, session);
       await sendWhatsAppMessage(
         sock,
-        phone,
+        replyTarget,
         "🛠️ Sorry about that. Please describe the problem (and your location if you can) and we'll log it right away."
       );
       return;
@@ -294,18 +300,19 @@ export async function handleIncomingWhatsAppMessage(
     if (!isReset && input === "4") {
       session.state = "support_awaiting_message";
       await saveSession(phone, session);
-      await sendWhatsAppMessage(sock, phone, "💬 Please type your message and our support team will get back to you.");
+      await sendWhatsAppMessage(sock, replyTarget, "💬 Please type your message and our support team will get back to you.");
       return;
     }
 
     session.state = "main";
     await saveSession(phone, session);
-    await sendWhatsAppMessage(sock, phone, await mainMenu(tenantName));
+    console.log(`[whatsapp-bot] sending main menu reply to ${replyTarget}`);
+    await sendWhatsAppMessage(sock, replyTarget, await mainMenu(tenantName));
   } catch (err) {
     console.error("[whatsapp-bot] failed handling message from", phone, err);
     await sendWhatsAppMessage(
       sock,
-      phone,
+      replyTarget,
       'Sorry — something went wrong on our side. Please send "menu" to try again.'
     ).catch(() => {});
   }

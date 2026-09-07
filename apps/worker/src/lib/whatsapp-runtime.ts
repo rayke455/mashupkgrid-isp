@@ -160,16 +160,41 @@ export async function startWhatsAppRuntime(): Promise<WhatsAppSessionManager> {
     },
   });
 
-  // The platform line stays env-gated, exactly as before — it is operator infrastructure, not
-  // something a tenant opts into.
-  if (env.ENABLE_WHATSAPP_BOT) {
-    await manager.start(PLATFORM_SESSION_ID);
+  // Bring back the platform session if enabled OR if it was already connected in DB or has auth keys
+  const platformRow = await prisma.whatsappConnection
+    .findFirst({
+      where: { tenantId: null, status: { in: ["CONNECTED", "CONNECTING"] } },
+    })
+    .catch(() => null);
+
+  const hasPlatformCreds = fs.existsSync(path.join(basePath, PLATFORM_SESSION_ID, "creds.json"));
+
+  if (env.ENABLE_WHATSAPP_BOT || platformRow || hasPlatformCreds) {
+    console.log("[whatsapp] starting platform WhatsApp session on worker boot");
+    try {
+      await manager.start(PLATFORM_SESSION_ID);
+    } catch (err) {
+      console.error("[whatsapp] failed to start platform WhatsApp session:", err);
+    }
   }
 
-  // Bring back every tenant that was linked before this restart, so a deploy doesn't quietly
-  // knock every ISP's WhatsApp offline until someone notices and re-pairs.
-  for (const tenantId of await listTenantsToRestore()) {
+  // Restore every tenant that was linked or has saved credentials on disk
+  const restoreTenants = new Set(await listTenantsToRestore());
+  try {
+    if (fs.existsSync(basePath)) {
+      for (const ent of fs.readdirSync(basePath, { withFileTypes: true })) {
+        if (ent.isDirectory() && ent.name !== PLATFORM_SESSION_ID) {
+          if (fs.existsSync(path.join(basePath, ent.name, "creds.json"))) {
+            restoreTenants.add(ent.name);
+          }
+        }
+      }
+    }
+  } catch {}
+
+  for (const tenantId of restoreTenants) {
     try {
+      console.log(`[whatsapp] restoring session for tenant ${tenantId}`);
       await manager.start(tenantId);
     } catch (err) {
       console.error(`[whatsapp] failed to restore session for tenant ${tenantId}:`, err);

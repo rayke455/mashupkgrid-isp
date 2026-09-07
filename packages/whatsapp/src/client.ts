@@ -179,26 +179,46 @@ export function isBotSentMessage(messageId?: string | null, text?: string | null
   return false;
 }
 
-export function isSelfChat(sock: WASocket, remoteJid?: string | null): boolean {
-  if (!remoteJid || !sock.user?.id) return false;
-  const myDigits = sock.user.id.split(":")[0]?.replace(/\D/g, "");
-  const remoteDigits = remoteJid.split("@")[0]?.replace(/\D/g, "");
-  return Boolean(myDigits && remoteDigits && myDigits === remoteDigits);
+export function extractMessageText(msg: any): string | undefined {
+  if (!msg?.message) return undefined;
+  const m = msg.message;
+  return (
+    m.conversation ??
+    m.extendedTextMessage?.text ??
+    m.ephemeralMessage?.message?.conversation ??
+    m.ephemeralMessage?.message?.extendedTextMessage?.text ??
+    m.viewOnceMessage?.message?.conversation ??
+    m.viewOnceMessage?.message?.extendedTextMessage?.text ??
+    m.viewOnceMessageV2?.message?.conversation ??
+    m.viewOnceMessageV2?.message?.extendedTextMessage?.text ??
+    m.documentWithCaptionMessage?.message?.documentMessage?.caption ??
+    undefined
+  );
 }
 
-/** Turns a phone number into the `<digits>@s.whatsapp.net` JID Baileys' `sendMessage` expects.
- *  Strips every non-digit rather than just a leading `+`: callers hand this numbers straight out
- *  of user input and DB columns in a mix of shapes ("+254 703605266" from the registration
- *  wizard, "254703605266" from M-Pesa), and a JID containing a space or dash is silently
- *  undeliverable rather than an error. Group chats use a different JID shape (`...@g.us`) and are
- *  out of scope here. */
+export function isSelfChat(sock: WASocket, remoteJid?: string | null): boolean {
+  if (!remoteJid || !sock.user) return false;
+  const myDigits = sock.user.id?.split(":")[0]?.replace(/\D/g, "");
+  const remoteDigits = remoteJid.split("@")[0]?.replace(/\D/g, "");
+  if (myDigits && remoteDigits && myDigits === remoteDigits) return true;
+
+  const myLid = (sock.user as any)?.lid?.split("@")[0];
+  if (myLid && remoteJid.startsWith(myLid)) return true;
+
+  return false;
+}
+
+/** Turns a phone number or existing JID into the `<digits>@s.whatsapp.net` JID Baileys' `sendMessage` expects.
+ *  Strips every non-digit rather than just a leading `+`. If already a JID (contains @), preserves it. */
 export function phoneToWhatsAppJid(phone: string): string {
+  if (phone.includes("@")) return phone;
   return `${phone.replace(/\D/g, "")}@s.whatsapp.net`;
 }
 
 export async function sendWhatsAppMessage(sock: WASocket, e164Phone: string, text: string): Promise<void> {
   recordBotSentMessage(null, text);
-  const result = await sock.sendMessage(phoneToWhatsAppJid(e164Phone), { text });
+  const targetJid = phoneToWhatsAppJid(e164Phone);
+  const result = await sock.sendMessage(targetJid, { text });
   if (result?.key?.id) {
     recordBotSentMessage(result.key.id, text);
   }
