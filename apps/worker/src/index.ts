@@ -317,7 +317,7 @@ async function main() {
               "WhatsApp runtime is not running in this worker — check the worker's startup logs"
             );
           }
-          await manager.start(tenantId, { pairWithPhoneNumber });
+          await manager.start(tenantId, { pairWithPhoneNumber, forceClean: true });
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           await setConnectionStatus(tenantId, "DISCONNECTED", { lastError: message });

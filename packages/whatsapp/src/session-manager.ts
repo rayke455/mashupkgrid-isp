@@ -3,7 +3,7 @@ import path from "node:path";
 import {
   makeWASocket,
   useMultiFileAuthState,
-  fetchLatestBaileysVersion,
+  fetchLatestWaWebVersion,
   DisconnectReason,
   Browsers,
   type WASocket,
@@ -98,10 +98,14 @@ export class WhatsAppSessionManager {
   /**
    * Starts (or restarts) a tenant's session (or platform session if null). Safe to call when one is
    * already live — that's a no-op rather than a second competing socket for the same account.
+   *
+   * @param options.forceClean  When true, wipes any stored auth keys before connecting so a fresh
+   *   QR is emitted. Only user-initiated "Connect" should set this — auto-reconnects after a
+   *   transient drop must NOT, otherwise every network blip destroys the pairing.
    */
   async start(
     tenantId: string | null | undefined,
-    options: { pairWithPhoneNumber?: string } = {}
+    options: { pairWithPhoneNumber?: string; forceClean?: boolean } = {}
   ): Promise<void> {
     const id = normalizeSessionId(tenantId);
     const existing = this.sessions.get(id);
@@ -122,9 +126,10 @@ export class WhatsAppSessionManager {
     if (existing?.socket) await this.stop(tenantId);
 
     const sessionDir = path.join(this.baseAuthPath, id);
-    // If not registered, wipe any stale or corrupted auth files from previous failed pairings
-    // so Baileys is guaranteed to request a fresh QR code from WhatsApp servers.
-    if (!existing?.socket?.authState?.creds?.registered) {
+    // Only wipe auth when explicitly asked (user pressed "Connect" in the dashboard).
+    // Auto-reconnects after transient drops must NOT wipe — doing so destroys the pairing
+    // and forces a new QR scan on every network blip.
+    if (options.forceClean) {
       try {
         fs.rmSync(sessionDir, { recursive: true, force: true });
       } catch {}
@@ -135,14 +140,14 @@ export class WhatsAppSessionManager {
     this.sessions.set(id, session);
 
     const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
-    const { version } = await fetchLatestBaileysVersion();
+    const { version } = await fetchLatestWaWebVersion({});
 
     const sock = makeWASocket({
       version,
       auth: state,
       logger: silentLogger,
       printQRInTerminal: false,
-      browser: ["Ubuntu", "Chrome", "20.0.04"],
+      browser: Browsers.ubuntu("Chrome"),
       connectTimeoutMs: 60000,
       defaultQueryTimeoutMs: 60000,
       syncFullHistory: false,
