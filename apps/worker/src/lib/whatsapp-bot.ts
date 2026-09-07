@@ -238,7 +238,10 @@ export async function handleIncomingWhatsAppMessage(
     if (isReset) session.state = "main";
     session.tenantId = tenantId;
 
-    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } });
+    const tenant =
+      tenantId && tenantId !== "platform"
+        ? await prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } }).catch(() => null)
+        : await prisma.tenant.findFirst({ where: { status: "ACTIVE" }, select: { name: true } }).catch(() => null);
     const tenantName = tenant?.name ?? "our network";
 
     // A free-text step (outage/support description) consumes whatever was typed, unless the

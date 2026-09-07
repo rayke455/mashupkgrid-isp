@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import path from "node:path";
 import { env } from "@mashupkgrid/config";
+import { prisma } from "@mashupkgrid/database";
 import {
   WhatsAppSessionManager,
   publishPairingQr,
@@ -8,6 +9,7 @@ import {
   clearPairingQr,
   setConnectionStatus,
   listTenantsToRestore,
+  sendWhatsAppMessage,
   type WASocket,
 } from "@mashupkgrid/whatsapp";
 import { handleIncomingWhatsAppMessage } from "./whatsapp-bot.js";
@@ -119,11 +121,39 @@ export async function startWhatsAppRuntime(): Promise<WhatsAppSessionManager> {
       );
     },
 
-    onMessage: (tenantId, fromJid, text) => {
-      // The platform line is for outbound notifications only — it belongs to no ISP, so there is
-      // no customer account or package catalogue for the self-service menu to act against.
+    onMessage: async (tenantId, fromJid, text) => {
+      // If message arrives on the platform session, route to the default/first active ISP tenant
+      // so operators and customers still get interactive bot responses, or send platform greeting.
       if (tenantId === PLATFORM_SESSION_ID) {
         console.log(`[whatsapp] (platform) message from ${fromJid}: ${text}`);
+        try {
+          const activeTenant = await prisma.tenant.findFirst({
+            where: { status: "ACTIVE" },
+            orderBy: { createdAt: "asc" },
+            select: { id: true },
+          });
+          if (activeTenant) {
+            void handleIncomingWhatsAppMessage(
+              manager?.get(PLATFORM_SESSION_ID) ?? null,
+              activeTenant.id,
+              fromJid,
+              text
+            );
+            return;
+          }
+        } catch (err) {
+          console.error("[whatsapp] failed to route platform message to active tenant:", err);
+        }
+
+        const sock = manager?.get(PLATFORM_SESSION_ID);
+        if (sock) {
+          const phone = `+${fromJid.split("@")[0]!.replace(/\D/g, "")}`;
+          void sendWhatsAppMessage(
+            sock,
+            phone,
+            "✅ *MashupKgrid Platform WhatsApp is online.*\n\nReply \"menu\" to start, or configure your ISP tenant in the dashboard."
+          ).catch((err) => console.error("[whatsapp] failed to send platform reply:", err));
+        }
         return;
       }
       void handleIncomingWhatsAppMessage(manager?.get(tenantId) ?? null, tenantId, fromJid, text);
