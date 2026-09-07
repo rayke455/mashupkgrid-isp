@@ -122,6 +122,8 @@ export async function startWhatsAppRuntime(): Promise<WhatsAppSessionManager> {
     },
 
     onMessage: async (tenantId, fromJid, text) => {
+      if (fromJid === "status@broadcast" || fromJid.endsWith("@broadcast") || fromJid.endsWith("@g.us") || fromJid.endsWith("@newsletter")) return;
+
       // If message arrives on the platform session, route to the default/first active ISP tenant
       // so operators and customers still get interactive bot responses, or send platform greeting.
       if (tenantId === PLATFORM_SESSION_ID) {

@@ -213,6 +213,7 @@ export class WhatsAppSessionManager {
         const from = msg.key.remoteJid;
         const text = extractMessageText(msg);
         if (!from || !text) continue;
+        if (from === "status@broadcast" || from.endsWith("@broadcast") || from.endsWith("@g.us") || from.endsWith("@newsletter")) continue;
 
         const isSelf = isSelfChat(sock, from);
         const fromMe = Boolean(msg.key.fromMe);
