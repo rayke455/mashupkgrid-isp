@@ -1,9 +1,11 @@
+import fs from "node:fs";
 import path from "node:path";
 import {
   makeWASocket,
   useMultiFileAuthState,
   fetchLatestBaileysVersion,
   DisconnectReason,
+  Browsers,
   type WASocket,
 } from "@whiskeysockets/baileys";
 import { pino } from "pino";
@@ -119,14 +121,32 @@ export class WhatsAppSessionManager {
     }
     if (existing?.socket) await this.stop(tenantId);
 
+    const sessionDir = path.join(this.baseAuthPath, id);
+    // If not registered, wipe any stale or corrupted auth files from previous failed pairings
+    // so Baileys is guaranteed to request a fresh QR code from WhatsApp servers.
+    if (!existing?.socket?.authState?.creds?.registered) {
+      try {
+        fs.rmSync(sessionDir, { recursive: true, force: true });
+      } catch {}
+    }
+
     const session: TenantSession = { socket: null, stopping: false };
     session.stopping = false;
     this.sessions.set(id, session);
 
-    const { state, saveCreds } = await useMultiFileAuthState(path.join(this.baseAuthPath, id));
+    const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
     const { version } = await fetchLatestBaileysVersion();
 
-    const sock = makeWASocket({ version, auth: state, logger: silentLogger, printQRInTerminal: false });
+    const sock = makeWASocket({
+      version,
+      auth: state,
+      logger: silentLogger,
+      printQRInTerminal: false,
+      browser: Browsers.macOS("Desktop"),
+      connectTimeoutMs: 60000,
+      defaultQueryTimeoutMs: 60000,
+      syncFullHistory: false,
+    });
     sock.ev.on("creds.update", saveCreds);
 
     // Phone-number pairing is an alternative to the QR, not an addition to it: WhatsApp issues
@@ -169,6 +189,9 @@ export class WhatsAppSessionManager {
         if (loggedOut) {
           this.events.onDisconnected?.(id, "logged_out");
           this.sessions.delete(id);
+          try {
+            fs.rmSync(sessionDir, { recursive: true, force: true });
+          } catch {}
           return;
         }
         this.events.onDisconnected?.(id, "reconnecting");
@@ -188,19 +211,25 @@ export class WhatsAppSessionManager {
     });
   }
 
-  /** Closes a tenant's session without reconnecting. Note this does not delete the stored keys. */
-  async stop(tenantId: string | null | undefined): Promise<void> {
+  /** Closes a tenant's session without reconnecting. Can optionally delete the stored keys. */
+  async stop(tenantId: string | null | undefined, options: { deleteAuth?: boolean } = {}): Promise<void> {
     const id = normalizeSessionId(tenantId);
     const session = this.sessions.get(id);
-    if (!session) return;
-    session.stopping = true;
-    try {
-      session.socket?.end(undefined);
-    } catch {
-      // Already dead — nothing to close.
+    if (session) {
+      session.stopping = true;
+      try {
+        session.socket?.end(undefined);
+      } catch {
+        // Already dead — nothing to close.
+      }
+      session.socket = null;
+      this.sessions.delete(id);
     }
-    session.socket = null;
-    this.sessions.delete(id);
+    if (options.deleteAuth) {
+      try {
+        fs.rmSync(path.join(this.baseAuthPath, id), { recursive: true, force: true });
+      } catch {}
+    }
   }
 
   async stopAll(): Promise<void> {

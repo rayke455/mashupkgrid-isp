@@ -328,7 +328,7 @@ async function main() {
 
       if (job.name === JOB_NAMES.whatsappDisconnect) {
         const { tenantId } = whatsappDisconnectJobSchema.parse(job.data);
-        await getManager()?.stop(tenantId);
+        await getManager()?.stop(tenantId, { deleteAuth: true });
         await clearPairingQr(tenantId);
         await setConnectionStatus(tenantId, "DISCONNECTED", { lastError: null });
         return;
