@@ -35,8 +35,8 @@ import {
 } from "./jobs/whatsapp-notifications.js";
 import { createGracefulShutdown } from "./lib/shutdown.js";
 import { startRadiusServer } from "@mashupkgrid/radius";
-import { whatsappConnectJobSchema, whatsappDisconnectJobSchema } from "@mashupkgrid/shared";
-import { setConnectionStatus, clearPairingQr } from "@mashupkgrid/whatsapp";
+import { whatsappConnectJobSchema, whatsappDisconnectJobSchema, whatsappTestMessageJobSchema } from "@mashupkgrid/shared";
+import { setConnectionStatus, clearPairingQr, pushTestChatMessage } from "@mashupkgrid/whatsapp";
 import { startWhatsAppRuntime, getManager } from "./lib/whatsapp-runtime.js";
 
 const connection = { url: env.REDIS_URL };
@@ -331,6 +331,44 @@ async function main() {
         await getManager()?.stop(tenantId, { deleteAuth: true });
         await clearPairingQr(tenantId);
         await setConnectionStatus(tenantId, "DISCONNECTED", { lastError: null });
+        return;
+      }
+
+      if (job.name === JOB_NAMES.whatsappTestMessage) {
+        const { tenantId, phone, text } = whatsappTestMessageJobSchema.parse(job.data);
+        const manager = getManager();
+        if (!manager) throw new Error("WhatsApp runtime is not running");
+        const sock = manager.get(tenantId);
+        if (!sock) throw new Error("No active WhatsApp session for this tenant");
+
+        // Import sendWhatsAppMessage dynamically to avoid circular deps
+        const { sendWhatsAppMessage } = await import("@mashupkgrid/whatsapp");
+        await sendWhatsAppMessage(sock, phone, text);
+
+        // Simulate the inbound reply by feeding the message through the bot handler,
+        // capturing its reply to log it to the test chat.
+        const jid = `${phone.replace(/\D/g, "")}@s.whatsapp.net`;
+        const { handleIncomingWhatsAppMessage } = await import("./lib/whatsapp-bot.js");
+
+        // Monkey-patch the socket's sendMessage to capture the bot's reply
+        const originalSendMessage = sock.sendMessage.bind(sock);
+        let botReply: string | null = null;
+        sock.sendMessage = async (jidTarget: string, content: unknown, ...rest: unknown[]) => {
+          if (typeof content === "object" && content !== null && "text" in content) {
+            botReply = (content as { text: string }).text;
+          }
+          // Don't actually send the bot reply to the real phone — just capture it
+          return { key: { remoteJid: jidTarget, id: "test" }, message: content } as any;
+        };
+
+        try {
+          await handleIncomingWhatsAppMessage(sock, tenantId ?? "platform", jid, text);
+          if (botReply) {
+            await pushTestChatMessage(tenantId, { direction: "in", text: botReply, phone });
+          }
+        } finally {
+          sock.sendMessage = originalSendMessage;
+        }
         return;
       }
     },

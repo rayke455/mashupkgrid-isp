@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
 import { Button, Card, ErrorText, HintText, Badge, StatusDot, Input } from "@/components/ui";
@@ -23,6 +23,13 @@ interface WhatsappConnectionView {
   deliveringOnPlatformLine: boolean;
 }
 
+interface TestChatEntry {
+  direction: "out" | "in";
+  text: string;
+  phone: string;
+  ts: number;
+}
+
 const STATUS_META: Record<ConnectionStatus, { label: string; variant: "success" | "warning" | "danger" | "neutral"; dot: string }> = {
   CONNECTED: { label: "Connected", variant: "success", dot: "ONLINE" },
   CONNECTING: { label: "Waiting for scan", variant: "warning", dot: "WARNING" },
@@ -30,6 +37,193 @@ const STATUS_META: Record<ConnectionStatus, { label: string; variant: "success" 
   DISCONNECTED: { label: "Not connected", variant: "neutral", dot: "UNKNOWN" },
 };
 
+// ---------------------------------------------------------------------------
+// Bot Testing Chat Panel
+// ---------------------------------------------------------------------------
+function BotTestPanel() {
+  const queryClient = useQueryClient();
+  const [testPhone, setTestPhone] = useState("");
+  const [activePhone, setActivePhone] = useState<string | null>(null);
+  const [msgText, setMsgText] = useState("");
+  const [sendError, setSendError] = useState<string | null>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Poll test messages while the panel is active
+  const { data: messages = [] } = useQuery({
+    queryKey: ["whatsapp-test-messages"],
+    queryFn: () => apiFetch<TestChatEntry[]>("/api/v1/whatsapp/test-messages"),
+    refetchInterval: activePhone ? 2000 : false,
+    enabled: !!activePhone,
+  });
+
+  // Auto-scroll to bottom when new messages arrive
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages.length]);
+
+  const sendMessage = useMutation({
+    mutationFn: (data: { phone: string; text: string }) =>
+      apiFetch("/api/v1/whatsapp/test-message", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    onSuccess: () => {
+      setMsgText("");
+      setSendError(null);
+      queryClient.invalidateQueries({ queryKey: ["whatsapp-test-messages"] });
+    },
+    onError: (err) =>
+      setSendError(err instanceof ApiRequestError ? err.message : "Failed to send"),
+  });
+
+  const clearChat = useMutation({
+    mutationFn: () => apiFetch("/api/v1/whatsapp/test-messages", { method: "DELETE" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["whatsapp-test-messages"] });
+      setActivePhone(null);
+    },
+  });
+
+  const handleStartChat = (e: React.FormEvent) => {
+    e.preventDefault();
+    const digits = testPhone.replace(/\D/g, "");
+    if (digits.length >= 8) {
+      setActivePhone(digits);
+      setSendError(null);
+    }
+  };
+
+  const handleSend = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!msgText.trim() || !activePhone) return;
+    sendMessage.mutate({ phone: activePhone, text: msgText.trim() });
+  };
+
+  if (!activePhone) {
+    return (
+      <Card className="space-y-4">
+        <div>
+          <h2 className="text-base font-semibold text-slate-900 dark:text-white flex items-center gap-2">
+            <span className="flex h-6 w-6 items-center justify-center rounded-md bg-violet-500/15 text-violet-600 dark:text-violet-400">
+              🤖
+            </span>
+            Test Bot
+          </h2>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+            Interact with your WhatsApp self-service bot as if you were a customer. Enter a phone
+            number to simulate a conversation — the bot replies are captured here instead of being
+            sent to the real phone.
+          </p>
+        </div>
+        <form onSubmit={handleStartChat} className="flex gap-2">
+          <Input
+            placeholder="Customer phone, e.g. 254712345678"
+            value={testPhone}
+            onChange={(e) => setTestPhone(e.target.value)}
+            className="flex-1 font-mono text-sm"
+          />
+          <Button type="submit" disabled={testPhone.replace(/\D/g, "").length < 8}>
+            Start Chat
+          </Button>
+        </form>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="flex flex-col overflow-hidden h-[480px]">
+      {/* Chat header */}
+      <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-obsidian-800 bg-gradient-to-r from-emerald-500/5 to-transparent">
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-lg">
+            🤖
+          </div>
+          <div>
+            <p className="text-sm font-bold text-slate-900 dark:text-white">Bot Test</p>
+            <p className="text-xs font-mono text-slate-500">+{activePhone}</p>
+          </div>
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => clearChat.mutate()}
+          disabled={clearChat.isPending}
+          className="text-xs"
+        >
+          {clearChat.isPending ? "Clearing..." : "New Chat"}
+        </Button>
+      </div>
+
+      {/* Chat messages */}
+      <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 bg-slate-50/50 dark:bg-obsidian-950/30">
+        {messages.length === 0 && (
+          <div className="flex flex-col items-center justify-center h-full text-center text-sm text-slate-400 gap-2">
+            <span className="text-3xl">💬</span>
+            <p>Send a message to test the bot.</p>
+            <p className="text-xs">Try &quot;hi&quot;, &quot;1&quot;, &quot;2&quot;, &quot;3&quot;, or &quot;4&quot; to navigate the menu.</p>
+          </div>
+        )}
+        {messages.map((msg, i) => (
+          <div
+            key={i}
+            className={`flex ${msg.direction === "out" ? "justify-end" : "justify-start"}`}
+          >
+            <div
+              className={`relative max-w-[75%] rounded-2xl px-3.5 py-2 text-sm shadow-sm ${
+                msg.direction === "out"
+                  ? "bg-emerald-500 text-white rounded-br-md"
+                  : "bg-white dark:bg-obsidian-800 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-obsidian-700 rounded-bl-md"
+              }`}
+            >
+              <p className="whitespace-pre-wrap leading-relaxed">{msg.text}</p>
+              <p
+                className={`mt-1 text-right text-[10px] ${
+                  msg.direction === "out" ? "text-emerald-100" : "text-slate-400"
+                }`}
+              >
+                {new Date(msg.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+              </p>
+            </div>
+          </div>
+        ))}
+        <div ref={chatEndRef} />
+      </div>
+
+      {/* Chat input */}
+      <form
+        onSubmit={handleSend}
+        className="flex items-center gap-2 border-t border-slate-200 px-4 py-3 dark:border-obsidian-800 bg-white dark:bg-obsidian-900"
+      >
+        <input
+          type="text"
+          placeholder="Type a message..."
+          value={msgText}
+          onChange={(e) => setMsgText(e.target.value)}
+          className="flex-1 rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm outline-none transition-colors focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 dark:border-obsidian-700 dark:bg-obsidian-800 dark:text-white dark:focus:border-emerald-500"
+        />
+        <button
+          type="submit"
+          disabled={sendMessage.isPending || !msgText.trim()}
+          className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500 text-white shadow-md transition-all hover:bg-emerald-600 hover:shadow-lg disabled:opacity-40 disabled:shadow-none"
+        >
+          {sendMessage.isPending ? (
+            <span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth={2.5}>
+              <path d="M22 2L11 13" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M22 2L15 22L11 13L2 9L22 2Z" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          )}
+        </button>
+      </form>
+      {sendError && <p className="px-4 pb-2 text-xs text-red-500">{sendError}</p>}
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main Page
+// ---------------------------------------------------------------------------
 export default function WhatsappSettingsPage() {
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
@@ -248,6 +442,9 @@ export default function WhatsappSettingsPage() {
           )}
         </Card>
       )}
+
+      {/* Bot Testing Panel — only shown when connected */}
+      {status === "CONNECTED" && <BotTestPanel />}
 
       {error && <ErrorText>{error}</ErrorText>}
     </div>

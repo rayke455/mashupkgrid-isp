@@ -12,6 +12,7 @@ import {
   type SendWhatsappTenantWelcomeJob,
   type WhatsappConnectJob,
   type WhatsappDisconnectJob,
+  type WhatsappTestMessageJob,
 } from "@mashupkgrid/shared";
 
 const connection = { url: env.REDIS_URL };
@@ -103,5 +104,13 @@ export async function enqueueSendWhatsappOtp(data: SendWhatsappOtpJob): Promise<
     backoff: { type: "exponential", delay: 3000 },
     removeOnComplete: 1000,
     removeOnFail: 2000,
+  });
+}
+
+export async function enqueueWhatsappTestMessage(data: WhatsappTestMessageJob): Promise<void> {
+  await whatsappQueue.add(JOB_NAMES.whatsappTestMessage, data, {
+    attempts: 1,
+    removeOnComplete: 100,
+    removeOnFail: 100,
   });
 }

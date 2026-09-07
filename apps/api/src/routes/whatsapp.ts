@@ -1,13 +1,13 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { getConnectionStatus, setConnectionStatus, clearPairingQr } from "@mashupkgrid/whatsapp";
+import { getConnectionStatus, setConnectionStatus, clearPairingQr, getTestChatMessages, clearTestChat, pushTestChatMessage } from "@mashupkgrid/whatsapp";
 import { successResponse } from "@mashupkgrid/shared";
 import { authenticate } from "../plugins/authenticate.js";
 import { resolveTenant } from "../plugins/tenant.js";
 import { checkMaintenance } from "../plugins/maintenance.js";
 import { requirePermission } from "../plugins/authorize.js";
 import { writeAuditLog } from "../lib/audit.js";
-import { enqueueWhatsappConnect, enqueueWhatsappDisconnect } from "../lib/queue.js";
+import { enqueueWhatsappConnect, enqueueWhatsappDisconnect, enqueueWhatsappTestMessage } from "../lib/queue.js";
 
 const preHandler = [authenticate, resolveTenant, checkMaintenance] as const;
 
@@ -130,6 +130,59 @@ export async function whatsappRoutes(app: FastifyInstance): Promise<void> {
         request.log.error({ err, tenantId }, "Failed to disconnect WhatsApp");
         throw err;
       }
+    }
+  );
+
+  // -------------------------------------------------------------------------
+  // Bot-testing panel: send a message as-if from a customer, poll the replies.
+  // -------------------------------------------------------------------------
+
+  /** Send a test message from the tenant's WhatsApp to a phone number, simulating a customer
+   *  reply so the bot responds and the operator can see it in the dashboard. */
+  app.post(
+    "/test-message",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("settings.manage")] },
+    async (request, reply) => {
+      const tenantId = request.user!.tenantId;
+      const { phone, text } = z
+        .object({
+          phone: z
+            .string()
+            .trim()
+            .transform((v) => v.replace(/[^\d]/g, ""))
+            .refine((v) => v.length >= 8 && v.length <= 15, "Enter the number in international format, e.g. 254712345678"),
+          text: z.string().trim().min(1).max(2000),
+        })
+        .parse(request.body);
+
+      // Log the outbound message in Redis so the dashboard can render it.
+      await pushTestChatMessage(tenantId, { direction: "out", text, phone });
+      // Enqueue the job — the worker will send it via the tenant's socket.
+      await enqueueWhatsappTestMessage({ tenantId, phone, text });
+
+      reply.send(successResponse({ sent: true }, request.id));
+    }
+  );
+
+  /** Poll the test chat log — the dashboard calls this every few seconds while the bot-testing
+   *  panel is open. */
+  app.get(
+    "/test-messages",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("settings.manage")] },
+    async (request, reply) => {
+      const tenantId = request.user!.tenantId;
+      reply.send(successResponse(await getTestChatMessages(tenantId), request.id));
+    }
+  );
+
+  /** Clear the test chat log — a "New conversation" button in the dashboard. */
+  app.delete(
+    "/test-messages",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("settings.manage")] },
+    async (request, reply) => {
+      const tenantId = request.user!.tenantId;
+      await clearTestChat(tenantId);
+      reply.send(successResponse({ cleared: true }, request.id));
     }
   );
 }

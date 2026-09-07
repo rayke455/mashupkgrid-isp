@@ -124,6 +124,16 @@ export type WhatsappConnectJob = z.infer<typeof whatsappConnectJobSchema>;
 export const whatsappDisconnectJobSchema = z.object({ tenantId: z.string().uuid().nullable() });
 export type WhatsappDisconnectJob = z.infer<typeof whatsappDisconnectJobSchema>;
 
+/** Sends an arbitrary text message from a tenant's WhatsApp socket — used by the dashboard's
+ *  bot-testing panel so operators can interact with the self-service menu as if they were a
+ *  customer, without needing a second phone. */
+export const whatsappTestMessageJobSchema = z.object({
+  tenantId: z.string().uuid().nullable(),
+  phone: z.string().min(8).max(20),
+  text: z.string().min(1).max(2000),
+});
+export type WhatsappTestMessageJob = z.infer<typeof whatsappTestMessageJobSchema>;
+
 export const deliverWebhookEventJobSchema = z.object({
   webhookEndpointId: z.string().uuid(),
   eventType: z.string(),
@@ -170,6 +180,7 @@ export const JOB_NAMES = {
   sendWhatsappServiceStatus: "send-whatsapp-service-status",
   whatsappConnect: "whatsapp-connect",
   whatsappDisconnect: "whatsapp-disconnect",
+  whatsappTestMessage: "whatsapp-test-message",
 } as const;
 
 /** Webhook event types a tenant can subscribe an endpoint to. Kept in `shared` (not just the API)

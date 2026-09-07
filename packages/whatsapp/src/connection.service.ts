@@ -159,3 +159,42 @@ export async function listTenantsToRestore(): Promise<string[]> {
   });
   return rows.flatMap((r) => (r.tenantId === null ? [] : [r.tenantId]));
 }
+
+// ---------------------------------------------------------------------------
+// Test chat log — ephemeral Redis list so the dashboard's bot-testing panel can
+// show both the outbound messages it sent and the bot's automatic replies.
+// ---------------------------------------------------------------------------
+
+const TEST_CHAT_TTL_SECONDS = 30 * 60;
+
+export interface TestChatEntry {
+  /** "out" = operator typed this in the dashboard; "in" = bot auto-replied. */
+  direction: "out" | "in";
+  text: string;
+  phone: string;
+  ts: number;
+}
+
+function testChatKey(tenantId: ConnectionScope): string {
+  return `wa-test-chat:${scopeKey(tenantId)}`;
+}
+
+export async function pushTestChatMessage(
+  tenantId: ConnectionScope,
+  entry: Omit<TestChatEntry, "ts">
+): Promise<void> {
+  const key = testChatKey(tenantId);
+  await redis.rpush(key, JSON.stringify({ ...entry, ts: Date.now() }));
+  // Cap at 100 entries and refresh TTL.
+  await redis.ltrim(key, -100, -1);
+  await redis.expire(key, TEST_CHAT_TTL_SECONDS);
+}
+
+export async function getTestChatMessages(tenantId: ConnectionScope): Promise<TestChatEntry[]> {
+  const raw = await redis.lrange(testChatKey(tenantId), 0, -1);
+  return raw.map((r) => JSON.parse(r) as TestChatEntry);
+}
+
+export async function clearTestChat(tenantId: ConnectionScope): Promise<void> {
+  await redis.del(testChatKey(tenantId));
+}
