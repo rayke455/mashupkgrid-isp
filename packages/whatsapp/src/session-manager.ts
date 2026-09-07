@@ -142,7 +142,7 @@ export class WhatsAppSessionManager {
       auth: state,
       logger: silentLogger,
       printQRInTerminal: false,
-      browser: Browsers.macOS("Desktop"),
+      browser: ["Ubuntu", "Chrome", "20.0.04"],
       connectTimeoutMs: 60000,
       defaultQueryTimeoutMs: 60000,
       syncFullHistory: false,
