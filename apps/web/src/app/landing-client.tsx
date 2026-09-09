@@ -1400,6 +1400,13 @@ export function LandingClient({ initialContent }: { initialContent?: LandingCont
             >
               View Internet Packages
             </a>
+            <Link
+              href="/donate"
+              className="px-8 py-4 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/40 text-amber-200 font-bold text-sm transition-all flex items-center gap-2 active:scale-95"
+            >
+              <span>Support the platform</span>
+              <span>&rarr;</span>
+            </Link>
               <a
                 href="https://wa.me/254703605266?text=Hello%20MashupHost%2C%20I%20want%20to%20get%20connected%20to%20Fiber"
               target="_blank"

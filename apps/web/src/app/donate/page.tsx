@@ -542,11 +542,11 @@ export default function DonateCoffeePage() {
             <div className="p-4 rounded-2xl bg-slate-900/40 border border-slate-800/60 text-xs text-slate-400 flex items-center justify-between">
               <div>
                 <span className="text-[10px] uppercase font-bold text-slate-500 block">Manual Paybill</span>
-                <span className="text-white font-mono font-bold">247247 · Acc: COFFEE</span>
+                <span className="text-white font-mono font-bold">1021635 · Acc: COFFEE</span>
               </div>
               <button
                 type="button"
-                onClick={() => handleCopy("247247", "side-paybill")}
+                onClick={() => handleCopy("1021635", "side-paybill")}
                 className="text-amber-400 hover:text-amber-300 font-bold text-xs flex items-center gap-1"
               >
                 {copiedKey === "side-paybill" ? <IconCheck size={14} className="text-emerald-400" /> : <IconCopy size={14} />}
@@ -592,7 +592,7 @@ export default function DonateCoffeePage() {
             {/* Manual fallback in case STK push didn't show */}
             <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-[11px] text-slate-400 text-left mb-5">
               <span className="text-white font-semibold block mb-1">Didn&apos;t get the prompt?</span>
-              <span>Go to M-Pesa &rarr; Lipa na M-Pesa &rarr; <strong>Paybill: 247247</strong>, <strong>Acc: COFFEE</strong>, Amount: <strong>KES {currentTotalAmount}</strong>.</span>
+              <span>Go to M-Pesa &rarr; Lipa na M-Pesa &rarr; <strong>Paybill: 1021635</strong>, <strong>Acc: COFFEE</strong>, Amount: <strong>KES {currentTotalAmount}</strong>.</span>
             </div>
 
             <div className="flex flex-col gap-2">
