@@ -297,6 +297,30 @@ docker compose -f docker-compose.prod.yml --env-file .env.production run --rm \
   -w /repo/packages/database migrate ./node_modules/.bin/tsx prisma/seed.ts
 ```
 
+If the platform administrator later cannot sign in, reset only that account with a new password.
+The tenant field must remain blank when signing in. This command does not print the password or
+write it to the container command history:
+
+```bash
+read -p "Super-admin email [superadmin@mashupkgrid.local]: " ADMIN_EMAIL
+ADMIN_EMAIL=${ADMIN_EMAIL:-superadmin@mashupkgrid.local}
+read -s -p "New super-admin password: " ADMIN_PASSWORD
+echo
+
+if [ ${#ADMIN_PASSWORD} -lt 10 ]; then
+  echo "Password must be at least 10 characters"
+  unset ADMIN_PASSWORD
+  exit 1
+fi
+
+docker compose -f docker-compose.prod.yml --env-file .env.production run --rm \
+  -w /repo/packages/database migrate \
+  ./node_modules/.bin/tsx prisma/create-admin.ts \
+  "$ADMIN_EMAIL" "$ADMIN_PASSWORD"
+
+unset ADMIN_EMAIL ADMIN_PASSWORD
+```
+
 ---
 
 ## 5. Verify

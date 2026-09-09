@@ -4,8 +4,14 @@ import { hashPassword } from "@mashupkgrid/shared";
 const prisma = new PrismaClient();
 
 async function main() {
-  const email = (process.argv[2] || "admin@mashuphost.tech").trim().toLowerCase();
-  const password = process.argv[3] || "Admin12345!";
+  const email = (process.argv[2] || "superadmin@mashupkgrid.local").trim().toLowerCase();
+  const password = process.argv[3];
+
+  if (!password || password.length < 10) {
+    console.error("Usage: pnpm create-admin <email> <password>");
+    console.error("The password must be at least 10 characters.");
+    process.exit(1);
+  }
 
   console.log(`Setting up Super Admin for: ${email}`);
 
@@ -68,7 +74,6 @@ async function main() {
   console.log("\n==============================================");
   console.log("Super Admin Account Ready:");
   console.log(`  Email:    ${email}`);
-  console.log(`  Password: ${password}`);
   console.log(`  Tenant:   (leave blank on login page)`);
   console.log("==============================================\n");
 }
