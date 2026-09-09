@@ -47,6 +47,7 @@ function LoginContent() {
   const [serverError, setServerError] = useState<string | null>(null);
   const [googlePending, setGooglePending] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [capsLockOn, setCapsLockOn] = useState(false);
 
   const {
     register,
@@ -141,10 +142,17 @@ function LoginContent() {
         </div>
       </header>
 
+      <div className="relative z-10 mx-auto w-full max-w-6xl px-4 sm:px-6">
+        <div className="flex items-center justify-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-center text-[11px] text-emerald-200">
+          <IconLock size={13} />
+          <span>Your connection is encrypted. We never display or store your password in the browser.</span>
+        </div>
+      </div>
+
       {/* Main Container */}
       <div className="relative z-10 mx-auto w-full max-w-6xl px-4 sm:px-6 py-6 lg:py-10">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-0 items-stretch overflow-hidden rounded-[2rem] border border-slate-700/80 bg-slate-950/60 shadow-2xl shadow-black/40 backdrop-blur-xl">
-          <div className="lg:hidden space-y-3 text-left">
+          <div className="lg:hidden space-y-3 px-1 pb-4 text-left">
             <div className="inline-flex items-center gap-2 rounded-full border border-slate-700/80 bg-slate-800/60 px-3 py-1 text-[11px] font-medium text-slate-300 backdrop-blur">
               <StatusDot status="ONLINE" pulse={true} />
               <span>MashupHost network services online</span>
@@ -268,6 +276,7 @@ function LoginContent() {
                     className={`bg-slate-900/80 border-slate-700/80 text-white font-mono text-sm focus:border-brand-500 ${
                       isTenantLocked ? "opacity-75 cursor-default" : ""
                     }`}
+                    autoComplete="organization"
                     {...register("tenantSlug")}
                   />
                   {isTenantLocked ? (
@@ -285,6 +294,7 @@ function LoginContent() {
                     type="email"
                     placeholder="admin@isp.co.ke"
                     className="bg-slate-900/80 border-slate-700/80 text-white text-sm focus:border-brand-500"
+                    autoComplete="username"
                     {...register("email")}
                   />
                   {errors.email && <ErrorText>{errors.email.message}</ErrorText>}
@@ -310,8 +320,10 @@ function LoginContent() {
                       id="password"
                       type={showPassword ? "text" : "password"}
                       placeholder="••••••••••••"
+                      autoComplete="current-password"
                       className="bg-slate-900/80 border-slate-700/80 text-white text-sm focus:border-brand-500 pr-12"
                       {...register("password")}
+                      onKeyUp={(event) => setCapsLockOn(event.getModifierState("CapsLock"))}
                     />
                     <button
                       type="button"
@@ -324,12 +336,19 @@ function LoginContent() {
                       {showPassword ? <IconEyeOff size={16} /> : <IconEye size={16} />}
                     </button>
                   </div>
+                  {capsLockOn && (
+                    <p className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-amber-300" role="status">
+                      <span className="h-1.5 w-1.5 rounded-full bg-amber-300" />
+                      Caps Lock is on
+                    </p>
+                  )}
                   {errors.password && <ErrorText>{errors.password.message}</ErrorText>}
                 </div>
 
                 {serverError && (
-                  <div role="alert" className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs font-medium text-rose-300">
-                    {serverError}
+                  <div role="alert" aria-live="polite" className="flex items-start gap-3 p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-xs font-medium text-rose-300">
+                    <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full bg-rose-400" />
+                    <span>{serverError}</span>
                   </div>
                 )}
 
@@ -392,6 +411,12 @@ function LoginContent() {
                     </Link>
                   </>
                 )}
+              </div>
+
+              <div className="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-2 text-center text-[10px] font-mono text-slate-500">
+                <span className="rounded-lg border border-slate-800 bg-slate-900/50 px-2 py-2">SESSION PROTECTED</span>
+                <span className="rounded-lg border border-slate-800 bg-slate-900/50 px-2 py-2">M-PESA READY</span>
+                <span className="rounded-lg border border-slate-800 bg-slate-900/50 px-2 py-2">24/7 SUPPORT</span>
               </div>
             </Card>
           </div>

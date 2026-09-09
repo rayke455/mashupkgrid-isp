@@ -83,6 +83,7 @@ export default function DonateCoffeePage() {
   const [donationSuccess, setDonationSuccess] = useState<boolean>(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [paymentNote, setPaymentNote] = useState<string | null>(null);
 
   // Supporters roll
   const [supporters, setSupporters] = useState<CoffeeSupporter[]>(INITIAL_SUPPORTERS);
@@ -125,7 +126,7 @@ export default function DonateCoffeePage() {
         const res = await fetch(`/api/v1/payments/mpesa/donate/${checkoutRequestId}/status`);
         if (res.ok) {
           const data = await res.json();
-          if (data?.data?.status === "COMPLETED" || attempts > 10) {
+          if (data?.data?.status === "COMPLETED") {
             clearInterval(pollInterval);
             setStkPending(false);
             setDonationSuccess(true);
@@ -140,9 +141,23 @@ export default function DonateCoffeePage() {
               timeAgo: "Just now",
             };
             setSupporters((prev) => [newSupporter, ...prev]);
+          } else if (attempts >= 20) {
+            clearInterval(pollInterval);
+            setStkPending(false);
+            setErrorMsg("We could not confirm the payment yet. If you completed the prompt, keep the M-Pesa confirmation message and contact support.");
           }
+        } else if (attempts >= 20) {
+          clearInterval(pollInterval);
+          setStkPending(false);
+          setErrorMsg("The payment status could not be checked. You can use the Paybill instructions shown in the form and keep your M-Pesa confirmation message.");
         }
-      } catch {}
+      } catch {
+        if (attempts >= 20) {
+          clearInterval(pollInterval);
+          setStkPending(false);
+          setErrorMsg("The payment status could not be checked. Please keep your M-Pesa confirmation message and contact support.");
+        }
+      }
     }, 3000);
 
     return () => clearInterval(pollInterval);
@@ -151,6 +166,7 @@ export default function DonateCoffeePage() {
   const handleSubmitCoffee = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+    setPaymentNote(null);
 
     const cleanPhone = donorPhone.replace(/\D/g, "");
     if (!cleanPhone || cleanPhone.length < 9) {
@@ -219,7 +235,7 @@ export default function DonateCoffeePage() {
                 MASHUPKGRID
               </span>
               <span className="text-[10px] font-mono tracking-wider text-amber-400/80 uppercase">
-                Support The Developer ☕
+                Support the platform
               </span>
             </div>
           </Link>
@@ -245,9 +261,9 @@ export default function DonateCoffeePage() {
         {/* Creator Hero Header */}
         <div className="text-center max-w-2xl mx-auto mb-10">
           <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/25 text-amber-400 text-xs font-bold mb-4 shadow-inner">
-            <span>☕ Buy Me a Coffee</span>
+            <span>Support MashupHost</span>
             <span className="text-slate-400">·</span>
-            <span>M-Pesa Instant Support</span>
+            <span>Secure M-Pesa contribution</span>
           </div>
 
           <div className="relative mx-auto w-24 h-24 mb-4">
@@ -258,15 +274,28 @@ export default function DonateCoffeePage() {
           </div>
 
           <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-white tracking-tight">
-            Buy Me a Coffee
+            Keep ISP tools moving forward
           </h1>
 
           <p className="mt-3 text-sm sm:text-base text-slate-300 leading-relaxed">
-            If MashupHost helped you start your ISP, automate your hotspot vouchers, or fix your MikroTik router, consider buying me a coffee! It fuels late-night coding, server costs, and new features.
+            MashupHost is built to make billing, hotspot access, and network operations simpler for growing ISPs. Your contribution helps keep the platform maintained, the infrastructure online, and useful improvements available to the operators who rely on it.
           </p>
+          <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3 text-left">
+            {[
+              ["☁️", "Reliable infrastructure", "Hosting, monitoring, and backups"],
+              ["🛠️", "Practical improvements", "Billing, RADIUS, and router tools"],
+              ["🤝", "A stronger community", "Documentation, fixes, and guidance"],
+            ].map(([icon, title, description]) => (
+              <div key={title} className="rounded-2xl border border-slate-800 bg-slate-900/60 p-3.5">
+                <span className="text-lg">{icon}</span>
+                <p className="mt-2 text-xs font-bold text-white">{title}</p>
+                <p className="mt-1 text-[11px] leading-relaxed text-slate-400">{description}</p>
+              </div>
+            ))}
+          </div>
         </div>
 
-        {/* Coffee Interaction Grid */}
+        {/* Contribution form */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start max-w-5xl mx-auto mb-16">
           {/* Main Card (Col 7) */}
           <div className="lg:col-span-7 bg-slate-900/90 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl backdrop-blur-xl relative overflow-hidden">
@@ -276,7 +305,7 @@ export default function DonateCoffeePage() {
               {/* Coffee Quantity Selector */}
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-3">
-                  How many coffees? (KES 100 each)
+                  Choose a contribution (KES 100 per unit)
                 </label>
 
                 <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5">
@@ -296,7 +325,7 @@ export default function DonateCoffeePage() {
                             : "bg-slate-950/80 border-slate-800 text-slate-300 hover:border-slate-700 hover:bg-slate-900"
                         }`}
                       >
-                        <span className="text-xl">☕</span>
+                        <span className="text-xl">KES</span>
                         <span className="text-sm font-black">{num}</span>
                         <span className="text-[10px] text-slate-400 font-mono">
                           KES {num * COFFEE_UNIT_PRICE}
@@ -317,7 +346,7 @@ export default function DonateCoffeePage() {
                       }}
                       className="text-xs text-amber-400 hover:text-amber-300 font-semibold underline underline-offset-4"
                     >
-                      Or enter a custom amount…
+                      Or enter a custom amount
                     </button>
                   ) : (
                     <div className="relative mt-2">
@@ -340,10 +369,11 @@ export default function DonateCoffeePage() {
               {/* Supporter Name & Note */}
               <div className="space-y-3 pt-1 border-t border-slate-800/80">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  <label htmlFor="donor-name" className="block text-xs font-semibold text-slate-300 mb-1.5">
                     Your Name or Handle (Optional)
                   </label>
                   <input
+                    id="donor-name"
                     type="text"
                     value={donorName}
                     onChange={(e) => setDonorName(e.target.value)}
@@ -353,14 +383,15 @@ export default function DonateCoffeePage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                    Say something nice… (Optional)
+                  <label htmlFor="donor-message" className="block text-xs font-semibold text-slate-300 mb-1.5">
+                    Add a note (Optional)
                   </label>
                   <textarea
+                    id="donor-message"
                     rows={2}
                     value={donorMessage}
                     onChange={(e) => setDonorMessage(e.target.value)}
-                    placeholder="Drop a thank you note or words of encouragement…"
+                    placeholder="Share what you would like to see improved…"
                     className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-amber-500 resize-none"
                   />
                 </div>
@@ -368,7 +399,7 @@ export default function DonateCoffeePage() {
 
               {/* M-Pesa Phone Number */}
               <div className="pt-1 border-t border-slate-800/80">
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
+                <label htmlFor="donor-phone" className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
                   M-Pesa Phone Number
                 </label>
                 <div className="relative">
@@ -376,11 +407,13 @@ export default function DonateCoffeePage() {
                     🇰🇪 +254
                   </span>
                   <input
+                    id="donor-phone"
                     type="tel"
                     required
                     value={donorPhone}
                     onChange={(e) => setDonorPhone(e.target.value)}
                     placeholder="712 345 678"
+                    autoComplete="tel"
                     className="w-full pl-20 pr-4 py-3 rounded-xl bg-slate-950 border border-emerald-500/40 text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
                   />
                 </div>
@@ -391,8 +424,13 @@ export default function DonateCoffeePage() {
               </div>
 
               {errorMsg && (
-                <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-medium">
+                <div role="alert" aria-live="polite" className="p-3 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-medium">
                   {errorMsg}
+                </div>
+              )}
+              {paymentNote && (
+                <div role="status" className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs font-medium">
+                  {paymentNote}
                 </div>
               )}
 
@@ -410,27 +448,27 @@ export default function DonateCoffeePage() {
                 ) : (
                   <>
                     <span>
-                      Buy {isCustom ? "" : `${coffees} `}Coffee{coffees > 1 || isCustom ? "s" : ""} · KES{" "}
+                      Contribute · KES{" "}
                       {currentTotalAmount.toLocaleString()}
                     </span>
-                    <span className="text-lg">☕</span>
+                    <span className="text-lg">→</span>
                   </>
                 )}
               </button>
 
               {/* Safe & Direct Guarantee */}
-              <div className="flex items-center justify-center gap-3 text-[11px] text-slate-500 pt-1">
+              <div className="flex flex-wrap items-center justify-center gap-3 text-[11px] text-slate-500 pt-1">
                 <span className="flex items-center gap-1">
                   <IconShield size={13} className="text-emerald-400" />
                   <span>Official Safaricom Daraja STK</span>
                 </span>
                 <span>•</span>
-                <span>Direct to Developer</span>
+                <span>Supports platform operations</span>
               </div>
             </form>
           </div>
 
-          {/* Right Column: Recent Coffees & Live Wall (Col 5) */}
+          {/* Right Column: Recent support & community wall */}
           <div className="lg:col-span-5 space-y-6">
             {/* Quick Summary Box */}
             <div className="p-6 rounded-3xl bg-slate-900/60 border border-slate-800 shadow-xl space-y-4">
@@ -439,7 +477,7 @@ export default function DonateCoffeePage() {
                   💡
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white">Why Buy a Coffee?</h3>
+                  <h3 className="text-sm font-bold text-white">Why contribute?</h3>
                   <p className="text-[11px] text-slate-400">Directly supports our ongoing work</p>
                 </div>
               </div>
@@ -464,10 +502,10 @@ export default function DonateCoffeePage() {
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
                   <IconUsers size={16} className="text-amber-400" />
-                  <span>Recent Coffees</span>
+                  <span>Recent Support</span>
                 </h3>
                 <span className="text-[10px] text-amber-400/80 font-mono font-bold uppercase tracking-wider">
-                  Live Wall
+                  Community Wall
                 </span>
               </div>
 
@@ -479,10 +517,10 @@ export default function DonateCoffeePage() {
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-white flex items-center gap-1.5">
-                        <span>☕</span>
+                        <span className="text-amber-400">KES</span>
                         <span>{sup.name}</span>
                         <span className="text-[10px] text-slate-400 font-normal">
-                          bought {sup.coffees} {sup.coffees === 1 ? "coffee" : "coffees"}
+                          contributed {sup.coffees} {sup.coffees === 1 ? "unit" : "units"}
                         </span>
                       </span>
                       <span className="font-mono font-bold text-amber-400">KES {sup.amount}</span>
@@ -523,7 +561,7 @@ export default function DonateCoffeePage() {
       {stkPending && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fade-in-up">
           <div className="w-full max-w-md rounded-3xl bg-slate-900 border border-emerald-500/60 p-6 sm:p-8 text-center shadow-2xl relative overflow-hidden">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/20 text-3xl animate-bounce">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/20 text-3xl animate-bounce" aria-hidden="true">
               📱
             </div>
 
@@ -547,14 +585,14 @@ export default function DonateCoffeePage() {
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-slate-400">Item:</span>
-                <span className="text-amber-400 font-semibold">{coffees} Coffee{coffees > 1 ? "s" : ""} ☕</span>
+                <span className="text-amber-400 font-semibold">KES {currentTotalAmount}</span>
               </div>
             </div>
 
             {/* Manual fallback in case STK push didn't show */}
             <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-[11px] text-slate-400 text-left mb-5">
               <span className="text-white font-semibold block mb-1">Didn&apos;t get the prompt?</span>
-              <span>Go to M-Pesa $\rightarrow$ Lipa na M-Pesa $\rightarrow$ <strong>Paybill: 247247</strong>, <strong>Acc: COFFEE</strong>, Amount: <strong>KES {currentTotalAmount}</strong>.</span>
+              <span>Go to M-Pesa &rarr; Lipa na M-Pesa &rarr; <strong>Paybill: 247247</strong>, <strong>Acc: COFFEE</strong>, Amount: <strong>KES {currentTotalAmount}</strong>.</span>
             </div>
 
             <div className="flex flex-col gap-2">
@@ -562,20 +600,11 @@ export default function DonateCoffeePage() {
                 type="button"
                 onClick={() => {
                   setStkPending(false);
-                  setDonationSuccess(true);
-                  const newSupporter: CoffeeSupporter = {
-                    id: Date.now().toString(),
-                    name: donorName.trim() || "A Friendly Supporter",
-                    coffees: isCustom ? Math.max(1, Math.round(currentTotalAmount / 100)) : coffees,
-                    amount: currentTotalAmount,
-                    message: donorMessage.trim() || undefined,
-                    timeAgo: "Just now",
-                  };
-                  setSupporters((prev) => [newSupporter, ...prev]);
+                  setPaymentNote("Thanks — your payment is being reconciled. If you used Paybill, keep the confirmation message for your records.");
                 }}
                 className="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs transition-colors shadow-lg"
               >
-                I Have Entered My PIN
+                I Have Paid
               </button>
               <button
                 type="button"
@@ -597,15 +626,15 @@ export default function DonateCoffeePage() {
               🎉
             </div>
 
-            <h3 className="text-2xl font-black text-white">Coffee Received!</h3>
+            <h3 className="text-2xl font-black text-white">Contribution received</h3>
             <p className="mt-2 text-xs text-slate-300 leading-relaxed">
-              Thank you so much, <strong className="text-amber-400">{donorName || "friend"}</strong>! Your coffee fuels our passion to build the best ISP software in Africa.
+              Thank you, <strong className="text-amber-400">{donorName || "friend"}</strong>. Your support helps us maintain and improve reliable tools for ISP operators.
             </p>
 
             <div className="my-5 p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs text-left space-y-1.5">
               <div className="flex justify-between">
                 <span className="text-slate-400">Contribution:</span>
-                <span className="font-bold text-white">KES {currentTotalAmount} ({coffees} ☕)</span>
+                <span className="font-bold text-white">KES {currentTotalAmount}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Status:</span>
@@ -624,7 +653,7 @@ export default function DonateCoffeePage() {
               onClick={() => setDonationSuccess(false)}
               className="w-full py-3.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs transition-colors shadow-lg"
             >
-              Back to Page
+              Return to support page
             </button>
           </div>
         </div>

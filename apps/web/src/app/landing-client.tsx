@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useCart, FALLBACK_PRODUCTS, HardwareProduct } from "@/lib/hardware-store";
+import { type LandingContent } from "@/lib/landing-content";
 import { CartDrawer } from "@/components/store/cart-drawer";
 import { HardwareProductCard } from "@/components/store/hardware-product-card";
 import {
@@ -32,6 +33,10 @@ interface PlanItem {
   summary: string;
   features: string[];
 }
+
+type PlanAudience = "home" | "business";
+type PlanDevices = "light" | "family" | "power";
+type PlanPriority = "streaming" | "work" | "growth";
 
 const FIBER_PLANS: PlanItem[] = [
   // Home Plans
@@ -223,23 +228,28 @@ const TESTIMONIALS = [
   },
 ];
 
-export function LandingClient({ initialContent }: { initialContent?: unknown }) {
+export function LandingClient({ initialContent }: { initialContent?: LandingContent }) {
   const { itemCount, addItem } = useCart();
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [planTab, setPlanTab] = useState<"home" | "business" | "ultra">("home");
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [activeFaq, setActiveFaq] = useState<number | null>(0);
+  const [planAudience, setPlanAudience] = useState<PlanAudience>("home");
+  const [planDevices, setPlanDevices] = useState<PlanDevices>("family");
+  const [planPriority, setPlanPriority] = useState<PlanPriority>("streaming");
 
   // Backhaul Speed Test state
   const [speedTestRunning, setSpeedTestRunning] = useState(false);
   const [speedVal, setSpeedVal] = useState<number>(0);
   const [pingVal, setPingVal] = useState<number>(1.8);
   const [testComplete, setTestComplete] = useState(false);
+  const speedTestInterval = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Coverage search state
   const [coverageSearch, setCoverageSearch] = useState("");
   const [coverageResult, setCoverageResult] = useState<string | null>(null);
+  const faqItems = initialContent?.faqs?.length ? initialContent.faqs : FAQS;
 
   const filteredPlans = useMemo(
     () => FIBER_PLANS.filter((p) => p.type === planTab),
@@ -264,18 +274,38 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
     return list;
   }, [activeCategory, searchQuery]);
 
+  const recommendedPlan = useMemo(() => {
+    if (planAudience === "business") {
+      return planDevices === "power" || planPriority === "growth"
+        ? FIBER_PLANS.find((plan) => plan.id === "biz_enterprise")!
+        : planDevices === "family"
+          ? FIBER_PLANS.find((plan) => plan.id === "biz_sme")!
+          : FIBER_PLANS.find((plan) => plan.id === "biz_pro")!;
+    }
+
+    if (planDevices === "power" || planPriority === "growth") {
+      return FIBER_PLANS.find((plan) => plan.id === "home_platinum")!;
+    }
+    if (planDevices === "family" || planPriority === "streaming") {
+      return FIBER_PLANS.find((plan) => plan.id === "home_silver")!;
+    }
+    return FIBER_PLANS.find((plan) => plan.id === "home_bronze")!;
+  }, [planAudience, planDevices, planPriority]);
+
   const runSpeedTest = () => {
     if (speedTestRunning) return;
+    if (speedTestInterval.current) clearInterval(speedTestInterval.current);
     setSpeedTestRunning(true);
     setTestComplete(false);
     setSpeedVal(5);
     setPingVal(1.8);
 
     let curr = 5;
-    const interval = setInterval(() => {
+    speedTestInterval.current = setInterval(() => {
       curr += Math.floor(Math.random() * 85) + 40;
       if (curr >= 982) {
-        clearInterval(interval);
+        if (speedTestInterval.current) clearInterval(speedTestInterval.current);
+        speedTestInterval.current = null;
         setSpeedVal(982.4);
         setSpeedTestRunning(false);
         setTestComplete(true);
@@ -284,6 +314,12 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
       }
     }, 60);
   };
+
+  useEffect(() => {
+    return () => {
+      if (speedTestInterval.current) clearInterval(speedTestInterval.current);
+    };
+  }, []);
 
   const handleCoverageCheck = (e: React.FormEvent) => {
     e.preventDefault();
@@ -306,7 +342,7 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
     ) {
       setCoverageResult("✓ Great news! High-Speed Fiber Backbone is LIVE in your area. Ready for 24-48h installation.");
     } else {
-      setCoverageResult("✓ Good news! High-Speed Wireless Backhaul is available in your region. Fiber trunk extension in progress.");
+      setCoverageResult("We do not have a live address-level result for that location yet. Share your estate or nearest landmark on WhatsApp and our team will confirm the nearest node.");
     }
   };
 
@@ -912,6 +948,117 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
             </div>
           </div>
 
+          {/* Guided plan matcher: every recommendation maps to a real package above. */}
+          <div className="max-w-4xl mx-auto rounded-3xl bg-slate-950/90 border border-cyan-500/30 p-5 sm:p-7 text-left shadow-xl shadow-cyan-950/20">
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+              <div>
+                <p className="text-[11px] font-mono font-bold uppercase tracking-wider text-cyan-300">
+                  Not sure where to start?
+                </p>
+                <h3 className="mt-1 text-xl sm:text-2xl font-black text-white">Find your best-fit package</h3>
+                <p className="mt-1 text-xs text-slate-400">
+                  Three quick choices. We&apos;ll match you to a plan you can order below.
+                </p>
+              </div>
+              <div className="shrink-0 rounded-2xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3">
+                <span className="block text-[10px] font-mono uppercase text-emerald-300">Recommended</span>
+                <span className="text-sm font-black text-white">{recommendedPlan.name}</span>
+                <span className="ml-2 text-xs font-mono text-amber-300">
+                  KES {recommendedPlan.price.toLocaleString()}/mo
+                </span>
+              </div>
+            </div>
+
+            <div className="mt-6 grid gap-5 md:grid-cols-3">
+              <fieldset>
+                <legend className="text-xs font-bold text-slate-300">1. Where will you use it?</legend>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  {([
+                    ["home", "Home"],
+                    ["business", "Business"],
+                  ] as const).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setPlanAudience(value)}
+                      aria-pressed={planAudience === value}
+                      className={`rounded-xl border px-3 py-2 text-xs font-bold transition-colors ${
+                        planAudience === value
+                          ? "border-cyan-300 bg-cyan-400/15 text-cyan-200"
+                          : "border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-500 hover:text-white"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+
+              <fieldset>
+                <legend className="text-xs font-bold text-slate-300">2. How many devices?</legend>
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  {([
+                    ["light", "1–3"],
+                    ["family", "4–8"],
+                    ["power", "10+"],
+                  ] as const).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setPlanDevices(value)}
+                      aria-pressed={planDevices === value}
+                      className={`rounded-xl border px-2 py-2 text-xs font-bold transition-colors ${
+                        planDevices === value
+                          ? "border-cyan-300 bg-cyan-400/15 text-cyan-200"
+                          : "border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-500 hover:text-white"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+
+              <fieldset>
+                <legend className="text-xs font-bold text-slate-300">3. What matters most?</legend>
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  {([
+                    ["streaming", "Streaming"],
+                    ["work", "Work"],
+                    ["growth", "Growth"],
+                  ] as const).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setPlanPriority(value)}
+                      aria-pressed={planPriority === value}
+                      className={`rounded-xl border px-2 py-2 text-xs font-bold transition-colors ${
+                        planPriority === value
+                          ? "border-cyan-300 bg-cyan-400/15 text-cyan-200"
+                          : "border-slate-700 bg-slate-900 text-slate-400 hover:border-slate-500 hover:text-white"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+            </div>
+
+            <div className="mt-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-slate-800 pt-4">
+              <p className="text-xs leading-relaxed text-slate-400">
+                {recommendedPlan.summary}
+              </p>
+              <button
+                type="button"
+                onClick={() => handleOrderPlan(recommendedPlan)}
+                className="shrink-0 rounded-xl bg-cyan-400 px-4 py-2.5 text-xs font-black text-slate-950 transition-colors hover:bg-cyan-300 active:scale-95"
+              >
+                Order {recommendedPlan.name}
+              </button>
+            </div>
+          </div>
+
           {/* Plan Cards Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {filteredPlans.map((plan) => (
@@ -1209,7 +1356,7 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
           </div>
 
           <div className="space-y-3">
-            {FAQS.map((faq, idx) => {
+            {faqItems.map((faq, idx) => {
               const isOpen = activeFaq === idx;
               return (
                 <div
