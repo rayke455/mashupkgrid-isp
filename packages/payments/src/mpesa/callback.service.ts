@@ -329,13 +329,17 @@ export async function tryCompleteDonationCallback(rawPayload: unknown): Promise<
     where: { checkoutRequestId: cb.CheckoutRequestID },
   });
   if (!donation) return false;
-  if (donation.status !== "PENDING") return true; // already processed — idempotent
+  // If already completed with a real Safaricom receipt (not provisional DON-...), idempotent return
+  if (donation.status === "COMPLETED" && !donation.mpesaReceiptNumber?.startsWith("DON-")) {
+    return true;
+  }
 
   const metadata = parseCallbackMetadata(cb.CallbackMetadata?.Item);
 
   if (cb.ResultCode === 0) {
     const receiptNumber =
       metadata.mpesaReceiptNumber ||
+      donation.mpesaReceiptNumber ||
       `DON-${cb.CheckoutRequestID.replace(/[^A-Za-z0-9]/g, "").slice(-12).toUpperCase()}`;
 
     await prisma.donation.update({
@@ -343,22 +347,25 @@ export async function tryCompleteDonationCallback(rawPayload: unknown): Promise<
       data: {
         status: "COMPLETED",
         resultCode: cb.ResultCode,
-        resultDesc: cb.ResultDesc ?? "",
+        resultDesc: cb.ResultDesc ?? "The service request is processed successfully.",
         mpesaReceiptNumber: receiptNumber,
         rawCallback: rawPayload as Prisma.InputJsonValue,
       },
     });
   } else {
-    const status = cb.ResultCode === 1032 ? "CANCELLED" : "FAILED";
-    await prisma.donation.update({
-      where: { id: donation.id },
-      data: {
-        status,
-        resultCode: cb.ResultCode,
-        resultDesc: cb.ResultDesc ?? "",
-        rawCallback: rawPayload as Prisma.InputJsonValue,
-      },
-    });
+    // Only update failure if not already completed
+    if (donation.status !== "COMPLETED") {
+      const status = cb.ResultCode === 1032 ? "CANCELLED" : "FAILED";
+      await prisma.donation.update({
+        where: { id: donation.id },
+        data: {
+          status,
+          resultCode: cb.ResultCode,
+          resultDesc: cb.ResultDesc ?? "",
+          rawCallback: rawPayload as Prisma.InputJsonValue,
+        },
+      });
+    }
   }
 
   return true;

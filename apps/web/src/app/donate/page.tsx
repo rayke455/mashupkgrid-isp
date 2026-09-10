@@ -226,7 +226,7 @@ export default function DonateCoffeePage() {
             setVerifyStatusMessage(
               status === "CANCELLED"
                 ? "❌ M-Pesa prompt was cancelled on the phone. Please try again."
-                : "❌ M-Pesa payment failed. Please check your balance and try again."
+                : (data?.data?.resultDesc ? `❌ ${data.data.resultDesc}` : "❌ M-Pesa payment was not completed. Please try again.")
             );
             return true;
           }
@@ -235,7 +235,7 @@ export default function DonateCoffeePage() {
       return false;
     };
 
-    // Quick initial check at 1.2s
+    // Quick initial check at 1.5s
     const initialTimer = setTimeout(async () => {
       if (isCancelled) return;
       const done = await checkStatus();
@@ -253,7 +253,7 @@ export default function DonateCoffeePage() {
           clearInterval(intervalId);
         }
       }, 1500);
-    }, 1200);
+    }, 1500);
 
     return () => {
       isCancelled = true;
@@ -270,17 +270,15 @@ export default function DonateCoffeePage() {
 
     try {
       const baseUrl = getApiBaseUrl();
-      let verified = false;
 
-      // Check up to 3 times (1s apart) to allow in-flight Safaricom processing to complete
+      // Check up to 3 times (1.5s apart) with ?verify=true to actively query Daraja if callback hasn't arrived
       for (let i = 0; i < 3; i++) {
-        const res = await fetch(`${baseUrl}/api/v1/payments/mpesa/donate/${checkoutRequestId}/status`);
+        const res = await fetch(`${baseUrl}/api/v1/payments/mpesa/donate/${checkoutRequestId}/status?verify=true`);
         if (res.ok) {
           const data = await res.json();
           const status = data?.data?.status;
 
           if (status === "COMPLETED") {
-            verified = true;
             setIsVerifyingPin(false);
             setStkPending(false);
             setDonationSuccess(true);
@@ -300,12 +298,12 @@ export default function DonateCoffeePage() {
             setVerifyStatusMessage(
               status === "CANCELLED"
                 ? "❌ M-Pesa transaction was cancelled on your phone. Please try again."
-                : "❌ M-Pesa reported payment was not completed. Please check your PIN and try again."
+                : (data?.data?.resultDesc ? `❌ ${data.data.resultDesc}` : "❌ M-Pesa reported payment was not completed. Please try again.")
             );
             return;
           }
         }
-        if (i < 2) await new Promise((resolve) => setTimeout(resolve, 1000));
+        if (i < 2) await new Promise((resolve) => setTimeout(resolve, 1500));
       }
 
       // If still pending after 3 active inquiries:

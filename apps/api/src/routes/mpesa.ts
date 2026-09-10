@@ -761,18 +761,22 @@ export async function mpesaRoutes(app: FastifyInstance): Promise<void> {
     },
     async (request, reply) => {
       const { checkoutRequestId } = request.params as { checkoutRequestId: string };
+      const { verify } = (request.query || {}) as { verify?: string };
+      const shouldVerify = verify === "true" || verify === "1";
+
       // Check the donations table first.
       const donation = await prisma.donation.findFirst({
         where: { checkoutRequestId },
       });
 
       if (donation) {
-        if (donation.status !== "PENDING") {
+        if (donation.status === "COMPLETED") {
           reply.send(
             successResponse(
               {
                 status: donation.status,
                 receiptNumber: donation.mpesaReceiptNumber,
+                resultDesc: donation.resultDesc,
               },
               request.id
             )
@@ -780,54 +784,98 @@ export async function mpesaRoutes(app: FastifyInstance): Promise<void> {
           return;
         }
 
-        // Active inquiry against Safaricom Daraja if still pending:
-        // When the user taps "I Have Entered My PIN", query Safaricom directly if the callback
-        // webhook hasn't reached our server yet.
-        try {
-          const credentials = await getPlatformMpesaCredentials();
-          const queryRes = await queryStkPushStatus(credentials, checkoutRequestId);
-          if (queryRes.ResultCode === "0") {
-            const updated = await prisma.donation.update({
-              where: { id: donation.id },
-              data: { status: "COMPLETED" },
-            });
-            reply.send(
-              successResponse(
-                { status: updated.status, resultDesc: queryRes.ResultDesc },
-                request.id
-              )
-            );
-            return;
-          } else if (queryRes.ResultCode === "1032") {
-            const updated = await prisma.donation.update({
-              where: { id: donation.id },
-              data: { status: "CANCELLED" },
-            });
-            reply.send(
-              successResponse(
-                { status: updated.status, resultDesc: queryRes.ResultDesc },
-                request.id
-              )
-            );
-            return;
-          } else if (queryRes.ResultCode && queryRes.ResultCode !== "0") {
-            const updated = await prisma.donation.update({
-              where: { id: donation.id },
-              data: { status: "FAILED" },
-            });
-            reply.send(
-              successResponse(
-                { status: updated.status, resultDesc: queryRes.ResultDesc },
-                request.id
-              )
-            );
-            return;
+        // Only actively query Safaricom Daraja when explicitly requested (e.g. user clicks
+        // "I Have Entered My PIN"), NOT on routine background interval polling.
+        if (shouldVerify) {
+          try {
+            const credentials = await getPlatformMpesaCredentials();
+            const queryRes = await queryStkPushStatus(credentials, checkoutRequestId);
+            const resultCode = Number(queryRes.ResultCode);
+            const resDesc = queryRes.ResultDesc || queryRes.ResponseDescription || "";
+
+            if (resultCode === 0) {
+              const provisionalReceipt = `DON-${checkoutRequestId.replace(/[^A-Za-z0-9]/g, "").slice(-12).toUpperCase()}`;
+              const updated = await prisma.donation.update({
+                where: { id: donation.id },
+                data: {
+                  status: "COMPLETED",
+                  resultCode: 0,
+                  resultDesc: resDesc || "The service request is processed successfully.",
+                  mpesaReceiptNumber: donation.mpesaReceiptNumber || provisionalReceipt,
+                },
+              });
+              reply.send(
+                successResponse(
+                  {
+                    status: updated.status,
+                    receiptNumber: updated.mpesaReceiptNumber,
+                    resultDesc: updated.resultDesc,
+                  },
+                  request.id
+                )
+              );
+              return;
+            } else if (resultCode === 1032) {
+              const updated = await prisma.donation.update({
+                where: { id: donation.id },
+                data: {
+                  status: "CANCELLED",
+                  resultCode: 1032,
+                  resultDesc: resDesc || "Request Cancelled by user.",
+                },
+              });
+              reply.send(
+                successResponse(
+                  { status: updated.status, resultDesc: updated.resultDesc },
+                  request.id
+                )
+              );
+              return;
+            } else if (
+              resDesc.toLowerCase().includes("being processed") ||
+              resDesc.toLowerCase().includes("in progress") ||
+              Number.isNaN(resultCode)
+            ) {
+              // Safaricom is still waiting for user handset PIN — remain PENDING, do NOT fail!
+              reply.send(
+                successResponse(
+                  { status: "PENDING", resultDesc: "Transaction is being processed on your handset." },
+                  request.id
+                )
+              );
+              return;
+            } else if (resultCode > 0) {
+              const updated = await prisma.donation.update({
+                where: { id: donation.id },
+                data: {
+                  status: "FAILED",
+                  resultCode,
+                  resultDesc: resDesc,
+                },
+              });
+              reply.send(
+                successResponse(
+                  { status: updated.status, resultDesc: updated.resultDesc },
+                  request.id
+                )
+              );
+              return;
+            }
+          } catch {
+            // Keep pending if query threw (e.g. handset prompt still open, Daraja processing in-flight)
           }
-        } catch {
-          // Keep pending if query failed (e.g. handset prompt still open)
         }
 
-        reply.send(successResponse({ status: donation.status }, request.id));
+        reply.send(
+          successResponse(
+            {
+              status: donation.status,
+              receiptNumber: donation.mpesaReceiptNumber,
+              resultDesc: donation.resultDesc,
+            },
+            request.id
+          )
+        );
         return;
       }
 
