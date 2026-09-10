@@ -87,6 +87,8 @@ export default function RoutersPage() {
   const [openSessionsFor, setOpenSessionsFor] = useState<string | null>(null);
   const [openAccessPointsFor, setOpenAccessPointsFor] = useState<string | null>(null);
   const [winboxModalFor, setWinboxModalFor] = useState<RouterRow | null>(null);
+  const [powerToolsModalFor, setPowerToolsModalFor] = useState<RouterRow | null>(null);
+  const [toolLoading, setToolLoading] = useState<string | null>(null);
 
   const { data: routers, isLoading } = useQuery({
     queryKey: ["routers"],
@@ -167,7 +169,32 @@ export default function RoutersPage() {
     enabled: winboxModalFor !== null,
   });
 
+  const { data: firmwareData, isFetching: firmwareLoading, refetch: refetchFirmware } = useQuery({
+    queryKey: ["router-firmware", powerToolsModalFor?.id],
+    queryFn: () =>
+      apiFetch<{ currentVersion: string; latestVersion: string; status: string; upgradeAvailable: boolean }>(
+        `/api/v1/routers/${powerToolsModalFor?.id}/firmware`
+      ),
+    enabled: powerToolsModalFor !== null && Boolean(powerToolsModalFor.host),
+  });
 
+  const triggerPowerTool = async (routerId: string, endpoint: string, body?: unknown, toolName?: string) => {
+    setToolLoading(toolName || endpoint);
+    setError(null);
+    try {
+      const res = await apiFetch<{ message?: string }>(`/api/v1/routers/${routerId}/${endpoint}`, {
+        method: "POST",
+        ...(body ? { body: JSON.stringify(body) } : {}),
+      });
+      setActionSuccess(`⚡ ${res?.message || "Optimization applied successfully!"}`);
+      setTimeout(() => setActionSuccess(null), 6000);
+      queryClient.invalidateQueries({ queryKey: ["routers"] });
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : "Failed to execute tool");
+    } finally {
+      setToolLoading(null);
+    }
+  };
 
   const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
@@ -325,6 +352,16 @@ export default function RoutersPage() {
                     >
                       <span>📡</span>
                       <span>{openAccessPointsFor === router.id ? "Hide APs" : "Connected APs"}</span>
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      className="px-3 py-1.5 text-xs bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 font-bold flex items-center gap-1.5 shadow-xs"
+                      onClick={() => setPowerToolsModalFor(router)}
+                      title="Optimization, Fair-Share PCQ Shaper, Safe DNS, and Firmware tools"
+                      disabled={!router.host}
+                    >
+                      <span>⚡</span>
+                      <span>Power Tools</span>
                     </Button>
                     <Button
                       variant="danger"
@@ -842,6 +879,207 @@ export default function RoutersPage() {
                 variant="secondary"
                 className="text-xs px-4 py-1.5"
                 onClick={() => setWinboxModalFor(null)}
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ISP Power Tools & Optimization Modal */}
+      {powerToolsModalFor && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto"
+          onClick={() => setPowerToolsModalFor(null)}
+        >
+          <div
+            className="w-full max-w-2xl bg-slate-900 border border-amber-500/40 rounded-2xl p-6 text-slate-100 shadow-2xl relative space-y-5 animate-in fade-in zoom-in-95 duration-150 my-8"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-start justify-between border-b border-slate-800 pb-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">⚡</span>
+                  <h3 className="text-lg font-bold text-white tracking-tight">
+                    ISP Power Tools & Optimization
+                  </h3>
+                  <Badge variant={powerToolsModalFor.status === "ONLINE" ? "success" : "neutral"}>
+                    {powerToolsModalFor.status}
+                  </Badge>
+                </div>
+                <p className="text-xs text-slate-400">
+                  Instant network shaping, anti-VPN enforcement, and firmware tools for{" "}
+                  <strong className="text-amber-300">{powerToolsModalFor.name}</strong>.
+                </p>
+              </div>
+              <button
+                onClick={() => setPowerToolsModalFor(null)}
+                className="text-slate-400 hover:text-white rounded-lg p-1 hover:bg-slate-800 transition-colors text-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Grid of Power Tools */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+              {/* Tool 1: Fair-Share PCQ Bandwidth Shaper */}
+              <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/60 hover:border-amber-500/30 transition-all flex flex-col justify-between space-y-3">
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">⚖️</span>
+                    <h4 className="text-xs font-bold text-white">Dynamic Fair-Share (PCQ)</h4>
+                  </div>
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    Automatically distributes link bandwidth equally among all active devices so heavy downloaders don&apos;t cause bufferbloat or gaming lag.
+                  </p>
+                </div>
+                <Button
+                  variant="secondary"
+                  className="w-full text-xs py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold"
+                  onClick={() => triggerPowerTool(powerToolsModalFor.id, "enable-pcq-shaper", {}, "PCQ")}
+                  disabled={toolLoading === "PCQ" || !powerToolsModalFor.host}
+                >
+                  {toolLoading === "PCQ" ? "Activating..." : "⚡ Activate Fair-Share Shaper"}
+                </Button>
+              </div>
+
+              {/* Tool 2: Safe Family DNS Filter */}
+              <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/60 hover:border-emerald-500/30 transition-all flex flex-col justify-between space-y-3">
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">🛡️</span>
+                    <h4 className="text-xs font-bold text-white">Safe Family DNS Filter</h4>
+                  </div>
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    Enforces Cloudflare Family Protection (<code className="text-emerald-300 font-mono">1.1.1.3</code>) to block adult content & malware network-wide.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    className="flex-1 text-xs py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold"
+                    onClick={() => triggerPowerTool(powerToolsModalFor.id, "apply-family-dns", { familyMode: true }, "FamilyDNS")}
+                    disabled={toolLoading === "FamilyDNS" || !powerToolsModalFor.host}
+                  >
+                    {toolLoading === "FamilyDNS" ? "Applying..." : "Enable Safe DNS"}
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    className="text-xs py-1.5 text-slate-400 border border-slate-800 hover:text-white"
+                    onClick={() => triggerPowerTool(powerToolsModalFor.id, "apply-family-dns", { familyMode: false }, "StandardDNS")}
+                    disabled={toolLoading === "StandardDNS" || !powerToolsModalFor.host}
+                    title="Restore Google 8.8.8.8"
+                  >
+                    Standard
+                  </Button>
+                </div>
+              </div>
+
+              {/* Tool 3: Bulletproof Anti-VPN Shield */}
+              <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/60 hover:border-red-500/30 transition-all flex flex-col justify-between space-y-3">
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">🚫</span>
+                    <h4 className="text-xs font-bold text-white">10-Layer Anti-VPN Shield</h4>
+                  </div>
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    Kills Cloudflare WebSocket tunnels (HA Tunnel Plus), HTTP Injector, SlowDNS, UDP tunnels, and persistent bypass leaks.
+                  </p>
+                </div>
+                <Button
+                  variant="secondary"
+                  className="w-full text-xs py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 font-semibold"
+                  onClick={() => triggerPowerTool(powerToolsModalFor.id, "enable-anti-vpn-shield", {}, "AntiVPN")}
+                  disabled={toolLoading === "AntiVPN" || !powerToolsModalFor.host}
+                >
+                  {toolLoading === "AntiVPN" ? "Deploying..." : "🔒 Deploy Anti-VPN Shield"}
+                </Button>
+              </div>
+
+              {/* Tool 4: 100M Speedtest Booster */}
+              <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/60 hover:border-blue-500/30 transition-all flex flex-col justify-between space-y-3">
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base">🚀</span>
+                    <h4 className="text-xs font-bold text-white">Speedtest 100M Boost</h4>
+                  </div>
+                  <p className="text-[11px] text-slate-400 leading-relaxed">
+                    Prioritizes Ookla and Fast.com test packets at 100 Mbps burst to ensure speedtests reflect line speed accurately.
+                  </p>
+                </div>
+                <Button
+                  variant="secondary"
+                  className="w-full text-xs py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border border-blue-500/30 font-semibold"
+                  onClick={() => triggerPowerTool(powerToolsModalFor.id, "apply-speedtest-boost", {}, "Speedtest")}
+                  disabled={toolLoading === "Speedtest" || !powerToolsModalFor.host}
+                >
+                  {toolLoading === "Speedtest" ? "Boosting..." : "🚀 Apply Speedtest Boost"}
+                </Button>
+              </div>
+            </div>
+
+            {/* Firmware Check & Remote Upgrade Section */}
+            <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/80 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">📦</span>
+                  <h4 className="text-xs font-bold text-white">RouterOS Firmware Management</h4>
+                </div>
+                <button
+                  onClick={() => refetchFirmware()}
+                  className="text-[11px] text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1"
+                >
+                  <span>🔄</span>
+                  <span>{firmwareLoading ? "Checking..." : "Check Updates"}</span>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px] font-mono">
+                <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800">
+                  <span className="text-slate-500 block text-[10px] font-sans">Installed Version</span>
+                  <span className="text-slate-200 font-bold">{firmwareData?.currentVersion || "Unknown"}</span>
+                </div>
+                <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800">
+                  <span className="text-slate-500 block text-[10px] font-sans">Latest Available</span>
+                  <span className="text-emerald-400 font-bold">{firmwareData?.latestVersion || "Up to date"}</span>
+                </div>
+                <div className="col-span-2 sm:col-span-1 p-2.5 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-between sm:block">
+                  <span className="text-slate-500 block text-[10px] font-sans">Status</span>
+                  <span className="text-slate-300 font-semibold">{firmwareData?.status || "Ready"}</span>
+                </div>
+              </div>
+
+              {firmwareData?.upgradeAvailable ? (
+                <Button
+                  variant="primary"
+                  className="w-full text-xs py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold"
+                  onClick={() => {
+                    if (confirm("The router will download the latest RouterOS package and reboot automatically. Proceed?")) {
+                      triggerPowerTool(powerToolsModalFor.id, "upgrade-firmware", {}, "FirmwareUpgrade");
+                    }
+                  }}
+                  disabled={toolLoading === "FirmwareUpgrade" || !powerToolsModalFor.host}
+                >
+                  {toolLoading === "FirmwareUpgrade" ? "Installing & Rebooting..." : `⚡ Upgrade to v${firmwareData.latestVersion} & Reboot`}
+                </Button>
+              ) : (
+                <p className="text-[11px] text-slate-500 italic text-center pt-1">
+                  RouterOS is running the latest stable release.
+                </p>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
+              <span className="text-[11px] text-slate-500">
+                Connected Host: <code className="text-amber-300 font-mono">{powerToolsModalFor.host || powerToolsModalFor.vpnIp || "Awaiting Check-in"}</code>
+              </span>
+              <Button
+                variant="secondary"
+                className="text-xs px-4 py-1.5"
+                onClick={() => setPowerToolsModalFor(null)}
               >
                 Close
               </Button>

@@ -22,6 +22,10 @@ import {
   applyRouterSpeedtestBoost,
   enforceRouterStrictTimeout,
   enableRouterAntiVpnShield,
+  enableRouterPcqFairQueue,
+  enableRouterSafeFamilyDns,
+  checkRouterFirmwareUpdate,
+  installRouterFirmwareUpdate,
 } from "@mashupkgrid/network";
 import {
   buildMikrotikProvisioningScript,
@@ -718,6 +722,87 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
         tenantId,
         actorUserId: request.user!.id,
         action: "router.anti_vpn_shield_enabled",
+        resourceType: "Router",
+        resourceId: routerId,
+        after: result,
+        ipAddress: request.ip,
+        userAgent: request.headers["user-agent"] ?? null,
+      });
+
+      reply.send(successResponse(result, request.id));
+    }
+  );
+
+  app.post(
+    "/:routerId/enable-pcq-shaper",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("routers.manage")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const { routerId } = idParamsSchema.parse(request.params);
+      const result = await enableRouterPcqFairQueue(tenantId, routerId);
+
+      await writeAuditLog({
+        tenantId,
+        actorUserId: request.user!.id,
+        action: "router.pcq_shaper_enabled",
+        resourceType: "Router",
+        resourceId: routerId,
+        after: result,
+        ipAddress: request.ip,
+        userAgent: request.headers["user-agent"] ?? null,
+      });
+
+      reply.send(successResponse(result, request.id));
+    }
+  );
+
+  app.post(
+    "/:routerId/apply-family-dns",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("routers.manage")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const { routerId } = idParamsSchema.parse(request.params);
+      const body = z.object({ familyMode: z.boolean().optional().default(true) }).parse(request.body ?? {});
+      const result = await enableRouterSafeFamilyDns(tenantId, routerId, body.familyMode);
+
+      await writeAuditLog({
+        tenantId,
+        actorUserId: request.user!.id,
+        action: "router.family_dns_applied",
+        resourceType: "Router",
+        resourceId: routerId,
+        after: result,
+        ipAddress: request.ip,
+        userAgent: request.headers["user-agent"] ?? null,
+      });
+
+      reply.send(successResponse(result, request.id));
+    }
+  );
+
+  app.get(
+    "/:routerId/firmware",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("routers.read")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const { routerId } = idParamsSchema.parse(request.params);
+      const result = await checkRouterFirmwareUpdate(tenantId, routerId);
+      reply.send(successResponse(result, request.id));
+    }
+  );
+
+  app.post(
+    "/:routerId/upgrade-firmware",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("routers.manage")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const { routerId } = idParamsSchema.parse(request.params);
+      const result = await installRouterFirmwareUpdate(tenantId, routerId);
+
+      await writeAuditLog({
+        tenantId,
+        actorUserId: request.user!.id,
+        action: "router.firmware_upgrade_initiated",
         resourceType: "Router",
         resourceId: routerId,
         after: result,

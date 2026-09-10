@@ -115,6 +115,22 @@ export async function login(
   if (body.tenantSlug) {
     tenant = await prisma.tenant.findUnique({ where: { slug: body.tenantSlug } });
     tenantId = tenant && !tenant.deletedAt ? tenant.id : NONEXISTENT_TENANT_ID;
+  } else {
+    const normalizedEmail = body.email.trim().toLowerCase();
+    const platformUser = await prisma.user.findFirst({
+      where: { tenantId: null, email: normalizedEmail, deletedAt: null },
+    });
+    if (!platformUser) {
+      const tenantUsers = await prisma.user.findMany({
+        where: { email: normalizedEmail, deletedAt: null, tenantId: { not: null } },
+        include: { tenant: true },
+        take: 2,
+      });
+      if (tenantUsers.length === 1 && tenantUsers[0]?.tenant && !tenantUsers[0].tenant.deletedAt) {
+        tenantId = tenantUsers[0].tenantId;
+        tenant = tenantUsers[0].tenant;
+      }
+    }
   }
 
   const result = await attemptLogin({ tenantId, email: body.email, password: body.password, device });

@@ -136,6 +136,10 @@ export interface NetworkDeviceAdapter {
   applySpeedtestBoost?(): Promise<{ success: boolean; message: string }>;
   enforceStrictTimeout?(): Promise<{ success: boolean; cookiesRemoved: number; message: string }>;
   enableAntiVpnShield?(): Promise<{ success: boolean; message: string }>;
+  enablePcqFairQueue?(): Promise<{ success: boolean; message: string }>;
+  enableSafeFamilyDns?(familyMode?: boolean): Promise<{ success: boolean; message: string; servers: string }>;
+  checkFirmwareUpdate?(): Promise<{ currentVersion: string; latestVersion: string; status: string; upgradeAvailable: boolean }>;
+  installFirmwareUpdate?(): Promise<{ success: boolean; message: string }>;
 }
 
 /** Thrown by every not-yet-implemented vendor adapter — never pretend an unsupported

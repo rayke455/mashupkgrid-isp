@@ -679,12 +679,13 @@ export async function enableRouterAntiVpnShield(
   routerId: string
 ): Promise<{ success: boolean; message: string }> {
   const router = await getRouterOrThrow(tenantId, routerId);
-  if (!router.host) {
+  const primaryHost = router.host || router.vpnIp;
+  if (!primaryHost) {
     throw new ConflictError(
       `"${router.name}" hasn't checked in yet — paste the provisioning script on the router first.`
     );
   }
-  const adapter = createAdapterForRouter({ ...router, host: router.host });
+  const adapter = createAdapterForRouter({ ...router, host: primaryHost });
   try {
     await adapter.connect();
     if (!adapter.enableAntiVpnShield) {
@@ -694,6 +695,111 @@ export async function enableRouterAntiVpnShield(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     throw new ConflictError(`Failed to apply Anti-VPN Shield on "${router.name}": ${message}`);
+  } finally {
+    await adapter.disconnect().catch(() => {});
+  }
+}
+
+export async function enableRouterPcqFairQueue(
+  tenantId: string,
+  routerId: string
+): Promise<{ success: boolean; message: string }> {
+  const router = await getRouterOrThrow(tenantId, routerId);
+  const primaryHost = router.host || router.vpnIp;
+  if (!primaryHost) {
+    throw new ConflictError(
+      `"${router.name}" hasn't checked in yet — paste the provisioning script on the router first.`
+    );
+  }
+  const adapter = createAdapterForRouter({ ...router, host: primaryHost });
+  try {
+    await adapter.connect();
+    if (!adapter.enablePcqFairQueue) {
+      throw new ConflictError("PCQ Fair-Queue is not supported on this router model");
+    }
+    return await adapter.enablePcqFairQueue();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new ConflictError(`Failed to activate Fair-Share PCQ Shaper on "${router.name}": ${message}`);
+  } finally {
+    await adapter.disconnect().catch(() => {});
+  }
+}
+
+export async function enableRouterSafeFamilyDns(
+  tenantId: string,
+  routerId: string,
+  familyMode = true
+): Promise<{ success: boolean; message: string; servers: string }> {
+  const router = await getRouterOrThrow(tenantId, routerId);
+  const primaryHost = router.host || router.vpnIp;
+  if (!primaryHost) {
+    throw new ConflictError(
+      `"${router.name}" hasn't checked in yet — paste the provisioning script on the router first.`
+    );
+  }
+  const adapter = createAdapterForRouter({ ...router, host: primaryHost });
+  try {
+    await adapter.connect();
+    if (!adapter.enableSafeFamilyDns) {
+      throw new ConflictError("Safe Family DNS is not supported on this router model");
+    }
+    return await adapter.enableSafeFamilyDns(familyMode);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new ConflictError(`Failed to apply Safe Family DNS on "${router.name}": ${message}`);
+  } finally {
+    await adapter.disconnect().catch(() => {});
+  }
+}
+
+export async function checkRouterFirmwareUpdate(
+  tenantId: string,
+  routerId: string
+): Promise<{ currentVersion: string; latestVersion: string; status: string; upgradeAvailable: boolean }> {
+  const router = await getRouterOrThrow(tenantId, routerId);
+  const primaryHost = router.host || router.vpnIp;
+  if (!primaryHost) {
+    throw new ConflictError(
+      `"${router.name}" hasn't checked in yet — paste the provisioning script on the router first.`
+    );
+  }
+  const adapter = createAdapterForRouter({ ...router, host: primaryHost });
+  try {
+    await adapter.connect();
+    if (!adapter.checkFirmwareUpdate) {
+      throw new ConflictError("Firmware check is not supported on this router model");
+    }
+    return await adapter.checkFirmwareUpdate();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new ConflictError(`Failed to check firmware on "${router.name}": ${message}`);
+  } finally {
+    await adapter.disconnect().catch(() => {});
+  }
+}
+
+export async function installRouterFirmwareUpdate(
+  tenantId: string,
+  routerId: string
+): Promise<{ success: boolean; message: string }> {
+  const router = await getRouterOrThrow(tenantId, routerId);
+  const primaryHost = router.host || router.vpnIp;
+  if (!primaryHost) {
+    throw new ConflictError(
+      `"${router.name}" hasn't checked in yet — paste the provisioning script on the router first.`
+    );
+  }
+  const adapter = createAdapterForRouter({ ...router, host: primaryHost });
+  try {
+    await adapter.connect();
+    if (!adapter.installFirmwareUpdate) {
+      throw new ConflictError("Firmware update is not supported on this router model");
+    }
+    return await adapter.installFirmwareUpdate();
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    throw new ConflictError(`Failed to install firmware update on "${router.name}": ${message}`);
   } finally {
     await adapter.disconnect().catch(() => {});
   }

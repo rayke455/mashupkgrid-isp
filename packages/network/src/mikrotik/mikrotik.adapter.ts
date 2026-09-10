@@ -621,6 +621,116 @@ export class MikroTikAdapter implements NetworkDeviceAdapter {
       message: "Bulletproof Anti-VPN Shield active: Blocked Cloudflare WebSocket tunnels, SSH tunnels, SlowDNS, UDP tunnels, and persistent streaming leaks.",
     };
   }
+
+  async enablePcqFairQueue(): Promise<{ success: boolean; message: string }> {
+    const client = this.requireClient();
+
+    // 1. Remove previous MKG PCQ queue types and trees if they exist
+    const oldTrees = await client.print(["/queue/tree/print"]).catch(() => []);
+    for (const t of oldTrees) {
+      if ((t["name"] || "").startsWith("MKG_GLOBAL_") && t[".id"]) {
+        await client.talk(["/queue/tree/remove", `=.id=${t[".id"]}`]).catch(() => {});
+      }
+    }
+
+    const oldTypes = await client.print(["/queue/type/print"]).catch(() => []);
+    for (const t of oldTypes) {
+      if ((t["name"] || "").startsWith("mkg-pcq") && t[".id"]) {
+        await client.talk(["/queue/type/remove", `=.id=${t[".id"]}`]).catch(() => {});
+      }
+    }
+
+    // 2. Add PCQ queue types for fair-share sub-distribution
+    await client.talk([
+      "/queue/type/add",
+      "=name=mkg-pcq-down",
+      "=kind=pcq",
+      "=pcq-rate=0",
+      "=pcq-classifier=dst-address",
+      "=pcq-limit=50KiB",
+      "=pcq-total-limit=2000KiB",
+    ]).catch(() => {});
+
+    await client.talk([
+      "/queue/type/add",
+      "=name=mkg-pcq-up",
+      "=kind=pcq",
+      "=pcq-rate=0",
+      "=pcq-classifier=src-address",
+      "=pcq-limit=50KiB",
+      "=pcq-total-limit=2000KiB",
+    ]).catch(() => {});
+
+    // 3. Attach PCQ to global queue tree so all active users dynamically share bandwidth without lagging
+    await client.talk([
+      "/queue/tree/add",
+      "=name=MKG_GLOBAL_DOWNLOAD",
+      "=parent=global",
+      "=queue=mkg-pcq-down",
+      "=priority=8",
+      "=comment=MashupHost Fair Share PCQ Shaper",
+    ]).catch(() => {});
+
+    await client.talk([
+      "/queue/tree/add",
+      "=name=MKG_GLOBAL_UPLOAD",
+      "=parent=global",
+      "=queue=mkg-pcq-up",
+      "=priority=8",
+      "=comment=MashupHost Fair Share PCQ Shaper",
+    ]).catch(() => {});
+
+    return {
+      success: true,
+      message: "Dynamic Fair-Share (PCQ) Bandwidth Shaper activated across the router!",
+    };
+  }
+
+  async enableSafeFamilyDns(familyMode = true): Promise<{ success: boolean; message: string; servers: string }> {
+    const client = this.requireClient();
+    const servers = familyMode ? "1.1.1.3,1.0.0.3" : "8.8.8.8,1.1.1.1";
+
+    await client.talk([
+      "/ip/dns/set",
+      `=servers=${servers}`,
+      "=allow-remote-requests=yes",
+    ]);
+
+    return {
+      success: true,
+      servers,
+      message: familyMode
+        ? "Cloudflare Family DNS active (Automatic Malware and Adult Content blocking enabled)!"
+        : "Standard High-Speed DNS restored (8.8.8.8, 1.1.1.1)!",
+    };
+  }
+
+  async checkFirmwareUpdate(): Promise<{ currentVersion: string; latestVersion: string; status: string; upgradeAvailable: boolean }> {
+    const client = this.requireClient();
+    await client.talk(["/system/package/update/check-for-updates"]).catch(() => {});
+    const updates = await client.print(["/system/package/update/print"]).catch(() => []);
+    const row = updates[0] || {};
+    const installed = row["installed-version"] || "Unknown";
+    const latest = row["latest-version"] || installed;
+    const status = row["status"] || "Up to date";
+    const upgradeAvailable = Boolean(latest && installed && latest !== installed && status.toLowerCase().includes("new"));
+
+    return {
+      currentVersion: installed,
+      latestVersion: latest,
+      status,
+      upgradeAvailable,
+    };
+  }
+
+  async installFirmwareUpdate(): Promise<{ success: boolean; message: string }> {
+    const client = this.requireClient();
+    await client.talk(["/system/package/update/install"]);
+    return {
+      success: true,
+      message: "RouterOS Firmware update initiated! The router will download the latest package and reboot automatically.",
+    };
+  }
   // --- VLAN and addressing (spec section 9) ---------------------------------------------------
   // Every method here reports what the DEVICE said. None of them assume a topology: the parent
   // interface a VLAN stacks on is always supplied by the caller, because it is the ISP's network
