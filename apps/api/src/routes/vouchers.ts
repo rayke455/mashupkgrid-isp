@@ -44,7 +44,7 @@ const generateSchema = z.object({
   uploadKbps: z.number().int().positive().optional(),
   simultaneousUse: z.number().int().min(1).max(50).optional(),
   blockTethering: z.boolean().optional(),
-  appPolicy: appPolicyEnum.optional().default("ALL"),
+  appPolicy: appPolicyEnum.optional(),
 });
 
 const createPackageSchema = z.object({
