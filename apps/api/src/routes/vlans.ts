@@ -355,6 +355,32 @@ export async function vlanRoutes(app: FastifyInstance): Promise<void> {
       const body = vlanBodySchema.parse(request.body);
       const vlan = await createVlan(tenantId, body);
 
+      // Automatically push VLAN to MikroTik router if assigned and reachable
+      if (vlan.routerId) {
+        const router = await prisma.router.findFirst({ where: { id: vlan.routerId, tenantId, deletedAt: null } });
+        if (router?.host) {
+          try {
+            const adapter = createAdapterForRouter({ ...router, host: router.host });
+            await adapter.connect();
+            const ifaces = (await adapter.listInterfaces?.()) || [];
+            const parent = ifaces.find((i) => i.name === "ether2" || i.name === "bridge")?.name || ifaces[0]?.name || "ether2";
+            await adapter.createVlanInterface?.({
+              name: `vlan${vlan.vlanTag}`,
+              vlanId: vlan.vlanTag,
+              parentInterface: parent,
+              comment: `MashupHost ${vlan.name}`,
+            });
+            await prisma.vlan.update({
+              where: { id: vlan.id },
+              data: { provisioningStatus: "ACTIVE", lastProvisionedAt: new Date() },
+            });
+            await adapter.disconnect().catch(() => {});
+          } catch (err) {
+            request.log.warn({ err }, "Could not automatically push VLAN to router - will sync on router connect");
+          }
+        }
+      }
+
       await writeAuditLog({
         tenantId,
         actorUserId: request.user!.id,
@@ -413,6 +439,20 @@ export async function vlanRoutes(app: FastifyInstance): Promise<void> {
       const before = await getVlanOrThrow(tenantId, vlanId);
       const after = await setVlanEnabled(tenantId, vlanId, isEnabled);
 
+      if (after.routerId) {
+        const router = await prisma.router.findFirst({ where: { id: after.routerId, tenantId, deletedAt: null } });
+        if (router?.host) {
+          try {
+            const adapter = createAdapterForRouter({ ...router, host: router.host });
+            await adapter.connect();
+            await adapter.setVlanInterfaceEnabled?.(`vlan${after.vlanTag}`, isEnabled);
+            await adapter.disconnect().catch(() => {});
+          } catch (err) {
+            request.log.warn({ err }, "Could not automatically toggle VLAN interface on router");
+          }
+        }
+      }
+
       await writeAuditLog({
         tenantId,
         actorUserId: request.user!.id,
@@ -436,6 +476,21 @@ export async function vlanRoutes(app: FastifyInstance): Promise<void> {
       const tenantId = requireTenant(request.user!.tenantId);
       const { vlanId } = idParamsSchema.parse(request.params);
       const before = await getVlanOrThrow(tenantId, vlanId);
+
+      // Automatically remove from router if online
+      if (before.routerId) {
+        const router = await prisma.router.findFirst({ where: { id: before.routerId, tenantId, deletedAt: null } });
+        if (router?.host) {
+          try {
+            const adapter = createAdapterForRouter({ ...router, host: router.host });
+            await adapter.connect();
+            await adapter.removeVlanInterface?.(`vlan${before.vlanTag}`, before.vlanTag);
+            await adapter.disconnect().catch(() => {});
+          } catch (err) {
+            request.log.warn({ err }, "Could not automatically remove VLAN from router");
+          }
+        }
+      }
 
       // Refuses while packages still reference it (see deleteVlan) — surfaced to the caller as a
       // 409 naming the packages, not a silent cascade that would strip network configuration from

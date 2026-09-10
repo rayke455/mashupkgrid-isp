@@ -248,6 +248,8 @@ export async function completeRouterProvisioning(
     console.warn("RADIUS NAS registration warning on provisioning:", err);
   }
 
+  let updated: Router;
+
   if (cleanWgKey) {
     const vpnIp = router.vpnIp || (await ensureRouterVpnIp(router.id));
     try {
@@ -256,7 +258,7 @@ export async function completeRouterProvisioning(
       console.warn("WireGuard peer registration warning on provisioning:", err);
     }
 
-    return prisma.router.update({
+    updated = await prisma.router.update({
       where: { id: router.id },
       data: {
         ...updateData,
@@ -266,15 +268,60 @@ export async function completeRouterProvisioning(
         vpnConfiguredAt: router.vpnConfiguredAt ?? new Date(),
       },
     });
+  } else {
+    updated = await prisma.router.update({
+      where: { id: router.id },
+      data: {
+        ...updateData,
+        host: router.host || remoteHost,
+      },
+    });
   }
 
-  return prisma.router.update({
-    where: { id: router.id },
-    data: {
-      ...updateData,
-      host: router.host || remoteHost,
-    },
+  syncRouterVlans(router.id).catch((err) => {
+    console.warn(`[vlans] Auto-sync VLANs warning on provisioning:`, err);
   });
+
+  return updated;
+}
+
+/** Automatically provisions any configured VLANs in the database directly onto the MikroTik router */
+export async function syncRouterVlans(routerId: string): Promise<void> {
+  const router = await prisma.router.findUnique({ where: { id: routerId, deletedAt: null } });
+  if (!router?.host) return;
+
+  const vlans = await prisma.vlan.findMany({
+    where: { routerId, isEnabled: true, deletedAt: null },
+  });
+  if (vlans.length === 0) return;
+
+  const adapter = createAdapterForRouter({ ...router, host: router.host });
+  try {
+    await adapter.connect();
+    const ifaces = (await adapter.listInterfaces?.()) || [];
+    // Default to ether2 or bridge or first available interface
+    const parent = ifaces.find((i) => i.name === "ether2" || i.name === "bridge")?.name || ifaces[0]?.name || "ether2";
+
+    for (const v of vlans) {
+      try {
+        await adapter.createVlanInterface?.({
+          name: `vlan${v.vlanTag}`,
+          vlanId: v.vlanTag,
+          parentInterface: parent,
+          comment: `MashupHost ${v.name}`,
+        });
+        await prisma.vlan.update({
+          where: { id: v.id },
+          data: { provisioningStatus: "ACTIVE", lastProvisionedAt: new Date() },
+        });
+      } catch {
+        // Continue if interface already exists or error
+      }
+    }
+    await adapter.disconnect().catch(() => {});
+  } catch (err) {
+    console.warn(`[syncRouterVlans] Failed to sync VLANs to router ${router.name}:`, err);
+  }
 }
 
 /** Starts a router's WireGuard remote-access handshake: issues a one-time token (same pattern

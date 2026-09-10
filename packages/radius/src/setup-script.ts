@@ -429,10 +429,53 @@ ${pppoeSection}
 }
 :put "Anti-VPN & Anti-tunnelling shield active (WebSocket tunnels, SSH, SlowDNS, UDP & VPN ports blocked)"
 
+# 10. Automated NTP Time Synchronization (Ensures accurate voucher & RADIUS expiry after reboot)
+:do {/system clock set time-zone-autodetect=yes time-zone-name=Africa/Nairobi} on-error={}
+:do {/system ntp client set enabled=yes} on-error={}
+:do {/system ntp client set primary-ntp=129.6.15.28 secondary-ntp=132.163.96.1} on-error={}
+:do {/system ntp client servers remove [find]} on-error={}
+:do {/system ntp client servers add address=pool.ntp.org} on-error={}
+:do {/system ntp client servers add address=time.google.com} on-error={}
+
+# 11. Dynamic Fair-Share (PCQ) Bandwidth Shaper (Stops bandwidth hogs from lagging other users)
+:do {/queue type remove [find name=mkg-pcq-down]} on-error={}
+:do {/queue type remove [find name=mkg-pcq-up]} on-error={}
+:do {/queue type add name=mkg-pcq-down kind=pcq pcq-rate=0 pcq-classifier=dst-address pcq-limit=50KiB pcq-total-limit=2000KiB} on-error={}
+:do {/queue type add name=mkg-pcq-up kind=pcq pcq-rate=0 pcq-classifier=src-address pcq-limit=50KiB pcq-total-limit=2000KiB} on-error={}
+:do {/queue tree remove [find name=MKG_GLOBAL_DOWNLOAD]} on-error={}
+:do {/queue tree remove [find name=MKG_GLOBAL_UPLOAD]} on-error={}
+:do {/queue tree add name=MKG_GLOBAL_DOWNLOAD parent=global queue=mkg-pcq-down priority=8 comment="MashupHost Fair Share PCQ"} on-error={}
+:do {/queue tree add name=MKG_GLOBAL_UPLOAD parent=global queue=mkg-pcq-up priority=8 comment="MashupHost Fair Share PCQ"} on-error={}
+
+# 12. DNS Cache & Connection Tracking Optimization (Prevents table overflows on busy networks)
+:do {/ip dns set cache-size=4096KiB max-udp-packet-size=4096} on-error={}
+:do {/ip firewall connection tracking set tcp-close-wait-timeout=10s tcp-time-wait-timeout=10s} on-error={}
+:do {/system logging action set memory memory-lines=1000} on-error={}
+
+# 13. FastTrack Connection Acceleration (Wire-speed routing throughput for established streams)
+:if ([:len [/ip firewall filter find comment="MASHUPKGRID FASTTRACK"]] = 0) do={
+  :do {/ip firewall filter add chain=forward action=fasttrack-connection connection-state=established,related comment="MASHUPKGRID FASTTRACK"} on-error={}
+  :do {/ip firewall filter move [find comment="MASHUPKGRID FASTTRACK"] destination=1} on-error={}
+}
+
+# 14. Graphing & Telemetry (Interface & Resource performance monitoring in WinBox/WebFig)
+:do {/tool graphing interface remove [find]} on-error={}
+:do {/tool graphing interface add interface=all store-on-disk=no} on-error={}
+:do {/tool graphing resource remove [find]} on-error={}
+:do {/tool graphing resource add store-on-disk=no} on-error={}
+
+# 15. Hardware Watchdog & Auto-Reboot on Freeze
+:do {/system watchdog set auto-restart=yes watchdog-timer=yes} on-error={}
+
+# 16. Automated Daily Local Backup Scheduler
+:do {/system scheduler remove [find name=mkg-daily-backup]} on-error={}
+:do {/system scheduler add name=mkg-daily-backup interval=1d start-time=03:00:00 on-event="/system backup save name=mkg-daily-backup encryption=none"} on-error={}
+
 ${antiTetheringSection}
 
 :put "========================================================="
 :put "  SUCCESS! Router & Hotspot captive portal are ONLINE!  "
+:put "  All ISP core features & fair-share queues activated!   "
 :put "========================================================="
 `;
 }
