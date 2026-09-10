@@ -154,6 +154,102 @@ function buildAntiTetheringSection(enabled: boolean): string {
 :put "Anti-tethering active — one device per voucher enforced at the network level"`;
 }
 
+/** Social media and app-specific voucher firewall rules and destination address lists.
+ *  Allows operators to sell TikTok-only, YouTube-only, Facebook-only, Instagram-only,
+ *  WhatsApp-only, or All-in-One Social Bundle packages. */
+function buildSocialAppFirewallSection(): string {
+  return `# 17. Social Media & App-Specific Voucher Isolation
+/ip firewall address-list remove [find comment~"MASHUPKGRID SOCIAL DEST"]
+
+# TikTok Domains
+/ip firewall address-list add list="mashup-dest-tiktok" address="tiktok.com" comment="MASHUPKGRID SOCIAL DEST tiktok"
+/ip firewall address-list add list="mashup-dest-tiktok" address="www.tiktok.com" comment="MASHUPKGRID SOCIAL DEST tiktok"
+/ip firewall address-list add list="mashup-dest-tiktok" address="m.tiktok.com" comment="MASHUPKGRID SOCIAL DEST tiktok"
+/ip firewall address-list add list="mashup-dest-tiktok" address="v16-webapp.tiktokcdn.com" comment="MASHUPKGRID SOCIAL DEST tiktok"
+/ip firewall address-list add list="mashup-dest-tiktok" address="p16-va.tiktokcdn.com" comment="MASHUPKGRID SOCIAL DEST tiktok"
+/ip firewall address-list add list="mashup-dest-tiktok" address="ib.tiktokv.com" comment="MASHUPKGRID SOCIAL DEST tiktok"
+/ip firewall address-list add list="mashup-dest-tiktok" address="byteoversea.com" comment="MASHUPKGRID SOCIAL DEST tiktok"
+/ip firewall address-list add list="mashup-dest-tiktok" address="musical.ly" comment="MASHUPKGRID SOCIAL DEST tiktok"
+
+# YouTube Domains
+/ip firewall address-list add list="mashup-dest-youtube" address="youtube.com" comment="MASHUPKGRID SOCIAL DEST youtube"
+/ip firewall address-list add list="mashup-dest-youtube" address="www.youtube.com" comment="MASHUPKGRID SOCIAL DEST youtube"
+/ip firewall address-list add list="mashup-dest-youtube" address="m.youtube.com" comment="MASHUPKGRID SOCIAL DEST youtube"
+/ip firewall address-list add list="mashup-dest-youtube" address="youtu.be" comment="MASHUPKGRID SOCIAL DEST youtube"
+/ip firewall address-list add list="mashup-dest-youtube" address="googlevideo.com" comment="MASHUPKGRID SOCIAL DEST youtube"
+/ip firewall address-list add list="mashup-dest-youtube" address="ytimg.com" comment="MASHUPKGRID SOCIAL DEST youtube"
+/ip firewall address-list add list="mashup-dest-youtube" address="ggpht.com" comment="MASHUPKGRID SOCIAL DEST youtube"
+/ip firewall address-list add list="mashup-dest-youtube" address="youtubei.googleapis.com" comment="MASHUPKGRID SOCIAL DEST youtube"
+
+# Facebook Domains
+/ip firewall address-list add list="mashup-dest-facebook" address="facebook.com" comment="MASHUPKGRID SOCIAL DEST facebook"
+/ip firewall address-list add list="mashup-dest-facebook" address="www.facebook.com" comment="MASHUPKGRID SOCIAL DEST facebook"
+/ip firewall address-list add list="mashup-dest-facebook" address="m.facebook.com" comment="MASHUPKGRID SOCIAL DEST facebook"
+/ip firewall address-list add list="mashup-dest-facebook" address="fbcdn.net" comment="MASHUPKGRID SOCIAL DEST facebook"
+/ip firewall address-list add list="mashup-dest-facebook" address="fbsbx.com" comment="MASHUPKGRID SOCIAL DEST facebook"
+/ip firewall address-list add list="mashup-dest-facebook" address="meta.com" comment="MASHUPKGRID SOCIAL DEST facebook"
+/ip firewall address-list add list="mashup-dest-facebook" address="messenger.com" comment="MASHUPKGRID SOCIAL DEST facebook"
+
+# Instagram Domains
+/ip firewall address-list add list="mashup-dest-instagram" address="instagram.com" comment="MASHUPKGRID SOCIAL DEST instagram"
+/ip firewall address-list add list="mashup-dest-instagram" address="www.instagram.com" comment="MASHUPKGRID SOCIAL DEST instagram"
+/ip firewall address-list add list="mashup-dest-instagram" address="cdninstagram.com" comment="MASHUPKGRID SOCIAL DEST instagram"
+/ip firewall address-list add list="mashup-dest-instagram" address="ig.me" comment="MASHUPKGRID SOCIAL DEST instagram"
+
+# WhatsApp Domains
+/ip firewall address-list add list="mashup-dest-whatsapp" address="whatsapp.com" comment="MASHUPKGRID SOCIAL DEST whatsapp"
+/ip firewall address-list add list="mashup-dest-whatsapp" address="www.whatsapp.com" comment="MASHUPKGRID SOCIAL DEST whatsapp"
+/ip firewall address-list add list="mashup-dest-whatsapp" address="web.whatsapp.com" comment="MASHUPKGRID SOCIAL DEST whatsapp"
+/ip firewall address-list add list="mashup-dest-whatsapp" address="whatsapp.net" comment="MASHUPKGRID SOCIAL DEST whatsapp"
+
+# Social Bundle (Twitter / X addition)
+/ip firewall address-list add list="mashup-dest-social" address="x.com" comment="MASHUPKGRID SOCIAL DEST social"
+/ip firewall address-list add list="mashup-dest-social" address="twitter.com" comment="MASHUPKGRID SOCIAL DEST social"
+/ip firewall address-list add list="mashup-dest-social" address="twimg.com" comment="MASHUPKGRID SOCIAL DEST social"
+
+# Social Forward Firewall Rules
+/ip firewall filter remove [find comment~"MASHUPKGRID SOCIAL FILTER"]
+
+# 1. Allow DNS for all social client address lists
+/ip firewall filter add chain=forward protocol=udp dst-port=53 src-address-list="mashup-client-tiktok" action=accept comment="MASHUPKGRID SOCIAL FILTER DNS"
+/ip firewall filter add chain=forward protocol=tcp dst-port=53 src-address-list="mashup-client-tiktok" action=accept comment="MASHUPKGRID SOCIAL FILTER DNS"
+/ip firewall filter add chain=forward protocol=udp dst-port=53 src-address-list="mashup-client-youtube" action=accept comment="MASHUPKGRID SOCIAL FILTER DNS"
+/ip firewall filter add chain=forward protocol=tcp dst-port=53 src-address-list="mashup-client-youtube" action=accept comment="MASHUPKGRID SOCIAL FILTER DNS"
+/ip firewall filter add chain=forward protocol=udp dst-port=53 src-address-list="mashup-client-facebook" action=accept comment="MASHUPKGRID SOCIAL FILTER DNS"
+/ip firewall filter add chain=forward protocol=tcp dst-port=53 src-address-list="mashup-client-facebook" action=accept comment="MASHUPKGRID SOCIAL FILTER DNS"
+/ip firewall filter add chain=forward protocol=udp dst-port=53 src-address-list="mashup-client-instagram" action=accept comment="MASHUPKGRID SOCIAL FILTER DNS"
+/ip firewall filter add chain=forward protocol=tcp dst-port=53 src-address-list="mashup-client-instagram" action=accept comment="MASHUPKGRID SOCIAL FILTER DNS"
+/ip firewall filter add chain=forward protocol=udp dst-port=53 src-address-list="mashup-client-whatsapp" action=accept comment="MASHUPKGRID SOCIAL FILTER DNS"
+/ip firewall filter add chain=forward protocol=tcp dst-port=53 src-address-list="mashup-client-whatsapp" action=accept comment="MASHUPKGRID SOCIAL FILTER DNS"
+/ip firewall filter add chain=forward protocol=udp dst-port=53 src-address-list="mashup-client-social" action=accept comment="MASHUPKGRID SOCIAL FILTER DNS"
+/ip firewall filter add chain=forward protocol=tcp dst-port=53 src-address-list="mashup-client-social" action=accept comment="MASHUPKGRID SOCIAL FILTER DNS"
+
+# 2. Allow destination app traffic for each app profile
+/ip firewall filter add chain=forward src-address-list="mashup-client-tiktok" dst-address-list="mashup-dest-tiktok" action=accept comment="MASHUPKGRID SOCIAL FILTER ALLOW TIKTOK"
+/ip firewall filter add chain=forward src-address-list="mashup-client-youtube" dst-address-list="mashup-dest-youtube" action=accept comment="MASHUPKGRID SOCIAL FILTER ALLOW YOUTUBE"
+/ip firewall filter add chain=forward src-address-list="mashup-client-facebook" dst-address-list="mashup-dest-facebook" action=accept comment="MASHUPKGRID SOCIAL FILTER ALLOW FACEBOOK"
+/ip firewall filter add chain=forward src-address-list="mashup-client-instagram" dst-address-list="mashup-dest-instagram" action=accept comment="MASHUPKGRID SOCIAL FILTER ALLOW INSTAGRAM"
+/ip firewall filter add chain=forward src-address-list="mashup-client-whatsapp" dst-address-list="mashup-dest-whatsapp" action=accept comment="MASHUPKGRID SOCIAL FILTER ALLOW WHATSAPP"
+
+# Social bundle allows all social destinations
+/ip firewall filter add chain=forward src-address-list="mashup-client-social" dst-address-list="mashup-dest-social" action=accept comment="MASHUPKGRID SOCIAL FILTER ALLOW SOCIAL"
+/ip firewall filter add chain=forward src-address-list="mashup-client-social" dst-address-list="mashup-dest-tiktok" action=accept comment="MASHUPKGRID SOCIAL FILTER ALLOW SOCIAL TIKTOK"
+/ip firewall filter add chain=forward src-address-list="mashup-client-social" dst-address-list="mashup-dest-youtube" action=accept comment="MASHUPKGRID SOCIAL FILTER ALLOW SOCIAL YOUTUBE"
+/ip firewall filter add chain=forward src-address-list="mashup-client-social" dst-address-list="mashup-dest-facebook" action=accept comment="MASHUPKGRID SOCIAL FILTER ALLOW SOCIAL FACEBOOK"
+/ip firewall filter add chain=forward src-address-list="mashup-client-social" dst-address-list="mashup-dest-instagram" action=accept comment="MASHUPKGRID SOCIAL FILTER ALLOW SOCIAL INSTAGRAM"
+/ip firewall filter add chain=forward src-address-list="mashup-client-social" dst-address-list="mashup-dest-whatsapp" action=accept comment="MASHUPKGRID SOCIAL FILTER ALLOW SOCIAL WHATSAPP"
+
+# 3. Block all non-app destinations for each social profile
+/ip firewall filter add chain=forward src-address-list="mashup-client-tiktok" action=drop comment="MASHUPKGRID SOCIAL FILTER BLOCK TIKTOK"
+/ip firewall filter add chain=forward src-address-list="mashup-client-youtube" action=drop comment="MASHUPKGRID SOCIAL FILTER BLOCK YOUTUBE"
+/ip firewall filter add chain=forward src-address-list="mashup-client-facebook" action=drop comment="MASHUPKGRID SOCIAL FILTER BLOCK FACEBOOK"
+/ip firewall filter add chain=forward src-address-list="mashup-client-instagram" action=drop comment="MASHUPKGRID SOCIAL FILTER BLOCK INSTAGRAM"
+/ip firewall filter add chain=forward src-address-list="mashup-client-whatsapp" action=drop comment="MASHUPKGRID SOCIAL FILTER BLOCK WHATSAPP"
+/ip firewall filter add chain=forward src-address-list="mashup-client-social" action=drop comment="MASHUPKGRID SOCIAL FILTER BLOCK SOCIAL"
+
+:put "Social-only & App-specific package firewall filters initialized"`;
+}
+
 /** The PPPoE server half of a router's setup.
  *
  *  Emitted only when an interface is configured. PPPoE is not defaulted the way the hotspot is:
@@ -264,6 +360,7 @@ export function buildMikrotikProvisioningScript(
   // on a factory-reset router; the DHCP-derived fallback in the script covers everything else.
   const addressPool = options.addressPool || "default-dhcp";
   const antiTetheringSection = buildAntiTetheringSection(options.blockTethering === true);
+  const socialAppFirewallSection = buildSocialAppFirewallSection();
   const pppoeSection = buildPppoeSection(
     options.pppoeInterface,
     options.pppoeGatewayIp,
@@ -478,6 +575,8 @@ ${pppoeSection}
 :do {/system scheduler add name=mkg-daily-backup interval=1d start-time=03:00:00 on-event="/system backup save name=mkg-daily-backup encryption=none"} on-error={}
 
 ${antiTetheringSection}
+
+${socialAppFirewallSection}
 
 :put "========================================================="
 :put "  SUCCESS! Router & Hotspot captive portal are ONLINE!  "

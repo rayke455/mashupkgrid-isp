@@ -24,6 +24,16 @@ import { writeAuditLog } from "../lib/audit.js";
 
 const preHandler = [authenticate, resolveTenant, checkMaintenance] as const;
 
+const appPolicyEnum = z.enum([
+  "ALL",
+  "TIKTOK_ONLY",
+  "YOUTUBE_ONLY",
+  "FACEBOOK_ONLY",
+  "INSTAGRAM_ONLY",
+  "WHATSAPP_ONLY",
+  "SOCIAL_BUNDLE",
+]);
+
 const generateSchema = z.object({
   count: z.number().int().min(1).max(500),
   hotspotPackageId: z.string().uuid().optional(),
@@ -34,6 +44,7 @@ const generateSchema = z.object({
   uploadKbps: z.number().int().positive().optional(),
   simultaneousUse: z.number().int().min(1).max(50).optional(),
   blockTethering: z.boolean().optional(),
+  appPolicy: appPolicyEnum.optional().default("ALL"),
 });
 
 const createPackageSchema = z.object({
@@ -47,6 +58,7 @@ const createPackageSchema = z.object({
   uploadKbps: z.number().int().positive().nullable().optional(),
   simultaneousUse: z.number().int().min(1).max(50).optional().default(1),
   blockTethering: z.boolean().optional().default(false),
+  appPolicy: appPolicyEnum.optional().default("ALL"),
   isPopular: z.boolean().optional(),
   // .nullable() matters here specifically: the "remove Most Popular" toggle sends
   // `badge: null` to clear a previously-set badge, and without this the whole PATCH — including
@@ -268,6 +280,9 @@ export async function voucherRoutes(app: FastifyInstance): Promise<void> {
         dataCapMb: body.dataCapMb ?? null,
         downloadKbps: body.downloadKbps ?? null,
         uploadKbps: body.uploadKbps ?? null,
+        simultaneousUse: body.simultaneousUse,
+        blockTethering: body.blockTethering,
+        appPolicy: body.appPolicy,
       });
 
       await writeAuditLog({

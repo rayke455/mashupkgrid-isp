@@ -151,6 +151,7 @@ export async function completeStkRequest(
           code += CODE_ALPHABET[rawToken.charCodeAt(i % rawToken.length) % CODE_ALPHABET.length];
         }
 
+        const simUse = Math.max(1, pkg.simultaneousUse || 1);
         await tx.hotspotVoucher.create({
           data: {
             tenantId,
@@ -160,6 +161,8 @@ export async function completeStkRequest(
             dataCapMb: pkg.dataCapMb,
             downloadKbps: pkg.downloadKbps,
             uploadKbps: pkg.uploadKbps,
+            simultaneousUse: simUse,
+            appPolicy: pkg.appPolicy || "ALL",
             status: "UNUSED",
           },
         });
@@ -167,6 +170,27 @@ export async function completeStkRequest(
         await tx.radCheck.create({
           data: { username: code, attribute: "Cleartext-Password", op: ":=", value: code },
         });
+        await tx.radCheck.create({
+          data: { username: code, attribute: "Simultaneous-Use", op: ":=", value: String(simUse) },
+        });
+        await tx.radReply.create({
+          data: { username: code, attribute: "Port-Limit", op: "=", value: String(simUse) },
+        });
+
+        if (pkg.blockTethering) {
+          await tx.radReply.create({
+            data: { username: code, attribute: "Mikrotik-Address-List", op: "=", value: "mashup-anti-tether" },
+          });
+        }
+
+        if (pkg.appPolicy && pkg.appPolicy !== "ALL") {
+          const norm = pkg.appPolicy.toUpperCase().trim();
+          let list = `mashup-client-${norm.toLowerCase().replace(/_only$/, "")}`;
+          if (norm === "SOCIAL_BUNDLE") list = "mashup-client-social";
+          await tx.radReply.create({
+            data: { username: code, attribute: "Mikrotik-Address-List", op: "=", value: list },
+          });
+        }
         if (pkg.durationMinutes) {
           await tx.radReply.create({
             data: {

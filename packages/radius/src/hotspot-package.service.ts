@@ -14,6 +14,7 @@ export interface CreateHotspotPackageInput {
   badge?: string | null;
   simultaneousUse?: number | null;
   blockTethering?: boolean | null;
+  appPolicy?: string | null;
 }
 
 export interface UpdateHotspotPackageInput {
@@ -30,6 +31,7 @@ export interface UpdateHotspotPackageInput {
   isActive?: boolean;
   simultaneousUse?: number | null;
   blockTethering?: boolean | null;
+  appPolicy?: string | null;
 }
 
 export async function listHotspotPackages(
@@ -84,6 +86,7 @@ export async function createHotspotPackage(
       badge: input.badge?.trim() ?? null,
       simultaneousUse: Math.max(1, input.simultaneousUse ?? 1),
       blockTethering: input.blockTethering === true,
+      appPolicy: input.appPolicy?.trim() || "ALL",
       isActive: true,
     },
   });
@@ -112,6 +115,7 @@ export async function updateHotspotPackage(
       ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
       ...(input.simultaneousUse !== undefined ? { simultaneousUse: Math.max(1, input.simultaneousUse ?? 1) } : {}),
       ...(input.blockTethering !== undefined ? { blockTethering: input.blockTethering === true } : {}),
+      ...(input.appPolicy !== undefined ? { appPolicy: input.appPolicy?.trim() || "ALL" } : {}),
     },
   });
 }

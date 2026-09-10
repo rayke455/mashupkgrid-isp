@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import type { CaptiveThemeProps } from "./types";
+import { type CaptiveThemeProps, getSocialAppMeta } from "./types";
 import {
   CARTOON_3D_CATALOG,
   Cartoon3DCharacterId,
@@ -588,7 +588,9 @@ export function GoldEnergyTheme({
                       <div className="relative z-10 w-full pb-0.5 px-0.5 text-center">
                         <div className="bg-slate-950/80 backdrop-blur-xs border border-yellow-400/60 rounded-md py-0.5 px-1 shadow-xs">
                           <span className="text-[8.5px] font-extrabold text-amber-300 uppercase tracking-tight block truncate">
-                            {formatPackageSpeed(pkg.downloadKbps, pkg.dataCapMb)}
+                            {pkg.appPolicy && pkg.appPolicy !== "ALL"
+                              ? `${getSocialAppMeta(pkg.appPolicy).icon} ${getSocialAppMeta(pkg.appPolicy).name}`
+                              : formatPackageSpeed(pkg.downloadKbps, pkg.dataCapMb)}
                           </span>
                         </div>
                       </div>

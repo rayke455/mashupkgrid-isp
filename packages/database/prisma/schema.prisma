@@ -1708,6 +1708,7 @@ model HotspotPackage {
   badge           String?
   simultaneousUse Int              @default(1)
   blockTethering  Boolean          @default(false)
+  appPolicy       String?          @default("ALL")
   isActive        Boolean          @default(true)
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
@@ -1737,6 +1738,7 @@ model HotspotVoucher {
   downloadKbps     Int?
   uploadKbps       Int?
   simultaneousUse  Int?            @default(1)
+  appPolicy        String?         @default("ALL")
   status           VoucherStatus   @default(UNUSED)
   activatedAt      DateTime?
   expiresAt        DateTime?

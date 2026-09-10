@@ -26,6 +26,18 @@ export interface GenerateVouchersInput {
   uploadKbps?: number | null;
   simultaneousUse?: number | null;
   blockTethering?: boolean | null;
+  appPolicy?: string | null;
+}
+
+export function getSocialClientAddressList(policy: string): string {
+  const norm = policy.toUpperCase().trim();
+  if (norm === "TIKTOK_ONLY") return "mashup-client-tiktok";
+  if (norm === "YOUTUBE_ONLY") return "mashup-client-youtube";
+  if (norm === "FACEBOOK_ONLY") return "mashup-client-facebook";
+  if (norm === "INSTAGRAM_ONLY") return "mashup-client-instagram";
+  if (norm === "WHATSAPP_ONLY") return "mashup-client-whatsapp";
+  if (norm === "SOCIAL_BUNDLE") return "mashup-client-social";
+  return `mashup-client-${norm.toLowerCase().replace(/_only$/, "").replace(/[^a-z0-9]/g, "-")}`;
 }
 
 /** Generates `count` self-contained hotspot vouchers. Each voucher is its own RADIUS identity
@@ -43,6 +55,7 @@ export async function generateVouchers(input: GenerateVouchersInput): Promise<Ho
   let uploadKbps = input.uploadKbps;
   let simultaneousUse = input.simultaneousUse;
   let blockTethering = input.blockTethering;
+  let appPolicy = input.appPolicy;
 
   if (input.hotspotPackageId) {
     const pkg = await prisma.hotspotPackage.findUnique({
@@ -62,6 +75,7 @@ export async function generateVouchers(input: GenerateVouchersInput): Promise<Ho
     uploadKbps = uploadKbps ?? pkg.uploadKbps;
     simultaneousUse = simultaneousUse ?? pkg.simultaneousUse;
     blockTethering = blockTethering ?? pkg.blockTethering;
+    appPolicy = appPolicy ?? pkg.appPolicy;
   }
 
   const resolvedInput: GenerateVouchersInput = {
@@ -72,6 +86,7 @@ export async function generateVouchers(input: GenerateVouchersInput): Promise<Ho
     uploadKbps,
     simultaneousUse: simultaneousUse ?? 1,
     blockTethering: blockTethering === true,
+    appPolicy: appPolicy || "ALL",
   };
 
   const vouchers: HotspotVoucher[] = [];
@@ -101,6 +116,7 @@ export async function createHotspotVoucherForPurchase(
     uploadKbps: pkg.uploadKbps,
     simultaneousUse: pkg.simultaneousUse,
     blockTethering: pkg.blockTethering,
+    appPolicy: pkg.appPolicy,
     count: 1,
     createdByUserId: null,
   });
@@ -129,6 +145,7 @@ async function createOneVoucher(input: GenerateVouchersInput): Promise<HotspotVo
           downloadKbps: input.downloadKbps ?? null,
           uploadKbps: input.uploadKbps ?? null,
           simultaneousUse: simUse,
+          appPolicy: input.appPolicy || "ALL",
           createdByUserId: input.createdByUserId ?? null,
           status: "UNUSED",
         },
@@ -161,6 +178,19 @@ async function createOneVoucher(input: GenerateVouchersInput): Promise<HotspotVo
             attribute: "Mikrotik-Address-List",
             op: "=",
             value: "mashup-anti-tether",
+          },
+        });
+      }
+
+      if (input.appPolicy && input.appPolicy !== "ALL") {
+        // Social Media / App-specific restriction: adds client IP to "mashup-client-<app>"
+        const socialList = getSocialClientAddressList(input.appPolicy);
+        await tx.radReply.create({
+          data: {
+            username: code,
+            attribute: "Mikrotik-Address-List",
+            op: "=",
+            value: socialList,
           },
         });
       }

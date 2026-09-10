@@ -7,7 +7,7 @@ import { useAuth } from "@/lib/auth-context";
 import { formatMoney } from "@/lib/money";
 import { Button, Card, ErrorText, HintText, Input, Label, Badge, StatusDot } from "@/components/ui";
 import { IconCheck, IconCopy, IconTicket } from "@/components/icons";
-import { THEME_CATALOG, type ThemeId } from "@/components/hotspot/themes";
+import { THEME_CATALOG, type ThemeId, getSocialAppMeta, SOCIAL_APP_CATALOG, type SocialAppPolicy } from "@/components/hotspot/themes";
 import { PackageAssistantChat } from "@/components/hotspot/package-assistant-chat";
 import { CaptivePortalEmbedStudio } from "@/components/hotspot/captive-portal-embed-studio";
 
@@ -25,6 +25,7 @@ interface HotspotPackage {
   badge?: string | null;
   simultaneousUse?: number;
   blockTethering?: boolean;
+  appPolicy?: string | null;
   isActive: boolean;
 }
 
@@ -39,6 +40,7 @@ interface Voucher {
   downloadKbps: number | null;
   uploadKbps: number | null;
   simultaneousUse?: number | null;
+  appPolicy?: string | null;
   expiresAt: string | null;
   createdAt: string;
 }
@@ -102,6 +104,7 @@ export default function VouchersPage() {
   const [downloadSpeed, setDownloadSpeed] = useState("");
   const [uploadSpeed, setUploadSpeed] = useState("");
   const [simultaneousUse, setSimultaneousUse] = useState("1");
+  const [batchAppPolicy, setBatchAppPolicy] = useState<SocialAppPolicy>("ALL");
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [lastBatch, setLastBatch] = useState<Voucher[] | null>(null);
 
@@ -114,6 +117,7 @@ export default function VouchersPage() {
   const [pkgUploadMbps, setPkgUploadMbps] = useState("2");
   const [pkgSimultaneousUse, setPkgSimultaneousUse] = useState("1");
   const [pkgBlockTethering, setPkgBlockTethering] = useState(false);
+  const [pkgAppPolicy, setPkgAppPolicy] = useState<SocialAppPolicy>("ALL");
   const [pkgIsPopular, setPkgIsPopular] = useState(false);
   const [pkgBadge, setPkgBadge] = useState("MOST POPULAR");
   const [packageError, setPackageError] = useState<string | null>(null);
@@ -128,6 +132,7 @@ export default function VouchersPage() {
   const [editPkgUploadMbps, setEditPkgUploadMbps] = useState("2");
   const [editPkgSimultaneousUse, setEditPkgSimultaneousUse] = useState("1");
   const [editPkgBlockTethering, setEditPkgBlockTethering] = useState(false);
+  const [editPkgAppPolicy, setEditPkgAppPolicy] = useState<SocialAppPolicy>("ALL");
   const [editPkgIsPopular, setEditPkgIsPopular] = useState(false);
   const [editPkgBadge, setEditPkgBadge] = useState("MOST POPULAR");
   const [editPkgError, setEditPkgError] = useState<string | null>(null);
@@ -170,6 +175,7 @@ export default function VouchersPage() {
         setDownloadSpeed(pkg.downloadKbps ? String(pkg.downloadKbps) : "");
         setUploadSpeed(pkg.uploadKbps ? String(pkg.uploadKbps) : "");
         setSimultaneousUse(String(pkg.simultaneousUse || 1));
+        setBatchAppPolicy((pkg.appPolicy as SocialAppPolicy) || "ALL");
       }
     }
   }, [selectedPackageId, packages]);
@@ -187,6 +193,7 @@ export default function VouchersPage() {
           downloadKbps: downloadSpeed ? Number(downloadSpeed) : undefined,
           uploadKbps: uploadSpeed ? Number(uploadSpeed) : undefined,
           simultaneousUse: simultaneousUse ? Number(simultaneousUse) : undefined,
+          appPolicy: batchAppPolicy,
         }),
       }),
     onSuccess: (vouchers) => {
@@ -211,6 +218,7 @@ export default function VouchersPage() {
           uploadKbps: pkgUploadMbps ? Math.round(Number(pkgUploadMbps) * 1000) : undefined,
           simultaneousUse: Math.max(1, Number(pkgSimultaneousUse) || 1),
           blockTethering: pkgBlockTethering,
+          appPolicy: pkgAppPolicy,
           isPopular: pkgIsPopular,
           badge: pkgIsPopular && pkgBadge ? pkgBadge.trim() : undefined,
         }),
@@ -221,6 +229,7 @@ export default function VouchersPage() {
       setPkgDataCap("");
       setPkgIsPopular(false);
       setPkgBlockTethering(false);
+      setPkgAppPolicy("ALL");
       setPkgSimultaneousUse("1");
       setShowPackageForm(false);
       queryClient.invalidateQueries({ queryKey: ["hotspot-packages-staff"] });
@@ -243,6 +252,7 @@ export default function VouchersPage() {
           uploadKbps: editPkgUploadMbps ? Math.round(Number(editPkgUploadMbps) * 1000) : null,
           simultaneousUse: Math.max(1, Number(editPkgSimultaneousUse) || 1),
           blockTethering: editPkgBlockTethering,
+          appPolicy: editPkgAppPolicy,
           isPopular: editPkgIsPopular,
           badge: editPkgIsPopular && editPkgBadge ? editPkgBadge.trim() : null,
         }),
@@ -295,6 +305,7 @@ export default function VouchersPage() {
     setEditPkgUploadMbps(pkg.uploadKbps ? String(Math.round(pkg.uploadKbps / 1000)) : "");
     setEditPkgSimultaneousUse(String(pkg.simultaneousUse || 1));
     setEditPkgBlockTethering(pkg.blockTethering === true);
+    setEditPkgAppPolicy((pkg.appPolicy as SocialAppPolicy) || "ALL");
     setEditPkgIsPopular(pkg.isPopular === true);
     setEditPkgBadge(pkg.badge || "MOST POPULAR");
     setEditPkgError(null);
@@ -535,6 +546,23 @@ export default function VouchersPage() {
                   <HintText className="text-[11px]">Max concurrent logins per voucher</HintText>
                 </div>
 
+                <div>
+                  <Label htmlFor="batchAppPolicy">App Access Policy</Label>
+                  <select
+                    id="batchAppPolicy"
+                    value={batchAppPolicy}
+                    onChange={(e) => setBatchAppPolicy(e.target.value as SocialAppPolicy)}
+                    className="w-full mt-1 px-3 py-2 text-sm rounded-lg border border-slate-300 dark:border-obsidian-700 bg-white dark:bg-obsidian-950 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  >
+                    {Object.values(SOCIAL_APP_CATALOG).map((item) => (
+                      <option key={item.policy} value={item.policy}>
+                        {item.icon} {item.name}
+                      </option>
+                    ))}
+                  </select>
+                  <HintText className="text-[11px]">Restrict voucher to social app or full web</HintText>
+                </div>
+
                 <div className="sm:col-span-3 pt-2 flex items-center justify-between">
                   <Button type="submit" disabled={generate.isPending}>
                     {generate.isPending ? "Generating FreeRADIUS tickets..." : "Generate Voucher Batch"}
@@ -612,11 +640,18 @@ export default function VouchersPage() {
                     </Badge>
                   </div>
 
-                  {voucher.hotspotPackage && (
-                    <p className="text-xs font-semibold text-purple-600 dark:text-purple-400 mt-1">
-                      {voucher.hotspotPackage.name}
-                    </p>
-                  )}
+                  <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                    {voucher.hotspotPackage && (
+                      <p className="text-xs font-semibold text-purple-600 dark:text-purple-400">
+                        {voucher.hotspotPackage.name}
+                      </p>
+                    )}
+                    {voucher.appPolicy && voucher.appPolicy !== "ALL" && (
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${getSocialAppMeta(voucher.appPolicy).badgeBg} ${getSocialAppMeta(voucher.appPolicy).badgeText} ${getSocialAppMeta(voucher.appPolicy).border}`}>
+                        {getSocialAppMeta(voucher.appPolicy).icon} {getSocialAppMeta(voucher.appPolicy).shortLabel}
+                      </span>
+                    )}
+                  </div>
 
                   <div className="mt-3 flex items-center justify-between border-t border-slate-100 dark:border-obsidian-800 pt-2 text-xs text-slate-500 dark:text-slate-400">
                     <span>{voucher.durationMinutes ? formatDuration(voucher.durationMinutes) : "Unlimited"}</span>
@@ -820,6 +855,49 @@ export default function VouchersPage() {
                   </div>
                 </div>
 
+                {/* Social Media & App Restriction Policy */}
+                <div className="rounded-xl border border-blue-500/30 bg-blue-50/20 dark:bg-blue-950/20 p-3.5 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                      <span>🌐</span> Access Type / Social Media Only Bundle
+                    </span>
+                    <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${getSocialAppMeta(pkgAppPolicy).badgeBg} ${getSocialAppMeta(pkgAppPolicy).badgeText} ${getSocialAppMeta(pkgAppPolicy).border}`}>
+                      {getSocialAppMeta(pkgAppPolicy).icon} {getSocialAppMeta(pkgAppPolicy).name}
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                    {Object.values(SOCIAL_APP_CATALOG).map((item) => (
+                      <button
+                        key={item.policy}
+                        type="button"
+                        onClick={() => setPkgAppPolicy(item.policy)}
+                        className={`p-2 rounded-lg border text-left flex flex-col justify-between transition-all ${
+                          pkgAppPolicy === item.policy
+                            ? "border-purple-600 bg-purple-50 dark:bg-purple-950/50 shadow-xs ring-1 ring-purple-600"
+                            : "border-slate-200 dark:border-obsidian-800 bg-white/70 dark:bg-obsidian-900/50 hover:border-slate-300 dark:hover:border-obsidian-700"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-base">{item.icon}</span>
+                          {pkgAppPolicy === item.policy && (
+                            <span className="text-[10px] text-purple-600 dark:text-purple-400 font-bold">✓ Selected</span>
+                          )}
+                        </div>
+                        <div className="mt-1.5">
+                          <div className="text-xs font-bold text-slate-900 dark:text-white leading-tight">{item.shortLabel}</div>
+                          <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
+                            {item.policy === "ALL" ? "Full Internet" : `${item.shortLabel} only`}
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                  <HintText className="text-[11px]">
+                    Social vouchers restrict DNS &amp; forward traffic exclusively to the selected app/CDN, dropping all outside traffic.
+                  </HintText>
+                </div>
+
                 <div className="rounded-xl bg-purple-500/10 border border-purple-500/30 p-3.5 space-y-2">
                   <label className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-slate-100 cursor-pointer">
                     <input
@@ -924,11 +1002,19 @@ export default function VouchersPage() {
                     </div>
                   </div>
 
-                  {pkg.blockTethering && (
-                    <div className="mt-2.5 flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-500/20 px-2 py-0.5 rounded-md border border-emerald-500/20 w-fit">
-                      <span>🛡️ Anti-Hotspot Shield Active</span>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-1.5 mt-2.5 flex-wrap">
+                    {pkg.appPolicy && pkg.appPolicy !== "ALL" && (
+                      <div className={`flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md border ${getSocialAppMeta(pkg.appPolicy).badgeBg} ${getSocialAppMeta(pkg.appPolicy).badgeText} ${getSocialAppMeta(pkg.appPolicy).border}`}>
+                        <span>{getSocialAppMeta(pkg.appPolicy).icon}</span>
+                        <span>{getSocialAppMeta(pkg.appPolicy).name}</span>
+                      </div>
+                    )}
+                    {pkg.blockTethering && (
+                      <div className="flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-500/20 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                        <span>🛡️ Anti-Hotspot</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 <div className="mt-4 pt-3 border-t border-slate-100 dark:border-obsidian-800 flex items-center justify-between gap-1">
@@ -1214,6 +1300,49 @@ export default function VouchersPage() {
                         </label>
                       </div>
                     </div>
+                  </div>
+
+                  {/* Social Media & App Restriction Policy */}
+                  <div className="rounded-xl border border-blue-500/30 bg-blue-50/20 dark:bg-blue-950/20 p-3.5 space-y-2.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                        <span>🌐</span> Access Type / Social Media Only Bundle
+                      </span>
+                      <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${getSocialAppMeta(editPkgAppPolicy).badgeBg} ${getSocialAppMeta(editPkgAppPolicy).badgeText} ${getSocialAppMeta(editPkgAppPolicy).border}`}>
+                        {getSocialAppMeta(editPkgAppPolicy).icon} {getSocialAppMeta(editPkgAppPolicy).name}
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                      {Object.values(SOCIAL_APP_CATALOG).map((item) => (
+                        <button
+                          key={item.policy}
+                          type="button"
+                          onClick={() => setEditPkgAppPolicy(item.policy)}
+                          className={`p-2 rounded-lg border text-left flex flex-col justify-between transition-all ${
+                            editPkgAppPolicy === item.policy
+                              ? "border-purple-600 bg-purple-50 dark:bg-purple-950/50 shadow-xs ring-1 ring-purple-600"
+                              : "border-slate-200 dark:border-obsidian-800 bg-white/70 dark:bg-obsidian-900/50 hover:border-slate-300 dark:hover:border-obsidian-700"
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-base">{item.icon}</span>
+                            {editPkgAppPolicy === item.policy && (
+                              <span className="text-[10px] text-purple-600 dark:text-purple-400 font-bold">✓ Selected</span>
+                            )}
+                          </div>
+                          <div className="mt-1.5">
+                            <div className="text-xs font-bold text-slate-900 dark:text-white leading-tight">{item.shortLabel}</div>
+                            <div className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
+                              {item.policy === "ALL" ? "Full Internet" : `${item.shortLabel} only`}
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                    <HintText className="text-[11px]">
+                      Select whether this package gives full web access or is locked to specific social media apps (TikTok, YouTube, Facebook, Instagram, WhatsApp, or Social Bundle).
+                    </HintText>
                   </div>
 
                   {/* Most Popular Badge */}

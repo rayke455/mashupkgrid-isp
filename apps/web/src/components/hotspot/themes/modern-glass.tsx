@@ -1,6 +1,4 @@
-"use client";
-
-import type { CaptiveThemeProps } from "./types";
+import { type CaptiveThemeProps, getSocialAppMeta } from "./types";
 
 function formatDuration(minutes: number): string {
   if (minutes < 60) return `${minutes} Mins`;
@@ -137,6 +135,11 @@ export function ModernGlassTheme({
                         <p className="text-xs text-slate-400 mt-0.5">
                           {formatDuration(pkg.durationMinutes)} • {pkg.downloadKbps ? `${Math.round(pkg.downloadKbps / 1000)}Mbps` : "Unlimited Speed"}
                         </p>
+                        {pkg.appPolicy && pkg.appPolicy !== "ALL" && (
+                          <span className={`inline-flex items-center gap-1 mt-1.5 text-[10px] font-bold px-2 py-0.5 rounded-full border ${getSocialAppMeta(pkg.appPolicy).badgeBg} ${getSocialAppMeta(pkg.appPolicy).badgeText} ${getSocialAppMeta(pkg.appPolicy).border}`}>
+                            {getSocialAppMeta(pkg.appPolicy).icon} {getSocialAppMeta(pkg.appPolicy).name}
+                          </span>
+                        )}
                       </div>
                       <div className="text-right">
                         <span className="block font-extrabold text-base text-purple-400">
