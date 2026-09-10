@@ -11,7 +11,11 @@ export const config = {
   matcher: ["/", "/login", "/register"],
 };
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API_BASE_URL =
+  process.env.INTERNAL_API_URL ??
+  (process.env.NEXT_PUBLIC_API_URL && !process.env.NEXT_PUBLIC_API_URL.includes("localhost")
+    ? process.env.NEXT_PUBLIC_API_URL
+    : "http://api:4000");
 
 /** Loopback/plain-IP access has nothing to resolve — skip the extra fetch on every single local
  *  dev page load. A spoofed Host header in a test request (e.g. `curl -H "Host: foo.bar" ...`)

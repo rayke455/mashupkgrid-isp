@@ -1,33 +1,38 @@
 export function getApiBaseUrl(): string {
-  if (process.env.NEXT_PUBLIC_API_URL) {
-    if (typeof window !== "undefined") {
-      try {
-        const configuredUrl = new URL(process.env.NEXT_PUBLIC_API_URL, window.location.origin);
-        // Only rewrite hostname if we are strictly in local development on a LAN IP
-        if (
-          (configuredUrl.hostname === "localhost" || configuredUrl.hostname === "127.0.0.1") &&
-          window.location.hostname !== "localhost" &&
-          window.location.hostname !== "127.0.0.1" &&
-          /^\d{1,3}(\.\d{1,3}){3}$/.test(window.location.hostname)
-        ) {
-          const port = configuredUrl.port || "4000";
-          return `${window.location.protocol}//${window.location.hostname}:${port}`;
-        }
-      } catch {
-        // fallback to NEXT_PUBLIC_API_URL
-      }
-    }
-    return process.env.NEXT_PUBLIC_API_URL;
-  }
   if (typeof window !== "undefined") {
-    if (window.location.hostname === "localhost" || /^\d{1,3}(\.\d{1,3}){3}$/.test(window.location.hostname)) {
+    // 1. Local development on loopback
+    if (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1") {
+      return `${window.location.protocol}//localhost:4000`;
+    }
+    // 2. Direct LAN / Raw IP access
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(window.location.hostname)) {
       return `${window.location.protocol}//${window.location.hostname}:4000`;
     }
+    // 3. Explicit non-localhost NEXT_PUBLIC_API_URL if configured
+    if (process.env.NEXT_PUBLIC_API_URL) {
+      try {
+        const configuredUrl = new URL(process.env.NEXT_PUBLIC_API_URL, window.location.origin);
+        if (configuredUrl.hostname !== "localhost" && configuredUrl.hostname !== "127.0.0.1") {
+          return process.env.NEXT_PUBLIC_API_URL;
+        }
+      } catch {
+        // fallback to dynamic domain resolution
+      }
+    }
+    // 4. Any public domain (mashuphost.tech, app.mashuphost.tech, mash.mashuphost.tech) -> api.mashuphost.tech
     const parts = window.location.hostname.split(".");
     const baseDomain = parts.slice(-2).join(".");
     return `${window.location.protocol}//api.${baseDomain}`;
   }
-  return "http://localhost:4000";
+
+  // Server-side (inside Next.js Node container)
+  if (process.env.INTERNAL_API_URL) {
+    return process.env.INTERNAL_API_URL;
+  }
+  if (process.env.NEXT_PUBLIC_API_URL && !process.env.NEXT_PUBLIC_API_URL.includes("localhost")) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
+  return "http://api:4000";
 }
 
 export interface ApiSuccess<T> {
