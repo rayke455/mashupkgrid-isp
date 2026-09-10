@@ -10,11 +10,11 @@ import type { MpesaCredentials } from "./config.service.js";
 const SINGLETON_ID = "platform";
 
 export interface SetPlatformMpesaConfigInput {
-  consumerKey: string;
-  consumerSecret: string;
-  shortcode: string;
-  passkey: string;
-  environment: "sandbox" | "production";
+  consumerKey?: string;
+  consumerSecret?: string;
+  shortcode?: string;
+  passkey?: string;
+  environment?: "sandbox" | "production";
   isActive?: boolean;
   /** B2B initiator: the Daraja API user allowed to move money out, and their password already
    *  encrypted against Safaricom's public certificate. The operator generates that blob — this
@@ -24,18 +24,28 @@ export interface SetPlatformMpesaConfigInput {
   initiatorCredential?: string;
   /** Smallest balance an automatic payout run will send, in cents. */
   payoutMinimumMinor?: number;
+  /** --- Donate / "Buy Me a Coffee" M-Pesa gateway --- */
+  donateEnabled?: boolean;
+  donatePaybill?: string;
+  donateAccountReference?: string;
 }
 
 export async function setPlatformMpesaConfig(input: SetPlatformMpesaConfigInput) {
-  const data = {
-    consumerKeyEncrypted: encryptAtRest(input.consumerKey, env.ENCRYPTION_KEY),
-    consumerSecretEncrypted: encryptAtRest(input.consumerSecret, env.ENCRYPTION_KEY),
-    shortcode: input.shortcode,
-    passkeyEncrypted: encryptAtRest(input.passkey, env.ENCRYPTION_KEY),
-    environment: input.environment,
-    isActive: input.isActive ?? true,
-    // Only overwritten when supplied: re-saving collection settings must not silently wipe
-    // payout credentials that were entered separately.
+  const existing = await prisma.platformMpesaConfig.findUnique({ where: { id: SINGLETON_ID } });
+
+  if (!existing && (!input.consumerKey || !input.consumerSecret || !input.shortcode || !input.passkey)) {
+    throw new ValidationError(
+      "Consumer key, secret, shortcode, and passkey are required for initial platform M-Pesa configuration"
+    );
+  }
+
+  const updateData: Record<string, any> = {
+    ...(input.consumerKey ? { consumerKeyEncrypted: encryptAtRest(input.consumerKey, env.ENCRYPTION_KEY) } : {}),
+    ...(input.consumerSecret ? { consumerSecretEncrypted: encryptAtRest(input.consumerSecret, env.ENCRYPTION_KEY) } : {}),
+    ...(input.shortcode ? { shortcode: input.shortcode } : {}),
+    ...(input.passkey ? { passkeyEncrypted: encryptAtRest(input.passkey, env.ENCRYPTION_KEY) } : {}),
+    ...(input.environment ? { environment: input.environment } : {}),
+    ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
     ...(input.initiatorName !== undefined ? { initiatorName: input.initiatorName || null } : {}),
     ...(input.initiatorCredential
       ? { initiatorCredentialEncrypted: encryptAtRest(input.initiatorCredential, env.ENCRYPTION_KEY) }
@@ -43,12 +53,49 @@ export async function setPlatformMpesaConfig(input: SetPlatformMpesaConfigInput)
     ...(input.payoutMinimumMinor !== undefined
       ? { payoutMinimumMinor: Math.max(1, Math.floor(input.payoutMinimumMinor)) }
       : {}),
+    ...(input.donateEnabled !== undefined ? { donateEnabled: input.donateEnabled } : {}),
+    ...(input.donatePaybill !== undefined ? { donatePaybill: input.donatePaybill.trim() || null } : {}),
+    ...(input.donateAccountReference !== undefined
+      ? { donateAccountReference: input.donateAccountReference.trim() || null }
+      : {}),
   };
+
   return prisma.platformMpesaConfig.upsert({
     where: { id: SINGLETON_ID },
-    update: data,
-    create: { id: SINGLETON_ID, ...data },
+    update: updateData,
+    create: {
+      id: SINGLETON_ID,
+      consumerKeyEncrypted: input.consumerKey ? encryptAtRest(input.consumerKey, env.ENCRYPTION_KEY) : "",
+      consumerSecretEncrypted: input.consumerSecret ? encryptAtRest(input.consumerSecret, env.ENCRYPTION_KEY) : "",
+      shortcode: input.shortcode ?? "",
+      passkeyEncrypted: input.passkey ? encryptAtRest(input.passkey, env.ENCRYPTION_KEY) : "",
+      environment: input.environment ?? "sandbox",
+      isActive: input.isActive ?? true,
+      ...updateData,
+    },
   });
+}
+
+// ---------------------------------------------------------------------------
+// Donate / "Buy Me a Coffee" config
+// ---------------------------------------------------------------------------
+
+export interface DonateConfig {
+  enabled: boolean;
+  paybill: string | null;
+  accountReference: string;
+}
+
+/** Public-facing config the donate page reads to display the correct Paybill and account
+ *  reference. Falls back to the platform's own shortcode when no dedicated donate paybill is
+ *  set, and to "COFFEE" when no account reference is set. */
+export async function getDonateConfig(): Promise<DonateConfig> {
+  const config = await prisma.platformMpesaConfig.findUnique({ where: { id: SINGLETON_ID } });
+  return {
+    enabled: config?.donateEnabled ?? false,
+    paybill: config?.donatePaybill || config?.shortcode || null,
+    accountReference: config?.donateAccountReference || "COFFEE",
+  };
 }
 
 /** Safe-to-display: whether payouts are possible at all, never the credential itself. */
@@ -100,15 +147,21 @@ export interface PlatformMpesaConfigStatus {
   isActive: boolean;
   shortcode: string | null;
   environment: string;
+  donateEnabled: boolean;
+  donatePaybill: string | null;
+  donateAccountReference: string | null;
 }
 
 export async function getPlatformMpesaConfigStatus(): Promise<PlatformMpesaConfigStatus> {
   const config = await prisma.platformMpesaConfig.findUnique({ where: { id: SINGLETON_ID } });
-  if (!config) return { configured: false, isActive: false, shortcode: null, environment: "sandbox" };
+  if (!config) return { configured: false, isActive: false, shortcode: null, environment: "sandbox", donateEnabled: false, donatePaybill: null, donateAccountReference: null };
   return {
     configured: Boolean(config.consumerKeyEncrypted && config.consumerSecretEncrypted && config.passkeyEncrypted),
     isActive: config.isActive,
     shortcode: config.shortcode,
     environment: config.environment,
+    donateEnabled: config.donateEnabled,
+    donatePaybill: config.donatePaybill,
+    donateAccountReference: config.donateAccountReference,
   };
 }

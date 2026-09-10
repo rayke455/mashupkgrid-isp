@@ -987,10 +987,43 @@ model PlatformMpesaConfig {
   /// Defaults to 1 — every cent collected is remitted.
   payoutMinimumMinor      Int      @default(1)
   environment             String   @default("sandbox")
+  /// --- Donate / "Buy Me a Coffee" M-Pesa gateway ---
+  /// When true, the public donate page's M-Pesa STK push is enabled. When false, only the
+  /// manual Paybill fallback instructions are shown.
+  donateEnabled           Boolean  @default(false)
+  /// The Paybill or Till number displayed on the donate page's manual fallback instructions,
+  /// and used as the collecting shortcode for donation STK pushes when the platform's own
+  /// credentials are configured. Null means "use the platform shortcode".
+  donatePaybill           String?
+  /// The M-Pesa account reference shown to donors (e.g. "COFFEE"). Defaults to "COFFEE" in
+  /// application code when null.
+  donateAccountReference  String?
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 
   @@map("platform_mpesa_config")
+}
+
+/// Tracks "Buy Me a Coffee" / donation M-Pesa STK pushes. Separate from MpesaStkRequest because
+/// donations have no tenant, no customer, no invoice — they are platform-level tips from the
+/// public. The callback finds and completes these by checkoutRequestId, same as tenant payments.
+model Donation {
+  id                 String   @id @default(uuid())
+  phone              String
+  amountMinor        Int
+  donorName          String?
+  donorMessage       String?
+  merchantRequestId  String
+  checkoutRequestId  String   @unique
+  status             String   @default("PENDING") // PENDING | COMPLETED | FAILED | CANCELLED
+  resultCode         Int?
+  resultDesc         String?
+  mpesaReceiptNumber String?  @unique
+  rawCallback        Json?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@map("donations")
 }
 
 /// "Sign in with Google" is platform-wide, same reasoning as PlatformMpesaConfig — one OAuth app

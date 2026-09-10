@@ -34,13 +34,16 @@ interface BotSession {
   packageIds?: string[];
 }
 
-function sessionKey(phone: string): string {
-  return `wa-bot:${phone}`;
+/** Session keys are namespaced by tenant so the same phone messaging two different ISP lines
+ *  gets isolated bot state for each — otherwise package lists, menu position and the stored
+ *  tenantId bleed across tenants. */
+function sessionKey(tenantId: string, phone: string): string {
+  return `wa-bot:${tenantId}:${phone}`;
 }
 
-async function loadSession(phone: string): Promise<BotSession> {
+async function loadSession(tenantId: string, phone: string): Promise<BotSession> {
   try {
-    const raw = await redis.get(sessionKey(phone));
+    const raw = await redis.get(sessionKey(tenantId, phone));
     if (raw) return JSON.parse(raw) as BotSession;
   } catch (err) {
     console.error("[whatsapp-bot] failed to load session", err);
@@ -48,9 +51,9 @@ async function loadSession(phone: string): Promise<BotSession> {
   return { state: "main" };
 }
 
-async function saveSession(phone: string, session: BotSession): Promise<void> {
+async function saveSession(tenantId: string, phone: string, session: BotSession): Promise<void> {
   try {
-    await redis.set(sessionKey(phone), JSON.stringify(session), "EX", SESSION_TTL_SECONDS);
+    await redis.set(sessionKey(tenantId, phone), JSON.stringify(session), "EX", SESSION_TTL_SECONDS);
   } catch (err) {
     console.error("[whatsapp-bot] failed to save session", err);
   }
@@ -241,7 +244,7 @@ export async function handleIncomingWhatsAppMessage(
     // The tenant is no longer inferred — the message arrived on that ISP's own WhatsApp session,
     // so it is known for certain. This is what removed the old "which internet provider are you
     // with?" prompt, which existed only because one shared line could not tell.
-    const session = await loadSession(phone);
+    const session = await loadSession(tenantId, phone);
     const isReset = ["menu", "0", "hi", "hello", "hey", "start", "help"].includes(lower);
     if (isReset) session.state = "main";
     session.tenantId = tenantId;
@@ -258,40 +261,40 @@ export async function handleIncomingWhatsAppMessage(
     if (!isReset && session.state === "outage_awaiting_description") {
       const reply = await handleTicket(tenantId, phone, input, "outage");
       session.state = "main";
-      await saveSession(phone, session);
+      await saveSession(tenantId, phone, session);
       await sendWhatsAppMessage(sock, replyTarget, reply);
       return;
     }
     if (!isReset && session.state === "support_awaiting_message") {
       const reply = await handleTicket(tenantId, phone, input, "support");
       session.state = "main";
-      await saveSession(phone, session);
+      await saveSession(tenantId, phone, session);
       await sendWhatsAppMessage(sock, replyTarget, reply);
       return;
     }
 
     if (!isReset && session.state === "buy_pick_package" && /^\d+$/.test(input)) {
       const reply = await handleBuyPick(tenantId, phone, session, Number(input));
-      await saveSession(phone, session);
+      await saveSession(tenantId, phone, session);
       await sendWhatsAppMessage(sock, replyTarget, reply);
       return;
     }
 
     if (!isReset && input === "1") {
       const reply = await handleBalance(tenantId, phone);
-      await saveSession(phone, session);
+      await saveSession(tenantId, phone, session);
       await sendWhatsAppMessage(sock, replyTarget, reply);
       return;
     }
     if (!isReset && input === "2") {
       const reply = await handleBuyList(tenantId, session);
-      await saveSession(phone, session);
+      await saveSession(tenantId, phone, session);
       await sendWhatsAppMessage(sock, replyTarget, reply);
       return;
     }
     if (!isReset && input === "3") {
       session.state = "outage_awaiting_description";
-      await saveSession(phone, session);
+      await saveSession(tenantId, phone, session);
       await sendWhatsAppMessage(
         sock,
         replyTarget,
@@ -301,15 +304,23 @@ export async function handleIncomingWhatsAppMessage(
     }
     if (!isReset && input === "4") {
       session.state = "support_awaiting_message";
-      await saveSession(phone, session);
+      await saveSession(tenantId, phone, session);
       await sendWhatsAppMessage(sock, replyTarget, "💬 Please type your message and our support team will get back to you.");
       return;
     }
 
+    // If the customer sent something we don't recognise (not a menu number, not a reset keyword),
+    // tell them so before re-showing the menu — a silent re-display makes them think their
+    // message was processed.
+    const menuText = await mainMenu(tenantName);
+    const replyText = isReset
+      ? menuText
+      : `Sorry, I didn't understand "${input.slice(0, 40)}". Please reply with a number from the menu below.\n\n${menuText}`;
+
     session.state = "main";
-    await saveSession(phone, session);
+    await saveSession(tenantId, phone, session);
     console.log(`[whatsapp-bot] sending main menu reply to ${replyTarget}`);
-    await sendWhatsAppMessage(sock, replyTarget, await mainMenu(tenantName));
+    await sendWhatsAppMessage(sock, replyTarget, replyText);
   } catch (err) {
     console.error("[whatsapp-bot] failed handling message from", phone, err);
     await sendWhatsAppMessage(

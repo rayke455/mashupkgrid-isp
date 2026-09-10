@@ -87,6 +87,21 @@ export default function DonateCoffeePage() {
   // Supporters roll
   const [supporters, setSupporters] = useState<CoffeeSupporter[]>(INITIAL_SUPPORTERS);
 
+  // M-Pesa gateway config (fetched from API)
+  const [mpesaConfig, setMpesaConfig] = useState<{ paybill: string | null; accountReference: string; enabled: boolean }>(
+    { paybill: null, accountReference: "COFFEE", enabled: false }
+  );
+
+  // Fetch the donate M-Pesa gateway config on mount
+  useEffect(() => {
+    fetch("/api/v1/payments/mpesa/donate/config")
+      .then((res) => res.ok ? res.json() : null)
+      .then((json) => {
+        if (json?.data) setMpesaConfig(json.data);
+      })
+      .catch(() => {});
+  }, []);
+
   // Price per coffee: KES 100
   const COFFEE_UNIT_PRICE = 100;
   const currentTotalAmount = isCustom ? (parseInt(customAmount, 10) || 0) : coffees * COFFEE_UNIT_PRICE;
@@ -125,7 +140,7 @@ export default function DonateCoffeePage() {
         const res = await fetch(`/api/v1/payments/mpesa/donate/${checkoutRequestId}/status`);
         if (res.ok) {
           const data = await res.json();
-          if (data?.data?.status === "COMPLETED" || attempts > 10) {
+          if (data?.data?.status === "COMPLETED") {
             clearInterval(pollInterval);
             setStkPending(false);
             setDonationSuccess(true);
@@ -140,6 +155,9 @@ export default function DonateCoffeePage() {
               timeAgo: "Just now",
             };
             setSupporters((prev) => [newSupporter, ...prev]);
+          } else if (attempts > 20) {
+            // Stop polling after ~60 seconds — don't auto-assume success
+            clearInterval(pollInterval);
           }
         }
       } catch {}
@@ -504,11 +522,11 @@ export default function DonateCoffeePage() {
             <div className="p-4 rounded-2xl bg-slate-900/40 border border-slate-800/60 text-xs text-slate-400 flex items-center justify-between">
               <div>
                 <span className="text-[10px] uppercase font-bold text-slate-500 block">Manual Paybill</span>
-                <span className="text-white font-mono font-bold">247247 · Acc: COFFEE</span>
+                <span className="text-white font-mono font-bold">{mpesaConfig.paybill || "—"} · Acc: {mpesaConfig.accountReference}</span>
               </div>
               <button
                 type="button"
-                onClick={() => handleCopy("247247", "side-paybill")}
+                onClick={() => handleCopy(mpesaConfig.paybill || "", "side-paybill")}
                 className="text-amber-400 hover:text-amber-300 font-bold text-xs flex items-center gap-1"
               >
                 {copiedKey === "side-paybill" ? <IconCheck size={14} className="text-emerald-400" /> : <IconCopy size={14} />}
@@ -554,7 +572,7 @@ export default function DonateCoffeePage() {
             {/* Manual fallback in case STK push didn't show */}
             <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-[11px] text-slate-400 text-left mb-5">
               <span className="text-white font-semibold block mb-1">Didn&apos;t get the prompt?</span>
-              <span>Go to M-Pesa $\rightarrow$ Lipa na M-Pesa $\rightarrow$ <strong>Paybill: 247247</strong>, <strong>Acc: COFFEE</strong>, Amount: <strong>KES {currentTotalAmount}</strong>.</span>
+              <span>Go to M-Pesa → Lipa na M-Pesa → <strong>Paybill: {mpesaConfig.paybill || "—"}</strong>, <strong>Acc: {mpesaConfig.accountReference}</strong>, Amount: <strong>KES {currentTotalAmount}</strong>.</span>
             </div>
 
             <div className="flex flex-col gap-2">

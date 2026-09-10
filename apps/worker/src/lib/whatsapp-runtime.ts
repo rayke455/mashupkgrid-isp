@@ -135,11 +135,13 @@ export async function startWhatsAppRuntime(): Promise<WhatsAppSessionManager> {
             select: { id: true },
           });
           if (activeTenant) {
-            void handleIncomingWhatsAppMessage(
+            handleIncomingWhatsAppMessage(
               manager?.get(PLATFORM_SESSION_ID) ?? null,
               activeTenant.id,
               fromJid,
               text
+            ).catch((err) =>
+              console.error("[whatsapp] failed to handle platform-routed message:", err)
             );
             return;
           }
@@ -149,10 +151,9 @@ export async function startWhatsAppRuntime(): Promise<WhatsAppSessionManager> {
 
         const sock = manager?.get(PLATFORM_SESSION_ID);
         if (sock) {
-          const phone = `+${fromJid.split("@")[0]!.replace(/\D/g, "")}`;
           void sendWhatsAppMessage(
             sock,
-            phone,
+            fromJid,
             "✅ *MashupKgrid Platform WhatsApp is online.*\n\nReply \"menu\" to start, or configure your ISP tenant in the dashboard."
           ).catch((err) => console.error("[whatsapp] failed to send platform reply:", err));
         }

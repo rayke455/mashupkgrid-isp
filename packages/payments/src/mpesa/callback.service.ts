@@ -301,3 +301,65 @@ export async function completeStkRequest(
     });
   });
 }
+
+// ---------------------------------------------------------------------------
+// Donation callback handler
+// ---------------------------------------------------------------------------
+
+/**
+ * Attempts to find and complete a Donation row for an STK callback. Returns true if a matching
+ * donation was found (regardless of whether it was updated), false if the CheckoutRequestID does
+ * not belong to a donation — so callers can fall through to other tables.
+ */
+export async function tryCompleteDonationCallback(rawPayload: unknown): Promise<boolean> {
+  const body = rawPayload as {
+    Body?: {
+      stkCallback?: {
+        CheckoutRequestID?: string;
+        ResultCode?: number;
+        ResultDesc?: string;
+        CallbackMetadata?: { Item?: StkCallbackItem[] };
+      };
+    };
+  };
+  const cb = body.Body?.stkCallback;
+  if (!cb?.CheckoutRequestID || typeof cb.ResultCode !== "number") return false;
+
+  const donation = await prisma.donation.findUnique({
+    where: { checkoutRequestId: cb.CheckoutRequestID },
+  });
+  if (!donation) return false;
+  if (donation.status !== "PENDING") return true; // already processed — idempotent
+
+  const metadata = parseCallbackMetadata(cb.CallbackMetadata?.Item);
+
+  if (cb.ResultCode === 0) {
+    const receiptNumber =
+      metadata.mpesaReceiptNumber ||
+      `DON-${cb.CheckoutRequestID.replace(/[^A-Za-z0-9]/g, "").slice(-12).toUpperCase()}`;
+
+    await prisma.donation.update({
+      where: { id: donation.id },
+      data: {
+        status: "COMPLETED",
+        resultCode: cb.ResultCode,
+        resultDesc: cb.ResultDesc ?? "",
+        mpesaReceiptNumber: receiptNumber,
+        rawCallback: rawPayload as Prisma.InputJsonValue,
+      },
+    });
+  } else {
+    const status = cb.ResultCode === 1032 ? "CANCELLED" : "FAILED";
+    await prisma.donation.update({
+      where: { id: donation.id },
+      data: {
+        status,
+        resultCode: cb.ResultCode,
+        resultDesc: cb.ResultDesc ?? "",
+        rawCallback: rawPayload as Prisma.InputJsonValue,
+      },
+    });
+  }
+
+  return true;
+}

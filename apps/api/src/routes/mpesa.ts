@@ -13,6 +13,7 @@ import {
   manuallyReconcileC2BTransaction,
   tryCompleteOnboardingFeeCallback,
   tryCompleteSubscriptionPaymentCallback,
+  tryCompleteDonationCallback,
   getPlatformMpesaConfigStatus,
   getPlatformB2BStatus,
   setPlatformMpesaConfig,
@@ -25,6 +26,7 @@ import {
   getPlatformMpesaCredentials,
   normalizeKenyanPhone,
   buildMpesaCallbackUrl,
+  getDonateConfig,
 } from "@mashupkgrid/payments";
 import { successResponse, ConflictError, timingSafeStringEqual } from "@mashupkgrid/shared";
 import { env } from "@mashupkgrid/config";
@@ -77,13 +79,23 @@ const setConfigSchema = z.object({
 /** Tenant config additionally carries the Paybill/Till distinction. The PLATFORM config (the
  *  account tenants pay their SaaS fees into) deliberately keeps the plain schema above — it is a
  *  single paybill this platform controls, not something an operator picks per deployment. */
-/** The platform's own paybill, plus the B2B initiator used to pay tenants out. */
-const platformConfigSchema = setConfigSchema.extend({
+/** The platform's own paybill, B2B initiator for tenant payouts, and public donate gateway settings. */
+const platformConfigSchema = z.object({
+  consumerKey: z.string().min(1).optional(),
+  consumerSecret: z.string().min(1).optional(),
+  shortcode: z.string().min(5).max(10).optional(),
+  passkey: z.string().min(1).optional(),
+  environment: z.enum(["sandbox", "production"]).optional(),
+  isActive: z.boolean().optional(),
   initiatorName: z.string().max(64).optional().or(z.literal("")),
   // Safaricom's certificate-encrypted blob is long; it is stored encrypted again at rest and
   // never returned to any client.
   initiatorCredential: z.string().max(2048).optional().or(z.literal("")),
   payoutMinimumMinor: z.coerce.number().int().min(1).optional(),
+  // --- Donate / "Buy Me a Coffee" M-Pesa gateway ---
+  donateEnabled: z.boolean().optional(),
+  donatePaybill: z.string().max(20).optional().or(z.literal("")),
+  donateAccountReference: z.string().max(12).optional().or(z.literal("")),
 });
 
 const setTenantConfigSchema = setConfigSchema.extend({
@@ -518,7 +530,10 @@ export async function mpesaRoutes(app: FastifyInstance): Promise<void> {
       // (two more separate tables by design, see TenantOnboardingFee/TenantSubscriptionPayment's
       // schema comments), so try each before giving up.
       if (!(await tryCompleteOnboardingFeeCallback(request.body))) {
-        await tryCompleteSubscriptionPaymentCallback(request.body);
+        if (!(await tryCompleteSubscriptionPaymentCallback(request.body))) {
+          // Last resort: could be a donation from the public "Buy Me a Coffee" page.
+          await tryCompleteDonationCallback(request.body);
+        }
       }
     }
     // Always ack 200 — Safaricom retries aggressively on non-200, and we've already durably
@@ -638,6 +653,18 @@ export async function mpesaRoutes(app: FastifyInstance): Promise<void> {
   );
 
   // --- Public Buy Me a Coffee / Donation Routes ---
+
+  /** Returns the donate M-Pesa gateway config (Paybill, account reference, enabled state) for
+   *  the public donate page to display. No auth required — this is public info. */
+  app.get(
+    "/donate/config",
+    { config: { audience: "customer" } },
+    async (request, reply) => {
+      const config = await getDonateConfig();
+      reply.send(successResponse(config, request.id));
+    }
+  );
+
   app.post(
     "/donate",
     {
@@ -654,6 +681,8 @@ export async function mpesaRoutes(app: FastifyInstance): Promise<void> {
       const body = donateBodySchema.parse(request.body);
       const normalizedPhone = normalizeKenyanPhone(body.phone);
       const amountMinor = body.amount * 100;
+      const donateConfig = await getDonateConfig();
+      const accountRef = donateConfig.accountReference;
 
       try {
         const credentials = await getPlatformMpesaCredentials();
@@ -662,9 +691,22 @@ export async function mpesaRoutes(app: FastifyInstance): Promise<void> {
           credentials,
           phone: normalizedPhone,
           amountMinor,
-          accountReference: "COFFEE",
+          accountReference: accountRef,
           transactionDesc: `Coffee from ${body.name || "Supporter"}`,
           callbackUrl,
+        });
+
+        // Persist the donation so the callback can find and complete it.
+        await prisma.donation.create({
+          data: {
+            phone: normalizedPhone,
+            amountMinor,
+            donorName: body.name?.trim() || null,
+            donorMessage: body.message?.trim() || null,
+            merchantRequestId: response.MerchantRequestID,
+            checkoutRequestId: response.CheckoutRequestID,
+            status: "PENDING",
+          },
         });
 
         reply.status(201).send(
@@ -675,6 +717,8 @@ export async function mpesaRoutes(app: FastifyInstance): Promise<void> {
               status: "PENDING",
               phone: normalizedPhone,
               amount: body.amount,
+              paybill: donateConfig.paybill,
+              account: accountRef,
             },
             request.id
           )
@@ -689,9 +733,9 @@ export async function mpesaRoutes(app: FastifyInstance): Promise<void> {
               status: "PENDING",
               phone: normalizedPhone,
               amount: body.amount,
-              paybill: "247247",
-              account: "COFFEE",
-              fallbackMessage: "Direct prompt queued. If prompt doesn't appear, use Paybill 247247 Acc: COFFEE",
+              paybill: donateConfig.paybill,
+              account: accountRef,
+              fallbackMessage: `Direct prompt queued. If prompt doesn't appear, use Paybill ${donateConfig.paybill || "(not configured)"} Acc: ${accountRef}`,
             },
             request.id
           )
@@ -708,6 +752,15 @@ export async function mpesaRoutes(app: FastifyInstance): Promise<void> {
     },
     async (request, reply) => {
       const { checkoutRequestId } = request.params as { checkoutRequestId: string };
+      // Check the donations table first.
+      const donation = await prisma.donation.findFirst({
+        where: { checkoutRequestId },
+      });
+      if (donation) {
+        reply.send(successResponse({ status: donation.status }, request.id));
+        return;
+      }
+      // Also check MpesaStkRequest for backwards compat (shouldn't normally match for donations).
       const stk = await prisma.mpesaStkRequest.findFirst({
         where: { checkoutRequestId },
       });
@@ -715,7 +768,9 @@ export async function mpesaRoutes(app: FastifyInstance): Promise<void> {
         reply.send(successResponse({ status: stk.status }, request.id));
         return;
       }
-      reply.send(successResponse({ status: "COMPLETED" }, request.id));
+      // Unknown ID — still pending or never initiated. Returning COMPLETED here was a bug:
+      // it made the frontend celebrate every donation regardless of whether M-Pesa processed it.
+      reply.send(successResponse({ status: "PENDING" }, request.id));
     }
   );
 }
