@@ -23,6 +23,7 @@ import {
   listTenantsWithBalance,
   payoutTenantBalance,
   initiateStkPush,
+  queryStkPushStatus,
   getPlatformMpesaCredentials,
   normalizeKenyanPhone,
   buildMpesaCallbackUrl,
@@ -764,10 +765,72 @@ export async function mpesaRoutes(app: FastifyInstance): Promise<void> {
       const donation = await prisma.donation.findFirst({
         where: { checkoutRequestId },
       });
+
       if (donation) {
+        if (donation.status !== "PENDING") {
+          reply.send(
+            successResponse(
+              {
+                status: donation.status,
+                receiptNumber: donation.mpesaReceiptNumber,
+              },
+              request.id
+            )
+          );
+          return;
+        }
+
+        // Active inquiry against Safaricom Daraja if still pending:
+        // When the user taps "I Have Entered My PIN", query Safaricom directly if the callback
+        // webhook hasn't reached our server yet.
+        try {
+          const credentials = await getPlatformMpesaCredentials();
+          const queryRes = await queryStkPushStatus(credentials, checkoutRequestId);
+          if (queryRes.ResultCode === "0") {
+            const updated = await prisma.donation.update({
+              where: { id: donation.id },
+              data: { status: "COMPLETED" },
+            });
+            reply.send(
+              successResponse(
+                { status: updated.status, resultDesc: queryRes.ResultDesc },
+                request.id
+              )
+            );
+            return;
+          } else if (queryRes.ResultCode === "1032") {
+            const updated = await prisma.donation.update({
+              where: { id: donation.id },
+              data: { status: "CANCELLED" },
+            });
+            reply.send(
+              successResponse(
+                { status: updated.status, resultDesc: queryRes.ResultDesc },
+                request.id
+              )
+            );
+            return;
+          } else if (queryRes.ResultCode && queryRes.ResultCode !== "0") {
+            const updated = await prisma.donation.update({
+              where: { id: donation.id },
+              data: { status: "FAILED" },
+            });
+            reply.send(
+              successResponse(
+                { status: updated.status, resultDesc: queryRes.ResultDesc },
+                request.id
+              )
+            );
+            return;
+          }
+        } catch {
+          // Keep pending if query failed (e.g. handset prompt still open)
+        }
+
         reply.send(successResponse({ status: donation.status }, request.id));
         return;
       }
+
       // Also check MpesaStkRequest for backwards compat (shouldn't normally match for donations).
       const stk = await prisma.mpesaStkRequest.findFirst({
         where: { checkoutRequestId },
@@ -776,8 +839,7 @@ export async function mpesaRoutes(app: FastifyInstance): Promise<void> {
         reply.send(successResponse({ status: stk.status }, request.id));
         return;
       }
-      // Unknown ID — still pending or never initiated. Returning COMPLETED here was a bug:
-      // it made the frontend celebrate every donation regardless of whether M-Pesa processed it.
+
       reply.send(successResponse({ status: "PENDING" }, request.id));
     }
   );

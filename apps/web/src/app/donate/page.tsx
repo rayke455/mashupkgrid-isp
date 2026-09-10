@@ -13,28 +13,45 @@ import {
 } from "@/components/icons";
 import { getApiBaseUrl } from "@/lib/api-client";
 
-interface CoffeeSupporter {
+interface DonationGift {
+  id: string;
+  emoji: string;
+  label: string;
+  amount: number;
+  desc: string;
+}
+
+const DONATION_GIFTS: DonationGift[] = [
+  { id: "chai", emoji: "🫖", label: "Chai & Mandazi", amount: 50, desc: "Quick boost" },
+  { id: "coffee", emoji: "☕", label: "Coffee", amount: 100, desc: "Coding fuel" },
+  { id: "snack", emoji: "🍟", label: "Snack / Bites", amount: 250, desc: "Dev break" },
+  { id: "lunch", emoji: "🍕", label: "Dev Lunch", amount: 500, desc: "Power through" },
+  { id: "bundle", emoji: "⚡", label: "Data Bundle", amount: 1000, desc: "High-speed testing" },
+  { id: "server", emoji: "🚀", label: "Cloud Server", amount: 2000, desc: "Host MikroTik nodes" },
+];
+
+interface SupporterItem {
   id: string;
   name: string;
-  coffees: number;
+  giftLabel: string;
   amount: number;
   message?: string;
   timeAgo: string;
 }
 
-const INITIAL_SUPPORTERS: CoffeeSupporter[] = [
+const INITIAL_SUPPORTERS: SupporterItem[] = [
   {
     id: "1",
     name: "Brian M.",
-    coffees: 3,
-    amount: 300,
+    giftLabel: "🍟 Snack / Bites",
+    amount: 250,
     message: "Loving the new MikroTik captive portal updates! Keep it up!",
     timeAgo: "10m ago",
   },
   {
     id: "2",
     name: "Faith W.",
-    coffees: 5,
+    giftLabel: "🍕 Dev Lunch",
     amount: 500,
     message: "Thank you for the anti-tunneling scripts. Saved our WISP network!",
     timeAgo: "45m ago",
@@ -42,15 +59,15 @@ const INITIAL_SUPPORTERS: CoffeeSupporter[] = [
   {
     id: "3",
     name: "Anonymous ISP Tech",
-    coffees: 2,
-    amount: 200,
-    message: "Small coffee for the late-night coding sessions ☕",
+    giftLabel: "🫖 Chai & Mandazi",
+    amount: 50,
+    message: "Small chai for the late-night coding sessions 🫖",
     timeAgo: "2h ago",
   },
   {
     id: "4",
     name: "Dennis Kipkorir",
-    coffees: 10,
+    giftLabel: "⚡ Data Bundle",
     amount: 1000,
     message: "Proud to support open telecom software in Kenya. Cheers!",
     timeAgo: "5h ago",
@@ -58,7 +75,7 @@ const INITIAL_SUPPORTERS: CoffeeSupporter[] = [
   {
     id: "5",
     name: "Meshack O.",
-    coffees: 1,
+    giftLabel: "☕ Coffee",
     amount: 100,
     message: "Best hotspot billing system!",
     timeAgo: "Yesterday",
@@ -66,10 +83,11 @@ const INITIAL_SUPPORTERS: CoffeeSupporter[] = [
 ];
 
 export default function DonateCoffeePage() {
-  // Coffee quantity state
-  const [coffees, setCoffees] = useState<number>(3);
+  // Donation gift / amount state
+  const [selectedGiftId, setSelectedGiftId] = useState<string>("coffee");
+  const [donationAmount, setDonationAmount] = useState<number>(100);
+  const [customAmountText, setCustomAmountText] = useState<string>("");
   const [isCustom, setIsCustom] = useState<boolean>(false);
-  const [customAmount, setCustomAmount] = useState<string>("");
 
   // Supporter info
   const [donorName, setDonorName] = useState<string>("");
@@ -82,11 +100,13 @@ export default function DonateCoffeePage() {
   const [checkoutRequestId, setCheckoutRequestId] = useState<string | null>(null);
   const [countdown, setCountdown] = useState<number>(60);
   const [donationSuccess, setDonationSuccess] = useState<boolean>(false);
+  const [isVerifyingPin, setIsVerifyingPin] = useState<boolean>(false);
+  const [verifyStatusMessage, setVerifyStatusMessage] = useState<string | null>(null);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   // Supporters roll
-  const [supporters, setSupporters] = useState<CoffeeSupporter[]>(INITIAL_SUPPORTERS);
+  const [supporters, setSupporters] = useState<SupporterItem[]>(INITIAL_SUPPORTERS);
 
   // M-Pesa gateway config (fetched from API)
   const [mpesaConfig, setMpesaConfig] = useState<{ paybill: string | null; accountReference: string; enabled: boolean }>(
@@ -104,9 +124,27 @@ export default function DonateCoffeePage() {
       .catch(() => {});
   }, []);
 
-  // Price per coffee: KES 100
-  const COFFEE_UNIT_PRICE = 100;
-  const currentTotalAmount = isCustom ? (parseInt(customAmount, 10) || 0) : coffees * COFFEE_UNIT_PRICE;
+  const currentGift = DONATION_GIFTS.find((g) => g.id === selectedGiftId);
+  const currentGiftLabel = isCustom
+    ? `Support Tip 💝 (KES ${donationAmount.toLocaleString()})`
+    : `${currentGift?.emoji || "☕"} ${currentGift?.label || "Coffee"}`;
+
+  const handleSelectGift = (gift: DonationGift) => {
+    setSelectedGiftId(gift.id);
+    setDonationAmount(gift.amount);
+    setIsCustom(false);
+    setCustomAmountText("");
+    setErrorMsg(null);
+  };
+
+  const handleCustomAmountChange = (val: string) => {
+    setCustomAmountText(val);
+    const parsed = parseInt(val, 10) || 0;
+    setDonationAmount(parsed);
+    setIsCustom(true);
+    setSelectedGiftId("");
+    setErrorMsg(null);
+  };
 
   const handleCopy = (text: string, key: string) => {
     if (typeof navigator !== "undefined" && navigator.clipboard) {
@@ -131,7 +169,7 @@ export default function DonateCoffeePage() {
     return () => clearInterval(timer);
   }, [stkPending, countdown]);
 
-  // Status polling when STK is dispatched (accelerated: 1s initial, 1.5s interval)
+  // Status polling when STK is dispatched (accelerated: 1.2s initial, 1.5s interval)
   useEffect(() => {
     if (!stkPending || !checkoutRequestId) return;
 
@@ -145,22 +183,33 @@ export default function DonateCoffeePage() {
         const res = await fetch(`${baseUrl}/api/v1/payments/mpesa/donate/${checkoutRequestId}/status`);
         if (res.ok) {
           const data = await res.json();
-          if (data?.data?.status === "COMPLETED") {
+          const status = data?.data?.status;
+
+          if (status === "COMPLETED") {
             if (isCancelled) return true;
             if (intervalId) clearInterval(intervalId);
             setStkPending(false);
             setDonationSuccess(true);
 
             // Add new donor to the live supporters list
-            const newSupporter: CoffeeSupporter = {
+            const newSupporter: SupporterItem = {
               id: Date.now().toString(),
               name: donorName.trim() || "A Friendly Supporter",
-              coffees: isCustom ? Math.max(1, Math.round(currentTotalAmount / 100)) : coffees,
-              amount: currentTotalAmount,
+              giftLabel: currentGiftLabel,
+              amount: donationAmount,
               message: donorMessage.trim() || undefined,
               timeAgo: "Just now",
             };
             setSupporters((prev) => [newSupporter, ...prev]);
+            return true;
+          } else if (status === "FAILED" || status === "CANCELLED") {
+            if (isCancelled) return true;
+            if (intervalId) clearInterval(intervalId);
+            setVerifyStatusMessage(
+              status === "CANCELLED"
+                ? "❌ M-Pesa prompt was cancelled on the phone. Please try again."
+                : "❌ M-Pesa payment failed. Please check your balance and try again."
+            );
             return true;
           }
         }
@@ -193,19 +242,78 @@ export default function DonateCoffeePage() {
       clearTimeout(initialTimer);
       if (intervalId) clearInterval(intervalId);
     };
-  }, [stkPending, checkoutRequestId, donorName, currentTotalAmount, coffees, isCustom, donorMessage]);
+  }, [stkPending, checkoutRequestId, donorName, donationAmount, currentGiftLabel, donorMessage]);
 
-  const handleSubmitCoffee = async (e: React.FormEvent) => {
+  // Accurate verification when the user explicitly clicks "I Have Entered My PIN"
+  const handleVerifyPinManually = async () => {
+    if (!checkoutRequestId) return;
+    setIsVerifyingPin(true);
+    setVerifyStatusMessage(null);
+
+    try {
+      const baseUrl = getApiBaseUrl();
+      let verified = false;
+
+      // Check up to 3 times (1s apart) to allow in-flight Safaricom processing to complete
+      for (let i = 0; i < 3; i++) {
+        const res = await fetch(`${baseUrl}/api/v1/payments/mpesa/donate/${checkoutRequestId}/status`);
+        if (res.ok) {
+          const data = await res.json();
+          const status = data?.data?.status;
+
+          if (status === "COMPLETED") {
+            verified = true;
+            setIsVerifyingPin(false);
+            setStkPending(false);
+            setDonationSuccess(true);
+
+            const newSupporter: SupporterItem = {
+              id: Date.now().toString(),
+              name: donorName.trim() || "A Friendly Supporter",
+              giftLabel: currentGiftLabel,
+              amount: donationAmount,
+              message: donorMessage.trim() || undefined,
+              timeAgo: "Just now",
+            };
+            setSupporters((prev) => [newSupporter, ...prev]);
+            return;
+          } else if (status === "FAILED" || status === "CANCELLED") {
+            setIsVerifyingPin(false);
+            setVerifyStatusMessage(
+              status === "CANCELLED"
+                ? "❌ M-Pesa transaction was cancelled on your phone. Please try again."
+                : "❌ M-Pesa reported payment was not completed. Please check your PIN and try again."
+            );
+            return;
+          }
+        }
+        if (i < 2) await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+
+      // If still pending after 3 active inquiries:
+      setIsVerifyingPin(false);
+      setVerifyStatusMessage(
+        "⚠️ Payment has not been confirmed by M-Pesa yet. If you already entered your PIN, please give Safaricom a few seconds to complete. The page will celebrate as soon as M-Pesa confirms!"
+      );
+    } catch {
+      setIsVerifyingPin(false);
+      setVerifyStatusMessage("Network error checking payment status. Will keep retrying automatically...");
+    }
+  };
+
+  const handleSubmitDonation = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg(null);
+    setVerifyStatusMessage(null);
 
-    const cleanPhone = donorPhone.replace(/\D/g, "");
-    if (!cleanPhone || cleanPhone.length < 9) {
-      setErrorMsg("Please enter a valid M-Pesa phone number (e.g. 0712345678).");
+    // Accept Kenyan numbers: 07XXXXXXXX, 01XXXXXXXX, 7XXXXXXXX, 1XXXXXXXX, 254XXXXXXXX
+    const cleanDigits = donorPhone.replace(/\D/g, "");
+    if (!/^(0[71]\d{8}|[71]\d{8}|254[71]\d{8})$/.test(cleanDigits)) {
+      setErrorMsg("Please enter a valid Kenyan phone number starting with 07 or 01 (e.g. 0712345678).");
       return;
     }
 
-    if (currentTotalAmount < 10) {
+    if (donationAmount < 10) {
       setErrorMsg("Please enter an amount of at least KES 10.");
       return;
     }
@@ -222,8 +330,8 @@ export default function DonateCoffeePage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          phone: cleanPhone,
-          amount: currentTotalAmount,
+          phone: cleanDigits,
+          amount: donationAmount,
           name: donorName.trim() || "Supporter",
           message: donorMessage.trim() || undefined,
         }),
@@ -318,74 +426,77 @@ export default function DonateCoffeePage() {
           </p>
         </div>
 
-        {/* Coffee Interaction Grid */}
+        {/* Donation Interaction Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start max-w-5xl mx-auto mb-16">
           {/* Main Card (Col 7) */}
           <div className="lg:col-span-7 bg-slate-900/90 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl backdrop-blur-xl relative overflow-hidden">
             <div className="absolute top-0 right-0 w-36 h-36 bg-amber-500/5 rounded-full blur-2xl pointer-events-none" />
 
-            <form onSubmit={handleSubmitCoffee} className="space-y-6">
-              {/* Coffee Quantity Selector */}
+            <form onSubmit={handleSubmitDonation} className="space-y-6">
+              {/* Gift & Amount Selection */}
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-3">
-                  How many coffees? (KES 100 each)
-                </label>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-300">
+                    Choose a treat or custom amount
+                  </label>
+                  <span className="text-xs font-mono font-black text-amber-400">
+                    KES {donationAmount.toLocaleString()}
+                  </span>
+                </div>
 
-                <div className="grid grid-cols-3 sm:grid-cols-5 gap-2.5">
-                  {[1, 2, 3, 5, 10].map((num) => {
-                    const isSelected = !isCustom && coffees === num;
+                {/* 6 Preset Gifts */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 mb-3.5">
+                  {DONATION_GIFTS.map((gift) => {
+                    const isSelected = !isCustom && selectedGiftId === gift.id;
                     return (
                       <button
-                        key={num}
+                        key={gift.id}
                         type="button"
-                        onClick={() => {
-                          setIsCustom(false);
-                          setCoffees(num);
-                        }}
-                        className={`py-3 px-2 rounded-2xl border text-center transition-all flex flex-col items-center justify-center gap-1 ${
+                        onClick={() => handleSelectGift(gift)}
+                        className={`p-3 rounded-2xl border text-left transition-all flex flex-col justify-between gap-1.5 ${
                           isSelected
-                            ? "bg-gradient-to-b from-amber-500/25 to-amber-600/20 border-amber-500 text-white shadow-lg ring-1 ring-amber-500/50 scale-105"
+                            ? "bg-gradient-to-b from-amber-500/25 to-amber-600/20 border-amber-500 text-white shadow-lg ring-1 ring-amber-500/50 scale-[1.02]"
                             : "bg-slate-950/80 border-slate-800 text-slate-300 hover:border-slate-700 hover:bg-slate-900"
                         }`}
                       >
-                        <span className="text-xl">☕</span>
-                        <span className="text-sm font-black">{num}</span>
-                        <span className="text-[10px] text-slate-400 font-mono">
-                          KES {num * COFFEE_UNIT_PRICE}
-                        </span>
+                        <div className="flex items-center justify-between w-full">
+                          <span className="text-2xl">{gift.emoji}</span>
+                          <span className="text-xs font-mono font-bold text-amber-400">
+                            KES {gift.amount}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-xs font-black block text-white">{gift.label}</span>
+                          <span className="text-[10px] text-slate-400 block truncate">{gift.desc}</span>
+                        </div>
                       </button>
                     );
                   })}
                 </div>
 
-                {/* Custom Amount Button */}
-                <div className="mt-2.5">
-                  {!isCustom ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsCustom(true);
-                        setCustomAmount("500");
-                      }}
-                      className="text-xs text-amber-400 hover:text-amber-300 font-semibold underline underline-offset-4"
-                    >
-                      Or enter a custom amount…
-                    </button>
-                  ) : (
-                    <div className="relative mt-2">
-                      <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-amber-400 font-mono">
-                        KES
-                      </span>
-                      <input
-                        type="number"
-                        min="10"
-                        value={customAmount}
-                        onChange={(e) => setCustomAmount(e.target.value)}
-                        placeholder="Enter custom amount"
-                        className="w-full pl-14 pr-4 py-2.5 rounded-xl bg-slate-950 border border-amber-500/60 text-white font-bold text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
-                      />
-                    </div>
-                  )}
+                {/* Prominent Custom Amount Input */}
+                <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800/90 space-y-1.5">
+                  <label className="block text-[11px] font-semibold text-slate-400">
+                    Or enter any custom amount you like:
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-amber-400 font-mono">
+                      KES
+                    </span>
+                    <input
+                      type="number"
+                      min="10"
+                      step="10"
+                      value={customAmountText}
+                      onChange={(e) => handleCustomAmountChange(e.target.value)}
+                      placeholder="e.g. 20, 75, 300, 1500..."
+                      className={`w-full pl-14 pr-4 py-2.5 rounded-xl bg-slate-900 border text-white font-bold text-sm focus:outline-none transition-all ${
+                        isCustom
+                          ? "border-amber-500 ring-1 ring-amber-500/50"
+                          : "border-slate-800 focus:border-amber-500"
+                      }`}
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -418,27 +529,22 @@ export default function DonateCoffeePage() {
                 </div>
               </div>
 
-              {/* M-Pesa Phone Number */}
+              {/* M-Pesa Phone Number — No +254 prefix, simple 07/01 entry */}
               <div className="pt-1 border-t border-slate-800/80">
                 <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
                   M-Pesa Phone Number
                 </label>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-mono font-bold text-emerald-400">
-                    🇰🇪 +254
-                  </span>
-                  <input
-                    type="tel"
-                    required
-                    value={donorPhone}
-                    onChange={(e) => setDonorPhone(e.target.value)}
-                    placeholder="712 345 678"
-                    className="w-full pl-20 pr-4 py-3 rounded-xl bg-slate-950 border border-emerald-500/40 text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                  />
-                </div>
+                <input
+                  type="tel"
+                  required
+                  value={donorPhone}
+                  onChange={(e) => setDonorPhone(e.target.value)}
+                  placeholder="0712 345 678 or 0110 123 456"
+                  className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-emerald-500/40 text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 placeholder:text-slate-600"
+                />
                 <p className="text-[11px] text-slate-400 mt-1.5 flex items-center gap-1.5">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                  <span>An instant M-Pesa prompt will pop up on this phone to enter PIN.</span>
+                  <span>Enter your phone number (starts with 07 or 01). An instant M-Pesa prompt will pop up.</span>
                 </p>
               </div>
 
@@ -451,7 +557,7 @@ export default function DonateCoffeePage() {
               {/* Action Button */}
               <button
                 type="submit"
-                disabled={isProcessing || currentTotalAmount <= 0}
+                disabled={isProcessing || donationAmount <= 0}
                 className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-500 to-orange-500 hover:from-amber-300 hover:via-amber-400 hover:to-orange-400 text-slate-950 font-black text-base shadow-xl shadow-amber-500/20 active:scale-[0.99] transition-all flex items-center justify-center gap-2 disabled:opacity-50"
               >
                 {isProcessing ? (
@@ -462,10 +568,9 @@ export default function DonateCoffeePage() {
                 ) : (
                   <>
                     <span>
-                      Buy {isCustom ? "" : `${coffees} `}Coffee{coffees > 1 || isCustom ? "s" : ""} · KES{" "}
-                      {currentTotalAmount.toLocaleString()}
+                      Send {currentGiftLabel} · KES {donationAmount.toLocaleString()}
                     </span>
-                    <span className="text-lg">☕</span>
+                    <span className="text-lg">⚡</span>
                   </>
                 )}
               </button>
@@ -491,7 +596,7 @@ export default function DonateCoffeePage() {
                   💡
                 </div>
                 <div>
-                  <h3 className="text-sm font-bold text-white">Why Buy a Coffee?</h3>
+                  <h3 className="text-sm font-bold text-white">Why Support?</h3>
                   <p className="text-[11px] text-slate-400">Directly supports our ongoing work</p>
                 </div>
               </div>
@@ -516,7 +621,7 @@ export default function DonateCoffeePage() {
               <div className="flex items-center justify-between mb-4">
                 <h3 className="text-sm font-extrabold text-white flex items-center gap-2">
                   <IconUsers size={16} className="text-amber-400" />
-                  <span>Recent Coffees</span>
+                  <span>Recent Supporters</span>
                 </h3>
                 <span className="text-[10px] text-amber-400/80 font-mono font-bold uppercase tracking-wider">
                   Live Wall
@@ -531,13 +636,12 @@ export default function DonateCoffeePage() {
                   >
                     <div className="flex items-center justify-between">
                       <span className="font-bold text-white flex items-center gap-1.5">
-                        <span>☕</span>
-                        <span>{sup.name}</span>
-                        <span className="text-[10px] text-slate-400 font-normal">
-                          bought {sup.coffees} {sup.coffees === 1 ? "coffee" : "coffees"}
-                        </span>
+                        <span>{sup.giftLabel}</span>
+                        <span className="text-[10px] text-slate-400 font-normal">by {sup.name}</span>
                       </span>
-                      <span className="font-mono font-bold text-amber-400">KES {sup.amount}</span>
+                      <span className="font-mono font-bold text-amber-400">
+                        KES {sup.amount.toLocaleString()}
+                      </span>
                     </div>
 
                     {sup.message && (
@@ -556,14 +660,20 @@ export default function DonateCoffeePage() {
             <div className="p-4 rounded-2xl bg-slate-900/40 border border-slate-800/60 text-xs text-slate-400 flex items-center justify-between">
               <div>
                 <span className="text-[10px] uppercase font-bold text-slate-500 block">Manual Paybill</span>
-                <span className="text-white font-mono font-bold">{mpesaConfig.paybill || "—"} · Acc: {mpesaConfig.accountReference}</span>
+                <span className="text-white font-mono font-bold">
+                  {mpesaConfig.paybill || "—"} · Acc: {mpesaConfig.accountReference}
+                </span>
               </div>
               <button
                 type="button"
                 onClick={() => handleCopy(mpesaConfig.paybill || "", "side-paybill")}
                 className="text-amber-400 hover:text-amber-300 font-bold text-xs flex items-center gap-1"
               >
-                {copiedKey === "side-paybill" ? <IconCheck size={14} className="text-emerald-400" /> : <IconCopy size={14} />}
+                {copiedKey === "side-paybill" ? (
+                  <IconCheck size={14} className="text-emerald-400" />
+                ) : (
+                  <IconCopy size={14} />
+                )}
                 <span>Copy</span>
               </button>
             </div>
@@ -591,12 +701,16 @@ export default function DonateCoffeePage() {
             <p className="mt-2 text-xs text-slate-300 leading-relaxed">
               {isProcessing && !checkoutRequestId ? (
                 <>
-                  Triggering direct M-Pesa prompt to <strong className="text-amber-400 font-mono">{donorPhone}</strong>. Please keep your phone unlocked!
+                  Triggering direct M-Pesa prompt to{" "}
+                  <strong className="text-amber-400 font-mono">{donorPhone}</strong>. Please keep
+                  your phone unlocked!
                 </>
               ) : (
                 <>
-                  We just dispatched an M-Pesa prompt to <strong className="text-emerald-400 font-mono">{donorPhone}</strong>.
-                  Enter your M-Pesa PIN on your phone to approve <strong className="text-white">KES {currentTotalAmount}</strong>.
+                  We just dispatched an M-Pesa prompt to{" "}
+                  <strong className="text-emerald-400 font-mono">{donorPhone}</strong>. Enter your
+                  M-Pesa PIN on your phone to approve{" "}
+                  <strong className="text-white">KES {donationAmount.toLocaleString()}</strong>.
                 </>
               )}
             </p>
@@ -618,43 +732,61 @@ export default function DonateCoffeePage() {
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-slate-400">Total Amount:</span>
-                <span className="font-mono font-bold text-white">KES {currentTotalAmount}</span>
+                <span className="font-mono font-bold text-white">
+                  KES {donationAmount.toLocaleString()}
+                </span>
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-slate-400">Item:</span>
-                <span className="text-amber-400 font-semibold">{coffees} Coffee{coffees > 1 ? "s" : ""} ☕</span>
+                <span className="text-amber-400 font-semibold">{currentGiftLabel}</span>
               </div>
             </div>
+
+            {/* Inline verification feedback message if PIN check was pressed or failed */}
+            {verifyStatusMessage && (
+              <div
+                className={`p-3.5 rounded-2xl text-xs text-left mb-4 leading-relaxed font-medium border ${
+                  verifyStatusMessage.includes("❌")
+                    ? "bg-red-500/10 border-red-500/30 text-red-400"
+                    : "bg-amber-500/10 border-amber-500/30 text-amber-300"
+                }`}
+              >
+                {verifyStatusMessage}
+              </div>
+            )}
 
             {/* Manual fallback in case STK push didn't show */}
             <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-[11px] text-slate-400 text-left mb-5">
               <span className="text-white font-semibold block mb-1">Didn&apos;t get the prompt?</span>
-              <span>Go to M-Pesa → Lipa na M-Pesa → <strong>Paybill: {mpesaConfig.paybill || "—"}</strong>, <strong>Acc: {mpesaConfig.accountReference}</strong>, Amount: <strong>KES {currentTotalAmount}</strong>.</span>
+              <span>
+                Go to M-Pesa → Lipa na M-Pesa → <strong>Paybill: {mpesaConfig.paybill || "—"}</strong>,{" "}
+                <strong>Acc: {mpesaConfig.accountReference}</strong>, Amount:{" "}
+                <strong>KES {donationAmount.toLocaleString()}</strong>.
+              </span>
             </div>
 
             <div className="flex flex-col gap-2">
               <button
                 type="button"
-                onClick={() => {
-                  setStkPending(false);
-                  setDonationSuccess(true);
-                  const newSupporter: CoffeeSupporter = {
-                    id: Date.now().toString(),
-                    name: donorName.trim() || "A Friendly Supporter",
-                    coffees: isCustom ? Math.max(1, Math.round(currentTotalAmount / 100)) : coffees,
-                    amount: currentTotalAmount,
-                    message: donorMessage.trim() || undefined,
-                    timeAgo: "Just now",
-                  };
-                  setSupporters((prev) => [newSupporter, ...prev]);
-                }}
-                className="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs transition-colors shadow-lg"
+                disabled={isVerifyingPin || (isProcessing && !checkoutRequestId)}
+                onClick={handleVerifyPinManually}
+                className="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs transition-colors shadow-lg flex items-center justify-center gap-2 disabled:opacity-60"
               >
-                I Have Entered My PIN
+                {isVerifyingPin ? (
+                  <>
+                    <div className="h-4 w-4 rounded-full border-2 border-slate-950 border-t-transparent animate-spin" />
+                    <span>Verifying with M-Pesa…</span>
+                  </>
+                ) : (
+                  <span>I Have Entered My PIN</span>
+                )}
               </button>
               <button
                 type="button"
-                onClick={() => setStkPending(false)}
+                onClick={() => {
+                  setStkPending(false);
+                  setVerifyStatusMessage(null);
+                }}
                 className="w-full py-2.5 rounded-xl text-xs font-semibold text-slate-400 hover:text-white transition-colors"
               >
                 Cancel
@@ -672,19 +804,25 @@ export default function DonateCoffeePage() {
               🎉
             </div>
 
-            <h3 className="text-2xl font-black text-white">Coffee Received!</h3>
+            <h3 className="text-2xl font-black text-white">Support Received!</h3>
             <p className="mt-2 text-xs text-slate-300 leading-relaxed">
-              Thank you so much, <strong className="text-amber-400">{donorName || "friend"}</strong>! Your coffee fuels our passion to build the best ISP software in Africa.
+              Thank you so much, <strong className="text-amber-400">{donorName || "friend"}</strong>! Your support fuels our passion to build the best ISP software in Africa.
             </p>
 
             <div className="my-5 p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs text-left space-y-1.5">
               <div className="flex justify-between">
-                <span className="text-slate-400">Contribution:</span>
-                <span className="font-bold text-white">KES {currentTotalAmount} ({coffees} ☕)</span>
+                <span className="text-slate-400">Gift:</span>
+                <span className="font-bold text-white">{currentGiftLabel}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-slate-400">Amount:</span>
+                <span className="font-mono font-bold text-amber-400">
+                  KES {donationAmount.toLocaleString()}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Status:</span>
-                <span className="text-emerald-400 font-bold">Confirmed &amp; Appreciated ❤️</span>
+                <span className="text-emerald-400 font-bold">Confirmed by Safaricom M-Pesa ❤️</span>
               </div>
               {donorMessage && (
                 <div className="pt-2 border-t border-slate-800/80">
@@ -696,7 +834,10 @@ export default function DonateCoffeePage() {
 
             <button
               type="button"
-              onClick={() => setDonationSuccess(false)}
+              onClick={() => {
+                setDonationSuccess(false);
+                setVerifyStatusMessage(null);
+              }}
               className="w-full py-3.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs transition-colors shadow-lg"
             >
               Back to Page
