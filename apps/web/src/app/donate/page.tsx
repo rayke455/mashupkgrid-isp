@@ -131,20 +131,23 @@ export default function DonateCoffeePage() {
     return () => clearInterval(timer);
   }, [stkPending, countdown]);
 
-  // Status polling when STK is dispatched
+  // Status polling when STK is dispatched (accelerated: 1s initial, 1.5s interval)
   useEffect(() => {
     if (!stkPending || !checkoutRequestId) return;
 
     let attempts = 0;
-    const pollInterval = setInterval(async () => {
-      attempts++;
+    let isCancelled = false;
+    let intervalId: any = null;
+
+    const checkStatus = async () => {
       try {
         const baseUrl = getApiBaseUrl();
         const res = await fetch(`${baseUrl}/api/v1/payments/mpesa/donate/${checkoutRequestId}/status`);
         if (res.ok) {
           const data = await res.json();
           if (data?.data?.status === "COMPLETED") {
-            clearInterval(pollInterval);
+            if (isCancelled) return true;
+            if (intervalId) clearInterval(intervalId);
             setStkPending(false);
             setDonationSuccess(true);
 
@@ -158,15 +161,38 @@ export default function DonateCoffeePage() {
               timeAgo: "Just now",
             };
             setSupporters((prev) => [newSupporter, ...prev]);
-          } else if (attempts > 20) {
-            // Stop polling after ~60 seconds — don't auto-assume success
-            clearInterval(pollInterval);
+            return true;
           }
         }
       } catch {}
-    }, 3000);
+      return false;
+    };
 
-    return () => clearInterval(pollInterval);
+    // Quick initial check at 1.2s
+    const initialTimer = setTimeout(async () => {
+      if (isCancelled) return;
+      const done = await checkStatus();
+      if (done) return;
+
+      // Accelerated polling every 1.5s
+      intervalId = setInterval(async () => {
+        if (isCancelled) {
+          clearInterval(intervalId);
+          return;
+        }
+        attempts++;
+        const finished = await checkStatus();
+        if (finished || attempts > 38) {
+          clearInterval(intervalId);
+        }
+      }, 1500);
+    }, 1200);
+
+    return () => {
+      isCancelled = true;
+      clearTimeout(initialTimer);
+      if (intervalId) clearInterval(intervalId);
+    };
   }, [stkPending, checkoutRequestId, donorName, currentTotalAmount, coffees, isCustom, donorMessage]);
 
   const handleSubmitCoffee = async (e: React.FormEvent) => {
@@ -184,7 +210,11 @@ export default function DonateCoffeePage() {
       return;
     }
 
+    // Instant optimistic modal feedback
     setIsProcessing(true);
+    setCheckoutRequestId(null);
+    setCountdown(60);
+    setStkPending(true);
 
     try {
       const baseUrl = getApiBaseUrl();
@@ -202,9 +232,10 @@ export default function DonateCoffeePage() {
       const json = await response.json();
       if (response.ok && json?.data?.checkoutRequestId) {
         setCheckoutRequestId(json.data.checkoutRequestId);
-        setCountdown(60);
-        setStkPending(true);
+        setIsProcessing(false);
       } else {
+        setStkPending(false);
+        setIsProcessing(false);
         const errorMsg =
           json?.error?.message ||
           json?.message ||
@@ -213,9 +244,9 @@ export default function DonateCoffeePage() {
         setErrorMsg(errorMsg);
       }
     } catch (err: any) {
-      setErrorMsg("Network error connecting to payment gateway. Please check your connection.");
-    } finally {
+      setStkPending(false);
       setIsProcessing(false);
+      setErrorMsg("Network error connecting to payment gateway. Please check your connection.");
     }
   };
 
@@ -544,23 +575,46 @@ export default function DonateCoffeePage() {
       {stkPending && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-md p-4 animate-fade-in-up">
           <div className="w-full max-w-md rounded-3xl bg-slate-900 border border-emerald-500/60 p-6 sm:p-8 text-center shadow-2xl relative overflow-hidden">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/20 text-3xl animate-bounce">
-              📱
-            </div>
+            {isProcessing && !checkoutRequestId ? (
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-amber-500/20 text-3xl animate-pulse ring-4 ring-amber-500/30">
+                ⚡
+              </div>
+            ) : (
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/20 text-3xl animate-bounce">
+                📱
+              </div>
+            )}
 
-            <h3 className="text-2xl font-black text-white">Check Your Phone!</h3>
+            <h3 className="text-2xl font-black text-white">
+              {isProcessing && !checkoutRequestId ? "Connecting to Safaricom…" : "Check Your Phone!"}
+            </h3>
             <p className="mt-2 text-xs text-slate-300 leading-relaxed">
-              We just dispatched an M-Pesa prompt to <strong className="text-emerald-400 font-mono">{donorPhone}</strong>.
-              Enter your M-Pesa PIN on your phone to approve <strong className="text-white">KES {currentTotalAmount}</strong>.
+              {isProcessing && !checkoutRequestId ? (
+                <>
+                  Triggering direct M-Pesa prompt to <strong className="text-amber-400 font-mono">{donorPhone}</strong>. Please keep your phone unlocked!
+                </>
+              ) : (
+                <>
+                  We just dispatched an M-Pesa prompt to <strong className="text-emerald-400 font-mono">{donorPhone}</strong>.
+                  Enter your M-Pesa PIN on your phone to approve <strong className="text-white">KES {currentTotalAmount}</strong>.
+                </>
+              )}
             </p>
 
             <div className="my-5 p-4 rounded-2xl bg-slate-950 border border-slate-800 text-xs space-y-2 text-left">
               <div className="flex justify-between items-center">
                 <span className="text-slate-400">Prompt Status:</span>
-                <span className="text-emerald-400 font-bold flex items-center gap-1">
-                  <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
-                  <span>Waiting for PIN ({countdown}s)</span>
-                </span>
+                {isProcessing && !checkoutRequestId ? (
+                  <span className="text-amber-400 font-bold flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full bg-amber-400 animate-ping" />
+                    <span>Dispatched · Handset Ping…</span>
+                  </span>
+                ) : (
+                  <span className="text-emerald-400 font-bold flex items-center gap-1">
+                    <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
+                    <span>Waiting for PIN ({countdown}s)</span>
+                  </span>
+                )}
               </div>
               <div className="flex justify-between items-center">
                 <span className="text-slate-400">Total Amount:</span>

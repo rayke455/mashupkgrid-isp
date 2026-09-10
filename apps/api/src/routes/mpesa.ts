@@ -681,11 +681,15 @@ export async function mpesaRoutes(app: FastifyInstance): Promise<void> {
       const body = donateBodySchema.parse(request.body);
       const normalizedPhone = normalizeKenyanPhone(body.phone);
       const amountMinor = body.amount * 100;
-      const donateConfig = await getDonateConfig();
+
+      // Load config & credentials in parallel
+      const [donateConfig, credentials] = await Promise.all([
+        getDonateConfig(),
+        getPlatformMpesaCredentials(),
+      ]);
       const accountRef = donateConfig.accountReference;
 
       try {
-        const credentials = await getPlatformMpesaCredentials();
         const callbackUrl = buildMpesaCallbackUrl();
         const response = await initiateStkPush({
           credentials,
@@ -696,8 +700,8 @@ export async function mpesaRoutes(app: FastifyInstance): Promise<void> {
           callbackUrl,
         });
 
-        // Persist the donation so the callback can find and complete it.
-        await prisma.donation.create({
+        // Persist donation record immediately so callback can find it
+        const donationPromise = prisma.donation.create({
           data: {
             phone: normalizedPhone,
             amountMinor,
@@ -707,6 +711,8 @@ export async function mpesaRoutes(app: FastifyInstance): Promise<void> {
             checkoutRequestId: response.CheckoutRequestID,
             status: "PENDING",
           },
+        }).catch((err) => {
+          request.log.error({ err }, "Failed to persist donation record");
         });
 
         reply.status(201).send(
@@ -723,6 +729,8 @@ export async function mpesaRoutes(app: FastifyInstance): Promise<void> {
             request.id
           )
         );
+
+        await donationPromise;
       } catch (err: any) {
         request.log.info({ err: err?.message }, "Platform M-Pesa STK fallback used for donation");
         reply.status(200).send(

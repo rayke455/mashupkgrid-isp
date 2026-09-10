@@ -29,11 +29,34 @@ export interface SetMpesaConfigInput {
   isActive?: boolean;
 }
 
+interface CachedTenantConfig {
+  config: PaymentProviderConfig | null;
+  cachedAt: number;
+}
+const tenantConfigCache = new Map<string, CachedTenantConfig>();
+const TENANT_CACHE_TTL_MS = 60_000; // 60 seconds
+
+export function invalidateTenantMpesaConfigCache(tenantId: string) {
+  tenantConfigCache.delete(tenantId);
+}
+
+async function getCachedTenantMpesaConfig(tenantId: string): Promise<PaymentProviderConfig | null> {
+  const cached = tenantConfigCache.get(tenantId);
+  if (cached && Date.now() - cached.cachedAt < TENANT_CACHE_TTL_MS) {
+    return cached.config;
+  }
+  const config = await prisma.paymentProviderConfig.findUnique({
+    where: { tenantId_provider: { tenantId, provider: "MPESA" } },
+  });
+  tenantConfigCache.set(tenantId, { config, cachedAt: Date.now() });
+  return config;
+}
+
 export async function setMpesaConfig(
   tenantId: string,
   input: SetMpesaConfigInput
 ): Promise<PaymentProviderConfig> {
-  return prisma.paymentProviderConfig.upsert({
+  const result = await prisma.paymentProviderConfig.upsert({
     where: { tenantId_provider: { tenantId, provider: "MPESA" } },
     update: {
       consumerKeyEncrypted: encryptAtRest(input.consumerKey, env.ENCRYPTION_KEY),
@@ -58,14 +81,14 @@ export async function setMpesaConfig(
       isActive: input.isActive ?? true,
     },
   });
+  invalidateTenantMpesaConfigCache(tenantId);
+  return result;
 }
 
 /** Never returns the decrypted secrets to a caller that isn't about to call the Daraja API —
  *  see `getMpesaConfigStatus` for what's safe to show in the admin UI. */
 export async function getMpesaCredentials(tenantId: string): Promise<MpesaCredentials> {
-  const config = await prisma.paymentProviderConfig.findUnique({
-    where: { tenantId_provider: { tenantId, provider: "MPESA" } },
-  });
+  const config = await getCachedTenantMpesaConfig(tenantId);
   if (!config || !config.isActive) {
     throw new NotFoundError("M-Pesa configuration");
   }
@@ -99,9 +122,7 @@ export interface MpesaConfigStatus {
 
 /** Safe-to-display summary — never exposes the decrypted secrets. */
 export async function getMpesaConfigStatus(tenantId: string): Promise<MpesaConfigStatus> {
-  const config = await prisma.paymentProviderConfig.findUnique({
-    where: { tenantId_provider: { tenantId, provider: "MPESA" } },
-  });
+  const config = await getCachedTenantMpesaConfig(tenantId);
   if (!config)
     return {
       configured: false,

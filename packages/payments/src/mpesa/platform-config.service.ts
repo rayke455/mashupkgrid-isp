@@ -9,6 +9,27 @@ import type { MpesaCredentials } from "./config.service.js";
  *  second row ever getting created by mistake). */
 const SINGLETON_ID = "platform";
 
+interface CachedPlatformConfig {
+  config: any;
+  cachedAt: number;
+}
+
+let cachedPlatformConfig: CachedPlatformConfig | null = null;
+const CACHE_TTL_MS = 60_000; // 60 seconds in-memory cache
+
+export function invalidatePlatformConfigCache() {
+  cachedPlatformConfig = null;
+}
+
+async function getCachedPlatformConfig() {
+  if (cachedPlatformConfig && Date.now() - cachedPlatformConfig.cachedAt < CACHE_TTL_MS) {
+    return cachedPlatformConfig.config;
+  }
+  const config = await prisma.platformMpesaConfig.findUnique({ where: { id: SINGLETON_ID } });
+  cachedPlatformConfig = { config, cachedAt: Date.now() };
+  return config;
+}
+
 export interface SetPlatformMpesaConfigInput {
   consumerKey?: string;
   consumerSecret?: string;
@@ -60,7 +81,7 @@ export async function setPlatformMpesaConfig(input: SetPlatformMpesaConfigInput)
       : {}),
   };
 
-  return prisma.platformMpesaConfig.upsert({
+  const result = await prisma.platformMpesaConfig.upsert({
     where: { id: SINGLETON_ID },
     update: updateData,
     create: {
@@ -74,6 +95,9 @@ export async function setPlatformMpesaConfig(input: SetPlatformMpesaConfigInput)
       ...updateData,
     },
   });
+
+  invalidatePlatformConfigCache();
+  return result;
 }
 
 // ---------------------------------------------------------------------------
@@ -90,7 +114,7 @@ export interface DonateConfig {
  *  reference. Falls back to the platform's own shortcode when no dedicated donate paybill is
  *  set, and to "COFFEE" when no account reference is set. */
 export async function getDonateConfig(): Promise<DonateConfig> {
-  const config = await prisma.platformMpesaConfig.findUnique({ where: { id: SINGLETON_ID } });
+  const config = await getCachedPlatformConfig();
   return {
     enabled: config?.donateEnabled ?? false,
     paybill: config?.donatePaybill || config?.shortcode || null,
@@ -104,7 +128,7 @@ export async function getPlatformB2BStatus(): Promise<{
   initiatorName: string | null;
   payoutMinimumMinor: number;
 }> {
-  const config = await prisma.platformMpesaConfig.findUnique({ where: { id: SINGLETON_ID } });
+  const config = await getCachedPlatformConfig();
   return {
     configured: Boolean(config?.initiatorName && config.initiatorCredentialEncrypted),
     initiatorName: config?.initiatorName ?? null,
@@ -116,12 +140,12 @@ export async function getPlatformB2BStatus(): Promise<{
  *  platform has never been configured, which is the safe direction: a tenant is paid rather than
  *  quietly accumulating a balance nobody set a threshold for. */
 export async function getPayoutMinimumMinor(): Promise<number> {
-  const config = await prisma.platformMpesaConfig.findUnique({ where: { id: SINGLETON_ID } });
+  const config = await getCachedPlatformConfig();
   return config?.payoutMinimumMinor ?? 1;
 }
 
 export async function getPlatformMpesaCredentials(): Promise<MpesaCredentials> {
-  const config = await prisma.platformMpesaConfig.findUnique({ where: { id: SINGLETON_ID } });
+  const config = await getCachedPlatformConfig();
   if (!config || !config.isActive) {
     throw new NotFoundError("Platform M-Pesa configuration");
   }
@@ -153,7 +177,7 @@ export interface PlatformMpesaConfigStatus {
 }
 
 export async function getPlatformMpesaConfigStatus(): Promise<PlatformMpesaConfigStatus> {
-  const config = await prisma.platformMpesaConfig.findUnique({ where: { id: SINGLETON_ID } });
+  const config = await getCachedPlatformConfig();
   if (!config) return { configured: false, isActive: false, shortcode: null, environment: "sandbox", donateEnabled: false, donatePaybill: null, donateAccountReference: null };
   return {
     configured: Boolean(config.consumerKeyEncrypted && config.consumerSecretEncrypted && config.passkeyEncrypted),

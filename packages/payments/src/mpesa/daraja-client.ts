@@ -25,6 +25,7 @@ async function getAccessToken(credentials: MpesaCredentials): Promise<string> {
 
   const response = await fetch(`${baseUrl}/oauth/v1/generate?grant_type=client_credentials`, {
     headers: { Authorization: `Basic ${auth}` },
+    keepalive: true,
   });
 
   if (!response.ok) {
@@ -98,6 +99,7 @@ export async function initiateStkPush(params: StkPushParams): Promise<StkPushRes
   const response = await fetch(`${baseUrl}/mpesa/stkpush/v1/processrequest`, {
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    keepalive: true,
     body: JSON.stringify({
       BusinessShortCode: businessShortCode,
       Password: password,
@@ -149,6 +151,7 @@ export async function queryStkPushStatus(
   const response = await fetch(`${baseUrl}/mpesa/stkpushquery/v1/query`, {
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    keepalive: true,
     body: JSON.stringify({
       BusinessShortCode: queryShortCode,
       Password: password,
@@ -208,6 +211,7 @@ export async function initiateB2BPayment(params: B2BPaymentParams): Promise<B2BP
   const response = await fetch(`${baseUrl}/mpesa/b2b/v1/paymentrequest`, {
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    keepalive: true,
     body: JSON.stringify({
       Initiator: params.initiatorName,
       SecurityCredential: params.securityCredential,
