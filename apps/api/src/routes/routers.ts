@@ -27,6 +27,7 @@ import {
   buildMikrotikProvisioningScript,
   buildMikrotikVpnStartScript,
   buildMikrotikVpnCompleteScript,
+  buildMikrotikWinboxScript,
 } from "@mashupkgrid/radius";
 import { successResponse, ConflictError, NotFoundError, hashToken } from "@mashupkgrid/shared";
 import { env, isProduction } from "@mashupkgrid/config";
@@ -510,6 +511,37 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
       });
 
       reply.send(successResponse({ script }, request.id));
+    }
+  );
+
+  app.get(
+    "/:routerId/winbox-access",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("routers.read")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const { routerId } = idParamsSchema.parse(request.params);
+      const router = await getRouterOrThrow(tenantId, routerId);
+
+      const script = buildMikrotikWinboxScript(router.name);
+      reply.send(
+        successResponse(
+          {
+            routerId: router.id,
+            routerName: router.name,
+            host: router.host,
+            vpnIp: router.vpnIp,
+            winboxPort: 8291,
+            status: router.status,
+            script,
+            connectionTargets: {
+              direct: router.host ? `${router.host}:8291` : null,
+              vpn: router.vpnIp ? `${router.vpnIp}:8291` : null,
+              cloudHost: "68.210.187.104",
+            },
+          },
+          request.id
+        )
+      );
     }
   );
 

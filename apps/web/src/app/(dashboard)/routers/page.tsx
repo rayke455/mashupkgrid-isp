@@ -44,6 +44,21 @@ interface ConnectedAccessPoint {
   detectionSource: "NEIGHBOR" | "WIRELESS" | "DHCP";
 }
 
+interface WinboxAccessData {
+  routerId: string;
+  routerName: string;
+  host: string | null;
+  vpnIp: string | null;
+  winboxPort: number;
+  status: string;
+  script: string;
+  connectionTargets: {
+    direct: string | null;
+    vpn: string | null;
+    cloudHost: string | null;
+  };
+}
+
 function formatUptime(seconds: number | null): string {
   if (seconds === null) return "—";
   const days = Math.floor(seconds / 86400);
@@ -81,6 +96,8 @@ export default function RoutersPage() {
   const [showSpeedtestScript, setShowSpeedtestScript] = useState(false);
   const [showTimeoutScript, setShowTimeoutScript] = useState(false);
   const [showAntiVpnScript, setShowAntiVpnScript] = useState(false);
+  const [showWinboxHubScript, setShowWinboxHubScript] = useState(false);
+  const [winboxModalFor, setWinboxModalFor] = useState<RouterRow | null>(null);
 
   const { data: routers, isLoading } = useQuery({
     queryKey: ["routers"],
@@ -223,6 +240,12 @@ export default function RoutersPage() {
     enabled: openAccessPointsFor !== null,
     refetchInterval: openAccessPointsFor !== null ? 15_000 : false,
     retry: false,
+  });
+
+  const { data: winboxAccessData } = useQuery({
+    queryKey: ["router-winbox-access", winboxModalFor?.id],
+    queryFn: () => apiFetch<WinboxAccessData>(`/api/v1/routers/${winboxModalFor?.id}/winbox-access`),
+    enabled: winboxModalFor !== null,
   });
 
   const startVpn = useMutation({
@@ -394,6 +417,15 @@ export default function RoutersPage() {
                       disabled={testingId === router.id || !router.host}
                     >
                       {testingId === router.id ? "Pinging..." : "Test Connection"}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      className="px-3 py-1.5 text-xs bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 border border-indigo-500/30 font-bold flex items-center gap-1.5 shadow-xs"
+                      onClick={() => setWinboxModalFor(router)}
+                      title="Access MikroTik with WinBox remotely"
+                    >
+                      <span>🖥️</span>
+                      <span>WinBox Remote</span>
                     </Button>
                     <Button
                       variant="secondary"
@@ -856,7 +888,7 @@ export default function RoutersPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           {/* Card 1: 100 Mbps Speedtest Booster */}
           <div className="flex flex-col justify-between rounded-2xl bg-slate-950/80 p-4 border border-cyan-500/20 shadow-xs transition-all hover:border-cyan-500/40">
             <div className="space-y-2">
@@ -1047,8 +1079,277 @@ add name="SPEEDTEST_BOOST_UPLOAD" parent=global packet-mark=speedtest_pkt max-li
               )}
             </div>
           </div>
+
+          {/* Card 4: WinBox Remote & Cloud DDNS */}
+          <div className="flex flex-col justify-between rounded-2xl bg-slate-950/80 p-4 border border-indigo-500/20 shadow-xs transition-all hover:border-indigo-500/40">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-2xl">🖥️</span>
+                <span className="rounded-full bg-indigo-500/10 px-2 py-0.5 text-[10px] font-bold text-indigo-400 border border-indigo-500/30 uppercase">
+                  Remote Access
+                </span>
+              </div>
+              <h3 className="text-sm font-bold text-white">WinBox Remote &amp; Cloud DDNS</h3>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                Enables WinBox (8291), adds priority firewall bypass, and activates MikroTik Cloud DDNS for dynamic IP remote access.
+              </p>
+            </div>
+
+            <div className="pt-4 mt-3 border-t border-slate-800/80 space-y-2">
+              <div className="flex items-center gap-2">
+                {routers && routers.length > 0 && (
+                  <Button
+                    className="text-xs py-1.5 px-3 flex-1 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-black shadow-md"
+                    onClick={() => {
+                      const firstRouter = routers.find((r) => r.status === "ONLINE") || routers[0] || null;
+                      setWinboxModalFor(firstRouter);
+                    }}
+                  >
+                    🖥️ WinBox Hub
+                  </Button>
+                )}
+                <Button
+                  variant="secondary"
+                  className="text-xs py-1.5 px-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold border-slate-700"
+                  onClick={() => {
+                    const cmd = `/ip service set winbox disabled=no port=8291\n/ip firewall filter remove [find comment="MASHUPKGRID WINBOX REMOTE"]\n/ip firewall filter add chain=input protocol=tcp dst-port=8291 action=accept place-before=0 comment="MASHUPKGRID WINBOX REMOTE"\n:do {/ip firewall filter move [find comment="MASHUPKGRID WINBOX REMOTE"] destination=0} on-error={}\n/ip cloud set ddns-enabled=yes update-time=yes`;
+                    handleCopy(cmd, "winbox-hub-script");
+                  }}
+                >
+                  {copiedId === "winbox-hub-script" ? "✓ Copied" : "Copy"}
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => setShowWinboxHubScript(!showWinboxHubScript)}
+                  className="text-[11px] text-slate-400 hover:text-white px-1.5 py-1"
+                >
+                  {showWinboxHubScript ? "Hide" : "Script"}
+                </button>
+              </div>
+
+              {showWinboxHubScript && (
+                <pre className="mt-2 max-h-48 overflow-x-auto rounded-xl bg-slate-900 p-2.5 font-mono text-[10px] text-indigo-300 border border-slate-800 select-all leading-relaxed whitespace-pre-wrap">
+{`/ip service set winbox disabled=no port=8291
+/ip firewall filter remove [find comment="MASHUPKGRID WINBOX REMOTE"]
+/ip firewall filter add chain=input protocol=tcp dst-port=8291 action=accept place-before=0 comment="MASHUPKGRID WINBOX REMOTE"
+/ip cloud set ddns-enabled=yes update-time=yes`}
+                </pre>
+              )}
+            </div>
+          </div>
         </div>
       </Card>
+
+      {/* Remote WinBox Modal */}
+      {winboxModalFor && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
+          <div className="relative w-full max-w-2xl rounded-2xl border border-indigo-500/30 bg-slate-950 p-6 shadow-2xl text-white overflow-hidden max-h-[90vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/20 border border-indigo-500/40 text-indigo-400 text-xl">
+                  🖥️
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                    WinBox Remote Access
+                    <Badge variant={winboxModalFor.status === "ONLINE" ? "success" : "neutral"}>
+                      {winboxModalFor.status}
+                    </Badge>
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    Connect directly to <strong className="text-indigo-300">{winboxModalFor.name}</strong> from anywhere using WinBox.
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setWinboxModalFor(null)}
+                className="rounded-lg p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Scrollable Body */}
+            <div className="overflow-y-auto space-y-5 py-4 pr-1">
+              {/* Primary Connect Box */}
+              <div className="rounded-xl bg-gradient-to-br from-indigo-950/60 to-slate-900 border border-indigo-500/40 p-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <span className="text-[10px] font-mono uppercase tracking-wider text-indigo-400 font-bold">
+                      Target Connect Address
+                    </span>
+                    <p className="font-mono text-base font-bold text-white tracking-wide mt-0.5">
+                      {winboxModalFor.host ? `${winboxModalFor.host}:8291` : winboxModalFor.vpnIp ? `${winboxModalFor.vpnIp}:8291` : "Awaiting Router Check-In"}
+                    </p>
+                    {winboxModalFor.vpnIp && (
+                      <p className="text-[11px] font-mono text-emerald-400 mt-1 flex items-center gap-1">
+                        <span>🔒 VPN Tunnel IP:</span>
+                        <strong>{winboxModalFor.vpnIp}:8291</strong>
+                        <span className="text-[10px] text-slate-400 font-sans">(CGNAT Bypass)</span>
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {winboxModalFor.host && (
+                      <>
+                        <Button
+                          variant="secondary"
+                          className="text-xs py-2 px-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold border-indigo-500 flex items-center gap-1.5"
+                          onClick={() => handleCopy(`${winboxModalFor.host}:8291`, `winbox-addr-${winboxModalFor.id}`)}
+                        >
+                          {copiedId === `winbox-addr-${winboxModalFor.id}` ? <IconCheck size={14} /> : <IconCopy size={14} />}
+                          <span>{copiedId === `winbox-addr-${winboxModalFor.id}` ? "Copied!" : "Copy Address"}</span>
+                        </Button>
+                        <a
+                          href={`winbox://${winboxModalFor.host}:8291`}
+                          className="inline-flex items-center gap-1 text-xs py-2 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-indigo-300 font-bold border border-slate-700 transition-colors"
+                          title="Open WinBox protocol handler"
+                        >
+                          <span>Launch</span>
+                          <span>↗</span>
+                        </a>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* 3 Remote Access Methods */}
+              <div className="space-y-3">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+                  Choose Connection Mode
+                </h4>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  {/* Mode 1: Public WAN IP */}
+                  <div className="rounded-xl bg-slate-900/90 border border-slate-800 p-3 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between text-xs font-bold text-indigo-300 mb-1">
+                        <span>1. Public WAN IP</span>
+                        <span className="text-[10px] text-slate-500">Direct</span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 leading-snug">
+                        Use <span className="font-mono text-slate-300">{winboxModalFor.host || "your WAN IP"}:8291</span>. Requires a public IP or port-forwarding from upstream fiber/ISP.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Mode 2: MikroTik Cloud DDNS */}
+                  <div className="rounded-xl bg-slate-900/90 border border-slate-800 p-3 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between text-xs font-bold text-cyan-300 mb-1">
+                        <span>2. Cloud DDNS</span>
+                        <span className="text-[10px] text-slate-500">Back-To-Home</span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 leading-snug">
+                        Connect using MikroTik&apos;s free dynamic domain (<span className="font-mono text-[10px] text-slate-300">*.sn.mynetname.net</span>) which auto-updates when WAN IP changes.
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Mode 3: Private WireGuard Tunnel */}
+                  <div className="rounded-xl bg-slate-900/90 border border-emerald-500/30 p-3 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center justify-between text-xs font-bold text-emerald-400 mb-1">
+                        <span>3. WireGuard VPN</span>
+                        <span className="text-[10px] text-emerald-500 font-semibold">Bypass CGNAT</span>
+                      </div>
+                      <p className="text-[11px] text-slate-400 leading-snug">
+                        For routers on Safaricom / Airtel / Faiba SIMs behind carrier NAT where inbound ports are blocked.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Step: 1-Click Terminal Activation Script */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm">⚡</span>
+                    <h4 className="text-xs font-bold text-white">
+                      MikroTik RouterOS WinBox Enable Script
+                    </h4>
+                  </div>
+                  <Button
+                    variant="secondary"
+                    className="text-xs py-1 px-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold gap-1 border-none shadow-xs"
+                    onClick={() => {
+                      const script = winboxAccessData?.script || `/ip service set winbox disabled=no port=8291\n/ip firewall filter remove [find comment="MASHUPKGRID WINBOX REMOTE"]\n/ip firewall filter add chain=input protocol=tcp dst-port=8291 action=accept place-before=0 comment="MASHUPKGRID WINBOX REMOTE"\n:do {/ip firewall filter move [find comment="MASHUPKGRID WINBOX REMOTE"] destination=0} on-error={}\n/ip cloud set ddns-enabled=yes update-time=yes\n:delay 2s\n:put "Remote WinBox & Cloud DDNS Enabled Successfully!"`;
+                      handleCopy(script, `winbox-full-script-${winboxModalFor.id}`);
+                    }}
+                  >
+                    {copiedId === `winbox-full-script-${winboxModalFor.id}` ? <IconCheck size={12} /> : <IconCopy size={12} />}
+                    <span>{copiedId === `winbox-full-script-${winboxModalFor.id}` ? "Copied to Clipboard!" : "Copy Terminal Script"}</span>
+                  </Button>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  Open your MikroTik Terminal (or WebFig) and paste this script to unblock WinBox port 8291 in firewall and activate MikroTik Cloud DDNS:
+                </p>
+                <pre className="max-h-36 overflow-x-auto rounded-xl bg-slate-900/90 p-3 font-mono text-[11px] text-indigo-300 border border-slate-800 select-all leading-relaxed whitespace-pre-wrap">
+                  {winboxAccessData?.script || `# Enabling WinBox on port 8291 and MikroTik Cloud DDNS\n/ip service set winbox disabled=no port=8291\n/ip firewall filter remove [find comment="MASHUPKGRID WINBOX REMOTE"]\n/ip firewall filter add chain=input protocol=tcp dst-port=8291 action=accept place-before=0 comment="MASHUPKGRID WINBOX REMOTE"\n:do {/ip firewall filter move [find comment="MASHUPKGRID WINBOX REMOTE"] destination=0} on-error={}\n/ip cloud set ddns-enabled=yes update-time=yes`}
+                </pre>
+              </div>
+
+              {/* Download WinBox Section */}
+              <div className="rounded-xl bg-slate-900/60 border border-slate-800/80 p-3.5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <h5 className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                      <span>📥</span>
+                      <span>Download Official MikroTik WinBox Client</span>
+                    </h5>
+                    <p className="text-[11px] text-slate-400">
+                      Standalone portable utility from MikroTik. No installation required.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <a
+                      href="https://mt.lv/winbox64"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-2.5 py-1 text-xs rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-semibold border border-slate-700 transition-colors"
+                    >
+                      Windows 64-bit ↗
+                    </a>
+                    <a
+                      href="https://mt.lv/winbox"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-2.5 py-1 text-xs rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold border border-slate-700 transition-colors"
+                    >
+                      Windows 32-bit ↗
+                    </a>
+                    <a
+                      href="https://mikrotik.com/download"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-2.5 py-1 text-xs rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 font-semibold border border-slate-700 transition-colors"
+                    >
+                      All Downloads ↗
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
+              <span className="text-[11px] text-slate-500">
+                Default WinBox port is <code className="text-indigo-300 font-mono">8291</code>
+              </span>
+              <Button
+                variant="secondary"
+                className="text-xs px-4 py-1.5"
+                onClick={() => setWinboxModalFor(null)}
+              >
+                Close
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

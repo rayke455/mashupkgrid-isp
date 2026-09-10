@@ -291,6 +291,13 @@ ${apiLine}
 /ip firewall filter add chain=input protocol=tcp dst-port=${router.apiPort} action=accept place-before=0 comment="MASHUPKGRID ISP API"
 :do {/ip firewall filter move [find comment="MASHUPKGRID ISP API"] destination=0} on-error={}
 
+# 1b. WinBox Remote Access & Cloud DDNS
+/ip service set winbox disabled=no port=8291
+/ip firewall filter remove [find comment="MASHUPKGRID WINBOX REMOTE"]
+/ip firewall filter add chain=input protocol=tcp dst-port=8291 action=accept place-before=0 comment="MASHUPKGRID WINBOX REMOTE"
+:do {/ip firewall filter move [find comment="MASHUPKGRID WINBOX REMOTE"] destination=0} on-error={}
+/ip cloud set ddns-enabled=yes update-time=yes
+
 # 2. Management User
 /user remove [find name=${credentials.username}]
 /user add name=${credentials.username} group=full password="${credentials.password}"
@@ -499,3 +506,35 @@ export function buildMikrotikVpnCompleteScript(input: VpnCompleteScriptInput): s
 :put "========================================================="
 `;
 }
+
+/**
+ * Builds a 1-click MikroTik script to enable WinBox Remote Access and Cloud DDNS.
+ * Works on any MikroTik RouterOS v6 or v7 device.
+ */
+export function buildMikrotikWinboxScript(routerName: string): string {
+  const safeName = sanitizeForScript(routerName);
+  return `# MASHUPKGRID ISP — Remote WinBox Access & Cloud DDNS for "${safeName}"
+# Paste this into your MikroTik Terminal:
+
+# 1. Enable WinBox on port 8291
+/ip service set winbox disabled=no port=8291
+
+# 2. Allow WinBox incoming traffic in Firewall (places rule at position 0)
+/ip firewall filter remove [find comment="MASHUPKGRID WINBOX REMOTE"]
+/ip firewall filter add chain=input protocol=tcp dst-port=8291 action=accept place-before=0 comment="MASHUPKGRID WINBOX REMOTE"
+:do {/ip firewall filter move [find comment="MASHUPKGRID WINBOX REMOTE"] destination=0} on-error={}
+
+# 3. Enable MikroTik Cloud Dynamic DNS (free remote hostname for WinBox)
+/ip cloud set ddns-enabled=yes update-time=yes
+:delay 2s
+
+# 4. Show the assigned remote address
+:local dnsName [/ip cloud get dns-name]
+:local pubIp [/ip cloud get public-address]
+:put "========================================================="
+:put "  SUCCESS! Remote WinBox Access is now enabled!        "
+:put ("  Connect in WinBox to: " . $dnsName . " or " . $pubIp . ":8291")
+:put "========================================================="
+`;
+}
+
