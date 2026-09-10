@@ -62,6 +62,8 @@ const envSchema = z.object({
   NEXT_PUBLIC_API_URL: z.string().default("http://localhost:4000"),
   /** Base URL of apps/web, used server-side (worker) to build links inside transactional emails. */
   APP_WEB_URL: z.string().default("http://localhost:3000"),
+  /** Dedicated captive portal hostname reached directly without CDN proxying for MikroTik hotspot sign-in */
+  APP_PORTAL_URL: z.string().default("https://captive.mashuphost.tech"),
   /** The domain every tenant's automatic subdomain is built under (`{tenant.slug}.{this}`) —
    *  a placeholder until a real domain is registered and pointed at this deployment; actually
    *  making `{slug}.{this}` resolve to the tenant's dashboard is a separate, not-yet-built

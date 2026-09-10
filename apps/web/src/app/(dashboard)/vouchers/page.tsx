@@ -115,7 +115,11 @@ export default function VouchersPage() {
   const [urlCopied, setUrlCopied] = useState(false);
   const [portalUrl, setPortalUrl] = useState<string | null>(null);
   useEffect(() => {
-    if (user?.tenantSlug) setPortalUrl(`${window.location.origin}/hotspot/${user.tenantSlug}`);
+    if (user?.tenantSlug) {
+      const isLocal = typeof window !== "undefined" && window.location.hostname.includes("localhost");
+      const base = isLocal ? window.location.origin : "https://captive.mashuphost.tech";
+      setPortalUrl(`${base}/hotspot/${user.tenantSlug}`);
+    }
   }, [user?.tenantSlug]);
 
   // Queries
@@ -308,28 +312,42 @@ export default function VouchersPage() {
 
       {/* Captive Portal URL Callout */}
       {portalUrl && (
-        <Card className="flex items-center justify-between">
+        <Card className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-indigo-500/20 bg-gradient-to-r from-slate-900 via-slate-900 to-indigo-950/30">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
-              Your Captive Portal URL
-            </p>
-            <p className="mt-0.5 font-mono text-sm text-slate-700 dark:text-slate-300">{portalUrl}</p>
-            <p className="mt-1 text-xs text-slate-500">
-              Customers redirected here can enter codes or buy packages directly with M-Pesa.
+            <div className="flex items-center gap-2 mb-0.5">
+              <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+              <p className="text-xs font-semibold uppercase tracking-wider text-indigo-400">
+                Captive Wi-Fi Sign In Portal
+              </p>
+            </div>
+            <p className="font-mono text-sm font-bold text-white selection:bg-indigo-500">{portalUrl}</p>
+            <p className="mt-1 text-xs text-slate-400">
+              When customers connect to Wi-Fi, their phone opens this sign-in page to enter voucher codes or buy packages.
             </p>
           </div>
-          <Button
-            variant="secondary"
-            className="shrink-0 gap-1.5 px-3 py-1.5 text-xs"
-            onClick={() => {
-              navigator.clipboard.writeText(portalUrl);
-              setUrlCopied(true);
-              setTimeout(() => setUrlCopied(false), 2000);
-            }}
-          >
-            {urlCopied ? <IconCheck size={12} /> : <IconCopy size={12} />}
-            <span>{urlCopied ? "Copied!" : "Copy URL"}</span>
-          </Button>
+          <div className="flex items-center gap-2 shrink-0">
+            <a
+              href={portalUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-xs font-bold text-white transition-colors shadow-sm"
+            >
+              <span>Open Sign In</span>
+              <span>↗</span>
+            </a>
+            <Button
+              variant="secondary"
+              className="gap-1.5 px-3 py-1.5 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border-slate-700"
+              onClick={() => {
+                navigator.clipboard.writeText(portalUrl);
+                setUrlCopied(true);
+                setTimeout(() => setUrlCopied(false), 2000);
+              }}
+            >
+              {urlCopied ? <IconCheck size={12} /> : <IconCopy size={12} />}
+              <span>{urlCopied ? "Copied!" : "Copy URL"}</span>
+            </Button>
+          </div>
         </Card>
       )}
 

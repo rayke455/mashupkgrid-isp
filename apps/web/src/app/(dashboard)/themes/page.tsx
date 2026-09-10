@@ -138,7 +138,7 @@ export default function ThemesPage() {
 
         <div className="flex items-center gap-3">
           <a
-            href={`/hotspot/${tenantSlug}`}
+            href={typeof window !== "undefined" && !window.location.hostname.includes("localhost") ? `https://captive.mashuphost.tech/hotspot/${tenantSlug}` : `/hotspot/${tenantSlug}`}
             target="_blank"
             rel="noopener noreferrer"
             className="px-4 py-2 rounded-xl bg-blue-50 dark:bg-sky-950 border border-blue-200 dark:border-sky-800 text-blue-700 dark:text-sky-300 text-xs font-bold hover:bg-blue-100 dark:hover:bg-sky-900 transition-all flex items-center gap-1.5"

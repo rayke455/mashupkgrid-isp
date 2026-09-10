@@ -37,6 +37,17 @@ export async function middleware(request: NextRequest): Promise<NextResponse> {
   const hostname = host.split(":")[0]!.toLowerCase();
   if (isLocalHost(hostname)) return NextResponse.next();
 
+  // If request arrives on captive portal domain, route directly to hotspot sign-in
+  if (hostname === "captive.mashuphost.tech" || hostname.startsWith("captive.")) {
+    const url = request.nextUrl.clone();
+    if (url.pathname === "/" || url.pathname === "/login") {
+      const tenant = url.searchParams.get("tenant") || "demo-isp";
+      url.pathname = `/hotspot/${tenant}`;
+      return NextResponse.rewrite(url);
+    }
+    return NextResponse.next();
+  }
+
   let tenantSlug: string | null = null;
   try {
     const resolveUrl = `${API_BASE_URL}/api/v1/domains/resolve?host=${encodeURIComponent(hostname)}`;

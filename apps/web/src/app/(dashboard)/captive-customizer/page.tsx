@@ -227,7 +227,7 @@ export default function CaptiveCustomizerPage() {
             Reset Defaults
           </button>
           <a
-            href={`/hotspot/${tenantSlug}`}
+            href={typeof window !== "undefined" && !window.location.hostname.includes("localhost") ? `https://captive.mashuphost.tech/hotspot/${tenantSlug}` : `/hotspot/${tenantSlug}`}
             target="_blank"
             rel="noopener noreferrer"
             className="px-3.5 py-2 rounded-xl bg-indigo-950 border border-indigo-500/40 hover:bg-indigo-900 text-indigo-200 text-xs font-bold transition-all flex items-center gap-1.5"
