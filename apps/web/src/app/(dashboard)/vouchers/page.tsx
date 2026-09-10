@@ -23,6 +23,8 @@ interface HotspotPackage {
   uploadKbps: number | null;
   isPopular?: boolean;
   badge?: string | null;
+  simultaneousUse?: number;
+  blockTethering?: boolean;
   isActive: boolean;
 }
 
@@ -36,6 +38,7 @@ interface Voucher {
   dataCapMb: number | null;
   downloadKbps: number | null;
   uploadKbps: number | null;
+  simultaneousUse?: number | null;
   expiresAt: string | null;
   createdAt: string;
 }
@@ -98,6 +101,7 @@ export default function VouchersPage() {
   const [dataCapMb, setDataCapMb] = useState("");
   const [downloadSpeed, setDownloadSpeed] = useState("");
   const [uploadSpeed, setUploadSpeed] = useState("");
+  const [simultaneousUse, setSimultaneousUse] = useState("1");
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [lastBatch, setLastBatch] = useState<Voucher[] | null>(null);
 
@@ -106,11 +110,28 @@ export default function VouchersPage() {
   const [pkgPrice, setPkgPrice] = useState("");
   const [pkgDuration, setPkgDuration] = useState("60");
   const [pkgDataCap, setPkgDataCap] = useState("");
-  const [pkgDownload, setPkgDownload] = useState("5000");
-  const [pkgUpload, setPkgUpload] = useState("2000");
+  const [pkgDownloadMbps, setPkgDownloadMbps] = useState("5");
+  const [pkgUploadMbps, setPkgUploadMbps] = useState("2");
+  const [pkgSimultaneousUse, setPkgSimultaneousUse] = useState("1");
+  const [pkgBlockTethering, setPkgBlockTethering] = useState(false);
   const [pkgIsPopular, setPkgIsPopular] = useState(false);
   const [pkgBadge, setPkgBadge] = useState("MOST POPULAR");
   const [packageError, setPackageError] = useState<string | null>(null);
+
+  // Package Edit Modal
+  const [editingPackage, setEditingPackage] = useState<HotspotPackage | null>(null);
+  const [editPkgName, setEditPkgName] = useState("");
+  const [editPkgPrice, setEditPkgPrice] = useState("");
+  const [editPkgDuration, setEditPkgDuration] = useState("60");
+  const [editPkgDataCap, setEditPkgDataCap] = useState("");
+  const [editPkgDownloadMbps, setEditPkgDownloadMbps] = useState("5");
+  const [editPkgUploadMbps, setEditPkgUploadMbps] = useState("2");
+  const [editPkgSimultaneousUse, setEditPkgSimultaneousUse] = useState("1");
+  const [editPkgBlockTethering, setEditPkgBlockTethering] = useState(false);
+  const [editPkgIsPopular, setEditPkgIsPopular] = useState(false);
+  const [editPkgBadge, setEditPkgBadge] = useState("MOST POPULAR");
+  const [editPkgError, setEditPkgError] = useState<string | null>(null);
+  const [deletingPkgId, setDeletingPkgId] = useState<string | null>(null);
 
   const [urlCopied, setUrlCopied] = useState(false);
   const [portalUrl, setPortalUrl] = useState<string | null>(null);
@@ -148,6 +169,7 @@ export default function VouchersPage() {
         setDataCapMb(pkg.dataCapMb ? String(pkg.dataCapMb) : "");
         setDownloadSpeed(pkg.downloadKbps ? String(pkg.downloadKbps) : "");
         setUploadSpeed(pkg.uploadKbps ? String(pkg.uploadKbps) : "");
+        setSimultaneousUse(String(pkg.simultaneousUse || 1));
       }
     }
   }, [selectedPackageId, packages]);
@@ -164,6 +186,7 @@ export default function VouchersPage() {
           dataCapMb: dataCapMb ? Number(dataCapMb) : undefined,
           downloadKbps: downloadSpeed ? Number(downloadSpeed) : undefined,
           uploadKbps: uploadSpeed ? Number(uploadSpeed) : undefined,
+          simultaneousUse: simultaneousUse ? Number(simultaneousUse) : undefined,
         }),
       }),
     onSuccess: (vouchers) => {
@@ -180,25 +203,68 @@ export default function VouchersPage() {
       apiFetch<HotspotPackage>("/api/v1/vouchers/packages", {
         method: "POST",
         body: JSON.stringify({
-          name: pkgName,
+          name: pkgName.trim(),
           priceMinor: Math.round(Number(pkgPrice) * 100),
           durationMinutes: Number(pkgDuration),
           dataCapMb: pkgDataCap ? Number(pkgDataCap) : undefined,
-          downloadKbps: pkgDownload ? Number(pkgDownload) : undefined,
-          uploadKbps: pkgUpload ? Number(pkgUpload) : undefined,
+          downloadKbps: pkgDownloadMbps ? Math.round(Number(pkgDownloadMbps) * 1000) : undefined,
+          uploadKbps: pkgUploadMbps ? Math.round(Number(pkgUploadMbps) * 1000) : undefined,
+          simultaneousUse: Math.max(1, Number(pkgSimultaneousUse) || 1),
+          blockTethering: pkgBlockTethering,
           isPopular: pkgIsPopular,
-          badge: pkgIsPopular && pkgBadge ? pkgBadge : undefined,
+          badge: pkgIsPopular && pkgBadge ? pkgBadge.trim() : undefined,
         }),
       }),
     onSuccess: () => {
       setPkgName("");
       setPkgPrice("");
+      setPkgDataCap("");
       setPkgIsPopular(false);
+      setPkgBlockTethering(false);
+      setPkgSimultaneousUse("1");
       setShowPackageForm(false);
       queryClient.invalidateQueries({ queryKey: ["hotspot-packages-staff"] });
     },
     onError: (err) =>
       setPackageError(err instanceof ApiRequestError ? err.message : "Failed to create package"),
+  });
+
+  const updatePackage = useMutation({
+    mutationFn: () => {
+      if (!editingPackage) return Promise.reject(new Error("No package selected"));
+      return apiFetch<HotspotPackage>(`/api/v1/vouchers/packages/${editingPackage.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          name: editPkgName.trim(),
+          priceMinor: Math.round(Number(editPkgPrice) * 100),
+          durationMinutes: Number(editPkgDuration),
+          dataCapMb: editPkgDataCap ? Number(editPkgDataCap) : null,
+          downloadKbps: editPkgDownloadMbps ? Math.round(Number(editPkgDownloadMbps) * 1000) : null,
+          uploadKbps: editPkgUploadMbps ? Math.round(Number(editPkgUploadMbps) * 1000) : null,
+          simultaneousUse: Math.max(1, Number(editPkgSimultaneousUse) || 1),
+          blockTethering: editPkgBlockTethering,
+          isPopular: editPkgIsPopular,
+          badge: editPkgIsPopular && editPkgBadge ? editPkgBadge.trim() : null,
+        }),
+      });
+    },
+    onSuccess: () => {
+      setEditingPackage(null);
+      queryClient.invalidateQueries({ queryKey: ["hotspot-packages-staff"] });
+    },
+    onError: (err) =>
+      setEditPkgError(err instanceof ApiRequestError ? err.message : "Failed to update package"),
+  });
+
+  const deletePackage = useMutation({
+    mutationFn: (id: string) =>
+      apiFetch(`/api/v1/vouchers/packages/${id}`, {
+        method: "DELETE",
+      }),
+    onSuccess: () => {
+      setDeletingPkgId(null);
+      queryClient.invalidateQueries({ queryKey: ["hotspot-packages-staff"] });
+    },
   });
 
   const togglePackage = useMutation({
@@ -218,6 +284,21 @@ export default function VouchersPage() {
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["hotspot-packages-staff"] }),
   });
+
+  const openEditModal = (pkg: HotspotPackage) => {
+    setEditingPackage(pkg);
+    setEditPkgName(pkg.name);
+    setEditPkgPrice(String(pkg.priceMinor / 100));
+    setEditPkgDuration(String(pkg.durationMinutes));
+    setEditPkgDataCap(pkg.dataCapMb ? String(pkg.dataCapMb) : "");
+    setEditPkgDownloadMbps(pkg.downloadKbps ? String(Math.round(pkg.downloadKbps / 1000)) : "");
+    setEditPkgUploadMbps(pkg.uploadKbps ? String(Math.round(pkg.uploadKbps / 1000)) : "");
+    setEditPkgSimultaneousUse(String(pkg.simultaneousUse || 1));
+    setEditPkgBlockTethering(pkg.blockTethering === true);
+    setEditPkgIsPopular(pkg.isPopular === true);
+    setEditPkgBadge(pkg.badge || "MOST POPULAR");
+    setEditPkgError(null);
+  };
 
   const openPrintModal = (vouchers: Voucher[]) => {
     setVouchersToPrint(vouchers);
@@ -440,6 +521,20 @@ export default function VouchersPage() {
                   />
                 </div>
 
+                <div>
+                  <Label htmlFor="batchSimUse">Allowed Devices (Per Code)</Label>
+                  <Input
+                    id="batchSimUse"
+                    type="number"
+                    min="1"
+                    max="50"
+                    placeholder="1"
+                    value={simultaneousUse}
+                    onChange={(e) => setSimultaneousUse(e.target.value)}
+                  />
+                  <HintText className="text-[11px]">Max concurrent logins per voucher</HintText>
+                </div>
+
                 <div className="sm:col-span-3 pt-2 flex items-center justify-between">
                   <Button type="submit" disabled={generate.isPending}>
                     {generate.isPending ? "Generating FreeRADIUS tickets..." : "Generate Voucher Batch"}
@@ -550,84 +645,182 @@ export default function VouchersPage() {
 
           {showPackageForm && (
             <Card className="border-purple-500/40 bg-purple-50/20 dark:bg-purple-950/20">
-              <h2 className="font-semibold text-slate-900 dark:text-white mb-3">Create Hotspot Plan</h2>
+              <h2 className="font-semibold text-slate-900 dark:text-white mb-3 flex items-center gap-2">
+                <span>➕</span> Create Hotspot Plan
+              </h2>
               <form
                 onSubmit={(e) => {
                   e.preventDefault();
                   setPackageError(null);
                   createPackage.mutate();
                 }}
-                className="grid grid-cols-1 sm:grid-cols-3 gap-4"
+                className="space-y-4"
               >
-                <div>
-                  <Label htmlFor="pkgName">Plan Name</Label>
-                  <Input
-                    id="pkgName"
-                    placeholder="e.g. 1 Hour Unlimited"
-                    value={pkgName}
-                    onChange={(e) => setPkgName(e.target.value)}
-                    required
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div>
+                    <Label htmlFor="pkgName">Plan Name</Label>
+                    <Input
+                      id="pkgName"
+                      placeholder="e.g. 1 Hour Unlimited"
+                      value={pkgName}
+                      onChange={(e) => setPkgName(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <Label htmlFor="pkgPrice">Price (KES)</Label>
+                    <Input
+                      id="pkgPrice"
+                      type="number"
+                      placeholder="20"
+                      value={pkgPrice}
+                      onChange={(e) => setPkgPrice(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="pkgDuration">Duration (Minutes)</Label>
+                      <div className="flex items-center gap-1">
+                        {[
+                          { label: "1h", val: "60" },
+                          { label: "3h", val: "180" },
+                          { label: "12h", val: "720" },
+                          { label: "24h", val: "1440" },
+                          { label: "7d", val: "10080" },
+                        ].map((preset) => (
+                          <button
+                            key={preset.label}
+                            type="button"
+                            onClick={() => setPkgDuration(preset.val)}
+                            className="px-1 py-0.5 text-[9px] rounded bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-300 font-semibold"
+                          >
+                            {preset.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <Input
+                      id="pkgDuration"
+                      type="number"
+                      placeholder="60"
+                      value={pkgDuration}
+                      onChange={(e) => setPkgDuration(e.target.value)}
+                      required
+                      className="mt-1"
+                    />
+                  </div>
                 </div>
 
-                <div>
-                  <Label htmlFor="pkgPrice">Price (KES)</Label>
-                  <Input
-                    id="pkgPrice"
-                    type="number"
-                    placeholder="20"
-                    value={pkgPrice}
-                    onChange={(e) => setPkgPrice(e.target.value)}
-                    required
-                  />
+                {/* Bandwidth & Speeds (MBs) */}
+                <div className="rounded-xl border border-slate-200 dark:border-obsidian-800 bg-slate-50/50 dark:bg-obsidian-950/40 p-3.5 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                      ⚡ Bandwidth &amp; Speed Limits (MBs)
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <Label htmlFor="pkgDownloadMbps">Download Speed (Mbps)</Label>
+                      <Input
+                        id="pkgDownloadMbps"
+                        type="number"
+                        step="any"
+                        placeholder="5 for 5 Mbps"
+                        value={pkgDownloadMbps}
+                        onChange={(e) => setPkgDownloadMbps(e.target.value)}
+                      />
+                      <HintText className="text-[10px]">Leave empty for uncapped</HintText>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="pkgUploadMbps">Upload Speed (Mbps)</Label>
+                      <Input
+                        id="pkgUploadMbps"
+                        type="number"
+                        step="any"
+                        placeholder="2 for 2 Mbps"
+                        value={pkgUploadMbps}
+                        onChange={(e) => setPkgUploadMbps(e.target.value)}
+                      />
+                      <HintText className="text-[10px]">Leave empty for uncapped</HintText>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="pkgDataCap">Data Cap (MB, Optional)</Label>
+                      <Input
+                        id="pkgDataCap"
+                        type="number"
+                        placeholder="e.g. 1000 for 1GB (Blank = Unlimited)"
+                        value={pkgDataCap}
+                        onChange={(e) => setPkgDataCap(e.target.value)}
+                      />
+                      <HintText className="text-[10px]">Leave empty for unlimited</HintText>
+                    </div>
+                  </div>
                 </div>
 
-                <div>
-                  <Label htmlFor="pkgDuration">Duration (Minutes)</Label>
-                  <Input
-                    id="pkgDuration"
-                    type="number"
-                    placeholder="60"
-                    value={pkgDuration}
-                    onChange={(e) => setPkgDuration(e.target.value)}
-                    required
-                  />
+                {/* Devices & Anti-Hotspot */}
+                <div className="rounded-xl border border-indigo-500/30 bg-indigo-50/20 dark:bg-indigo-950/20 p-3.5 space-y-3">
+                  <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                    <span>📱</span> Device Limit &amp; Anti-Hotspot Shield
+                  </span>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="pkgSimultaneousUse">Number of Devices Allowed (Per Code)</Label>
+                      <div className="flex items-center gap-1 my-1">
+                        {["1", "2", "3", "5"].map((preset) => (
+                          <button
+                            key={preset}
+                            type="button"
+                            onClick={() => setPkgSimultaneousUse(preset)}
+                            className={`px-2 py-0.5 text-xs rounded font-bold transition-colors ${
+                              pkgSimultaneousUse === preset
+                                ? "bg-purple-600 text-white"
+                                : "bg-purple-500/10 text-purple-600 dark:text-purple-300 hover:bg-purple-500/20"
+                            }`}
+                          >
+                            {preset} {preset === "1" ? "Device" : "Devices"}
+                          </button>
+                        ))}
+                      </div>
+                      <Input
+                        id="pkgSimultaneousUse"
+                        type="number"
+                        min="1"
+                        max="50"
+                        placeholder="1"
+                        value={pkgSimultaneousUse}
+                        onChange={(e) => setPkgSimultaneousUse(e.target.value)}
+                      />
+                      <HintText className="text-[11px]">Concurrent active devices allowed</HintText>
+                    </div>
+
+                    <div className="flex flex-col justify-between rounded-lg border border-purple-500/20 bg-purple-500/5 p-3">
+                      <label className="flex items-start gap-2.5 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={pkgBlockTethering}
+                          onChange={(e) => setPkgBlockTethering(e.target.checked)}
+                          className="mt-0.5 rounded text-purple-600 focus:ring-purple-500 h-4 w-4"
+                        />
+                        <div>
+                          <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1">
+                            <span>🛡️</span> Anti-Hotspot Shield (Anti-Tethering)
+                          </span>
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                            Drops tethered packets (TTL inspection) to prevent users from sharing connection via phone hotspot or travel routers.
+                          </p>
+                        </div>
+                      </label>
+                    </div>
+                  </div>
                 </div>
 
-                <div>
-                  <Label htmlFor="pkgDownload">Download Speed (Kbps)</Label>
-                  <Input
-                    id="pkgDownload"
-                    type="number"
-                    placeholder="5000 for 5Mbps"
-                    value={pkgDownload}
-                    onChange={(e) => setPkgDownload(e.target.value)}
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="pkgUpload">Upload Speed (Kbps)</Label>
-                  <Input
-                    id="pkgUpload"
-                    type="number"
-                    placeholder="2000 for 2Mbps"
-                    value={pkgUpload}
-                    onChange={(e) => setPkgUpload(e.target.value)}
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="pkgDataCap">Data Cap (MB, Optional)</Label>
-                  <Input
-                    id="pkgDataCap"
-                    type="number"
-                    placeholder="e.g. 1000 for 1GB"
-                    value={pkgDataCap}
-                    onChange={(e) => setPkgDataCap(e.target.value)}
-                  />
-                </div>
-
-                <div className="sm:col-span-3 rounded-xl bg-purple-500/10 border border-purple-500/30 p-3.5 space-y-2">
+                <div className="rounded-xl bg-purple-500/10 border border-purple-500/30 p-3.5 space-y-2">
                   <label className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-slate-100 cursor-pointer">
                     <input
                       type="checkbox"
@@ -653,7 +846,10 @@ export default function VouchersPage() {
                   )}
                 </div>
 
-                <div className="sm:col-span-3 pt-2">
+                <div className="pt-2 flex items-center justify-end gap-2">
+                  <Button type="button" variant="ghost" onClick={() => setShowPackageForm(false)}>
+                    Cancel
+                  </Button>
                   <Button type="submit" disabled={createPackage.isPending}>
                     {createPackage.isPending ? "Creating Plan..." : "Save Hotspot Plan"}
                   </Button>
@@ -700,23 +896,53 @@ export default function VouchersPage() {
                       <span className="font-semibold">{formatDuration(pkg.durationMinutes)}</span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-slate-400">Speed:</span>
+                      <span className="text-slate-400">Speed (MBs):</span>
                       <span className="font-semibold">
-                        {pkg.downloadKbps ? `${Math.round(pkg.downloadKbps / 1000)} Mbps` : "Uncapped"}
+                        {pkg.downloadKbps
+                          ? `${(pkg.downloadKbps / 1000).toFixed(pkg.downloadKbps % 1000 === 0 ? 0 : 1)} Mbps`
+                          : "Uncapped"}
+                        {pkg.uploadKbps ? ` / ${Math.round(pkg.uploadKbps / 1000)}M Up` : ""}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
                       <span className="text-slate-400">Data Limit:</span>
-                      <span className="font-semibold">{pkg.dataCapMb ? `${pkg.dataCapMb} MB` : "Unlimited"}</span>
+                      <span className="font-semibold">
+                        {pkg.dataCapMb
+                          ? pkg.dataCapMb >= 1024
+                            ? `${(pkg.dataCapMb / 1024).toFixed(1)} GB`
+                            : `${pkg.dataCapMb} MB`
+                          : "Unlimited"}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-slate-400">Allowed Devices:</span>
+                      <span className="font-semibold">
+                        {pkg.simultaneousUse && pkg.simultaneousUse > 1
+                          ? `📱 ${pkg.simultaneousUse} Devices`
+                          : "📱 1 Device"}
+                      </span>
                     </div>
                   </div>
+
+                  {pkg.blockTethering && (
+                    <div className="mt-2.5 flex items-center gap-1 text-[10px] font-bold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 dark:bg-emerald-500/20 px-2 py-0.5 rounded-md border border-emerald-500/20 w-fit">
+                      <span>🛡️ Anti-Hotspot Shield Active</span>
+                    </div>
+                  )}
                 </div>
 
                 <div className="mt-4 pt-3 border-t border-slate-100 dark:border-obsidian-800 flex items-center justify-between gap-1">
                   <div className="flex items-center gap-1">
                     <Button
                       variant="secondary"
-                      className="px-2.5 py-1 text-xs"
+                      className="px-2.5 py-1 text-xs font-semibold bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-300 border-purple-500/20"
+                      onClick={() => openEditModal(pkg)}
+                    >
+                      ✏️ Edit
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      className="px-2 py-1 text-xs"
                       onClick={() => togglePackage.mutate({ id: pkg.id, isActive: !pkg.isActive })}
                     >
                       {pkg.isActive ? "Disable" : "Enable"}
@@ -739,17 +965,30 @@ export default function VouchersPage() {
                       {pkg.isPopular ? "★ Popular" : "☆ Feature"}
                     </Button>
                   </div>
-                  <Button
-                    variant="ghost"
-                    className="px-2.5 py-1 text-xs"
-                    onClick={() => {
-                      setSelectedPackageId(pkg.id);
-                      setActiveTab("vouchers");
-                      setShowGenerateForm(true);
-                    }}
-                  >
-                    + Codes
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      className="px-2 py-1 text-xs"
+                      onClick={() => {
+                        setSelectedPackageId(pkg.id);
+                        setActiveTab("vouchers");
+                        setShowGenerateForm(true);
+                      }}
+                    >
+                      + Codes
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      className="px-1.5 py-1 text-xs text-rose-500 hover:text-rose-700 hover:bg-rose-500/10"
+                      onClick={() => {
+                        if (confirm(`Are you sure you want to remove plan "${pkg.name}"?`)) {
+                          deletePackage.mutate(pkg.id);
+                        }
+                      }}
+                    >
+                      🗑️
+                    </Button>
+                  </div>
                 </div>
               </Card>
             ))}
@@ -764,6 +1003,265 @@ export default function VouchersPage() {
               </div>
             )}
           </div>
+
+          {/* EDIT HOTSPOT PLAN MODAL */}
+          {editingPackage && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
+              <Card className="w-full max-w-2xl bg-white dark:bg-obsidian-900 border-purple-500/40 shadow-2xl p-6 relative animate-in fade-in zoom-in-95 duration-150">
+                <div className="flex items-center justify-between border-b border-slate-100 dark:border-obsidian-800 pb-4 mb-4">
+                  <div>
+                    <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                      <span>✏️</span> Edit Hotspot Plan: {editingPackage.name}
+                    </h2>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Configure speed (MBs), data limits, simultaneous devices, and anti-hotspot tethering lock.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEditingPackage(null)}
+                    className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-lg font-bold p-1 rounded-md"
+                  >
+                    ✕
+                  </button>
+                </div>
+
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    setEditPkgError(null);
+                    updatePackage.mutate();
+                  }}
+                  className="space-y-4"
+                >
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="editPkgName">Plan Name</Label>
+                      <Input
+                        id="editPkgName"
+                        value={editPkgName}
+                        onChange={(e) => setEditPkgName(e.target.value)}
+                        placeholder="e.g. 1 Hour Unlimited"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="editPkgPrice">Price (KES)</Label>
+                      <Input
+                        id="editPkgPrice"
+                        type="number"
+                        step="any"
+                        value={editPkgPrice}
+                        onChange={(e) => setEditPkgPrice(e.target.value)}
+                        placeholder="20"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="editPkgDuration">Duration (Minutes)</Label>
+                      <div className="flex items-center gap-1">
+                        {[
+                          { label: "1h", val: "60" },
+                          { label: "3h", val: "180" },
+                          { label: "12h", val: "720" },
+                          { label: "24h", val: "1440" },
+                          { label: "7d", val: "10080" },
+                          { label: "30d", val: "43200" },
+                        ].map((preset) => (
+                          <button
+                            key={preset.label}
+                            type="button"
+                            onClick={() => setEditPkgDuration(preset.val)}
+                            className="px-1.5 py-0.5 text-[10px] rounded bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-300 font-semibold"
+                          >
+                            {preset.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <Input
+                      id="editPkgDuration"
+                      type="number"
+                      value={editPkgDuration}
+                      onChange={(e) => setEditPkgDuration(e.target.value)}
+                      placeholder="60"
+                      required
+                      className="mt-1"
+                    />
+                    <HintText className="text-[11px]">
+                      {editPkgDuration ? `Active for ${formatDuration(Number(editPkgDuration))}` : ""}
+                    </HintText>
+                  </div>
+
+                  {/* Speeds & Data Cap (MBs) */}
+                  <div className="rounded-xl border border-slate-200 dark:border-obsidian-800 bg-slate-50/50 dark:bg-obsidian-950/40 p-3.5 space-y-3">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                      <span>⚡</span> Speeds &amp; Bandwidth Quota (MBs)
+                    </span>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <Label htmlFor="editPkgDownloadMbps">Download Speed (Mbps)</Label>
+                        <Input
+                          id="editPkgDownloadMbps"
+                          type="number"
+                          step="any"
+                          value={editPkgDownloadMbps}
+                          onChange={(e) => setEditPkgDownloadMbps(e.target.value)}
+                          placeholder="e.g. 5 for 5Mbps"
+                        />
+                        <HintText className="text-[10px]">Leave blank for uncapped</HintText>
+                      </div>
+
+                      <div>
+                        <Label htmlFor="editPkgUploadMbps">Upload Speed (Mbps)</Label>
+                        <Input
+                          id="editPkgUploadMbps"
+                          type="number"
+                          step="any"
+                          value={editPkgUploadMbps}
+                          onChange={(e) => setEditPkgUploadMbps(e.target.value)}
+                          placeholder="e.g. 2 for 2Mbps"
+                        />
+                        <HintText className="text-[10px]">Leave blank for uncapped</HintText>
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <Label htmlFor="editPkgDataCap">Data Cap (MB)</Label>
+                          <button
+                            type="button"
+                            onClick={() => setEditPkgDataCap("")}
+                            className="text-[10px] text-purple-600 dark:text-purple-400 hover:underline"
+                          >
+                            Unlimited
+                          </button>
+                        </div>
+                        <Input
+                          id="editPkgDataCap"
+                          type="number"
+                          value={editPkgDataCap}
+                          onChange={(e) => setEditPkgDataCap(e.target.value)}
+                          placeholder="e.g. 1000 (Blank = Unlimited)"
+                        />
+                        <HintText className="text-[10px]">
+                          {editPkgDataCap ? `${editPkgDataCap} MB Quota` : "Unlimited Data"}
+                        </HintText>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Number of Devices & Anti-Hotspot */}
+                  <div className="rounded-xl border border-indigo-500/30 bg-indigo-50/20 dark:bg-indigo-950/20 p-3.5 space-y-3">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                      <span>📱</span> Allowed Devices &amp; Anti-Hotspot Protection
+                    </span>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="editPkgSimultaneousUse">Allowed Devices (Per Voucher)</Label>
+                        <div className="flex items-center gap-1 my-1">
+                          {["1", "2", "3", "5"].map((preset) => (
+                            <button
+                              key={preset}
+                              type="button"
+                              onClick={() => setEditPkgSimultaneousUse(preset)}
+                              className={`px-2 py-0.5 text-xs rounded font-bold transition-colors ${
+                                editPkgSimultaneousUse === preset
+                                  ? "bg-purple-600 text-white"
+                                  : "bg-purple-500/10 text-purple-600 dark:text-purple-300 hover:bg-purple-500/20"
+                              }`}
+                            >
+                              {preset} {preset === "1" ? "Device" : "Devices"}
+                            </button>
+                          ))}
+                        </div>
+                        <Input
+                          id="editPkgSimultaneousUse"
+                          type="number"
+                          min="1"
+                          max="50"
+                          value={editPkgSimultaneousUse}
+                          onChange={(e) => setEditPkgSimultaneousUse(e.target.value)}
+                          placeholder="1"
+                          required
+                        />
+                        <HintText className="text-[11px]">
+                          Concurrent active connections allowed on this package
+                        </HintText>
+                      </div>
+
+                      <div className="flex flex-col justify-between rounded-lg border border-purple-500/20 bg-purple-500/5 p-3">
+                        <label className="flex items-start gap-2.5 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={editPkgBlockTethering}
+                            onChange={(e) => setEditPkgBlockTethering(e.target.checked)}
+                            className="mt-0.5 rounded text-purple-600 focus:ring-purple-500 h-4 w-4"
+                          />
+                          <div>
+                            <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1">
+                              <span>🛡️</span> Anti-Hotspot Shield (Block Tethering)
+                            </span>
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                              Inspects packet TTL and drops tethered traffic. Prevents users from turning on their phone Wi-Fi hotspot or connecting travel routers to share 1 voucher with multiple devices.
+                            </p>
+                          </div>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Most Popular Badge */}
+                  <div className="rounded-xl bg-purple-500/10 border border-purple-500/30 p-3.5 space-y-2">
+                    <label className="flex items-center gap-2 text-xs font-bold text-slate-800 dark:text-slate-100 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={editPkgIsPopular}
+                        onChange={(e) => setEditPkgIsPopular(e.target.checked)}
+                        className="rounded text-purple-600 focus:ring-purple-500 h-4 w-4"
+                      />
+                      <span>⭐ Highlight as &quot;Most Popular&quot; / &quot;Best Value&quot; on Portal</span>
+                    </label>
+                    {editPkgIsPopular && (
+                      <div className="pt-1">
+                        <Label htmlFor="editPkgBadge" className="text-[11px] text-slate-500">
+                          Custom Badge Text (e.g. MOST POPULAR, BEST VALUE, HOT DEAL)
+                        </Label>
+                        <Input
+                          id="editPkgBadge"
+                          value={editPkgBadge}
+                          onChange={(e) => setEditPkgBadge(e.target.value)}
+                          placeholder="MOST POPULAR"
+                          className="mt-0.5 max-w-xs text-xs font-bold"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {editPkgError && <ErrorText>{editPkgError}</ErrorText>}
+
+                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-obsidian-800">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => setEditingPackage(null)}
+                      disabled={updatePackage.isPending}
+                    >
+                      Cancel
+                    </Button>
+                    <Button type="submit" disabled={updatePackage.isPending}>
+                      {updatePackage.isPending ? "Saving Changes..." : "Save Changes"}
+                    </Button>
+                  </div>
+                </form>
+              </Card>
+            </div>
+          )}
         </div>
       )}
 

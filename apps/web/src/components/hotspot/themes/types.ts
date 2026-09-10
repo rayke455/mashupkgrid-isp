@@ -10,6 +10,8 @@ export interface HotspotPackage {
   uploadKbps: number | null;
   isPopular?: boolean;
   badge?: string | null;
+  simultaneousUse?: number;
+  blockTethering?: boolean;
 }
 
 export interface VoucherLoginResult {

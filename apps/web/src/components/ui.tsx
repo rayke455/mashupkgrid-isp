@@ -105,8 +105,8 @@ export function ErrorText({ children }: { children: ReactNode }) {
   );
 }
 
-export function HintText({ children }: { children: ReactNode }) {
-  return <p className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">{children}</p>;
+export function HintText({ children, className = "" }: { children: ReactNode; className?: string }) {
+  return <p className={`mt-1.5 text-xs text-slate-500 dark:text-slate-400 ${className}`}>{children}</p>;
 }
 
 export function Badge({

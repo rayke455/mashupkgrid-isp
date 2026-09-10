@@ -32,6 +32,8 @@ const generateSchema = z.object({
   dataCapMb: z.number().int().positive().optional(),
   downloadKbps: z.number().int().positive().optional(),
   uploadKbps: z.number().int().positive().optional(),
+  simultaneousUse: z.number().int().min(1).max(50).optional(),
+  blockTethering: z.boolean().optional(),
 });
 
 const createPackageSchema = z.object({
@@ -43,6 +45,8 @@ const createPackageSchema = z.object({
   dataCapMb: z.number().int().positive().nullable().optional(),
   downloadKbps: z.number().int().positive().nullable().optional(),
   uploadKbps: z.number().int().positive().nullable().optional(),
+  simultaneousUse: z.number().int().min(1).max(50).optional().default(1),
+  blockTethering: z.boolean().optional().default(false),
   isPopular: z.boolean().optional(),
   // .nullable() matters here specifically: the "remove Most Popular" toggle sends
   // `badge: null` to clear a previously-set badge, and without this the whole PATCH — including

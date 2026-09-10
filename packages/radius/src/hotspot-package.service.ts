@@ -12,6 +12,8 @@ export interface CreateHotspotPackageInput {
   uploadKbps?: number | null;
   isPopular?: boolean;
   badge?: string | null;
+  simultaneousUse?: number | null;
+  blockTethering?: boolean | null;
 }
 
 export interface UpdateHotspotPackageInput {
@@ -26,6 +28,8 @@ export interface UpdateHotspotPackageInput {
   isPopular?: boolean;
   badge?: string | null;
   isActive?: boolean;
+  simultaneousUse?: number | null;
+  blockTethering?: boolean | null;
 }
 
 export async function listHotspotPackages(
@@ -78,6 +82,8 @@ export async function createHotspotPackage(
       uploadKbps: input.uploadKbps ?? null,
       isPopular: input.isPopular ?? false,
       badge: input.badge?.trim() ?? null,
+      simultaneousUse: Math.max(1, input.simultaneousUse ?? 1),
+      blockTethering: input.blockTethering === true,
       isActive: true,
     },
   });
@@ -104,6 +110,8 @@ export async function updateHotspotPackage(
       ...(input.isPopular !== undefined ? { isPopular: input.isPopular } : {}),
       ...(input.badge !== undefined ? { badge: input.badge?.trim() ?? null } : {}),
       ...(input.isActive !== undefined ? { isActive: input.isActive } : {}),
+      ...(input.simultaneousUse !== undefined ? { simultaneousUse: Math.max(1, input.simultaneousUse ?? 1) } : {}),
+      ...(input.blockTethering !== undefined ? { blockTethering: input.blockTethering === true } : {}),
     },
   });
 }

@@ -24,6 +24,8 @@ export interface GenerateVouchersInput {
   dataCapMb?: number | null;
   downloadKbps?: number | null;
   uploadKbps?: number | null;
+  simultaneousUse?: number | null;
+  blockTethering?: boolean | null;
 }
 
 /** Generates `count` self-contained hotspot vouchers. Each voucher is its own RADIUS identity
@@ -39,6 +41,8 @@ export async function generateVouchers(input: GenerateVouchersInput): Promise<Ho
   let dataCapMb = input.dataCapMb;
   let downloadKbps = input.downloadKbps;
   let uploadKbps = input.uploadKbps;
+  let simultaneousUse = input.simultaneousUse;
+  let blockTethering = input.blockTethering;
 
   if (input.hotspotPackageId) {
     const pkg = await prisma.hotspotPackage.findUnique({
@@ -56,6 +60,8 @@ export async function generateVouchers(input: GenerateVouchersInput): Promise<Ho
     dataCapMb = dataCapMb ?? pkg.dataCapMb;
     downloadKbps = downloadKbps ?? pkg.downloadKbps;
     uploadKbps = uploadKbps ?? pkg.uploadKbps;
+    simultaneousUse = simultaneousUse ?? pkg.simultaneousUse;
+    blockTethering = blockTethering ?? pkg.blockTethering;
   }
 
   const resolvedInput: GenerateVouchersInput = {
@@ -64,6 +70,8 @@ export async function generateVouchers(input: GenerateVouchersInput): Promise<Ho
     dataCapMb,
     downloadKbps,
     uploadKbps,
+    simultaneousUse: simultaneousUse ?? 1,
+    blockTethering: blockTethering === true,
   };
 
   const vouchers: HotspotVoucher[] = [];
@@ -91,12 +99,17 @@ export async function createHotspotVoucherForPurchase(
     dataCapMb: pkg.dataCapMb,
     downloadKbps: pkg.downloadKbps,
     uploadKbps: pkg.uploadKbps,
+    simultaneousUse: pkg.simultaneousUse,
+    blockTethering: pkg.blockTethering,
     count: 1,
     createdByUserId: null,
   });
 }
 
 async function createOneVoucher(input: GenerateVouchersInput): Promise<HotspotVoucher> {
+  const simUse = Math.max(1, input.simultaneousUse ?? 1);
+  const blockTethering = input.blockTethering === true;
+
   for (let attempt = 0; attempt < MAX_CODE_ATTEMPTS; attempt++) {
     const code = randomVoucherCode();
     const clash = await prisma.hotspotVoucher.findUnique({
@@ -115,6 +128,7 @@ async function createOneVoucher(input: GenerateVouchersInput): Promise<HotspotVo
           dataCapMb: input.dataCapMb ?? null,
           downloadKbps: input.downloadKbps ?? null,
           uploadKbps: input.uploadKbps ?? null,
+          simultaneousUse: simUse,
           createdByUserId: input.createdByUserId ?? null,
           status: "UNUSED",
         },
@@ -123,6 +137,34 @@ async function createOneVoucher(input: GenerateVouchersInput): Promise<HotspotVo
       await tx.radCheck.create({
         data: { username: code, attribute: "Cleartext-Password", op: ":=", value: code },
       });
+
+      // Number of concurrent devices (FreeRADIUS check attribute)
+      await tx.radCheck.create({
+        data: { username: code, attribute: "Simultaneous-Use", op: ":=", value: String(simUse) },
+      });
+
+      // Number of concurrent devices (MikroTik / RFC 2865 Port-Limit reply attribute)
+      await tx.radReply.create({
+        data: {
+          username: code,
+          attribute: "Port-Limit",
+          op: "=",
+          value: String(simUse),
+        },
+      });
+
+      if (blockTethering) {
+        // Anti-Hotspot / Anti-Tethering: adds client IP to MikroTik address list "mashup-anti-tether"
+        await tx.radReply.create({
+          data: {
+            username: code,
+            attribute: "Mikrotik-Address-List",
+            op: "=",
+            value: "mashup-anti-tether",
+          },
+        });
+      }
+
       if (input.durationMinutes) {
         await tx.radReply.create({
           data: {

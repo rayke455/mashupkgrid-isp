@@ -324,6 +324,18 @@ async function buildReplyAttributes(username: string): Promise<RadiusAttribute[]
         buf.writeUInt32BE(Math.floor(seconds), 0);
         attributes.push({ type: SESSION_TIMEOUT_TYPE, value: buf });
       }
+    } else if (reply.attribute === "Port-Limit") {
+      const portLimit = Number(reply.value);
+      if (Number.isFinite(portLimit) && portLimit > 0) {
+        const buf = Buffer.alloc(4);
+        buf.writeUInt32BE(Math.floor(portLimit), 0);
+        attributes.push({ type: 62, value: buf }); // RFC 2865 Port-Limit
+      }
+    } else if (reply.attribute === "Mikrotik-Address-List") {
+      // Vendor 14988, Subtype 19 = Mikrotik-Address-List
+      attributes.push(
+        encodeVendorSpecific(MIKROTIK_VENDOR_ID, 19, Buffer.from(reply.value, "utf8"))
+      );
     } else if (reply.attribute === "Mikrotik-Rate-Limit") {
       attributes.push(
         encodeVendorSpecific(MIKROTIK_VENDOR_ID, MIKROTIK_RATE_LIMIT_SUBTYPE, Buffer.from(reply.value, "utf8"))
@@ -530,10 +542,36 @@ export function startRadiusServer(options: { authPort?: number; acctPort?: numbe
         const usernameBuf = findAttr(packet, ATTR.USER_NAME);
         const passwordBuf = findAttr(packet, ATTR.USER_PASSWORD);
         const username = usernameBuf?.toString("utf8") ?? "(missing)";
-        const valid =
+        let valid =
           usernameBuf && passwordBuf
             ? await checkCredentials(username, decodePapPassword(passwordBuf, secret, packet.authenticator))
             : false;
+
+        // If credentials are valid, enforce simultaneous active devices limit if configured
+        if (valid) {
+          const simCheck = await prisma.radCheck.findFirst({
+            where: { username, attribute: "Simultaneous-Use" },
+          });
+          if (simCheck) {
+            const maxDevices = parseInt(simCheck.value, 10);
+            if (Number.isFinite(maxDevices) && maxDevices > 0) {
+              const callingStationId = readStringAttr(packet, ATTR.CALLING_STATION_ID);
+              const otherDevicesActive = await prisma.radAcct.count({
+                where: {
+                  username,
+                  acctStopTime: null,
+                  ...(callingStationId ? { NOT: { callingStationId } } : {}),
+                },
+              });
+              if (otherDevicesActive >= maxDevices) {
+                console.warn(
+                  `[radius] device limit reached for "${username}" (${otherDevicesActive}/${maxDevices} active sessions from other devices) — rejecting Access-Request`
+                );
+                valid = false;
+              }
+            }
+          }
+        }
 
         const replyCode = valid ? RADIUS_CODE.ACCESS_ACCEPT : RADIUS_CODE.ACCESS_REJECT;
         const replyAttributes = valid ? await buildReplyAttributes(username) : [];

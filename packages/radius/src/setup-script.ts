@@ -133,17 +133,23 @@ function hostWithSubdomains(host: string): string[] {
  *  is actually costing them, and leaves it off where a wrongly-blocked customer is worse. */
 function buildAntiTetheringSection(enabled: boolean): string {
   if (!enabled) {
-    return `# 10. Anti-tethering is OFF for this router. Enable it in the dashboard if customers are
-#     sharing one voucher across a room via their phone's hotspot.`;
+    return `# 10. Anti-tethering: Package-level enforcement active via RADIUS address list.
+/ip firewall filter remove [find comment="MASHUPKGRID ANTI-TETHER"]
+/ip firewall filter add chain=forward src-address-list="mashup-anti-tether" ttl=equal:63 action=drop comment="MASHUPKGRID ANTI-TETHER"
+/ip firewall filter add chain=forward src-address-list="mashup-anti-tether" ttl=equal:127 action=drop comment="MASHUPKGRID ANTI-TETHER"
+/ip firewall filter add chain=forward src-address-list="mashup-anti-tether" ttl=equal:254 action=drop comment="MASHUPKGRID ANTI-TETHER"
+:do {/ip firewall filter move [find comment="MASHUPKGRID ANTI-TETHER"] destination=0} on-error={}
+:put "Per-package Anti-tethering filter active"`;
   }
 
-  return `# 10. Anti-tethering. Drops traffic that reached this router through a customer's own
-#     hotspot or travel router, identified by a TTL one hop below the device's own. Scoped to
-#     authenticated hotspot clients: an unauthenticated device is already blocked, and PPPoE
-#     subscribers are not touched.
+  return `# 10. Anti-tethering: Global router + package enforcement active.
 /ip firewall filter remove [find comment="MASHUPKGRID ANTI-TETHER"]
 /ip firewall filter add chain=forward hotspot=auth ttl=equal:63 action=drop comment="MASHUPKGRID ANTI-TETHER"
 /ip firewall filter add chain=forward hotspot=auth ttl=equal:127 action=drop comment="MASHUPKGRID ANTI-TETHER"
+/ip firewall filter add chain=forward hotspot=auth ttl=equal:254 action=drop comment="MASHUPKGRID ANTI-TETHER"
+/ip firewall filter add chain=forward src-address-list="mashup-anti-tether" ttl=equal:63 action=drop comment="MASHUPKGRID ANTI-TETHER"
+/ip firewall filter add chain=forward src-address-list="mashup-anti-tether" ttl=equal:127 action=drop comment="MASHUPKGRID ANTI-TETHER"
+/ip firewall filter add chain=forward src-address-list="mashup-anti-tether" ttl=equal:254 action=drop comment="MASHUPKGRID ANTI-TETHER"
 :do {/ip firewall filter move [find comment="MASHUPKGRID ANTI-TETHER"] destination=0} on-error={}
 :put "Anti-tethering active — one device per voucher enforced at the network level"`;
 }
