@@ -11,6 +11,7 @@ import {
   IconUsers,
   IconChevronRight,
 } from "@/components/icons";
+import { getApiBaseUrl } from "@/lib/api-client";
 
 interface CoffeeSupporter {
   id: string;
@@ -94,8 +95,9 @@ export default function DonateCoffeePage() {
 
   // Fetch the donate M-Pesa gateway config on mount
   useEffect(() => {
-    fetch("/api/v1/payments/mpesa/donate/config")
-      .then((res) => res.ok ? res.json() : null)
+    const baseUrl = getApiBaseUrl();
+    fetch(`${baseUrl}/api/v1/payments/mpesa/donate/config`)
+      .then((res) => (res.ok ? res.json() : null))
       .then((json) => {
         if (json?.data) setMpesaConfig(json.data);
       })
@@ -137,7 +139,8 @@ export default function DonateCoffeePage() {
     const pollInterval = setInterval(async () => {
       attempts++;
       try {
-        const res = await fetch(`/api/v1/payments/mpesa/donate/${checkoutRequestId}/status`);
+        const baseUrl = getApiBaseUrl();
+        const res = await fetch(`${baseUrl}/api/v1/payments/mpesa/donate/${checkoutRequestId}/status`);
         if (res.ok) {
           const data = await res.json();
           if (data?.data?.status === "COMPLETED") {
@@ -184,7 +187,8 @@ export default function DonateCoffeePage() {
     setIsProcessing(true);
 
     try {
-      const response = await fetch("/api/v1/payments/mpesa/donate", {
+      const baseUrl = getApiBaseUrl();
+      const response = await fetch(`${baseUrl}/api/v1/payments/mpesa/donate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -196,21 +200,20 @@ export default function DonateCoffeePage() {
       });
 
       const json = await response.json();
-      if (response.ok && json?.data) {
-        setCheckoutRequestId(json.data.checkoutRequestId || `ws_${Date.now()}`);
+      if (response.ok && json?.data?.checkoutRequestId) {
+        setCheckoutRequestId(json.data.checkoutRequestId);
         setCountdown(60);
         setStkPending(true);
       } else {
-        // Fallback to STK waiting state so the donor sees the prompt & Paybill instructions
-        setCheckoutRequestId(`ws_sim_${Date.now()}`);
-        setCountdown(60);
-        setStkPending(true);
+        const errorMsg =
+          json?.error?.message ||
+          json?.message ||
+          json?.data?.fallbackMessage ||
+          "Could not send M-Pesa STK prompt to your phone. Please check the number or use Paybill directly.";
+        setErrorMsg(errorMsg);
       }
-    } catch {
-      // Fallback to waiting modal with Paybill details
-      setCheckoutRequestId(`ws_sim_${Date.now()}`);
-      setCountdown(60);
-      setStkPending(true);
+    } catch (err: any) {
+      setErrorMsg("Network error connecting to payment gateway. Please check your connection.");
     } finally {
       setIsProcessing(false);
     }

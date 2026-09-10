@@ -51,8 +51,15 @@
 # 1. Main website, ISP dashboard, and platform admin
 mashuphost.tech, www.mashuphost.tech, admin.mashuphost.tech {
     import hardening
-    reverse_proxy localhost:3000 {
-        import proxy_headers_cf
+    handle /api/* {
+        reverse_proxy localhost:4000 {
+            import proxy_headers_cf
+        }
+    }
+    handle {
+        reverse_proxy localhost:3000 {
+            import proxy_headers_cf
+        }
     }
 }
 
