@@ -22,6 +22,8 @@ interface DonationGift {
 }
 
 const DONATION_GIFTS: DonationGift[] = [
+  { id: "bob1", emoji: "🪙", label: "1 Bob Tip", amount: 1, desc: "Say hi & test" },
+  { id: "bob10", emoji: "🍬", label: "10 Bob", amount: 10, desc: "Sweet treat" },
   { id: "chai", emoji: "🫖", label: "Chai & Mandazi", amount: 50, desc: "Quick boost" },
   { id: "coffee", emoji: "☕", label: "Coffee", amount: 100, desc: "Coding fuel" },
   { id: "snack", emoji: "🍟", label: "Snack / Bites", amount: 250, desc: "Dev break" },
@@ -329,8 +331,8 @@ export default function DonateCoffeePage() {
       return;
     }
 
-    if (donationAmount < 10) {
-      setErrorMsg("Please enter an amount of at least KES 10.");
+    if (donationAmount < 1) {
+      setErrorMsg("Please enter an amount of at least KES 1 (1 Bob).");
       return;
     }
 
@@ -460,8 +462,8 @@ export default function DonateCoffeePage() {
                   </span>
                 </div>
 
-                {/* 6 Preset Gifts */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 mb-3.5">
+                {/* Preset Gifts */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-3.5">
                   {DONATION_GIFTS.map((gift) => {
                     const isSelected = !isCustom && selectedGiftId === gift.id;
                     return (
@@ -493,7 +495,7 @@ export default function DonateCoffeePage() {
                 {/* Prominent Custom Amount Input */}
                 <div className="p-3.5 rounded-2xl bg-slate-950 border border-slate-800/90 space-y-1.5">
                   <label className="block text-[11px] font-semibold text-slate-400">
-                    Or enter any custom amount you like:
+                    Or enter any custom amount you like (even 1 Bob!):
                   </label>
                   <div className="relative">
                     <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-amber-400 font-mono">
@@ -501,8 +503,8 @@ export default function DonateCoffeePage() {
                     </span>
                     <input
                       type="number"
-                      min="10"
-                      step="10"
+                      min="1"
+                      step="1"
                       value={customAmountText}
                       onChange={(e) => handleCustomAmountChange(e.target.value)}
                       onKeyDown={(e) => {
@@ -511,7 +513,7 @@ export default function DonateCoffeePage() {
                           focusAndScrollToPhone();
                         }
                       }}
-                      placeholder="e.g. 20, 75, 300, 1500..."
+                      placeholder="e.g. 1, 5, 20, 100, 500..."
                       className={`w-full pl-14 pr-4 py-2.5 rounded-xl bg-slate-900 border text-white font-bold text-sm focus:outline-none transition-all ${
                         isCustom
                           ? "border-amber-500 ring-1 ring-amber-500/50"
