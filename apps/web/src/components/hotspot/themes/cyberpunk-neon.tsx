@@ -97,7 +97,7 @@ export function CyberpunkNeonTheme({
             {loadingPackages ? (
               <div className="py-12 text-center text-xs text-cyan-600">QUERYING TIERS...</div>
             ) : (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3 pt-2">
                 {packages?.map((pkg, idx) => {
                   const isPop = pkg.isPopular;
                   const isPink = idx % 2 === 1;
@@ -116,7 +116,7 @@ export function CyberpunkNeonTheme({
                     >
                       {isPop && (
                         <div className="absolute -top-2.5 right-2 rounded bg-yellow-400 text-black px-2 py-0.2 text-[8px] font-black uppercase tracking-widest shadow-md">
-                          {pkg.badge || "TOP TIER"}
+                          {pkg.badge || "MOST POPULAR"}
                         </div>
                       )}
                       <div>

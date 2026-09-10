@@ -514,7 +514,7 @@ export function GoldEnergyTheme({
                 No packages available. Please contact administrator.
               </div>
             ) : (
-              <div className="grid grid-cols-3 gap-2.5">
+              <div className="grid grid-cols-3 gap-2.5 pt-2">
                 {packages.map((pkg, idx) => {
                   const isPop = pkg.isPopular;
                   const borderStyle = isPop
@@ -532,44 +532,46 @@ export function GoldEnergyTheme({
                       key={pkg.id}
                       type="button"
                       onClick={() => onSelectPackage(pkg)}
-                      className={`group relative flex flex-col justify-between rounded-2xl border-2 p-1.5 text-center shadow-2xl transition-all duration-150 active:scale-95 hover:scale-[1.04] overflow-hidden bg-[#fdfbf7] ${borderStyle}`}
+                      className={`group relative flex flex-col justify-between rounded-2xl border-2 p-1.5 text-center shadow-2xl transition-all duration-150 active:scale-95 hover:scale-[1.04] bg-[#fdfbf7] ${borderStyle}`}
                       style={{ minHeight: "142px" }}
                     >
-                      {/* Most Popular Floating Badge */}
+                      {/* Most Popular Floating Badge (outside inner clipped container so it is never cut off) */}
                       {isPop && (
-                        <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 z-30 whitespace-nowrap rounded-full bg-gradient-to-r from-red-600 via-orange-500 to-amber-500 px-2 py-0.5 text-[8px] font-black uppercase tracking-wider text-white shadow-md border border-yellow-300 flex items-center gap-1">
+                        <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-30 whitespace-nowrap rounded-full bg-gradient-to-r from-red-600 via-orange-500 to-amber-500 px-2.5 py-0.5 text-[8.5px] font-black uppercase tracking-wider text-white shadow-lg border border-yellow-300 flex items-center gap-1">
                           <FlameIcon className="w-2.5 h-2.5 text-yellow-200" />
                           <span>{pkg.badge || "MOST POPULAR"}</span>
                         </div>
                       )}
 
-                      {/* If full 3D card background template exists */}
-                      {cardItem.cardTemplate ? (
-                        <img
-                          src={cardItem.cardTemplate}
-                          alt={cardItem.name}
-                          className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none transform group-hover:scale-105 transition-transform duration-200"
-                        />
-                      ) : (
-                        /* Otherwise: Cream Signboard Base + Leaning 3D Character Cutout */
-                        <>
-                          {/* 3D Character leaning over top right */}
-                          {cardItem.charImage && (
-                            <div className="absolute top-0 right-0 w-16 h-16 pointer-events-none overflow-hidden z-0">
-                              <img
-                                src={cardItem.charImage}
-                                alt={cardItem.name}
-                                className="w-full h-full object-cover object-top opacity-95 transform group-hover:scale-110 transition-transform"
-                              />
-                            </div>
-                          )}
-                          {/* Bottom Curved Golden Wave Ribbon */}
-                          <div className="absolute bottom-0 inset-x-0 h-7 bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 rounded-b-xl z-0" />
-                        </>
-                      )}
+                      {/* Inner clipped background container for 3D card template & characters */}
+                      <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
+                        {cardItem.cardTemplate ? (
+                          <img
+                            src={cardItem.cardTemplate}
+                            alt={cardItem.name}
+                            className="absolute inset-0 w-full h-full object-cover object-center pointer-events-none transform group-hover:scale-105 transition-transform duration-200"
+                          />
+                        ) : (
+                          /* Otherwise: Cream Signboard Base + Leaning 3D Character Cutout */
+                          <>
+                            {/* 3D Character leaning over top right */}
+                            {cardItem.charImage && (
+                              <div className="absolute top-0 right-0 w-16 h-16 pointer-events-none overflow-hidden z-0">
+                                <img
+                                  src={cardItem.charImage}
+                                  alt={cardItem.name}
+                                  className="w-full h-full object-cover object-top opacity-95 transform group-hover:scale-110 transition-transform"
+                                />
+                              </div>
+                            )}
+                            {/* Bottom Curved Golden Wave Ribbon */}
+                            <div className="absolute bottom-0 inset-x-0 h-7 bg-gradient-to-r from-amber-400 via-yellow-400 to-amber-500 rounded-b-xl z-0" />
+                          </>
+                        )}
+                      </div>
 
                       {/* Package Duration Header in Bold High-Contrast Black */}
-                      <div className="relative z-10 w-full pt-1 pl-1 text-left">
+                      <div className={`relative z-10 w-full pl-1 text-left ${isPop ? "pt-2" : "pt-1"}`}>
                         <span className="inline-block bg-white/70 backdrop-blur-2xs px-1.5 py-0.5 rounded-md text-[13px] font-black text-slate-950 tracking-tight leading-none capitalize shadow-2xs">
                           {formatDurationTitle(pkg.name, pkg.durationMinutes)}
                         </span>

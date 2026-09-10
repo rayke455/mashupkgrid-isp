@@ -325,24 +325,38 @@ export function SuntechBlueTheme({
                 No active packages available.
               </div>
             ) : (
-              <div className="grid grid-cols-3 gap-2.5">
+              <div className="grid grid-cols-3 gap-2.5 pt-2">
                 {packages.map((pkg, idx) => {
+                  const isPop = pkg.isPopular;
                   return (
                     <button
                       key={pkg.id}
                       type="button"
                       onClick={() => onSelectPackage(pkg)}
-                      className="group relative flex flex-col justify-between rounded-2xl p-1 text-center shadow-xl transition-all duration-150 active:scale-95 hover:scale-[1.04] overflow-hidden"
+                      className={`group relative flex flex-col justify-between rounded-2xl p-1 text-center shadow-xl transition-all duration-150 active:scale-95 hover:scale-[1.04] ${
+                        isPop ? "ring-2 ring-amber-400 scale-[1.02]" : ""
+                      }`}
                       style={{ minHeight: "128px" }}
                     >
-                      {/* Ripped Denim Blue Paper Outer Frame */}
-                      <div className="absolute inset-0 bg-[#0284c7] border-2 border-sky-300/40 rounded-2xl z-0" />
+                      {/* Most Popular Floating Badge (outside inner container so it is never clipped) */}
+                      {isPop && (
+                        <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-30 whitespace-nowrap rounded-full bg-gradient-to-r from-red-600 via-orange-500 to-amber-500 px-2.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-white shadow-lg border border-yellow-300 flex items-center gap-1">
+                          <span>🔥</span>
+                          <span>{pkg.badge || "MOST POPULAR"}</span>
+                        </div>
+                      )}
 
-                      {/* Jagged Ripped Edge Shadow Effect */}
-                      <div className="absolute inset-1.5 rounded-xl bg-gradient-to-br from-red-600 via-red-600 to-red-700 shadow-inner z-0 overflow-hidden">
-                        {/* Torn Paper Jagged Edge Highlights */}
-                        <div className="absolute -top-1 inset-x-0 h-2 bg-sky-200 opacity-60 transform -rotate-1" />
-                        <div className="absolute -bottom-1 inset-x-0 h-2 bg-sky-200 opacity-60 transform rotate-1" />
+                      {/* Inner clipped background container for ripped denim effects */}
+                      <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
+                        {/* Ripped Denim Blue Paper Outer Frame */}
+                        <div className={`absolute inset-0 ${isPop ? "bg-gradient-to-br from-blue-600 via-blue-700 to-amber-600 border-2 border-amber-300/80" : "bg-[#0284c7] border-2 border-sky-300/40"} rounded-2xl z-0`} />
+
+                        {/* Jagged Ripped Edge Shadow Effect */}
+                        <div className="absolute inset-1.5 rounded-xl bg-gradient-to-br from-red-600 via-red-600 to-red-700 shadow-inner z-0 overflow-hidden">
+                          {/* Torn Paper Jagged Edge Highlights */}
+                          <div className="absolute -top-1 inset-x-0 h-2 bg-sky-200 opacity-60 transform -rotate-1" />
+                          <div className="absolute -bottom-1 inset-x-0 h-2 bg-sky-200 opacity-60 transform rotate-1" />
+                        </div>
                       </div>
 
                       {/* White Signboard Center Area */}

@@ -103,7 +103,7 @@ export function VibrantRetailTheme({
             {loadingPackages ? (
               <div className="py-12 text-center text-xs text-slate-400">Loading packages...</div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 pt-2">
                 {packages?.map((pkg) => {
                   const isPop = pkg.isPopular;
                   return (
@@ -119,7 +119,7 @@ export function VibrantRetailTheme({
                     >
                       {isPop && (
                         <div className="absolute -top-2.5 right-2 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 px-2 py-0.5 text-[8.5px] font-black uppercase text-white shadow-xs">
-                          {pkg.badge || "HOT DEAL"}
+                          {pkg.badge || "MOST POPULAR"}
                         </div>
                       )}
                       <div>

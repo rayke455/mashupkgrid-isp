@@ -111,7 +111,7 @@ export function ModernGlassTheme({
             ) : !packages || packages.length === 0 ? (
               <div className="py-12 text-center text-slate-500 text-xs">No active packages found.</div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
                 {packages.map((pkg) => {
                   const isPop = pkg.isPopular;
                   return (
@@ -127,7 +127,7 @@ export function ModernGlassTheme({
                     >
                       {isPop && (
                         <span className="absolute -top-2.5 right-4 rounded-full bg-gradient-to-r from-purple-600 to-indigo-600 px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white shadow-md">
-                          Most Popular
+                          {pkg.badge || "Most Popular"}
                         </span>
                       )}
                       <div>
