@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import {
   IconCheck,
@@ -94,6 +94,23 @@ export default function DonateCoffeePage() {
   const [donorPhone, setDonorPhone] = useState<string>("");
   const [donorMessage, setDonorMessage] = useState<string>("");
 
+  // Direct navigation / focus for phone number
+  const phoneInputRef = useRef<HTMLInputElement>(null);
+  const [highlightPhone, setHighlightPhone] = useState<boolean>(false);
+
+  const focusAndScrollToPhone = () => {
+    setHighlightPhone(true);
+    setTimeout(() => {
+      if (phoneInputRef.current) {
+        phoneInputRef.current.focus();
+        phoneInputRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }, 60);
+    setTimeout(() => {
+      setHighlightPhone(false);
+    }, 2200);
+  };
+
   // Transaction & modal states
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [stkPending, setStkPending] = useState<boolean>(false);
@@ -135,6 +152,7 @@ export default function DonateCoffeePage() {
     setIsCustom(false);
     setCustomAmountText("");
     setErrorMsg(null);
+    focusAndScrollToPhone();
   };
 
   const handleCustomAmountChange = (val: string) => {
@@ -489,6 +507,12 @@ export default function DonateCoffeePage() {
                       step="10"
                       value={customAmountText}
                       onChange={(e) => handleCustomAmountChange(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          focusAndScrollToPhone();
+                        }
+                      }}
                       placeholder="e.g. 20, 75, 300, 1500..."
                       className={`w-full pl-14 pr-4 py-2.5 rounded-xl bg-slate-900 border text-white font-bold text-sm focus:outline-none transition-all ${
                         isCustom
@@ -497,14 +521,73 @@ export default function DonateCoffeePage() {
                       }`}
                     />
                   </div>
+                  {isCustom && donationAmount > 0 && (
+                    <button
+                      type="button"
+                      onClick={focusAndScrollToPhone}
+                      className="mt-1.5 text-xs font-semibold text-amber-400 hover:text-amber-300 flex items-center gap-1 transition-colors"
+                    >
+                      <span>Next: Enter phone number for KES {donationAmount.toLocaleString()}</span>
+                      <IconChevronRight size={13} />
+                    </button>
+                  )}
                 </div>
               </div>
 
-              {/* Supporter Name & Note */}
-              <div className="space-y-3 pt-1 border-t border-slate-800/80">
+              {/* Step 2: M-Pesa Phone Number — Direct next step after choosing treat */}
+              <div
+                id="phone-input-section"
+                className={`pt-4 pb-1 border-t transition-all duration-500 rounded-2xl ${
+                  highlightPhone
+                    ? "bg-emerald-500/10 p-3.5 border-emerald-500/60 ring-2 ring-emerald-400/40"
+                    : "border-slate-800/80"
+                }`}
+              >
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400 text-[11px] font-mono">
+                      2
+                    </span>
+                    <span>M-Pesa Phone Number</span>
+                  </label>
+                  <span className="text-[11px] font-mono text-emerald-400 font-medium">
+                    07XX... or 01XX...
+                  </span>
+                </div>
+                <div className="relative">
+                  <input
+                    ref={phoneInputRef}
+                    type="tel"
+                    required
+                    value={donorPhone}
+                    onChange={(e) => setDonorPhone(e.target.value)}
+                    placeholder="0712 345 678 or 0110 123 456"
+                    className={`w-full px-4 py-3.5 rounded-xl bg-slate-950 border font-mono text-base focus:outline-none transition-all placeholder:text-slate-600 ${
+                      highlightPhone
+                        ? "border-emerald-400 text-white ring-2 ring-emerald-400/60 shadow-lg shadow-emerald-500/20"
+                        : "border-emerald-500/40 text-white focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                    }`}
+                  />
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1.5 flex items-center gap-1.5">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>Enter your phone number. Safaricom will send an instant PIN prompt on your screen.</span>
+                </p>
+              </div>
+
+              {/* Step 3: Supporter Details (Optional) */}
+              <div className="space-y-3 pt-3 border-t border-slate-800/80">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold text-slate-400 flex items-center gap-2">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-slate-800 text-slate-400 text-[11px] font-mono">
+                      3
+                    </span>
+                    <span>Supporter Details (Optional)</span>
+                  </span>
+                </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                    Your Name or Handle (Optional)
+                  <label className="block text-[11px] font-medium text-slate-400 mb-1">
+                    Your Name or Handle
                   </label>
                   <input
                     type="text"
@@ -516,8 +599,8 @@ export default function DonateCoffeePage() {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">
-                    Say something nice… (Optional)
+                  <label className="block text-[11px] font-medium text-slate-400 mb-1">
+                    Say something nice…
                   </label>
                   <textarea
                     rows={2}
@@ -527,25 +610,6 @@ export default function DonateCoffeePage() {
                     className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs focus:outline-none focus:border-amber-500 resize-none"
                   />
                 </div>
-              </div>
-
-              {/* M-Pesa Phone Number — No +254 prefix, simple 07/01 entry */}
-              <div className="pt-1 border-t border-slate-800/80">
-                <label className="block text-xs font-bold uppercase tracking-wider text-slate-300 mb-1.5">
-                  M-Pesa Phone Number
-                </label>
-                <input
-                  type="tel"
-                  required
-                  value={donorPhone}
-                  onChange={(e) => setDonorPhone(e.target.value)}
-                  placeholder="0712 345 678 or 0110 123 456"
-                  className="w-full px-4 py-3 rounded-xl bg-slate-950 border border-emerald-500/40 text-white font-mono text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 placeholder:text-slate-600"
-                />
-                <p className="text-[11px] text-slate-400 mt-1.5 flex items-center gap-1.5">
-                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                  <span>Enter your phone number (starts with 07 or 01). An instant M-Pesa prompt will pop up.</span>
-                </p>
               </div>
 
               {errorMsg && (
