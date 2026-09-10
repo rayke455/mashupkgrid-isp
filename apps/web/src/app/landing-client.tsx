@@ -199,30 +199,6 @@ const FAQS = [
   },
 ];
 
-const TESTIMONIALS = [
-  {
-    name: "Sarah Kimani",
-    role: "Business Owner, Westlands",
-    avatar: "SK",
-    content: "MashupHost transformed our office connectivity. The speed and reliability are outstanding.",
-    stars: 5,
-  },
-  {
-    name: "David Omondi",
-    role: "Software Developer, Kilimani",
-    avatar: "DO",
-    content: "Best ISP in Nairobi. No downtime, fast support, and incredible speeds for remote work.",
-    stars: 5,
-  },
-  {
-    name: "Grace Mwangi",
-    role: "Content Creator, Ruiru",
-    avatar: "GM",
-    content: "Upload speeds are phenomenal. I can finally stream and upload content without lag.",
-    stars: 5,
-  },
-];
-
 export function LandingClient({ initialContent }: { initialContent?: unknown }) {
   const { itemCount, addItem } = useCart();
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -231,15 +207,8 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [activeFaq, setActiveFaq] = useState<number | null>(0);
 
-  // Backhaul Speed Test state
-  const [speedTestRunning, setSpeedTestRunning] = useState(false);
-  const [speedVal, setSpeedVal] = useState<number>(0);
-  const [pingVal, setPingVal] = useState<number>(1.8);
-  const [testComplete, setTestComplete] = useState(false);
-
   // Coverage search state
   const [coverageSearch, setCoverageSearch] = useState("");
-  const [coverageResult, setCoverageResult] = useState<string | null>(null);
 
   const filteredPlans = useMemo(
     () => FIBER_PLANS.filter((p) => p.type === planTab),
@@ -264,50 +233,13 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
     return list;
   }, [activeCategory, searchQuery]);
 
-  const runSpeedTest = () => {
-    if (speedTestRunning) return;
-    setSpeedTestRunning(true);
-    setTestComplete(false);
-    setSpeedVal(5);
-    setPingVal(1.8);
-
-    let curr = 5;
-    const interval = setInterval(() => {
-      curr += Math.floor(Math.random() * 85) + 40;
-      if (curr >= 982) {
-        clearInterval(interval);
-        setSpeedVal(982.4);
-        setSpeedTestRunning(false);
-        setTestComplete(true);
-      } else {
-        setSpeedVal(curr);
-      }
-    }, 60);
-  };
-
   const handleCoverageCheck = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!coverageSearch.trim()) return;
-    const q = coverageSearch.toLowerCase();
-    if (
-      q.includes("nairobi") ||
-      q.includes("utawala") ||
-      q.includes("dandora") ||
-      q.includes("kilimani") ||
-      q.includes("westlands") ||
-      q.includes("kiambu") ||
-      q.includes("ruiru") ||
-      q.includes("thika") ||
-      q.includes("machakos") ||
-      q.includes("mombasa") ||
-      q.includes("nakuru") ||
-      q.includes("eldoret") ||
-      q.includes("kisumu")
-    ) {
-      setCoverageResult("✓ Great news! High-Speed Fiber Backbone is LIVE in your area. Ready for 24-48h installation.");
-    } else {
-      setCoverageResult("✓ Good news! High-Speed Wireless Backhaul is available in your region. Fiber trunk extension in progress.");
-    }
+    const query = coverageSearch.trim();
+    const message = query
+      ? `Hello MashupHost, I want to check fiber internet coverage for my area: ${encodeURIComponent(query)}`
+      : "Hello MashupHost, I would like to check fiber internet coverage for my location.";
+    window.open(`https://wa.me/254703605266?text=${message}`, "_blank");
   };
 
   const handleOrderPlan = (plan: PlanItem) => {
@@ -386,8 +318,8 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
               <span className="px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[9px] font-mono font-bold">35+</span>
             </a>
             <a href="#solutions" className="hover:text-amber-400 transition-colors">Solutions</a>
-            <a href="#why-us" className="hover:text-amber-400 transition-colors">Why Us</a>
             <a href="#coverage" className="hover:text-amber-400 transition-colors">Coverage</a>
+            <a href="#faq" className="hover:text-amber-400 transition-colors">FAQ</a>
           </nav>
 
           {/* Action Buttons */}
@@ -449,30 +381,31 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
                 Ultra-fast fiber internet, enterprise hardware, and expert network solutions powering modern Kenya.
               </p>
 
-              {/* Exact Target CTAs */}
+              {/* CTAs */}
               <div className="flex flex-wrap items-center gap-3.5 pt-2">
                 <a
                   href="#packages"
-                    className="px-7 py-4 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs sm:text-sm tracking-wide uppercase shadow-xl shadow-amber-500/25 transition-all flex items-center gap-2 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-200"
+                  className="px-7 py-4 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs sm:text-sm tracking-wide uppercase shadow-xl shadow-amber-500/25 transition-all flex items-center gap-2 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-200"
                 >
                   <span>View Packages</span>
                   <IconArrowRight size={16} />
                 </a>
                 <a
                   href="#hardware"
-                    className="px-7 py-4 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-700 hover:border-amber-400 text-white font-bold text-xs sm:text-sm tracking-wide transition-all flex items-center gap-2 shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                  className="px-7 py-4 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-700 hover:border-amber-400 text-white font-bold text-xs sm:text-sm tracking-wide transition-all flex items-center gap-2 shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
                 >
                   <IconPackage size={16} />
                   <span>Explore Hardware</span>
                 </a>
-                <button
-                  type="button"
-                  onClick={runSpeedTest}
-                    className="px-5 py-4 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 font-bold text-xs sm:text-sm transition-all flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300"
+                <a
+                  href="https://wa.me/254703605266?text=Hello%20MashupHost%2C%20I%20want%20to%20get%20connected%20to%20Fiber"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-6 py-4 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 font-bold text-xs sm:text-sm transition-all flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300"
                 >
-                  <IconPulse size={16} />
-                  <span>{speedTestRunning ? "Testing Speed..." : "Backhaul Test"}</span>
-                </button>
+                  <IconMessage size={16} />
+                  <span>WhatsApp Us</span>
+                </a>
               </div>
 
               {/* Key Hero Stats Bar */}
@@ -496,92 +429,59 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
               </div>
             </div>
 
-            {/* Right Hero Column: Interactive Backhaul Speed Test Widget & Telecom Image */}
+            {/* Right Hero Column: Carrier Network Guarantee Card & Infrastructure Photo */}
             <div className="lg:col-span-5 space-y-4">
-              {/* Backhaul Speedometer Demo Card */}
+              {/* Network Highlights Showcase Card */}
               <div className="p-6 rounded-3xl bg-slate-950/90 border border-amber-500/30 shadow-2xl shadow-amber-500/10 space-y-4 relative backdrop-blur-md">
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-base font-black text-white flex items-center gap-2">
-                      <IconPulse size={16} className="text-amber-400" />
-                      <span>Backhaul Speed Test</span>
+                      <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 animate-ping" />
+                      <span>Direct Optical Network</span>
                     </h3>
                     <p className="text-xs text-slate-400 mt-0.5">
-                      Real-time demonstration of our 50 Gbps backhaul utilization
+                      Carrier-grade fiber delivery across Kenya
                     </p>
                   </div>
                   <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-mono font-bold">
-                    99.99% Uptime
+                    99.9% SLA
                   </span>
                 </div>
 
-                {/* Speed Dial & Metrics */}
-                <div className="flex flex-col items-center justify-center py-4 relative">
-                  {/* Circular Speed Gauge */}
-                  <div className="relative w-48 h-28 flex items-end justify-center overflow-hidden">
-                    <svg className="w-48 h-48 transform -rotate-90" viewBox="0 0 100 100">
-                      <circle
-                        cx="50"
-                        cy="50"
-                        r="40"
-                        className="text-slate-800"
-                        strokeWidth="8"
-                        stroke="currentColor"
-                        fill="transparent"
-                        strokeDasharray="188.5"
-                        strokeDashoffset="62.8"
-                      />
-                      <circle
-                        cx="50"
-                        cy="50"
-                        r="40"
-                        className="text-amber-400 transition-all duration-100"
-                        strokeWidth="8"
-                        strokeLinecap="round"
-                        stroke="currentColor"
-                        fill="transparent"
-                        strokeDasharray="188.5"
-                        strokeDashoffset={188.5 - ((speedVal || 820) / 1000) * 125.7}
-                      />
-                    </svg>
-                    <div className="absolute bottom-1 text-center">
-                      <span className="text-3xl sm:text-4xl font-black font-mono text-white block">
-                        {speedVal > 0 ? speedVal.toFixed(1) : "982.4"}
-                      </span>
-                      <span className="text-[10px] font-mono uppercase tracking-wider text-amber-400 font-bold">
-                        Mbps Line Rate
-                      </span>
-                    </div>
+                <div className="grid grid-cols-2 gap-3 py-2">
+                  <div className="p-3 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-1">
+                    <span className="text-[10px] font-mono uppercase text-slate-400 block">Installation</span>
+                    <span className="text-sm font-black text-white block">24 - 48 Hours</span>
+                    <span className="text-[10px] text-emerald-400">Certified Fusion Splicing</span>
                   </div>
-
-                  {/* Telemetry Strip */}
-                  <div className="grid grid-cols-3 gap-2 w-full pt-4 text-center">
-                    <div className="p-2 rounded-xl bg-slate-900 border border-slate-800">
-                      <span className="text-[10px] text-slate-400 block font-mono">LATENCY</span>
-                      <span className="text-xs font-bold font-mono text-emerald-400">{pingVal} ms</span>
-                    </div>
-                    <div className="p-2 rounded-xl bg-slate-900 border border-slate-800">
-                      <span className="text-[10px] text-slate-400 block font-mono">JITTER</span>
-                      <span className="text-xs font-bold font-mono text-cyan-300">0.3 ms</span>
-                    </div>
-                    <div className="p-2 rounded-xl bg-slate-900 border border-slate-800">
-                      <span className="text-[10px] text-slate-400 block font-mono">LOSS</span>
-                      <span className="text-xs font-bold font-mono text-emerald-400">0.0 %</span>
-                    </div>
+                  <div className="p-3 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-1">
+                    <span className="text-[10px] font-mono uppercase text-slate-400 block">Payments</span>
+                    <span className="text-sm font-black text-amber-400 block">Instant M-Pesa</span>
+                    <span className="text-[10px] text-slate-400">Auto-renewal in 15s</span>
+                  </div>
+                  <div className="p-3 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-1">
+                    <span className="text-[10px] font-mono uppercase text-slate-400 block">Data Limits</span>
+                    <span className="text-sm font-black text-white block">100% Unlimited</span>
+                    <span className="text-[10px] text-emerald-400">Zero FUP Throttling</span>
+                  </div>
+                  <div className="p-3 rounded-2xl bg-slate-900/90 border border-slate-800 space-y-1">
+                    <span className="text-[10px] font-mono uppercase text-slate-400 block">Hardware</span>
+                    <span className="text-sm font-black text-cyan-300 block">Router Included</span>
+                    <span className="text-[10px] text-slate-400">Dual-band Gigabit</span>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between pt-2 border-t border-slate-800/80">
-                  <span className="text-[11px] text-slate-400">
-                    {testComplete ? "✓ Speed Test Complete" : "Dedicated 50 Gbps backhaul capacity"}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={runSpeedTest}
-                    className="px-3.5 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 font-bold text-xs transition-colors"
+                <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between text-xs">
+                  <span className="text-slate-400">Need immediate connection?</span>
+                  <a
+                    href="https://wa.me/254703605266?text=Hello%20MashupHost%2C%20I%20want%20to%20get%20connected%20to%20Fiber"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-amber-400 hover:text-amber-300 font-bold underline flex items-center gap-1"
                   >
-                    {speedTestRunning ? "Testing..." : "Test Speed"}
-                  </button>
+                    <span>Chat With Team</span>
+                    <span>&rarr;</span>
+                  </a>
                 </div>
               </div>
 
@@ -595,11 +495,11 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/40 to-transparent p-4 flex items-end justify-between">
                   <div>
-                    <p className="text-xs font-black text-white uppercase tracking-wider">Tier-1 Fiber Backbone Ring</p>
-                    <p className="text-[11px] text-emerald-400 font-mono">AS329656 &bull; KIXP Peering Live</p>
+                    <p className="text-xs font-black text-white uppercase tracking-wider">Tier-1 Optical Ring Network</p>
+                    <p className="text-[11px] text-emerald-400 font-mono">Low Latency Peering Live</p>
                   </div>
                   <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 text-[10px] font-mono font-bold">
-                    CONNECTED
+                    ACTIVE
                   </span>
                 </div>
               </div>
@@ -749,92 +649,7 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
         </div>
       </section>
 
-      {/* 6. WHY MASHUPHOST (BUILT FOR PERFORMANCE - 6 FEATURES) */}
-      <section id="why-us" className="py-20 bg-[#090D16] border-y border-slate-800/80 relative">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
-          <div className="text-center max-w-3xl mx-auto space-y-3">
-            <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-mono font-bold uppercase">
-              <span>Why MashupHost</span>
-            </div>
-            <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight">
-              Built for Performance
-            </h2>
-            <p className="text-sm sm:text-base text-slate-300">
-              We&apos;re not just an ISP. We&apos;re your technology partner for reliable, scalable connectivity.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {/* Feature 1 */}
-            <div className="rounded-3xl bg-slate-950 p-6 border border-slate-800 space-y-3 hover:border-amber-400/40 transition-all">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 text-xl">
-                <IconSpeed size={20} />
-              </div>
-              <h3 className="text-base font-black text-white">Maximum Speed</h3>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Ultra-fast fiber connections that keep up with your demands.
-              </p>
-            </div>
-
-            {/* Feature 2 */}
-            <div className="rounded-3xl bg-slate-950 p-6 border border-slate-800 space-y-3 hover:border-cyan-400/40 transition-all">
-              <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 text-xl">
-                <IconShield size={20} />
-              </div>
-              <h3 className="text-base font-black text-white">Uptime Guarantee</h3>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Enterprise-grade reliability backed by our service commitment.
-              </p>
-            </div>
-
-            {/* Feature 3 */}
-            <div className="rounded-3xl bg-slate-950 p-6 border border-slate-800 space-y-3 hover:border-emerald-400/40 transition-all">
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 text-xl">
-                <IconLifeBuoy size={20} />
-              </div>
-              <h3 className="text-base font-black text-white">Expert Support</h3>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Round-the-clock technical assistance when you need it most.
-              </p>
-            </div>
-
-            {/* Feature 4 */}
-            <div className="rounded-3xl bg-slate-950 p-6 border border-slate-800 space-y-3 hover:border-sky-400/40 transition-all">
-              <div className="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400 text-xl">
-                <IconGlobe size={20} />
-              </div>
-              <h3 className="text-base font-black text-white">Coverage Areas</h3>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Growing network across Nairobi and surrounding regions.
-              </p>
-            </div>
-
-            {/* Feature 5 */}
-            <div className="rounded-3xl bg-slate-950 p-6 border border-slate-800 space-y-3 hover:border-purple-400/40 transition-all">
-              <div className="w-10 h-10 rounded-xl bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-400 text-xl">
-                <IconUsers size={20} />
-              </div>
-              <h3 className="text-base font-black text-white">Active Customers</h3>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Trusted by businesses and homes throughout Kenya.
-              </p>
-            </div>
-
-            {/* Feature 6 */}
-            <div className="rounded-3xl bg-slate-950 p-6 border border-slate-800 space-y-3 hover:border-yellow-400/40 transition-all">
-              <div className="w-10 h-10 rounded-xl bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center text-yellow-400 text-xl">
-                <IconRouter size={20} />
-              </div>
-              <h3 className="text-base font-black text-white">Backhaul Capacity</h3>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Massive backbone infrastructure for uninterrupted service.
-              </p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 7. FIBER INTERNET PACKAGES (LIGHTNING-FAST FIBER INTERNET) */}
+      {/* 6. FIBER INTERNET PACKAGES (LIGHTNING-FAST FIBER INTERNET) */}
       <section id="packages" className="py-20 bg-[#060A12] relative">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
           <div className="text-center max-w-3xl mx-auto space-y-4">
@@ -868,10 +683,10 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
               </div>
             </div>
 
-            {/* SkySurf Infrastructure Banner */}
+            {/* Value Highlights Banner */}
             <div className="p-3.5 rounded-2xl bg-gradient-to-r from-amber-500/10 via-cyan-500/10 to-emerald-500/10 border border-amber-500/20 text-xs text-slate-300 flex items-center justify-center gap-2">
-              <span className="font-mono font-bold text-amber-400">Powered by SkySurf AS329656:</span>
-              <span>Enterprise-Grade Infrastructure connected to tier-1 global networks.</span>
+              <span className="font-mono font-bold text-amber-400">100% Truly Unlimited:</span>
+              <span>Zero data caps, zero speed throttling, free optical WiFi router &amp; 24/7 support.</span>
             </div>
 
             {/* Plan Switcher Tabs */}
@@ -1088,53 +903,7 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
         </div>
       </section>
 
-      {/* 9. TESTIMONIALS (TRUSTED BY THOUSANDS) */}
-      <section id="testimonials" className="py-20 bg-[#060A12] border-t border-slate-800/80">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
-          <div className="text-center max-w-3xl mx-auto space-y-3">
-            <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-mono font-bold uppercase">
-              <span>Testimonials</span>
-            </div>
-            <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight">
-              Trusted by Thousands
-            </h2>
-            <p className="text-sm sm:text-base text-slate-300">
-              Hear from our customers about their experience with MashupHost.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {TESTIMONIALS.map((t, idx) => (
-              <div
-                key={idx}
-                className="rounded-3xl bg-slate-950 p-6 border border-slate-800 hover:border-amber-400/40 transition-all space-y-4 shadow-xl flex flex-col justify-between"
-              >
-                <div className="space-y-3">
-                  <div className="flex items-center gap-1 text-amber-400 text-sm">
-                    {Array.from({ length: t.stars }).map((_, i) => (
-                      <span key={i}>★</span>
-                    ))}
-                  </div>
-                  <p className="text-xs text-slate-300 leading-relaxed italic">
-                    &ldquo;{t.content}&rdquo;
-                  </p>
-                </div>
-                <div className="flex items-center gap-3 pt-4 border-t border-slate-800/80">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-amber-500 to-yellow-400 text-slate-950 font-black text-xs flex items-center justify-center shadow-md">
-                    {t.avatar}
-                  </div>
-                  <div>
-                    <h4 className="text-xs font-bold text-white">{t.name}</h4>
-                    <p className="text-[11px] text-slate-400">{t.role}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* 10. INTERACTIVE KENYA COVERAGE CHECKER */}
+      {/* 8. INTERACTIVE KENYA COVERAGE CHECKER */}
       <section id="coverage" className="py-20 bg-[#090D16] border-t border-slate-800/80">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-6">
           <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-mono font-bold uppercase">
@@ -1143,35 +912,30 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
           <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight">
             Check Coverage in Your Area
           </h2>
-          <p className="text-sm text-slate-300 max-w-xl mx-auto">
-            Search your neighborhood, estate, or county in Kenya to verify immediate fiber connectivity.
+          <p className="text-sm text-slate-300 max-w-xl mx-auto leading-relaxed">
+            Enter your estate, neighborhood, or town in Kenya to verify immediate fiber availability directly with our field splicing team.
           </p>
 
-          <form onSubmit={handleCoverageCheck} className="max-w-xl mx-auto flex gap-2">
+          <form onSubmit={handleCoverageCheck} className="max-w-xl mx-auto flex flex-col sm:flex-row gap-2.5">
             <input
               type="text"
               required
               value={coverageSearch}
               onChange={(e) => setCoverageSearch(e.target.value)}
               placeholder="e.g. Utawala, Dandora, Kilimani, Ruiru, Thika, Eldoret..."
-              className="flex-1 px-4 py-3 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs sm:text-sm focus:outline-none focus:border-amber-400 transition-colors"
+              className="flex-1 px-4 py-3.5 bg-slate-950 border border-slate-700 rounded-xl text-white text-xs sm:text-sm focus:outline-none focus:border-amber-400 transition-colors"
             />
             <button
               type="submit"
-              className="px-6 py-3 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs sm:text-sm shrink-0 shadow-lg shadow-amber-500/20 active:scale-95"
+              className="px-7 py-3.5 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs sm:text-sm shrink-0 shadow-lg shadow-amber-500/20 active:scale-95 flex items-center justify-center gap-2"
             >
-              Check Coverage
+              <IconMessage size={16} />
+              <span>Check on WhatsApp</span>
             </button>
           </form>
 
-          {coverageResult && (
-            <div className="p-4 rounded-2xl bg-slate-950 border border-emerald-500/40 text-emerald-300 text-xs font-semibold max-w-xl mx-auto animate-in fade-in">
-              {coverageResult}
-            </div>
-          )}
-
-          <div className="flex flex-wrap justify-center gap-2 pt-2 text-xs text-slate-400">
-            <span className="font-semibold text-slate-500">Popular Nodes:</span>
+          <div className="flex flex-wrap justify-center gap-2 pt-3 text-xs text-slate-400">
+            <span className="font-semibold text-slate-500 self-center">Popular Active Nodes:</span>
             {[
               "Utawala",
               "Dandora",
@@ -1185,9 +949,15 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
               "Mombasa",
               "Kisumu",
             ].map((node, idx) => (
-              <span key={idx} className="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 font-mono text-[11px]">
-                {node}
-              </span>
+              <a
+                key={idx}
+                href={`https://wa.me/254703605266?text=Hello%20MashupHost%2C%20is%20fiber%20available%20in%20${encodeURIComponent(node)}%3F`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-2.5 py-1 rounded-lg bg-slate-950 hover:bg-slate-900 border border-slate-800 hover:border-amber-400/50 text-slate-300 hover:text-amber-400 font-mono text-[11px] transition-colors"
+              >
+                {node} &rarr;
+              </a>
             ))}
           </div>
         </div>
@@ -1298,9 +1068,9 @@ export function LandingClient({ initialContent }: { initialContent?: unknown }) 
               <ul className="space-y-2">
                 <li><a href="#packages" className="hover:text-amber-400 transition-colors">Internet Packages</a></li>
                 <li><a href="#hardware" className="hover:text-amber-400 transition-colors">Hardware Shop</a></li>
-                <li><a href="#solutions" className="hover:text-amber-400 transition-colors">PPPoE Setup</a></li>
-                <li><a href="#solutions" className="hover:text-amber-400 transition-colors">Hotspot Solutions</a></li>
-                <li><a href="#solutions" className="hover:text-amber-400 transition-colors">Fiber Optics</a></li>
+                <li><a href="#solutions" className="hover:text-amber-400 transition-colors">Network Solutions</a></li>
+                <li><a href="#coverage" className="hover:text-amber-400 transition-colors">Coverage Areas</a></li>
+                <li><a href="#faq" className="hover:text-amber-400 transition-colors">FAQs</a></li>
               </ul>
             </div>
 
