@@ -5,8 +5,7 @@ import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
 import { Button, Card, ErrorText, Badge, StatusDot } from "@/components/ui";
-import { IconRouter, IconCopy, IconCheck, IconPulse, IconTerminal } from "@/components/icons";
-import { useAuth } from "@/lib/auth-context";
+import { IconRouter, IconCopy, IconCheck, IconPulse } from "@/components/icons";
 
 interface RouterRow {
   id: string;
@@ -82,21 +81,11 @@ export default function RoutersPage() {
     return () => clearInterval(id);
   }, []);
 
-  const { user } = useAuth();
-  const tenantSlug = user?.tenantSlug || "mash";
-
   const [error, setError] = useState<string | null>(null);
   const [testingId, setTestingId] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [vpnScripts, setVpnScripts] = useState<Record<string, string>>({});
   const [openSessionsFor, setOpenSessionsFor] = useState<string | null>(null);
   const [openAccessPointsFor, setOpenAccessPointsFor] = useState<string | null>(null);
-  const [antiVpnScriptFor, setAntiVpnScriptFor] = useState<string | null>(null);
-  const [showVpnScriptFor, setShowVpnScriptFor] = useState<string | null>(null);
-  const [showSpeedtestScript, setShowSpeedtestScript] = useState(false);
-  const [showTimeoutScript, setShowTimeoutScript] = useState(false);
-  const [showAntiVpnScript, setShowAntiVpnScript] = useState(false);
-  const [showWinboxHubScript, setShowWinboxHubScript] = useState(false);
   const [winboxModalFor, setWinboxModalFor] = useState<RouterRow | null>(null);
 
   const { data: routers, isLoading } = useQuery({
@@ -145,77 +134,7 @@ export default function RoutersPage() {
     onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to update router IP"),
   });
 
-  const [kickingId, setKickingId] = useState<string | null>(null);
-  const [boostingId, setBoostingId] = useState<string | null>(null);
-  const [enforcingId, setEnforcingId] = useState<string | null>(null);
-  const [shieldingId, setShieldingId] = useState<string | null>(null);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
-
-  const applySpeedtestBoost = useMutation({
-    mutationFn: (routerId: string) => {
-      setBoostingId(routerId);
-      return apiFetch<{ success: boolean; message: string }>(`/api/v1/routers/${routerId}/apply-speedtest-boost`, {
-        method: "POST",
-      });
-    },
-    onSuccess: (result) => {
-      setActionSuccess(`🚀 ${result.message}`);
-      setTimeout(() => setActionSuccess(null), 5000);
-    },
-    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to apply 100M speedtest boost"),
-    onSettled: () => setBoostingId(null),
-  });
-
-  const enforceStrictTimeout = useMutation({
-    mutationFn: (routerId: string) => {
-      setEnforcingId(routerId);
-      return apiFetch<{ success: boolean; cookiesRemoved: number; message: string }>(
-        `/api/v1/routers/${routerId}/enforce-strict-timeout`,
-        { method: "POST" }
-      );
-    },
-    onSuccess: (result) => {
-      setActionSuccess(`⏱️ ${result.message}`);
-      setTimeout(() => setActionSuccess(null), 5000);
-    },
-    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to enforce strict timeout"),
-    onSettled: () => setEnforcingId(null),
-  });
-
-  const enableAntiVpnShield = useMutation({
-    mutationFn: (routerId: string) => {
-      setShieldingId(routerId);
-      return apiFetch<{ success: boolean; message: string }>(
-        `/api/v1/routers/${routerId}/enable-anti-vpn-shield`,
-        { method: "POST" }
-      );
-    },
-    onSuccess: (result) => {
-      setActionSuccess(`🛡️ ${result.message}`);
-      setTimeout(() => setActionSuccess(null), 7000);
-    },
-    onError: (err, routerId) => {
-      const msg = err instanceof ApiRequestError ? err.message : "Failed to apply Anti-VPN Shield";
-      setError(msg);
-      if (msg.includes("timed out") || msg.includes("hasn't checked in")) {
-        setAntiVpnScriptFor(routerId);
-      }
-    },
-    onSettled: () => setShieldingId(null),
-  });
-
-  const kickAllSessions = useMutation({
-    mutationFn: (routerId: string) => {
-      setKickingId(routerId);
-      return apiFetch<{ removed: number }>(`/api/v1/routers/${routerId}/kick-all-sessions`, { method: "POST" });
-    },
-    onSuccess: (result) => {
-      alert(`Disconnected ${result.removed} session${result.removed === 1 ? "" : "s"}.`);
-      queryClient.invalidateQueries({ queryKey: ["router-sessions"] });
-    },
-    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to disconnect sessions"),
-    onSettled: () => setKickingId(null),
-  });
 
   const {
     data: liveSessions,
@@ -248,23 +167,7 @@ export default function RoutersPage() {
     enabled: winboxModalFor !== null,
   });
 
-  const startVpn = useMutation({
-    mutationFn: (routerId: string) =>
-      apiFetch<{ script: string }>(`/api/v1/routers/${routerId}/vpn-start`, { method: "POST" }),
-    onSuccess: (result, routerId) => {
-      setVpnScripts((prev) => ({ ...prev, [routerId]: result.script }));
-      queryClient.invalidateQueries({ queryKey: ["routers"] });
-    },
-    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to start VPN setup"),
-  });
 
-  const getVpnCompleteScript = useMutation({
-    mutationFn: (routerId: string) =>
-      apiFetch<{ script: string }>(`/api/v1/routers/${routerId}/vpn-complete-script`),
-    onSuccess: (result, routerId) => setVpnScripts((prev) => ({ ...prev, [routerId]: result.script })),
-    onError: (err) =>
-      setError(err instanceof ApiRequestError ? err.message : "Failed to generate the VPN completion script"),
-  });
 
   const handleCopy = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
@@ -379,37 +282,6 @@ export default function RoutersPage() {
 
                   {/* Actions */}
                   <div className="flex flex-wrap items-center gap-2">
-                    {/* 1-Click Speedtest 100M Boost Button */}
-                    <Button
-                      variant="secondary"
-                      className="px-3 py-1.5 text-xs bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-600 dark:text-cyan-400 border border-cyan-500/30 font-bold"
-                      onClick={() => applySpeedtestBoost.mutate(router.id)}
-                      disabled={boostingId === router.id || !router.host}
-                    >
-                      {boostingId === router.id ? "Boosting..." : "⚡ 100M Boost"}
-                    </Button>
-
-                    {/* 1-Click Strict 1-Hour Timeout & Clear Cookies Button */}
-                    <Button
-                      variant="secondary"
-                      className="px-3 py-1.5 text-xs bg-purple-500/10 hover:bg-purple-500/20 text-purple-600 dark:text-purple-400 border border-purple-500/30 font-bold"
-                      onClick={() => enforceStrictTimeout.mutate(router.id)}
-                      disabled={enforcingId === router.id || !router.host}
-                    >
-                      {enforcingId === router.id ? "Enforcing..." : "⏱️ Strict 1hr Timeout"}
-                    </Button>
-
-                    {/* 1-Click Anti-VPN & Tunnel Shield Button */}
-                    <Button
-                      variant="secondary"
-                      className="px-3 py-1.5 text-xs bg-rose-500/10 hover:bg-rose-500/20 text-rose-600 dark:text-rose-400 border border-rose-500/30 font-bold"
-                      onClick={() => enableAntiVpnShield.mutate(router.id)}
-                      disabled={shieldingId === router.id || !router.host}
-                      title="Block free VPN tunneling (SlowDNS, HA Tunnel, HTTP Injector, SSH tunnels)"
-                    >
-                      {shieldingId === router.id ? "Applying Shield..." : "🛡️ Block VPN Tunnels"}
-                    </Button>
-
                     <Button
                       variant="secondary"
                       className="px-3 py-1.5 text-xs"
@@ -458,32 +330,6 @@ export default function RoutersPage() {
                       variant="danger"
                       className="px-3 py-1.5 text-xs"
                       onClick={() => {
-                        if (confirm(`Disconnect every active session on "${router.name}"? This can't be undone.`)) {
-                          kickAllSessions.mutate(router.id);
-                        }
-                      }}
-                      disabled={kickingId === router.id || !router.host}
-                    >
-                      {kickingId === router.id ? "Kicking..." : "Kick All"}
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      className="px-3 py-1.5 text-xs"
-                      onClick={() =>
-                        router.vpnIp ? getVpnCompleteScript.mutate(router.id) : startVpn.mutate(router.id)
-                      }
-                      disabled={startVpn.isPending || getVpnCompleteScript.isPending || !router.host}
-                    >
-                      {router.vpnIp && router.status === "ONLINE"
-                        ? "Remote Access ✓"
-                        : router.vpnIp
-                        ? "Finish Remote Access"
-                        : "Enable Remote Access"}
-                    </Button>
-                    <Button
-                      variant="danger"
-                      className="px-3 py-1.5 text-xs"
-                      onClick={() => {
                         if (confirm(`Remove router "${router.name}"?`)) deleteRouter.mutate(router.id);
                       }}
                       disabled={deletingId === router.id}
@@ -493,84 +339,6 @@ export default function RoutersPage() {
                   </div>
                 </div>
               </div>
-
-              {/* VPN (Remote Access) Script Section - Compact Bar */}
-              {vpnScripts[router.id] && (
-                <div className="mt-5 border-t border-slate-200 pt-3 dark:border-obsidian-800">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-xl bg-slate-900 border border-slate-800">
-                    <div className="flex items-center gap-2">
-                      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-400">
-                        <IconTerminal size={14} />
-                      </div>
-                      <div>
-                        <p className="text-xs font-bold text-white">Remote Access Terminal Script</p>
-                        <p className="text-[11px] text-slate-400">Ready to paste into MikroTik WinBox &quot;New Terminal&quot;</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="secondary"
-                        className="px-2.5 py-1 text-xs gap-1 bg-emerald-600 hover:bg-emerald-500 text-white font-bold"
-                        onClick={() => handleCopy(vpnScripts[router.id]!, `vpn-${router.id}`)}
-                      >
-                        {copiedId === `vpn-${router.id}` ? <IconCheck size={12} /> : <IconCopy size={12} />}
-                        <span>{copiedId === `vpn-${router.id}` ? "Copied Script!" : "Copy Script"}</span>
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        className="px-2.5 py-1 text-xs text-slate-300"
-                        onClick={() => setShowVpnScriptFor(showVpnScriptFor === router.id ? null : router.id)}
-                      >
-                        {showVpnScriptFor === router.id ? "Hide Code" : "View Code"}
-                      </Button>
-                    </div>
-                  </div>
-                  {showVpnScriptFor === router.id && (
-                    <pre className="mt-2 max-h-48 overflow-auto rounded-lg bg-slate-950 p-3 font-mono text-xs text-emerald-400 border border-slate-800 select-all">
-                      {vpnScripts[router.id]}
-                    </pre>
-                  )}
-                  {router.vpnIp && router.status !== "ONLINE" && (
-                    <p className="mt-1.5 text-[11px] text-slate-500">
-                      Once this runs on your router, click <span className="font-semibold text-slate-400">Test Connection</span> above to confirm the tunnel.
-                    </p>
-                  )}
-                </div>
-              )}
-
-              {/* Anti-VPN & Tunnel Shield Quick-Run - Compact Bar */}
-              {antiVpnScriptFor === router.id && (
-                <div className="mt-4 border-t border-slate-200 pt-3 dark:border-obsidian-800">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-xl bg-rose-950/40 border border-rose-900/60">
-                    <div className="flex items-center gap-2">
-                      <span className="text-base">🛡️</span>
-                      <div>
-                        <p className="text-xs font-bold text-rose-300">Router Behind NAT? Run Anti-VPN Command</p>
-                        <p className="text-[11px] text-rose-400/80">Blocks SlowDNS, HA Tunnel, &amp; HTTP Injector bypasses</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="secondary"
-                        className="px-2.5 py-1 text-xs gap-1 bg-rose-600 hover:bg-rose-500 text-white font-bold"
-                        onClick={() => {
-                          const cmd = `/tool fetch url="https://api.mashuphost.tech/api/v1/hotspot/${tenantSlug}/anti-vpn.rsc" dst-path=anti-vpn.rsc; :delay 2s; /import anti-vpn.rsc;`;
-                          handleCopy(cmd, `antivpn-${router.id}`);
-                        }}
-                      >
-                        {copiedId === `antivpn-${router.id}` ? <IconCheck size={12} /> : <IconCopy size={12} />}
-                        <span>{copiedId === `antivpn-${router.id}` ? "Copied!" : "Copy 1-Line Command"}</span>
-                      </Button>
-                      <button
-                        onClick={() => setAntiVpnScriptFor(null)}
-                        className="text-xs text-slate-400 hover:text-white px-1 cursor-pointer"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
 
               {/* Connected Access Points (APs) Section */}
               {openAccessPointsFor === router.id && (
@@ -869,276 +637,7 @@ export default function RoutersPage() {
         )}
       </div>
 
-      {/* MikroTik Network Performance & Session Optimization Hub */}
-      <Card className="space-y-5 border-cyan-500/20 bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950/40 text-white shadow-xl">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <span className="flex h-2 w-2 rounded-full bg-cyan-400 animate-ping" />
-              <span className="text-[11px] font-black uppercase tracking-wider text-cyan-400">
-                MikroTik Performance &amp; Session Optimization
-              </span>
-            </div>
-            <h2 className="text-lg font-bold text-white">
-              ⚡ Network Performance, Speedtest &amp; Security Tools
-            </h2>
-            <p className="text-xs text-slate-300 mt-0.5">
-              1-click tools to boost speedtests to 100 Mbps, enforce strict voucher timeouts, and block VPN tunnel bypasses.
-            </p>
-          </div>
-        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-          {/* Card 1: 100 Mbps Speedtest Booster */}
-          <div className="flex flex-col justify-between rounded-2xl bg-slate-950/80 p-4 border border-cyan-500/20 shadow-xs transition-all hover:border-cyan-500/40">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-2xl">🚀</span>
-                <span className="rounded-full bg-cyan-500/10 px-2 py-0.5 text-[10px] font-bold text-cyan-400 border border-cyan-500/30 uppercase">
-                  Bandwidth Boost
-                </span>
-              </div>
-              <h3 className="text-sm font-bold text-white">100 Mbps Speedtest Booster</h3>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Prioritizes Ookla (Speedtest.net) &amp; Fast.com in a dedicated 100M Queue Tree, bypassing customer voucher caps during speed tests.
-              </p>
-            </div>
-
-            <div className="pt-4 mt-3 border-t border-slate-800/80 space-y-2">
-              <div className="flex items-center gap-2">
-                {routers && routers.filter((r) => r.status === "ONLINE").length > 0 && (
-                  <Button
-                    className="text-xs py-1.5 px-3 flex-1 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-slate-950 font-black shadow-md"
-                    onClick={() => {
-                      const online = routers.filter((r) => r.status === "ONLINE");
-                      online.forEach((r) => applySpeedtestBoost.mutate(r.id));
-                    }}
-                    disabled={boostingId !== null}
-                  >
-                    {boostingId !== null ? "Applying..." : "⚡ 1-Click Apply"}
-                  </Button>
-                )}
-                <Button
-                  variant="secondary"
-                  className="text-xs py-1.5 px-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold border-slate-700"
-                  onClick={() =>
-                    handleCopy(
-                      `/ip firewall address-list\nadd list=SPEEDTEST_SERVERS address=speedtest.net comment="Ookla Speedtest"\nadd list=SPEEDTEST_SERVERS address=fast.com comment="Fast.com Speedtest"\nadd list=SPEEDTEST_SERVERS address=speedtestcustom.com comment="Custom Speedtest"\nadd list=SPEEDTEST_SERVERS address=ookla.com comment="Ookla"\n\n/ip firewall mangle\nadd chain=prerouting dst-address-list=SPEEDTEST_SERVERS action=mark-connection new-connection-mark=speedtest_conn passthrough=yes comment="Speedtest Boost Connection"\nadd chain=prerouting connection-mark=speedtest_conn action=mark-packet new-packet-mark=speedtest_pkt passthrough=no comment="Speedtest Boost Packet"\n\n/queue tree\nadd name="SPEEDTEST_BOOST_DOWNLOAD" parent=global packet-mark=speedtest_pkt max-limit=100M limit-at=100M priority=1 comment="100M Speedtest Boost"\nadd name="SPEEDTEST_BOOST_UPLOAD" parent=global packet-mark=speedtest_pkt max-limit=100M limit-at=100M priority=1 comment="100M Speedtest Boost"`,
-                      "speedtest-script"
-                    )
-                  }
-                >
-                  {copiedId === "speedtest-script" ? "✓ Copied" : "Copy"}
-                </Button>
-                <button
-                  type="button"
-                  onClick={() => setShowSpeedtestScript(!showSpeedtestScript)}
-                  className="text-[11px] text-slate-400 hover:text-white px-1.5 py-1"
-                >
-                  {showSpeedtestScript ? "Hide" : "Script"}
-                </button>
-              </div>
-
-              {showSpeedtestScript && (
-                <pre className="mt-2 max-h-48 overflow-x-auto rounded-xl bg-slate-900 p-2.5 font-mono text-[10px] text-cyan-300 border border-slate-800 select-all leading-relaxed">
-{`/ip firewall address-list
-add list=SPEEDTEST_SERVERS address=speedtest.net comment="Ookla Speedtest"
-add list=SPEEDTEST_SERVERS address=fast.com comment="Fast.com Speedtest"
-add list=SPEEDTEST_SERVERS address=speedtestcustom.com comment="Custom Speedtest"
-add list=SPEEDTEST_SERVERS address=ookla.com comment="Ookla"
-
-/ip firewall mangle
-add chain=prerouting dst-address-list=SPEEDTEST_SERVERS action=mark-connection new-connection-mark=speedtest_conn passthrough=yes comment="Speedtest Boost Connection"
-add chain=prerouting connection-mark=speedtest_conn action=mark-packet new-packet-mark=speedtest_pkt passthrough=no comment="Speedtest Boost Packet"
-
-/queue tree
-add name="SPEEDTEST_BOOST_DOWNLOAD" parent=global packet-mark=speedtest_pkt max-limit=100M limit-at=100M priority=1 comment="100M Speedtest Boost"
-add name="SPEEDTEST_BOOST_UPLOAD" parent=global packet-mark=speedtest_pkt max-limit=100M limit-at=100M priority=1 comment="100M Speedtest Boost"`}
-                </pre>
-              )}
-            </div>
-          </div>
-
-          {/* Card 2: Strict 1-Hour Timeout & Cookie Cleaner */}
-          <div className="flex flex-col justify-between rounded-2xl bg-slate-950/80 p-4 border border-purple-500/20 shadow-xs transition-all hover:border-purple-500/40">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-2xl">⏱️</span>
-                <span className="rounded-full bg-purple-500/10 px-2 py-0.5 text-[10px] font-bold text-purple-400 border border-purple-500/30 uppercase">
-                  Session Expiry
-                </span>
-              </div>
-              <h3 className="text-sm font-bold text-white">Strict 1-Hour Timeout &amp; Cookie Flush</h3>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Disables silent browser cookie auto-reconnects, flushes cached hotspot cookies, and sets 1-minute RADIUS interim accounting.
-              </p>
-            </div>
-
-            <div className="pt-4 mt-3 border-t border-slate-800/80 space-y-2">
-              <div className="flex items-center gap-2">
-                {routers && routers.filter((r) => r.status === "ONLINE").length > 0 && (
-                  <Button
-                    className="text-xs py-1.5 px-3 flex-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-black shadow-md"
-                    onClick={() => {
-                      const online = routers.filter((r) => r.status === "ONLINE");
-                      online.forEach((r) => enforceStrictTimeout.mutate(r.id));
-                    }}
-                    disabled={enforcingId !== null}
-                  >
-                    {enforcingId !== null ? "Enforcing..." : "⏱️ 1-Click Enforce"}
-                  </Button>
-                )}
-                <Button
-                  variant="secondary"
-                  className="text-xs py-1.5 px-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold border-slate-700"
-                  onClick={() =>
-                    handleCopy(
-                      `/ip hotspot profile set [find] login-by=http-chap,http-pap\n/ip hotspot cookie remove [find]\n/radius set [find service=hotspot] interim-update=1m`,
-                      "cookie-script"
-                    )
-                  }
-                >
-                  {copiedId === "cookie-script" ? "✓ Copied" : "Copy"}
-                </Button>
-                <button
-                  type="button"
-                  onClick={() => setShowTimeoutScript(!showTimeoutScript)}
-                  className="text-[11px] text-slate-400 hover:text-white px-1.5 py-1"
-                >
-                  {showTimeoutScript ? "Hide" : "Script"}
-                </button>
-              </div>
-
-              {showTimeoutScript && (
-                <pre className="mt-2 max-h-48 overflow-x-auto rounded-xl bg-slate-900 p-2.5 font-mono text-[10px] text-purple-300 border border-slate-800 select-all leading-relaxed">
-{`# 1. Disable cookie login so expired vouchers cannot silently re-authenticate
-/ip hotspot profile set [find] login-by=http-chap,http-pap
-
-# 2. Clear existing cached cookies from router memory
-/ip hotspot cookie remove [find]
-
-# 3. Set RADIUS interim accounting updates to 1 minute
-/radius set [find service=hotspot] interim-update=1m`}
-                </pre>
-              )}
-            </div>
-          </div>
-
-          {/* Card 3: Anti-VPN & Tunnel Shield */}
-          <div className="flex flex-col justify-between rounded-2xl bg-slate-950/80 p-4 border border-rose-500/20 shadow-xs transition-all hover:border-rose-500/40">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-2xl">🛡️</span>
-                <span className="rounded-full bg-rose-500/10 px-2 py-0.5 text-[10px] font-bold text-rose-400 border border-rose-500/30 uppercase">
-                  Tunnel Defense
-                </span>
-              </div>
-              <h3 className="text-sm font-bold text-white">Anti-VPN &amp; Tunnel Protection</h3>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Blocks free internet tunnel apps (SlowDNS, HA Tunnel, HTTP Injector, and DNS port 53 evasion) on captive portal.
-              </p>
-            </div>
-
-            <div className="pt-4 mt-3 border-t border-slate-800/80 space-y-2">
-              <div className="flex items-center gap-2">
-                {routers && routers.filter((r) => r.status === "ONLINE").length > 0 && (
-                  <Button
-                    className="text-xs py-1.5 px-3 flex-1 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white font-black shadow-md"
-                    onClick={() => {
-                      const online = routers.filter((r) => r.status === "ONLINE");
-                      online.forEach((r) => enableAntiVpnShield.mutate(r.id));
-                    }}
-                    disabled={shieldingId !== null}
-                  >
-                    {shieldingId !== null ? "Applying..." : "🛡️ 1-Click Shield"}
-                  </Button>
-                )}
-                <Button
-                  variant="secondary"
-                  className="text-xs py-1.5 px-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold border-slate-700"
-                  onClick={() => {
-                    const cmd = `/tool fetch url="https://api.mashuphost.tech/api/v1/hotspot/${tenantSlug}/anti-vpn.rsc" dst-path=anti-vpn.rsc; :delay 2s; /import anti-vpn.rsc;`;
-                    handleCopy(cmd, "antivpn-hub");
-                  }}
-                >
-                  {copiedId === "antivpn-hub" ? "✓ Copied" : "Copy"}
-                </Button>
-                <button
-                  type="button"
-                  onClick={() => setShowAntiVpnScript(!showAntiVpnScript)}
-                  className="text-[11px] text-slate-400 hover:text-white px-1.5 py-1"
-                >
-                  {showAntiVpnScript ? "Hide" : "Script"}
-                </button>
-              </div>
-
-              {showAntiVpnScript && (
-                <pre className="mt-2 max-h-48 overflow-x-auto rounded-xl bg-slate-900 p-2.5 font-mono text-[10px] text-rose-300 border border-slate-800 select-all leading-relaxed whitespace-pre-wrap">
-{`/tool fetch url="https://api.mashuphost.tech/api/v1/hotspot/${tenantSlug}/anti-vpn.rsc" dst-path=anti-vpn.rsc; :delay 2s; /import anti-vpn.rsc;`}
-                </pre>
-              )}
-            </div>
-          </div>
-
-          {/* Card 4: WinBox Remote & Cloud DDNS */}
-          <div className="flex flex-col justify-between rounded-2xl bg-slate-950/80 p-4 border border-indigo-500/20 shadow-xs transition-all hover:border-indigo-500/40">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-2xl">🖥️</span>
-                <span className="rounded-full bg-indigo-500/10 px-2 py-0.5 text-[10px] font-bold text-indigo-400 border border-indigo-500/30 uppercase">
-                  Remote Access
-                </span>
-              </div>
-              <h3 className="text-sm font-bold text-white">WinBox Remote &amp; Cloud DDNS</h3>
-              <p className="text-xs text-slate-400 leading-relaxed">
-                Enables WinBox (8291), adds priority firewall bypass, and activates MikroTik Cloud DDNS for dynamic IP remote access.
-              </p>
-            </div>
-
-            <div className="pt-4 mt-3 border-t border-slate-800/80 space-y-2">
-              <div className="flex items-center gap-2">
-                {routers && routers.length > 0 && (
-                  <Button
-                    className="text-xs py-1.5 px-3 flex-1 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-black shadow-md"
-                    onClick={() => {
-                      const firstRouter = routers.find((r) => r.status === "ONLINE") || routers[0] || null;
-                      setWinboxModalFor(firstRouter);
-                    }}
-                  >
-                    🖥️ WinBox Hub
-                  </Button>
-                )}
-                <Button
-                  variant="secondary"
-                  className="text-xs py-1.5 px-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold border-slate-700"
-                  onClick={() => {
-                    const cmd = `/ip service set winbox disabled=no port=8291\n/ip firewall filter remove [find comment="MASHUPKGRID WINBOX REMOTE"]\n/ip firewall filter add chain=input protocol=tcp dst-port=8291 action=accept place-before=0 comment="MASHUPKGRID WINBOX REMOTE"\n:do {/ip firewall filter move [find comment="MASHUPKGRID WINBOX REMOTE"] destination=0} on-error={}\n/ip cloud set ddns-enabled=yes update-time=yes`;
-                    handleCopy(cmd, "winbox-hub-script");
-                  }}
-                >
-                  {copiedId === "winbox-hub-script" ? "✓ Copied" : "Copy"}
-                </Button>
-                <button
-                  type="button"
-                  onClick={() => setShowWinboxHubScript(!showWinboxHubScript)}
-                  className="text-[11px] text-slate-400 hover:text-white px-1.5 py-1"
-                >
-                  {showWinboxHubScript ? "Hide" : "Script"}
-                </button>
-              </div>
-
-              {showWinboxHubScript && (
-                <pre className="mt-2 max-h-48 overflow-x-auto rounded-xl bg-slate-900 p-2.5 font-mono text-[10px] text-indigo-300 border border-slate-800 select-all leading-relaxed whitespace-pre-wrap">
-{`/ip service set winbox disabled=no port=8291
-/ip firewall filter remove [find comment="MASHUPKGRID WINBOX REMOTE"]
-/ip firewall filter add chain=input protocol=tcp dst-port=8291 action=accept place-before=0 comment="MASHUPKGRID WINBOX REMOTE"
-/ip cloud set ddns-enabled=yes update-time=yes`}
-                </pre>
-              )}
-            </div>
-          </div>
-        </div>
-      </Card>
 
       {/* Remote WinBox Modal */}
       {winboxModalFor && (
