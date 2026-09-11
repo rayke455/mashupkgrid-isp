@@ -406,14 +406,14 @@ ${apiLine}
 /user add name=${credentials.username} group=full password="${credentials.password}"
 
 # 3. Heartbeat Scheduler & Instant Handshake (Links router immediately)
-/system scheduler remove [find name=mkg-heartbeat]
-/system scheduler add name=mkg-heartbeat interval=1m on-event="/tool fetch url=\"${callbackUrl}\" http-method=post keep-result=no"
-/tool fetch url="${callbackUrl}" http-method=post keep-result=no
+:do {/system scheduler remove [find name=mkg-heartbeat]} on-error={}
+:do {/system scheduler add name=mkg-heartbeat interval=1m on-event=":do {/tool fetch url=\\"${callbackUrl}\\" http-method=post keep-result=no} on-error={}"} on-error={}
+:do {/tool fetch url="${callbackUrl}" http-method=post keep-result=no} on-error={}
 
 # 3b. Outbound AP Neighbor Sync (Works even behind locked modems / no port forwarding)
-/system scheduler remove [find name=mkg-ap-sync]
-/system scheduler add name=mkg-ap-sync interval=2m on-event=":local d \\\"\\\"; :foreach i in=[/ip neighbor find] do={ :set d (\\\$d . [/ip neighbor get \\\$i interface] . \\\";\\\" . [/ip neighbor get \\\$i mac-address] . \\\";\\\" . [/ip neighbor get \\\$i identity] . \\\";\\\" . [/ip neighbor get \\\$i address] . \\\";\\\" . [/ip neighbor get \\\$i board] . \\\"|\\\") }; :do {/tool fetch url=\\\"${apSyncUrl}\\\" http-method=post http-header-field=\\\"Content-Type: text/plain\\\" http-data=\\\$d keep-result=no} on-error={}"
-:local d ""; :foreach i in=[/ip neighbor find] do={ :set d ($d . [/ip neighbor get $i interface] . ";" . [/ip neighbor get $i mac-address] . ";" . [/ip neighbor get $i identity] . ";" . [/ip neighbor get $i address] . ";" . [/ip neighbor get $i board] . "|") }; :do {/tool fetch url="${apSyncUrl}" http-method=post http-header-field="Content-Type: text/plain" http-data=$d keep-result=no} on-error={}
+:do {/system scheduler remove [find name=mkg-ap-sync]} on-error={}
+:do {/system scheduler add name=mkg-ap-sync interval=2m on-event=":local d \\\"\\\"; :foreach i in=[/ip neighbor find] do={ :set d (\\\$d . [/ip neighbor get \\\$i interface] . \\\";\\\" . [/ip neighbor get \\\$i mac-address] . \\\";\\\" . [/ip neighbor get \\\$i identity] . \\\";\\\" . [/ip neighbor get \\\$i address] . \\\";\\\" . [/ip neighbor get \\\$i board] . \\\"|\\\") }; :do {/tool fetch url=\\\"${apSyncUrl}\\\" http-method=post http-header-field=\\\"Content-Type: text/plain\\\" http-data=\\\$d keep-result=no} on-error={}"} on-error={}
+:do {:local d ""; :foreach i in=[/ip neighbor find] do={ :set d ($d . [/ip neighbor get $i interface] . ";" . [/ip neighbor get $i mac-address] . ";" . [/ip neighbor get $i identity] . ";" . [/ip neighbor get $i address] . ";" . [/ip neighbor get $i board] . "|") }; :do {/tool fetch url="${apSyncUrl}" http-method=post http-header-field="Content-Type: text/plain" http-data=$d keep-result=no} on-error={}} on-error={}
 
 # 4. RADIUS Authentication (PPPoE & Hotspot)
 /radius remove [find address="${radiusHost}"]
