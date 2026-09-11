@@ -357,10 +357,10 @@ export function buildMikrotikProvisioningScript(
   const vpnIp = options.vpnIp || "10.90.0.2";
   const wireguardSection = serverPublicKey
     ? `
-# 0b. Automatic management VPN (RouterOS v7+)
-# The router sends its public key to the same provisioning callback. The platform registers the
-# peer before this command returns, so no second dashboard step or manual WinBox script is needed.
-:do {
+# Optional management VPN (RouterOS v7+). This is deliberately last: a legacy or low-resource
+# hAP must still finish hotspot provisioning even when WireGuard is unavailable.
+:if ([:pick [/system resource get version] 0 2] = "7.") do={
+  :do {
   /interface wireguard remove [find name=mkg-wg]
   /interface wireguard add name=mkg-wg listen-port=${serverPort}
   :delay 2s
@@ -371,7 +371,8 @@ export function buildMikrotikProvisioningScript(
   :delay 2s
   /interface wireguard peers remove [find interface=mkg-wg]
   /interface wireguard peers add interface=mkg-wg public-key="${serverPublicKey}" endpoint-address="${serverHost}" endpoint-port=${serverPort} allowed-address=10.90.0.0/16 persistent-keepalive=25s
-} on-error={}
+  } on-error={}
+}
 `
     :"";
   const hotspotInterface = options.hotspotInterface || "bridge";
@@ -411,7 +412,6 @@ export function buildMikrotikProvisioningScript(
 # The dashboard can mark this router as linked even if a later RouterOS command
 # is unavailable on this model or RouterOS version.
 :do {/tool fetch url="${callbackUrl}" http-method=post keep-result=no} on-error={}
-${wireguardSection}
 
 # 1. API Service
 ${apiLine}
@@ -602,6 +602,8 @@ ${pppoeSection}
 ${antiTetheringSection}
 
 ${socialAppFirewallSection}
+
+${wireguardSection}
 
 :put "========================================================="
 :put "  SUCCESS! Router & Hotspot captive portal are ONLINE!  "
