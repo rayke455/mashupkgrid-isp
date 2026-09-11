@@ -152,7 +152,33 @@ function routerLoginUrl(linkLoginOnly: string, username: string, password: strin
 }
 
 function submitRouterLogin(linkLoginOnly: string, username: string, password: string): void {
-  // 1. Attempt silent background POST form submission
+  const loginUrl = routerLoginUrl(linkLoginOnly, username, password);
+
+  // Strategy 1: Hidden iframe — works even when the browser blocks HTTPS→HTTP top-level
+  // navigation (Android's captive-portal mini-browser, Chrome's mixed-content policy). The
+  // router only needs to see the request once to add this MAC to its active sessions; it does
+  // not matter what the iframe renders, only that the GET/POST reaches the router.
+  try {
+    const iframe = document.createElement("iframe");
+    iframe.style.display = "none";
+    iframe.setAttribute("sandbox", "allow-forms allow-same-origin");
+    document.body.appendChild(iframe);
+    // Navigate the iframe — browsers are generally more permissive about mixed content in
+    // hidden iframes than top-level navigation.
+    iframe.src = loginUrl;
+    // Clean up after the router has had more than enough time to process the request.
+    window.setTimeout(() => {
+      try { document.body.removeChild(iframe); } catch {}
+    }, 5000);
+  } catch {}
+
+  // Strategy 2: Background fetch — browsers allow mixed-content fetch in some contexts where
+  // they block navigation. The router only needs the request to arrive; we ignore the response.
+  try {
+    void fetch(loginUrl, { mode: "no-cors", credentials: "omit" }).catch(() => {});
+  } catch {}
+
+  // Strategy 3: Silent background POST form submission (original approach)
   try {
     const form = document.createElement("form");
     form.method = "POST";
@@ -172,9 +198,11 @@ function submitRouterLogin(linkLoginOnly: string, username: string, password: st
     form.submit();
   } catch {}
 
-  // 2. Primary top-level navigation to router login with credentials in query
-  // Handled by the router's login.html template which executes same-origin local POST
-  window.location.href = routerLoginUrl(linkLoginOnly, username, password);
+  // Strategy 4: Primary top-level navigation to router login with credentials in query.
+  // Handled by the router's login.html template which executes same-origin local POST.
+  // This is last because if the browser blocks it (HTTPS→HTTP), we've already tried the
+  // silent methods above.
+  window.location.href = loginUrl;
 }
 
 export default function HotspotCaptivePortalPage() {
@@ -519,10 +547,10 @@ export default function HotspotCaptivePortalPage() {
           phone: buyPhone.trim(),
           email: buyEmail.trim() || undefined,
           method: selectedGateway,
-          // Paystack's checkout is a full-page redirect away from this URL and back — without
-          // this, the router's link-login-only param (only otherwise living in the address bar)
-          // is gone by the time the customer returns, and auto-connect can't happen.
-          linkLoginOnly: selectedGateway === "PAYSTACK" ? linkLoginOnly ?? undefined : undefined,
+          // Paystack and Pesapal checkouts are full-page redirects away from this URL and back —
+          // without this, the router's link-login-only param (only otherwise living in the address
+          // bar) is gone by the time the customer returns, and auto-connect can't happen.
+          linkLoginOnly: (selectedGateway === "PAYSTACK" || selectedGateway === "PESAPAL") ? linkLoginOnly ?? undefined : undefined,
         }),
       }),
     onSuccess: (data) => {
@@ -530,7 +558,7 @@ export default function HotspotCaptivePortalPage() {
       // Remembered only once the gateway has accepted the request, so a typo that never reached
       // a payment provider is not what gets pre-filled on the customer's next visit.
       rememberPhone(tenantSlug, buyPhone.trim());
-      if (data.method === "PAYSTACK" && data.authorizationUrl) {
+      if ((data.method === "PAYSTACK" || data.method === "PESAPAL") && data.authorizationUrl) {
         window.location.href = data.authorizationUrl;
         return;
       }
@@ -943,6 +971,29 @@ export default function HotspotCaptivePortalPage() {
                 <div className="rounded-xl bg-slate-950 p-2.5 text-xs font-mono text-amber-300 border border-slate-800">
                   Waiting for PIN confirmation... ({pollCountdown}s)
                 </div>
+                <Button
+                  variant="outline"
+                  className="w-full py-2.5 text-xs font-bold text-emerald-400 border-emerald-500/50 hover:bg-emerald-500/10"
+                  onClick={async () => {
+                    try {
+                      const res = await apiFetch<PurchaseStatusResponse>(
+                        `/api/v1/hotspot/${tenantSlug}/purchase/${checkoutRequestId}/status`,
+                        { skipAuth: true }
+                      );
+                      if (res.status === "COMPLETED" && res.voucherCode) {
+                        setPollingStatus("COMPLETED");
+                        connectWithVoucher.mutate(res.voucherCode);
+                      } else if (res.status === "FAILED" || res.status === "CANCELLED") {
+                        setPollingStatus(res.status);
+                        setError(res.resultDesc || "Payment failed.");
+                      }
+                    } catch {
+                      // Ignore — polling will continue in background
+                    }
+                  }}
+                >
+                  ✓ I Have Entered My PIN
+                </Button>
                 <Button
                   variant="outline"
                   className="px-4 py-1.5 text-xs text-slate-300"
