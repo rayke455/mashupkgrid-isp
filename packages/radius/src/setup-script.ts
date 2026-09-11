@@ -407,6 +407,53 @@ export function buildMikrotikProvisioningScript(
       ? callbackUrl.replace(/\/provision\/.*$/, `/${router.id}/push-aps`)
       : `https://${apiHost}/api/v1/routers/${router.id}/push-aps`);
 
+  const minimalProvisioningScript = `# MASHUPKGRID ISP - safe baseline setup for "${safeName}"
+# The router must already have WAN internet access for this file to download.
+:do {/tool fetch url="${callbackUrl}" http-method=post keep-result=no} on-error={}
+
+# LAN, Wi-Fi and WAN baseline. Existing configurations are preserved when present.
+:do {/interface bridge add name=bridge} on-error={}
+:do {/interface bridge port add bridge=bridge interface=ether2} on-error={}
+:do {/interface bridge port add bridge=bridge interface=ether3} on-error={}
+:do {/interface bridge port add bridge=bridge interface=ether4} on-error={}
+:do {/interface bridge port add bridge=bridge interface=ether5} on-error={}
+:do {/interface bridge port add bridge=bridge interface=wlan1} on-error={}
+:do {/interface wireless set wlan1 disabled=no mode=ap-bridge ssid="MASHUPKGRID"} on-error={}
+:do {/ip dhcp-client add interface=ether1 disabled=no add-default-route=yes use-peer-dns=yes} on-error={}
+:do {/ip address add address=192.168.88.1/24 interface=bridge} on-error={}
+:do {/ip pool add name=default-dhcp ranges=192.168.88.10-192.168.88.254} on-error={}
+:do {/ip dhcp-server add name=mkg-dhcp interface=bridge address-pool=default-dhcp disabled=no} on-error={}
+:do {/ip dhcp-server network add address=192.168.88.0/24 gateway=192.168.88.1 dns-server=192.168.88.1} on-error={}
+:do {/ip dns set allow-remote-requests=yes} on-error={}
+:do {/ip firewall nat add chain=srcnat out-interface=ether1 action=masquerade comment="MASHUPKGRID"} on-error={}
+
+# Management API and account.
+:do {${apiLine}} on-error={}
+:do {/ip firewall filter add chain=input protocol=tcp dst-port=${router.apiPort} action=accept place-before=0 comment="MASHUPKGRID ISP API"} on-error={}
+:do {/ip service set winbox disabled=no port=8291} on-error={}
+:do {/user remove [find name=${credentials.username}]} on-error={}
+:do {/user add name=${credentials.username} group=full password="${credentials.password}"} on-error={}
+
+# RADIUS and captive portal.
+:do {/radius remove [find address="${radiusHost}"]} on-error={}
+:do {/radius add service=ppp,hotspot address=${radiusHost} secret="${radiusSecret}" authentication-port=1812 accounting-port=1813 timeout=3s} on-error={}
+:do {/ppp aaa set use-radius=yes accounting=yes interim-update=1m} on-error={}
+:do {/ip hotspot profile set [find default=yes] use-radius=yes login-by=http-chap,http-pap radius-accounting=yes radius-interim-update=1m html-directory=hotspot} on-error={}
+:do {/ip hotspot user profile set [find default=yes] shared-users=1} on-error={}
+:do {/ip hotspot remove [find name=mkg-hotspot]} on-error={}
+:do {/ip hotspot add name=mkg-hotspot interface=bridge address-pool=default-dhcp profile=default disabled=no} on-error={}
+:do {/ip hotspot walled-garden remove [find comment="MASHUPKGRID"]} on-error={}
+:do {/ip hotspot walled-garden ip remove [find comment="MASHUPKGRID"]} on-error={}
+${walledGardenLines(walledGardenHosts)}
+:do {/tool fetch url="${loginTemplateUrl}" dst-path=hotspot/login.html check-certificate=no} on-error={}
+
+# Persistent check-in. It survives normal reboots and is safe to re-run.
+:do {/system scheduler remove [find name=mkg-heartbeat]} on-error={}
+:do {/system scheduler add name=mkg-heartbeat interval=1m on-event=":do {/tool fetch url=\\"${callbackUrl}\\" http-method=post keep-result=no} on-error={}\"} on-error={}
+`;
+
+  return minimalProvisioningScript;
+
   return `# MASHUPKGRID ISP — Automated Setup for "${safeName}"
 # 0. Immediate handshake (must run before optional configuration)
 # The dashboard can mark this router as linked even if a later RouterOS command
