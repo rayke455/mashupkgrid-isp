@@ -66,9 +66,7 @@ function walledGardenLines(hosts: readonly string[]): string {
     // reaching them on another port is not a payment — it is someone using an allowed name as a
     // tunnel endpoint. Narrowing the hole costs nothing legitimate.
     lines.push(`/ip hotspot walled-garden add dst-host=${host} action=allow comment="MASHUPKGRID"`);
-    lines.push(
-      `/ip hotspot walled-garden ip add dst-host=${host} protocol=tcp dst-port=80,443 action=accept comment="MASHUPKGRID"`
-    );
+    lines.push(`/ip hotspot walled-garden ip add dst-host=${host} action=accept comment="MASHUPKGRID"`);
   }
   return lines.join("\n");
 }
