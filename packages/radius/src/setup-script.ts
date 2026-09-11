@@ -435,122 +435,13 @@ ${apiLine}
 :do {/system scheduler add name=mkg-heartbeat interval=1m on-event=":do {/tool fetch url=\\"${callbackUrl}\\" http-method=post keep-result=no} on-error={}"} on-error={}
 :do {/tool fetch url="${callbackUrl}" http-method=post keep-result=no} on-error={}
 
-# 3b. Outbound AP Neighbor Sync (Works even behind locked modems / no port forwarding)
-:do {/system scheduler remove [find name=mkg-ap-sync]} on-error={}
-:do {/system scheduler add name=mkg-ap-sync interval=2m on-event=":local d \\\"\\\"; :foreach i in=[/ip neighbor find] do={ :set d (\\\$d . [/ip neighbor get \\\$i interface] . \\\";\\\" . [/ip neighbor get \\\$i mac-address] . \\\";\\\" . [/ip neighbor get \\\$i identity] . \\\";\\\" . [/ip neighbor get \\\$i address] . \\\";\\\" . [/ip neighbor get \\\$i board] . \\\"|\\\") }; :do {/tool fetch url=\\\"${apSyncUrl}\\\" http-method=post http-header-field=\\\"Content-Type: text/plain\\\" http-data=\\\$d keep-result=no} on-error={}"} on-error={}
-:do {:local d ""; :foreach i in=[/ip neighbor find] do={ :set d ($d . [/ip neighbor get $i interface] . ";" . [/ip neighbor get $i mac-address] . ";" . [/ip neighbor get $i identity] . ";" . [/ip neighbor get $i address] . ";" . [/ip neighbor get $i board] . "|") }; :do {/tool fetch url="${apSyncUrl}" http-method=post http-header-field="Content-Type: text/plain" http-data=$d keep-result=no} on-error={}} on-error={}
-
 # 4. RADIUS Authentication (PPPoE & Hotspot)
 /radius remove [find address="${radiusHost}"]
 /radius add service=ppp,hotspot address=${radiusHost} secret="${radiusSecret}" authentication-port=1812 accounting-port=1813 timeout=3s
 /ppp aaa set use-radius=yes accounting=yes interim-update=1m
-/radius incoming set accept=yes port=3799
-
-# 5. Hotspot Captive Portal Server — WITHOUT this nothing intercepts an unauthenticated
-#    client's traffic, so no login page is ever shown no matter how the profile, RADIUS and
-#    walled garden are configured. This is the single line whose removal (commit c9f944c) took
-#    the whole captive portal offline.
-#
-#    Every line below is deliberately self-contained: NO ":local" variables, and no nested
-#    ":if ... do={:if ... }". This script is delivered two ways — "/import setup.rsc" AND
-#    copy-paste into a terminal — and in the terminal each pasted line is its own scope, so a
-#    variable set on one line is already empty on the next. A confirmed hAP failure: interface
-#    detection assigned to a ":local", then "/ip hotspot add interface=$hsif" on the next line
-#    saw nothing and bound the hotspot to the WireGuard interface instead of the LAN bridge,
-#    producing an INVALID hotspot and no portal. Nested :if blocks also plain syntax-error on
-#    the RouterOS v6 console.
-/ip hotspot profile set [find default=yes] use-radius=yes login-by=http-chap,http-pap radius-accounting=yes radius-interim-update=1m html-directory=hotspot
-# One device per voucher. Without this a single code can be passed around a room and every device
-# on it counts as the same paying customer — the most common way hotspot revenue leaks.
-/ip hotspot user profile set [find default=yes] shared-users=1
-/ip hotspot remove [find name=mkg-hotspot]
-:do {/ip hotspot add name=mkg-hotspot interface=${hotspotInterface} address-pool=${addressPool} profile=default disabled=no} on-error={}
-# Fallback for a router whose LAN bridge/pool aren't named the defconf defaults: derive both
-# from whatever the existing DHCP server already serves. One self-contained statement, so it
-# survives being pasted on its own line, and only runs if the line above created nothing.
-:if ([:len [/ip hotspot find name=mkg-hotspot]] = 0) do={:do {/ip hotspot add name=mkg-hotspot interface=[/ip dhcp-server get [:pick [/ip dhcp-server find] 0] interface] address-pool=[/ip dhcp-server get [:pick [/ip dhcp-server find] 0] address-pool] profile=default disabled=no} on-error={}}
-
-# 5b. The portal cannot appear without working DNS: the client's captive-portal probe, the
-#     redirect to the branded page, and every walled-garden dst-host lookup all resolve names.
-:if ([:len [/ip dns get servers]] = 0) do={/ip dns set servers=8.8.8.8,1.1.1.1}
-/ip dns set allow-remote-requests=yes
-
-# 5c. Hotspot clients need source NAT to reach the internet once they authenticate. MikroTik's
-#     defconf ships a masquerade rule, but a router that has been reset to a blank config, or
-#     had its firewall rebuilt by hand, has none -- and the symptom is the worst kind: login
-#     succeeds, then every page still fails. Only added when no masquerade rule exists at all,
-#     so an operator's own NAT setup is never duplicated or overridden.
-:if ([:len [/ip firewall nat find action=masquerade]] = 0) do={/ip firewall nat add chain=srcnat action=masquerade comment="MASHUPKGRID"}
-
-# 6. Walled Garden (portal + payment gateway bypasses). Removed by comment first so re-running
-#    this script doesn't stack duplicate entries.
-/ip hotspot walled-garden remove [find comment="MASHUPKGRID"]
-/ip hotspot walled-garden ip remove [find comment="MASHUPKGRID"]
-${walledGardenLines(walledGardenHosts)}
-
-# 7. Cloud Portal Login Template. Non-fatal: if the fetch fails the router keeps its stock
-#    hotspot login page, which still authenticates against RADIUS — a plain login form beats
-#    no page at all, and the import continues instead of aborting here.
-:do {/tool fetch url="${loginTemplateUrl}" dst-path=hotspot/login.html check-certificate=no} on-error={:put "WARNING: portal login page fetch failed - stock RouterOS login page will be used."}
-
-# 7b. Automated Template Sync Scheduler: Router automatically checks in every 1 hour and downloads new copies
-/system scheduler remove [find name=mkg-sync-template]
-/system scheduler add name=mkg-sync-template interval=1h start-time=startup on-event=":do {/tool fetch url=\\"${loginTemplateUrl}\\" dst-path=hotspot/login.html check-certificate=no} on-error={}"
-
-${pppoeSection}
-
-# 9. Anti-tunnelling. A captive portal has to let an unauthenticated device do two things before
-#    it has paid: resolve names (DNS) and, on most setups, ping. Those are exactly the two
-#    channels used to carry IP traffic past the portal — iodine and dnscat tunnel over DNS,
-#    various tools tunnel over ICMP echo — and someone doing it gets free internet on your link
-#    while contributing nothing. Everything else is already blocked, because the hotspot drops
-#    anything that is neither authenticated nor in the walled garden.
-#
-#    Both rules are scoped with hotspot=!auth so they apply ONLY to devices that have not logged
-#    in. A paying customer is unaffected: their DNS is unlimited and their pings work.
-# Clean up old rules
-/ip firewall filter remove [find comment~"MASHUPKGRID ANTI-TUNNEL"]
-/ip firewall filter remove [find comment~"MASHUPKGRID ANTI-VPN"]
-/ip firewall nat remove [find comment~"MASHUPKGRID ANTI-VPN"]
-
-# 1. DNS Hijack: Force unauthenticated DNS to router (stops SlowDNS, iodine, dnscat)
-/ip firewall nat add chain=dstnat protocol=udp dst-port=53 hotspot=!auth action=redirect to-ports=53 comment="MASHUPKGRID ANTI-VPN"
-/ip firewall nat add chain=dstnat protocol=tcp dst-port=53 hotspot=!auth action=redirect to-ports=53 comment="MASHUPKGRID ANTI-VPN"
-
-# 2. Block direct outbound DNS queries (stops bypass attempts)
-/ip firewall filter add chain=forward protocol=udp dst-port=53 hotspot=!auth action=drop comment="MASHUPKGRID ANTI-VPN"
-/ip firewall filter add chain=forward protocol=tcp dst-port=53 hotspot=!auth action=drop comment="MASHUPKGRID ANTI-VPN"
-
-# 3. Block UDP forwarding completely for unauth (kills WireGuard, OpenVPN UDP, V2Ray UDP, QUIC tunnels)
-/ip firewall filter add chain=forward protocol=udp hotspot=!auth action=drop comment="MASHUPKGRID ANTI-VPN"
-
-# 4. Block common VPN & Proxy ports
-/ip firewall filter add chain=forward protocol=tcp dst-port=22,1194,3128,8080,8443,8888,51820,9000-65535 hotspot=!auth action=drop comment="MASHUPKGRID ANTI-VPN"
-
-# 5. BLOCK WEBSOCKET TUNNELS (Kills HA Tunnel Plus & HTTP Injector over Cloudflare CDN)
-/ip firewall filter add chain=forward protocol=tcp content="websocket" hotspot=!auth action=drop comment="MASHUPKGRID ANTI-VPN"
-/ip firewall filter add chain=forward protocol=tcp content="Upgrade: websocket" hotspot=!auth action=drop comment="MASHUPKGRID ANTI-VPN"
-/ip firewall filter add chain=forward protocol=tcp content="Sec-WebSocket" hotspot=!auth action=drop comment="MASHUPKGRID ANTI-VPN"
-
-# 6. BLOCK SSH TUNNELS (Kills SSH over port 443/80)
-/ip firewall filter add chain=forward protocol=tcp content="SSH-" hotspot=!auth action=drop comment="MASHUPKGRID ANTI-VPN"
-
-# 7. BLOCK HTTP INJECTOR PROXY TUNNELS (Kills HTTP CONNECT proxying)
-/ip firewall filter add chain=forward protocol=tcp content="CONNECT " hotspot=!auth action=drop comment="MASHUPKGRID ANTI-VPN"
-
-# 8. LIMIT PERSISTENT DATA TRANSFERS (Captive portal never downloads large continuous data)
-# Drops any single unauthenticated connection that transfers more than 3 Megabytes
-/ip firewall filter add chain=forward protocol=tcp connection-bytes=3000000-0 hotspot=!auth action=drop comment="MASHUPKGRID ANTI-VPN"
-
-# 9. LIMIT CONCURRENT CONNECTIONS (Stops multi-connection flood tunnels)
-/ip firewall filter add chain=forward protocol=tcp hotspot=!auth connection-limit=6,32 action=drop comment="MASHUPKGRID ANTI-VPN"
-
-# 10. BLOCK ICMP TUNNELS
-/ip firewall filter add chain=forward protocol=icmp hotspot=!auth action=drop comment="MASHUPKGRID ANTI-VPN"
-
-# 12. MOVE ALL RULES TO TOP OF CHAIN (Crucial: loop each item so RouterOS reliably moves them to position 0)
-:foreach i in=[/ip firewall filter find comment~"MASHUPKGRID ANTI-VPN"] do={
-  :do {/ip firewall filter move $i destination=0} on-error={}
+# Optional traffic policies, queues, graphing, backups, PPPoE and WireGuard are deliberately
+# excluded from the first import. They can be applied later from the dashboard after the hAP is
+# online; none of them should be able to block the captive portal bootstrap.
 }
 :foreach i in=[/ip firewall nat find comment~"MASHUPKGRID ANTI-VPN"] do={
   :do {/ip firewall nat move $i destination=0} on-error={}
