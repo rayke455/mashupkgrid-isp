@@ -122,7 +122,7 @@ export async function completePesapalTransaction(
 
         if (pkg.blockTethering) {
           await tx.radReply.create({
-            data: { username: code, attribute: "Mikrotik-Address-List", op: "=", value: "mashup-anti-tether" },
+            data: { username: code, attribute: "Mikrotik-Address-List", op: "+=", value: "mashup-anti-tether" },
           });
         }
 
@@ -131,7 +131,7 @@ export async function completePesapalTransaction(
           let list = `mashup-client-${norm.toLowerCase().replace(/_only$/, "")}`;
           if (norm === "SOCIAL_BUNDLE") list = "mashup-client-social";
           await tx.radReply.create({
-            data: { username: code, attribute: "Mikrotik-Address-List", op: "=", value: list },
+            data: { username: code, attribute: "Mikrotik-Address-List", op: "+=", value: list },
           });
         }
 

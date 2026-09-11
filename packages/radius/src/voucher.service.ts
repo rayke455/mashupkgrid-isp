@@ -176,7 +176,7 @@ async function createOneVoucher(input: GenerateVouchersInput): Promise<HotspotVo
           data: {
             username: code,
             attribute: "Mikrotik-Address-List",
-            op: "=",
+            op: "+=",
             value: "mashup-anti-tether",
           },
         });
@@ -189,7 +189,7 @@ async function createOneVoucher(input: GenerateVouchersInput): Promise<HotspotVo
           data: {
             username: code,
             attribute: "Mikrotik-Address-List",
-            op: "=",
+            op: "+=",
             value: socialList,
           },
         });

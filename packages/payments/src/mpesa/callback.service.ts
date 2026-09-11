@@ -179,7 +179,7 @@ export async function completeStkRequest(
 
         if (pkg.blockTethering) {
           await tx.radReply.create({
-            data: { username: code, attribute: "Mikrotik-Address-List", op: "=", value: "mashup-anti-tether" },
+            data: { username: code, attribute: "Mikrotik-Address-List", op: "+=", value: "mashup-anti-tether" },
           });
         }
 
@@ -188,7 +188,7 @@ export async function completeStkRequest(
           let list = `mashup-client-${norm.toLowerCase().replace(/_only$/, "")}`;
           if (norm === "SOCIAL_BUNDLE") list = "mashup-client-social";
           await tx.radReply.create({
-            data: { username: code, attribute: "Mikrotik-Address-List", op: "=", value: list },
+            data: { username: code, attribute: "Mikrotik-Address-List", op: "+=", value: list },
           });
         }
         if (pkg.durationMinutes) {

@@ -32,6 +32,7 @@ import {
   buildMikrotikVpnStartScript,
   buildMikrotikVpnCompleteScript,
   buildMikrotikWinboxScript,
+  buildSocialFirewallOnlyScript,
 } from "@mashupkgrid/radius";
 import { successResponse, ConflictError, NotFoundError, hashToken } from "@mashupkgrid/shared";
 import { env, isProduction } from "@mashupkgrid/config";
@@ -360,6 +361,15 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
 
       const fetchCommand = `/tool fetch url="${env.APP_API_PUBLIC_URL}/api/v1/routers/provision/${provisionToken}/setup.rsc" dst-path=setup.rsc; :delay 2s; /import setup.rsc;`;
       reply.send(successResponse({ script, fetchCommand, oneLiner: fetchCommand }, request.id));
+    }
+  );
+
+  app.get(
+    "/social-firewall-script",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("routers.read")] },
+    async (request, reply) => {
+      const script = buildSocialFirewallOnlyScript();
+      reply.send(successResponse({ script }, request.id));
     }
   );
 
