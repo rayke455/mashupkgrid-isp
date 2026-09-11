@@ -262,7 +262,7 @@ async function main() {
     {},
     { repeat: { every: 30_000 }, removeOnComplete: true, removeOnFail: 100 }
   );
-  // Every 60 seconds: routers are polled far more often than the billing/mpesa jobs since
+  // Every 10 seconds: routers are polled far more often than the billing/mpesa jobs since
   // "is the router still up" is what the dashboard's live status badge reflects — the web UI
   // polls the routers list every few seconds, so this is the freshness bound on what it shows.
   // Every 20 seconds: this is the delay between a customer paying and their internet coming back
@@ -276,7 +276,7 @@ async function main() {
   await networkQueue.add(
     JOB_NAMES.pollRouterHealth,
     {},
-    { repeat: { every: 60_000 }, removeOnComplete: true, removeOnFail: 50 }
+    { repeat: { every: 10_000 }, removeOnComplete: true, removeOnFail: 50 }
   );
   await networkQueue.add(
     JOB_NAMES.expireOverdueVouchers,
