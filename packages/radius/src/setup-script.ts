@@ -355,6 +355,25 @@ export function buildMikrotikProvisioningScript(
   const serverPort = options.serverPort || 51820;
   const serverPublicKey = options.serverPublicKey || "";
   const vpnIp = options.vpnIp || "10.90.0.2";
+  const wireguardSection = serverPublicKey
+    ? `
+# 0b. Automatic management VPN (RouterOS v7+)
+# The router sends its public key to the same provisioning callback. The platform registers the
+# peer before this command returns, so no second dashboard step or manual WinBox script is needed.
+:do {
+  /interface wireguard remove [find name=mkg-wg]
+  /interface wireguard add name=mkg-wg listen-port=${serverPort}
+  :delay 2s
+  /ip address remove [find interface=mkg-wg]
+  /ip address add address=${vpnIp}/32 interface=mkg-wg
+  :local routerPublicKey [/interface wireguard get [find name=mkg-wg] public-key]
+  /tool fetch url="${callbackUrl}" http-method=post http-data=$routerPublicKey keep-result=no
+  :delay 2s
+  /interface wireguard peers remove [find interface=mkg-wg]
+  /interface wireguard peers add interface=mkg-wg public-key="${serverPublicKey}" endpoint-address="${serverHost}" endpoint-port=${serverPort} allowed-address=10.90.0.0/16 persistent-keepalive=25s
+} on-error={}
+`
+    :"";
   const hotspotInterface = options.hotspotInterface || "bridge";
   // "bridge" / "default-dhcp" are the names MikroTik's own defconf ships with, so they are right
   // on a factory-reset router; the DHCP-derived fallback in the script covers everything else.
@@ -388,6 +407,12 @@ export function buildMikrotikProvisioningScript(
       : `https://${apiHost}/api/v1/routers/${router.id}/push-aps`);
 
   return `# MASHUPKGRID ISP — Automated Setup for "${safeName}"
+# 0. Immediate handshake (must run before optional configuration)
+# The dashboard can mark this router as linked even if a later RouterOS command
+# is unavailable on this model or RouterOS version.
+:do {/tool fetch url="${callbackUrl}" http-method=post keep-result=no} on-error={}
+${wireguardSection}
+
 # 1. API Service
 ${apiLine}
 /ip firewall filter remove [find comment="MASHUPKGRID ISP API"]
@@ -567,8 +592,8 @@ ${pppoeSection}
 :do {/tool graphing resource remove [find]} on-error={}
 :do {/tool graphing resource add store-on-disk=no} on-error={}
 
-# 15. Hardware Watchdog & Auto-Reboot on Freeze
-:do {/system watchdog set auto-restart=yes watchdog-timer=yes} on-error={}
+# 15. Hardware watchdog is intentionally left unchanged during provisioning.
+# Enabling it while importing a large script can reboot low-resource hAP devices.
 
 # 16. Automated Daily Local Backup Scheduler
 :do {/system scheduler remove [find name=mkg-daily-backup]} on-error={}
