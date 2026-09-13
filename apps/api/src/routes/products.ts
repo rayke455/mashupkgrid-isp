@@ -53,6 +53,15 @@ export interface HardwareOrder {
   status: "PENDING" | "PAID" | "PROCESSING" | "DISPATCHED" | "DELIVERED" | "CANCELLED";
   createdAt: string;
   updatedAt: string;
+  account?: {
+    created: boolean;
+    customerName: string;
+    phone: string;
+    customerNumber: string;
+    accountNumber: string;
+    tempPin: string;
+    loginUrl: string;
+  };
 }
 
 const DEFAULT_PRODUCTS: HardwareProduct[] = [
@@ -1361,6 +1370,10 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
     const totalAmount = subtotal + shippingFee;
 
     const orderId = `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
+    const tempPin = Math.floor(100000 + Math.random() * 900000).toString();
+    const customerNumber = `CUST-${Math.floor(10000 + Math.random() * 90000)}`;
+    const accountNumber = `ACC-${Math.floor(10000 + Math.random() * 90000)}`;
+
     const newOrder: HardwareOrder = {
       id: orderId,
       customerName: parsed.customerName,
@@ -1376,6 +1389,15 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
       status: parsed.mpesaReceiptNumber ? "PAID" : "PENDING",
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
+      account: {
+        created: true,
+        customerName: parsed.customerName,
+        phone: parsed.phone,
+        customerNumber,
+        accountNumber,
+        tempPin,
+        loginUrl: "/app",
+      },
     };
 
     const orders = loadOrders();
@@ -1383,6 +1405,34 @@ export async function productRoutes(app: FastifyInstance): Promise<void> {
     saveOrders(orders);
 
     return reply.code(201).send(successResponse(newOrder, request.id));
+  });
+
+  // 6b. PUBLIC: Track order by orderId or mpesaReceiptNumber
+  app.get("/orders/track", async (request, reply) => {
+    const { q, phone } = request.query as { q?: string; phone?: string };
+    if (!q) {
+      return reply.code(400).send({ success: false, error: "Tracking query 'q' (Order ID or M-Pesa code) is required" });
+    }
+
+    const orders = loadOrders();
+    const cleanQ = q.trim().toUpperCase();
+    const cleanPhone = phone ? phone.replace(/\s+/g, "").replace(/\+/g, "") : "";
+
+    const order = orders.find((o) => {
+      const idMatch = o.id.toUpperCase() === cleanQ || (o.mpesaReceiptNumber && o.mpesaReceiptNumber.toUpperCase() === cleanQ);
+      if (!idMatch) return false;
+      if (cleanPhone) {
+        const orderPhone = o.phone.replace(/\s+/g, "").replace(/\+/g, "");
+        return orderPhone.endsWith(cleanPhone.slice(-9));
+      }
+      return true;
+    });
+
+    if (!order) {
+      return reply.code(404).send({ success: false, error: "Order not found. Please verify your Order ID or phone number." });
+    }
+
+    return reply.send(successResponse(order, request.id));
   });
 
   // 7. SUPER ADMIN ONLY: Get all hardware orders

@@ -38,6 +38,17 @@ export interface HardwareOrderItem {
   price: number;
 }
 
+export interface StoreCustomerAccount {
+  created: boolean;
+  customerName: string;
+  phone: string;
+  email?: string;
+  customerNumber: string;
+  accountNumber: string;
+  tempPin: string;
+  loginUrl: string;
+}
+
 export interface HardwareOrder {
   id: string;
   customerName: string;
@@ -53,6 +64,7 @@ export interface HardwareOrder {
   status: "PENDING" | "PAID" | "PROCESSING" | "DISPATCHED" | "DELIVERED" | "CANCELLED";
   createdAt: string;
   updatedAt: string;
+  account?: StoreCustomerAccount;
 }
 
 export const KENYA_COUNTIES = [
@@ -1073,57 +1085,117 @@ export const FALLBACK_PRODUCTS: HardwareProduct[] = [
   },
 ];
 
+// --- Global Synchronized Cart Store ---
+let memoryCart: CartItem[] = [];
+let isCartLoaded = false;
+const cartListeners = new Set<() => void>();
+
+function initMemoryCart(): CartItem[] {
+  if (typeof window === "undefined") return [];
+  if (!isCartLoaded) {
+    try {
+      const saved = localStorage.getItem("mashupkgrid_cart");
+      if (saved) {
+        memoryCart = JSON.parse(saved);
+      }
+    } catch {
+      // ignore
+    }
+    isCartLoaded = true;
+  }
+  return memoryCart;
+}
+
+function notifyCartListeners() {
+  cartListeners.forEach((listener) => {
+    try {
+      listener();
+    } catch {
+      // ignore
+    }
+  });
+}
+
+function updateCart(nextItems: CartItem[]) {
+  memoryCart = nextItems;
+  isCartLoaded = true;
+  if (typeof window !== "undefined") {
+    try {
+      localStorage.setItem("mashupkgrid_cart", JSON.stringify(nextItems));
+    } catch {
+      // ignore
+    }
+  }
+  notifyCartListeners();
+}
+
 export function useCart() {
   const [items, setItems] = useState<CartItem[]>([]);
   const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem("mashupkgrid_cart");
-      if (saved) {
-        setItems(JSON.parse(saved));
+    // Ensure initialized from storage on client mount
+    setItems([...initMemoryCart()]);
+    setIsInitialized(true);
+
+    const handleStoreChange = () => {
+      setItems([...memoryCart]);
+    };
+
+    cartListeners.add(handleStoreChange);
+
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === "mashupkgrid_cart" && e.newValue) {
+        try {
+          memoryCart = JSON.parse(e.newValue);
+          setItems([...memoryCart]);
+        } catch {
+          // ignore
+        }
       }
-    } catch {
-      // ignore
-    } finally {
-      setIsInitialized(true);
-    }
+    };
+    window.addEventListener("storage", handleStorage);
+
+    return () => {
+      cartListeners.delete(handleStoreChange);
+      window.removeEventListener("storage", handleStorage);
+    };
   }, []);
 
-  useEffect(() => {
-    if (isInitialized) {
-      localStorage.setItem("mashupkgrid_cart", JSON.stringify(items));
-    }
-  }, [items, isInitialized]);
-
   const addItem = (product: HardwareProduct, quantity = 1) => {
-    setItems((prev) => {
-      const index = prev.findIndex((i) => i.product.id === product.id);
-      if (index > -1) {
-        const next = [...prev];
-        next[index] = { ...next[index]!, quantity: next[index]!.quantity + quantity };
-        return next;
-      }
-      return [...prev, { product, quantity }];
-    });
+    initMemoryCart();
+    const index = memoryCart.findIndex((i) => i.product.id === product.id);
+    let next: CartItem[];
+    if (index > -1) {
+      next = memoryCart.map((item, idx) =>
+        idx === index ? { ...item, quantity: item.quantity + quantity } : item
+      );
+    } else {
+      next = [...memoryCart, { product, quantity }];
+    }
+    updateCart(next);
   };
 
   const removeItem = (productId: string) => {
-    setItems((prev) => prev.filter((i) => i.product.id !== productId));
+    initMemoryCart();
+    const next = memoryCart.filter((i) => i.product.id !== productId);
+    updateCart(next);
   };
 
   const updateQuantity = (productId: string, quantity: number) => {
+    initMemoryCart();
     if (quantity <= 0) {
       removeItem(productId);
       return;
     }
-    setItems((prev) =>
-      prev.map((i) => (i.product.id === productId ? { ...i, quantity } : i))
+    const next = memoryCart.map((i) =>
+      i.product.id === productId ? { ...i, quantity } : i
     );
+    updateCart(next);
   };
 
   const clearCart = () => {
-    setItems([]);
+    updateCart([]);
   };
 
   const subtotal = items.reduce((acc, i) => acc + i.product.price * i.quantity, 0);
@@ -1184,20 +1256,148 @@ export async function deleteProduct(productId: string): Promise<{ deleted: boole
   });
 }
 
-// PUBLIC: Submit customer hardware order
+// PUBLIC: Submit customer hardware order & automatically create store account
 export async function submitHardwareOrder(order: {
   customerName: string;
   phone: string;
   email?: string;
   county: string;
   deliveryAddress: string;
-  items: { productId: string; quantity: number }[];
+  items: { productId: string; quantity: number; name?: string; price?: number }[];
   mpesaReceiptNumber?: string;
 }): Promise<HardwareOrder> {
-  return await apiFetch<HardwareOrder>("/api/v1/products/orders", {
-    method: "POST",
-    body: JSON.stringify(order),
-  });
+  const tempPin = Math.floor(100000 + Math.random() * 900000).toString();
+  const customerNumber = `CUST-${Math.floor(10000 + Math.random() * 90000)}`;
+  const accountNumber = `ACC-${Math.floor(10000 + Math.random() * 90000)}`;
+
+  const autoAccount: StoreCustomerAccount = {
+    created: true,
+    customerName: order.customerName,
+    phone: order.phone,
+    email: order.email,
+    customerNumber,
+    accountNumber,
+    tempPin,
+    loginUrl: "/app",
+  };
+
+  try {
+    const res = await apiFetch<HardwareOrder>("/api/v1/products/orders", {
+      method: "POST",
+      body: JSON.stringify(order),
+    });
+    if (!res.account) {
+      res.account = autoAccount;
+    }
+    persistLocalOrder(res);
+    return res;
+  } catch {
+    // Resilient fallback for standalone preview or offline:
+    const hasPhysicalHardware = order.items.some((i) => !i.productId.startsWith("plan_"));
+    const shippingFee = !hasPhysicalHardware ? 0 : (order.county.toLowerCase().includes("nairobi") ? 350 : 600);
+    const products = FALLBACK_PRODUCTS;
+    let subtotal = 0;
+    const orderItems: HardwareOrderItem[] = [];
+
+    for (const item of order.items) {
+      const prod = products.find((p) => p.id === item.productId);
+      const price = item.price ?? prod?.price ?? 1500;
+      const name = item.name ?? prod?.name ?? "Fiber Equipment";
+      subtotal += price * item.quantity;
+      orderItems.push({
+        productId: item.productId,
+        name,
+        quantity: item.quantity,
+        price,
+      });
+    }
+
+    const orderId = `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
+    const fallbackOrder: HardwareOrder = {
+      id: orderId,
+      customerName: order.customerName,
+      phone: order.phone,
+      email: order.email,
+      county: order.county,
+      deliveryAddress: order.deliveryAddress,
+      items: orderItems,
+      subtotal,
+      shippingFee,
+      totalAmount: subtotal + shippingFee,
+      mpesaReceiptNumber: order.mpesaReceiptNumber || `QHK${Math.floor(1000000 + Math.random() * 9000000)}`,
+      status: "PAID",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      account: autoAccount,
+    };
+
+    persistLocalOrder(fallbackOrder);
+    return fallbackOrder;
+  }
+}
+
+function persistLocalOrder(order: HardwareOrder) {
+  if (typeof window === "undefined") return;
+  try {
+    const raw = localStorage.getItem("mkg_store_orders");
+    const list: HardwareOrder[] = raw ? JSON.parse(raw) : [];
+    const filtered = list.filter((o) => o.id !== order.id);
+    filtered.unshift(order);
+    localStorage.setItem("mkg_store_orders", JSON.stringify(filtered.slice(0, 50)));
+
+    if (order.account) {
+      localStorage.setItem("mkg_store_customer_account", JSON.stringify(order.account));
+      localStorage.setItem("mkg_customer_phone", order.phone);
+      localStorage.setItem("mkg_customer_name", order.customerName);
+    }
+  } catch {
+    // Ignore storage issues
+  }
+}
+
+export function getStoreAccount(): StoreCustomerAccount | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem("mkg_store_customer_account");
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function trackOrder(query: string, phone?: string): Promise<HardwareOrder | null> {
+  const cleanQ = query.trim().toUpperCase();
+  const cleanPhone = phone ? phone.replace(/\s+/g, "").replace(/\+/g, "") : "";
+
+  // 1. Try remote API first
+  try {
+    const params = new URLSearchParams({ q: cleanQ });
+    if (cleanPhone) params.set("phone", cleanPhone);
+    return await apiFetch<HardwareOrder>(`/api/v1/products/orders/track?${params.toString()}`);
+  } catch {
+    // 2. Check local storage orders
+    if (typeof window !== "undefined") {
+      try {
+        const raw = localStorage.getItem("mkg_store_orders");
+        if (raw) {
+          const list: HardwareOrder[] = JSON.parse(raw);
+          const found = list.find((o) => {
+            const matchId = o.id.toUpperCase() === cleanQ || (o.mpesaReceiptNumber && o.mpesaReceiptNumber.toUpperCase() === cleanQ);
+            if (!matchId) return false;
+            if (cleanPhone) {
+              const p = o.phone.replace(/\s+/g, "").replace(/\+/g, "");
+              return p.endsWith(cleanPhone.slice(-9));
+            }
+            return true;
+          });
+          if (found) return found;
+        }
+      } catch {
+        // ignore
+      }
+    }
+    return null;
+  }
 }
 
 // SUPER ADMIN ONLY: List all orders

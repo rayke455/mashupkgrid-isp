@@ -72,8 +72,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en-KE" className="dark">
-      <body className="bg-obsidian-950 text-slate-100 antialiased min-h-screen">
+    <html lang="en-KE" className="dark" suppressHydrationWarning>
+      <body className="bg-obsidian-950 text-slate-100 antialiased min-h-screen" suppressHydrationWarning>
         <QueryProvider>
           <AuthProvider>
             <MaintenanceBanner />

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import Link from "next/link";
 import { useCart, KENYA_COUNTIES, submitHardwareOrder, HardwareOrder } from "@/lib/hardware-store";
 
 interface CartDrawerProps {
@@ -19,10 +20,26 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
   const [stkStatus, setStkStatus] = useState<"idle" | "prompting" | "success">("idle");
   const [errorMessage, setErrorMessage] = useState("");
   const [countdown, setCountdown] = useState(45);
+  const [copiedPin, setCopiedPin] = useState(false);
+
+  useEffect(() => {
+    if (isOpen && items.length > 0 && completedOrder) {
+      setCompletedOrder(null);
+      setStkStatus("idle");
+    }
+  }, [isOpen, items.length, completedOrder]);
 
   if (!isOpen) return null;
 
-  const shippingFee = county.toLowerCase().includes("nairobi") ? 350 : 600;
+  const hasPhysicalHardware = items.some(
+    (i) => i.product.category !== "fiber" && !i.product.id.startsWith("plan_")
+  );
+  const shippingFee =
+    items.length === 0 || !hasPhysicalHardware
+      ? 0
+      : county.toLowerCase().includes("nairobi")
+      ? 350
+      : 600;
   const grandTotal = subtotal + shippingFee;
 
   const normalizePhone = (p: string): string => {
@@ -81,7 +98,12 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
         phone: normalizePhone(phone.trim()),
         county,
         deliveryAddress: deliveryAddress.trim(),
-        items: items.map((i) => ({ productId: i.product.id, quantity: i.quantity })),
+        items: items.map((i) => ({
+          productId: i.product.id,
+          quantity: i.quantity,
+          name: i.product.name,
+          price: i.product.price,
+        })),
         mpesaReceiptNumber: receipt,
       });
 
@@ -116,17 +138,17 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
         {/* Drawer Header */}
         <div className="p-5 border-b border-slate-800/80 flex items-center justify-between bg-slate-950/60">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400">
-              🛒
-            </div>
+            <span className="text-xl">🛒</span>
             <div>
-              <h3 className="font-bold text-lg text-white">Your Hardware Cart</h3>
-              <p className="text-xs text-slate-400">{itemCount} items ready for Kenya dispatch</p>
+              <h2 className="font-bold text-white text-base">Your Cart &amp; Checkout</h2>
+              <p className="text-xs text-slate-400">
+                {items.length === 0 ? "No items selected" : `${itemCount} item${itemCount > 1 ? "s" : ""} selected`}
+              </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition-colors"
+            className="w-8 h-8 rounded-full bg-slate-900 border border-slate-800 hover:border-slate-700 flex items-center justify-center text-slate-400 hover:text-white transition-colors"
           >
             ✕
           </button>
@@ -135,92 +157,135 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
         {/* Drawer Content */}
         <div className="flex-1 overflow-y-auto p-5 space-y-6">
           {stkStatus === "prompting" ? (
-            <div className="text-center py-10 space-y-5 animate-in fade-in">
-              <div className="relative w-20 h-20 mx-auto flex items-center justify-center">
-                <div className="absolute inset-0 rounded-full border-4 border-emerald-500/20 border-t-emerald-400 animate-spin" />
-                <div className="w-14 h-14 rounded-full bg-emerald-500/20 text-emerald-400 text-2xl flex items-center justify-center">
-                  📱
-                </div>
+            <div className="py-12 px-6 text-center space-y-6 animate-in fade-in">
+              <div className="w-20 h-20 mx-auto rounded-full bg-emerald-500/10 border-2 border-emerald-500/40 flex items-center justify-center relative">
+                <span className="text-3xl animate-bounce">📱</span>
+                <span className="absolute inset-0 rounded-full border-2 border-emerald-400 animate-ping opacity-25" />
               </div>
-
-              <div>
-                <h4 className="text-lg font-black text-white">Safaricom STK Push Sent!</h4>
-                <p className="text-xs text-slate-300 mt-1 max-w-xs mx-auto">
-                  A payment prompt of <span className="text-emerald-400 font-bold">KES {grandTotal.toLocaleString()}</span> was sent to <span className="text-cyan-300 font-mono font-bold">{phone}</span>.
+              <div className="space-y-2">
+                <h3 className="text-lg font-black text-white">M-Pesa STK Push Sent!</h3>
+                <p className="text-xs text-slate-300 max-w-xs mx-auto leading-relaxed">
+                  Check your phone <span className="font-mono text-emerald-400 font-bold">{phone}</span> and enter your M-Pesa PIN to authorize payment.
                 </p>
               </div>
-
-              <div className="p-4 rounded-2xl bg-slate-900/90 border border-emerald-500/30 text-left space-y-2.5 max-w-sm mx-auto shadow-xl">
-                <div className="text-xs font-bold text-emerald-400 uppercase tracking-wider flex items-center justify-between">
-                  <span>M-Pesa Instructions</span>
-                  <span className="text-slate-400 font-mono text-[11px]">{countdown}s remaining</span>
-                </div>
-                <ol className="text-xs text-slate-300 space-y-1.5 list-decimal list-inside">
-                  <li>Unlock your Safaricom phone.</li>
-                  <li>Verify payee is <strong className="text-white">MASHUPKGRID LTD</strong>.</li>
-                  <li>Enter your secret 4-digit <strong className="text-emerald-300">M-Pesa PIN</strong>.</li>
-                  <li>Press <strong className="text-cyan-300">OK / Send</strong> to complete.</li>
-                </ol>
-              </div>
-
-              <div className="text-[11px] text-slate-500">
-                Awaiting confirmation from Safaricom Daraja gateway...
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-900 border border-slate-800 font-mono text-xs text-slate-400">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span>Awaiting response... ({countdown}s)</span>
               </div>
             </div>
           ) : completedOrder ? (
-            <div className="text-center py-8 space-y-4">
-              <div className="w-16 h-16 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 text-3xl flex items-center justify-center mx-auto animate-bounce">
-                ✓
+            <div className="space-y-5 animate-in zoom-in-95 duration-200">
+              <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 text-center space-y-2">
+                <div className="w-12 h-12 rounded-full bg-emerald-500/20 text-emerald-400 mx-auto flex items-center justify-center text-xl font-black">
+                  ✓
+                </div>
+                <h3 className="font-black text-white text-base">Payment Received &amp; Verified!</h3>
+                <p className="text-xs text-emerald-300 font-mono">
+                  M-Pesa Receipt: {completedOrder.mpesaReceiptNumber}
+                </p>
+                <p className="text-[11px] text-slate-400">
+                  Order ID: <span className="font-mono text-white font-bold">{completedOrder.id}</span>
+                </p>
               </div>
-              <h4 className="text-xl font-bold text-white">Order Confirmed & Paid!</h4>
-              <p className="text-sm text-slate-300">
-                M-Pesa payment received for Order{" "}
-                <span className="text-cyan-400 font-mono font-bold">{completedOrder.id}</span>.
-              </p>
-              <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 text-left space-y-2 text-xs">
-                <div className="flex justify-between">
-                  <span className="text-slate-400">M-Pesa Receipt:</span>
-                  <span className="text-emerald-400 font-mono font-bold">
-                    {completedOrder.mpesaReceiptNumber}
-                  </span>
+
+              {/* AUTOMATIC STORE ACCOUNT CREATED NOTICE */}
+              {completedOrder.account && (
+                <div className="p-4 rounded-2xl bg-gradient-to-b from-amber-500/15 to-yellow-500/5 border-2 border-amber-500/40 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">🎉</span>
+                    <div>
+                      <h4 className="text-xs font-black text-amber-300 uppercase tracking-wide">
+                        Your Customer Account is Created!
+                      </h4>
+                      <p className="text-[11px] text-slate-300">
+                        Use these credentials to track orders, download invoices, and manage subscriptions.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="bg-slate-950/80 rounded-xl p-3 border border-amber-500/30 space-y-2 font-mono text-xs">
+                    <div className="flex justify-between items-center text-slate-300">
+                      <span className="text-slate-400">Account No:</span>
+                      <span className="text-amber-400 font-bold">{completedOrder.account.accountNumber}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-slate-300">
+                      <span className="text-slate-400">Phone (Login):</span>
+                      <span className="text-white font-bold">{completedOrder.account.phone}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-slate-300 pt-1 border-t border-slate-800">
+                      <div>
+                        <span className="text-slate-400">Your Login PIN:</span>
+                        <span className="ml-2 px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 font-black tracking-widest text-sm">
+                          {completedOrder.account.tempPin}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (navigator.clipboard) {
+                            navigator.clipboard.writeText(completedOrder.account!.tempPin);
+                            setCopiedPin(true);
+                            setTimeout(() => setCopiedPin(false), 2500);
+                          }
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10px] font-sans font-bold transition-all border border-slate-700"
+                      >
+                        {copiedPin ? "✓ Copied" : "Copy PIN"}
+                      </button>
+                    </div>
+                  </div>
                 </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Recipient:</span>
-                  <span className="text-white font-medium">{completedOrder.customerName}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Phone:</span>
-                  <span className="text-cyan-300 font-mono">{completedOrder.phone}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Destination:</span>
-                  <span className="text-white">
-                    {completedOrder.county} — {completedOrder.deliveryAddress}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-400">Total Paid:</span>
-                  <span className="text-cyan-300 font-bold text-sm">
-                    KES {completedOrder.totalAmount.toLocaleString()}
-                  </span>
-                </div>
-              </div>
+              )}
+
               <p className="text-xs text-slate-400">
                 You will receive an SMS dispatch alert with rider contact once parcel leaves our Nairobi hub.
               </p>
-              <div className="grid grid-cols-2 gap-2.5">
-                <button
-                  onClick={handlePrintReceipt}
-                  className="py-3 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-white font-bold text-xs transition-colors flex items-center justify-center gap-1.5"
+
+              <div className="flex flex-col gap-2 pt-1">
+                {/* 1-Click Go to My Account */}
+                <Link
+                  href="/app"
+                  onClick={() => onClose()}
+                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs uppercase tracking-wide transition-all shadow-lg flex items-center justify-center gap-2"
                 >
-                  <span>🖨️</span> Print Receipt
-                </button>
-                <button
-                  onClick={handleReset}
-                  className="py-3 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs transition-colors shadow-lg shadow-cyan-500/20"
-                >
-                  Continue Shopping
-                </button>
+                  <span>🚀 Open My Store Dashboard</span>
+                </Link>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <Link
+                    href={`/track?orderId=${encodeURIComponent(completedOrder.id)}`}
+                    onClick={() => onClose()}
+                    className="py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors"
+                  >
+                    <span>📍 Track Order</span>
+                  </Link>
+
+                  <a
+                    href={`https://wa.me/254703605266?text=Hello%20MashupHost%2C%20I%20want%20to%20track%20my%20order%20${encodeURIComponent(
+                      completedOrder.id
+                    )}%20(M-Pesa%20${encodeURIComponent(completedOrder.mpesaReceiptNumber || "")})`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="py-2.5 rounded-xl bg-[#25D366]/15 hover:bg-[#25D366]/25 border border-[#25D366]/40 text-emerald-300 font-bold text-xs flex items-center justify-center gap-1.5 transition-colors"
+                  >
+                    <span>Track on WhatsApp</span>
+                  </a>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <button
+                    onClick={handlePrintReceipt}
+                    className="py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-300 font-medium text-xs transition-colors flex items-center justify-center gap-1"
+                  >
+                    <span>🖨️</span> Print Receipt
+                  </button>
+                  <button
+                    onClick={handleReset}
+                    className="py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-white font-medium text-xs transition-colors"
+                  >
+                    Close
+                  </button>
+                </div>
               </div>
             </div>
           ) : items.length === 0 ? (
@@ -284,34 +349,41 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
 
               {/* Checkout Form */}
               <form onSubmit={handleCheckout} className="space-y-4 pt-4 border-t border-slate-800/80">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                  Kenya Delivery & M-Pesa Details
-                </h4>
+                <div className="flex items-center justify-between">
+                  <h3 className="text-xs font-bold text-white uppercase tracking-wider">
+                    Customer Delivery &amp; Account Details
+                  </h3>
+                  <span className="text-[10px] text-emerald-400 font-mono font-bold">
+                    ⚡ Auto-Account Creation
+                  </span>
+                </div>
 
                 {errorMessage && (
-                  <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs">
+                  <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs">
                     {errorMessage}
                   </div>
                 )}
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-medium text-slate-300 mb-1">Full Name</label>
                     <input
                       type="text"
                       required
-                      placeholder="e.g. Kelvin Otieno"
+                      placeholder="e.g. John Kamau"
                       value={customerName}
                       onChange={(e) => setCustomerName(e.target.value)}
                       className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">M-Pesa Phone</label>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">
+                      M-Pesa Safaricom Phone
+                    </label>
                     <input
                       type="tel"
                       required
-                      placeholder="0712345678"
+                      placeholder="0712 345 678"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
@@ -335,11 +407,11 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-medium text-slate-300 mb-1">Exact Address</label>
+                    <label className="block text-xs font-medium text-slate-300 mb-1">Exact Location / House</label>
                     <input
                       type="text"
                       required
-                      placeholder="Estate, building, room"
+                      placeholder="Estate, building, house / road"
                       value={deliveryAddress}
                       onChange={(e) => setDeliveryAddress(e.target.value)}
                       className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
@@ -350,12 +422,14 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                 {/* Price Breakdown */}
                 <div className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 space-y-1.5 text-xs">
                   <div className="flex justify-between text-slate-400">
-                    <span>Hardware Subtotal</span>
+                    <span>{hasPhysicalHardware ? "Hardware Subtotal" : "Fiber Subscription Subtotal"}</span>
                     <span className="text-white font-medium">KES {subtotal.toLocaleString()}</span>
                   </div>
                   <div className="flex justify-between text-slate-400">
-                    <span>Shipping ({county})</span>
-                    <span className="text-white font-medium">KES {shippingFee.toLocaleString()}</span>
+                    <span>{hasPhysicalHardware ? `Courier Shipping (${county})` : "Setup & Router Dispatch"}</span>
+                    <span className="text-emerald-400 font-medium">
+                      {shippingFee === 0 ? "FREE (Included)" : `KES ${shippingFee.toLocaleString()}`}
+                    </span>
                   </div>
                   <div className="pt-2 border-t border-slate-800 flex justify-between font-bold text-sm">
                     <span className="text-white">Total Amount</span>
