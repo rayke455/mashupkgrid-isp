@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { LandingClient } from "./landing-client";
 import { DEFAULT_LANDING_CONTENT, type LandingContent } from "@/lib/landing-content";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
@@ -56,6 +56,10 @@ async function loadLandingContent(): Promise<LandingContent> {
  * get both: this file is what search engines and link scrapers read, `landing-client.tsx` is what
  * the browser hydrates.
  */
+/** The homepage is a light design; the root layout colours the mobile browser bar for the dark
+ *  dashboard. */
+export const viewport: Viewport = { themeColor: "#ffffff" };
+
 export const metadata: Metadata = {
   // Carries the brand explicitly. A parent layout's title template does not apply to its own
   // segment, and the homepage shares the root segment — so without the name here the most

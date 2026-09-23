@@ -1,1177 +1,630 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, type ComponentType, type ReactNode } from "react";
 import Link from "next/link";
-import { useCart, FALLBACK_PRODUCTS, HardwareProduct } from "@/lib/hardware-store";
-import { CartDrawer } from "@/components/store/cart-drawer";
-import { QuickRenewModal } from "@/components/portal/quick-renew-modal";
-import { HardwareProductCard } from "@/components/store/hardware-product-card";
+import { DEFAULT_LANDING_CONTENT, type LandingContent } from "@/lib/landing-content";
+import { SiteHeader } from "@/components/marketing/site-header";
+import { SiteFooter } from "@/components/marketing/site-footer";
+import { SUPPORT_PHONE_DISPLAY, whatsappLink } from "@/components/marketing/brand";
+import { DashboardCustomersPreview, DashboardOverviewPreview } from "@/components/marketing/dashboard-preview";
 import {
-  IconCheck,
   IconArrowRight,
+  IconCheck,
+  IconGlobe,
+  IconInvoice,
+  IconMessage,
+  IconLayers,
+  IconLock,
+  IconMpesa,
+  IconPulse,
   IconRouter,
   IconShield,
-  IconPulse,
-  IconPackage,
-  IconUser,
-  IconLock,
-  IconLifeBuoy,
-  IconSpeed,
-  IconMpesa,
-  IconMenu,
-  IconClose,
+  IconTicket,
+  IconUsers,
   IconWhatsApp,
+  type IconProps,
 } from "@/components/icons";
 
-interface PlanItem {
-  id: string;
-  name: string;
-  speed: string;
-  price: number; // KES per month
-  popular?: boolean;
-  type: "home" | "business" | "ultra";
-  summary: string;
-  features: string[];
+type Icon = ComponentType<IconProps>;
+
+// ---------------------------------------------------------------------------------------------
+// Copy. Every capability named below exists in this codebase — see the file noted beside each.
+// ---------------------------------------------------------------------------------------------
+
+/** Primary integrations (the hero strip). */
+const INTEGRATIONS = [
+  { name: "MikroTik", note: "RouterOS API" }, // packages/network/src/mikrotik
+  { name: "M-Pesa", note: "Daraja STK & C2B", accent: true }, // packages/payments/src/mpesa
+  { name: "FreeRADIUS", note: "AAA & accounting" }, // packages/radius, infrastructure/freeradius
+  { name: "PPPoE", note: "Subscriber sessions" }, // router_pppoe_server migration
+  { name: "WhatsApp", note: "OTP & notifications" }, // packages/whatsapp
+];
+
+/** Also supported, shown smaller so the headline row stays focused. */
+const MORE_INTEGRATIONS = ["Paystack", "Pesapal", "Africa's Talking SMS", "WireGuard"];
+
+const FEATURES: { title: string; body: string; icon: Icon; mpesa?: boolean }[] = [
+  {
+    title: "Subscriber Management",
+    body: "Customer profiles, packages, account status and history in one place — with suspension and reactivation handled for you.",
+    icon: IconUsers,
+  },
+  {
+    title: "Automated Billing",
+    body: "Renewal invoices, overdue reminders and suspensions run on schedule. Wallets and pro-rated first invoices included.",
+    icon: IconInvoice,
+  },
+  {
+    title: "M-Pesa Payments",
+    body: "STK Push, Paybill and Till. Payments are matched to the right account and service is restored automatically.",
+    icon: IconMpesa,
+    mpesa: true,
+  },
+  {
+    title: "Network Management",
+    body: "Connect MikroTik routers with a single setup script. Manage PPPoE, IP pools, VLANs and RADIUS from the dashboard.",
+    icon: IconRouter,
+  },
+  {
+    title: "Hotspot & Vouchers",
+    body: "Sell time and data packages on a branded captive portal, and print voucher batches for walk-in customers.",
+    icon: IconTicket,
+  },
+  {
+    title: "Reports & Analytics",
+    body: "Revenue, outstanding balances and bandwidth usage from your real billing and session records.",
+    icon: IconPulse,
+  },
+];
+
+const SHOWCASE_POINTS = [
+  "Real-time subscriber, session and payment tracking",
+  "M-Pesa STK Push, Paybill and Till integration",
+  "MikroTik and FreeRADIUS support",
+  "Hotspot and PPPoE management",
+  "Multi-tenant, with your own branding and domain",
+  "Reports, audit logs and role-based staff access",
+];
+
+const STEPS = [
+  { title: "Connect Your Network", body: "Paste one setup script into your MikroTik to link it to MashupHost." },
+  { title: "Add Subscribers", body: "Create customer accounts for PPPoE and hotspot users." },
+  { title: "Set Packages", body: "Define speeds, prices and billing cycles for what you sell." },
+  { title: "Automate Billing", body: "Invoices, reminders and suspensions run on their own." },
+  { title: "Get Paid & Grow", body: "Collect through M-Pesa and track revenue as it lands." },
+];
+
+const PLAN_INCLUDES = [
+  "Subscriber and package management",
+  "Automated invoicing and reminders",
+  "M-Pesa STK Push, Paybill and Till",
+  "MikroTik and RADIUS integration",
+  "Hotspot captive portal and vouchers",
+  "Reports and audit logs",
+];
+
+const OPERATOR_POINTS: { title: string; body: string; icon: Icon }[] = [
+  {
+    title: "Your money, your choice",
+    body: "Collect straight into your own Paybill or Till, or let MashupHost collect and settle to you.",
+    icon: IconMpesa,
+  },
+  {
+    title: "Works with routers you own",
+    body: "No proprietary hardware. MikroTik RouterOS v6 and v7, configured by script.",
+    icon: IconRouter,
+  },
+  {
+    title: "Role-based access",
+    body: "Give technicians, cashiers and admins only the permissions they need.",
+    icon: IconShield,
+  },
+  {
+    title: "Every action on record",
+    body: "An audit log of who changed what, and when, across your workspace.",
+    icon: IconLayers,
+  },
+  {
+    title: "Encrypted credentials",
+    body: "M-Pesa and payment gateway credentials are encrypted at rest.",
+    icon: IconLock,
+  },
+  {
+    title: "Your brand, your domain",
+    body: "Your logo and colours on the customer and hotspot portals, served on your own domain.",
+    icon: IconGlobe,
+  },
+];
+
+/** Set to a plan name to give it the highlighted treatment. Left unset on purpose: there is no
+ *  sales data in the project saying which plan most customers choose, and a "Most popular" badge
+ *  is a factual claim. */
+const FEATURED_PLAN: string | null = null;
+
+// ---------------------------------------------------------------------------------------------
+
+function SectionHeading({
+  eyebrow,
+  title,
+  body,
+  align = "left",
+  id,
+}: {
+  eyebrow: string;
+  title: string;
+  body?: string;
+  align?: "left" | "center";
+  id?: string;
+}) {
+  return (
+    <div className={align === "center" ? "mx-auto max-w-2xl text-center" : "max-w-2xl"}>
+      <p className="text-sm font-semibold text-blue-700">{eyebrow}</p>
+      <h2 id={id} className="mt-3 text-3xl font-semibold tracking-[-0.025em] text-slate-950 sm:text-4xl">
+        {title}
+      </h2>
+      {body && <p className="mt-4 text-lg leading-8 text-slate-600">{body}</p>}
+    </div>
+  );
 }
 
-const FIBER_PLANS: PlanItem[] = [
-  // Home Plans
-  {
-    id: "home_bronze",
-    name: "Home Bronze",
-    speed: "10 Mbps",
-    price: 1500,
-    type: "home",
-    summary: "Ideal for basic browsing, social media, WhatsApp, Zoom calls, and standard streaming.",
-    features: [
-      "10 Mbps Truly Unlimited High-Speed",
-      "Connect 1 to 3 Devices Smoothly",
-      "Zero Data Caps & Zero FUP Throttling",
-      "Standard WiFi Router Included",
-      "99.9% Uptime SLA Commitment",
-      "Automated M-Pesa Instant Renewal",
-    ],
-  },
-  {
-    id: "home_silver",
-    name: "Home Silver",
-    speed: "20 Mbps",
-    price: 2500,
-    popular: true,
-    type: "home",
-    summary: "Our most popular home plan. Seamless 4K streaming, online gaming, and family use.",
-    features: [
-      "20 Mbps Symmetrical Throughput",
-      "Connect 4 to 8 Simultaneous Devices",
-      "FREE Professional Installation & Cabling",
-      "Dual-Band Gigabit Optical Router Included",
-      "Smooth 4K Ultra-HD Netflix & YouTube",
-      "24/7 Dedicated Technical Support",
-    ],
-  },
-  {
-    id: "home_gold",
-    name: "Home Gold",
-    speed: "50 Mbps",
-    price: 4000,
-    type: "home",
-    summary: "For power creators, heavy streamers, smart homes, and large residential estates.",
-    features: [
-      "50 Mbps Ultra-Fast Fiber Broadband",
-      "Connect 10+ Devices with Zero Congestion",
-      "FREE Next-Gen WiFi 6 Router Included",
-      "Zero-Lag Multi-Player Gaming",
-      "Direct Peering to Local Exchange (KIXP), Google & Netflix",
-      "Priority Installation Dispatch",
-    ],
-  },
-  {
-    id: "home_platinum",
-    name: "Home Platinum",
-    speed: "100 Mbps",
-    price: 6500,
-    type: "home",
-    summary: "Extreme residential gigabit performance for luxury homes and work-from-home villas.",
-    features: [
-      "100 Mbps Blazing High-Performance Fiber",
-      "Connect 20+ Devices with Zero Latency Spikes",
-      "FREE Mesh WiFi 6 Coverage Kit Included",
-      "Ultra-Low Latency to Global Cloud CDNs",
-      "VIP Dedicated Support Hotline",
-      "Free Static IP Address on Request",
-    ],
-  },
+function PrimaryButton({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <Link
+      href={href}
+      className="inline-flex items-center justify-center gap-2 rounded-md bg-blue-700 px-5 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-blue-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+    >
+      {children}
+    </Link>
+  );
+}
 
-  // Dedicated Business 1:1 Plans
-  {
-    id: "biz_pro",
-    name: "Business Pro",
-    speed: "50 Mbps (1:1)",
-    price: 9500,
-    type: "business",
-    summary: "Guaranteed 1:1 dedicated bandwidth for SMEs, branch offices, and clinics.",
-    features: [
-      "50 Mbps Dedicated Symmetrical Bandwidth (1:1)",
-      "1 Usable Public Static IPv4 Address",
-      "99.95% Enterprise SLA Guarantee",
-      "Enterprise Cloud Gateway Included",
-      "Direct Low Latency Peering",
-      "4-Hour MTTR Priority Field Dispatch",
-    ],
-  },
-  {
-    id: "biz_sme",
-    name: "Business SME",
-    speed: "100 Mbps (1:1)",
-    price: 15000,
-    popular: true,
-    type: "business",
-    summary: "Mission-critical connectivity for corporate headquarters, schools, and tech hubs.",
-    features: [
-      "100 Mbps Dedicated 1:1 Symmetrical",
-      "2 Usable Public Static IPv4 Addresses",
-      "Direct Peering to Safaricom, Liquid & KIXP",
-      "Dual-Path Redundant Fiber Uplink",
-      "24/7 Managed NOC Monitoring",
-      "2-Hour Rapid Field Response",
-    ],
-  },
-  {
-    id: "biz_enterprise",
-    name: "Business Enterprise",
-    speed: "250 Mbps (1:1)",
-    price: 28000,
-    type: "business",
-    summary: "Carrier-grade optical connectivity for financial fintechs, universities, and data centers.",
-    features: [
-      "250 Mbps Pure Fiber Dedicated Bandwidth",
-      "4 Usable Public Static IPv4 Addresses",
-      "10G SFP+ Optical Hand-off Directly in Rack",
-      "Custom BGP Autonomous System (AS) Peering",
-      "Named Dedicated Senior Network Engineer",
-      "99.99% Financial-Grade SLA",
-    ],
-  },
+function SecondaryButton({ href, children, external }: { href: string; children: ReactNode; external?: boolean }) {
+  const className =
+    "inline-flex items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-5 py-3 text-sm font-semibold text-slate-800 shadow-sm transition-colors hover:border-slate-400 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2";
+  return external ? (
+    <a href={href} target="_blank" rel="noopener noreferrer" className={className}>
+      {children}
+    </a>
+  ) : (
+    <a href={href} className={className}>
+      {children}
+    </a>
+  );
+}
 
-  // Ultra Fiber 1Gbps
-  {
-    id: "ultra_gigabit",
-    name: "Ultra Gigabit 1Gbps",
-    speed: "1,000 Mbps (1 Gbps)",
-    price: 45000,
-    popular: true,
-    type: "ultra",
-    summary: "Maximum performance for power users, campuses, regional POPs, and data centers.",
-    features: [
-      "Up to 1 Gbps Download & 500 Mbps Upload",
-      "Top-Tier Enterprise Equipment Included",
-      "Multiple Usable Static Public IPs",
-      "Redundant Dual-Path Backup Uplink",
-      "Custom Network Configuration & BGP Peering",
-      "Dedicated 24/7 Account & NOC Manager",
-    ],
-  },
-];
+function formatKes(amount: number): string {
+  return new Intl.NumberFormat("en-KE").format(amount);
+}
 
-const FAQS = [
-  {
-    q: "How fast can I get connected after ordering?",
-    a: "We offer 24-48 hour installation across all covered areas in Kenya. Once you confirm your location and complete your request, a certified optical fiber team is dispatched with all equipment.",
-  },
-  {
-    q: "Are the fiber internet packages truly unlimited?",
-    a: "Yes! All our home and business fiber plans come with 100% truly unlimited data. We do not enforce Fair Usage Policies (FUP), data caps, or speed reductions at any time of day or night.",
-  },
-  {
-    q: "Do you provide hardware and networking equipment?",
-    a: "Yes! We operate a complete networking hardware shop stocked with genuine MikroTik routers, Ubiquiti access points, switches, fiber cables, Mini DC UPS power backups, and CCTV cameras delivered nationwide across 47 counties.",
-  },
-  {
-    q: "What payment methods do you accept?",
-    a: "We support automated instant M-Pesa STK push, M-Pesa Paybill, and credit/debit cards. When your invoice is due, an M-Pesa prompt appears directly on your phone, and your service renews automatically within seconds.",
-  },
-  {
-    q: "Do you offer professional installation services?",
-    a: "Yes, our certified field engineers provide professional structured cabling, PPPoE configuration, hotspot setup, and optical fiber fusion splicing with neat rack cable management.",
-  },
-  {
-    q: "What areas do you cover?",
-    a: "We cover Nairobi (including Utawala, Dandora, Kilimani, Westlands, Eastlands, South B/C) and expanding networks in Kiambu, Ruiru, Thika, Machakos, Nakuru, Eldoret, and Mombasa.",
-  },
-];
+export function LandingClient({ initialContent }: { initialContent?: LandingContent }) {
+  const content = initialContent ?? DEFAULT_LANDING_CONTENT;
+  const { pricing, faqs, footer } = content;
+  const [annual, setAnnual] = useState(false);
+  const [openFaq, setOpenFaq] = useState<number | null>(0);
 
-export function LandingClient({ initialContent }: { initialContent?: unknown }) {
-  const { itemCount, addItem } = useCart();
-  const [isCartOpen, setIsCartOpen] = useState(false);
-  const [isRenewOpen, setIsRenewOpen] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [planTab, setPlanTab] = useState<"home" | "business" | "ultra">("home");
-  const [activeCategory, setActiveCategory] = useState<string>("all");
-  const [searchQuery, setSearchQuery] = useState<string>("");
-  const [activeFaq, setActiveFaq] = useState<number | null>(0);
+  const plans = [
+    { name: "Starter", audience: "For small ISPs", monthly: pricing.starterMonthly, yearly: pricing.starterAnnual },
+    { name: "Growth", audience: "For growing ISPs", monthly: pricing.growthMonthly, yearly: pricing.growthAnnual },
+    { name: "Enterprise", audience: "For larger ISPs", monthly: pricing.carrierMonthly, yearly: pricing.carrierAnnual },
+  ];
 
-  // Coverage search state
-  const [coverageSearch, setCoverageSearch] = useState("");
-
-  const filteredPlans = useMemo(
-    () => FIBER_PLANS.filter((p) => p.type === planTab),
-    [planTab]
+  // Derived from the configured prices rather than written as copy, so the toggle label can never
+  // promise a discount the numbers don't deliver (and disappears if annual isn't cheaper).
+  const annualSaving = Math.round(
+    Math.min(...plans.map((p) => (p.monthly > 0 ? (1 - p.yearly / p.monthly) * 100 : 0)))
   );
 
-  const filteredProducts = useMemo(() => {
-    let list = FALLBACK_PRODUCTS;
-    if (activeCategory !== "all") {
-      list = list.filter((p) => p.category === activeCategory);
-    }
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      list = list.filter(
-        (p) =>
-          p.name.toLowerCase().includes(q) ||
-          p.brand.toLowerCase().includes(q) ||
-          p.shortDescription.toLowerCase().includes(q) ||
-          p.specs.some((s) => s.toLowerCase().includes(q))
-      );
-    }
-    return list;
-  }, [activeCategory, searchQuery]);
-
-  const handleCoverageCheck = (e: React.FormEvent) => {
-    e.preventDefault();
-    const query = coverageSearch.trim();
-    const message = query
-      ? `Hello MashupHost, I want to check fiber internet coverage for my area: ${encodeURIComponent(query)}`
-      : "Hello MashupHost, I would like to check fiber internet coverage for my location.";
-    window.open(`https://wa.me/254703605266?text=${message}`, "_blank");
-  };
-
-  const handleOrderPlan = (plan: PlanItem) => {
-    addItem(
-      {
-        id: `plan_${plan.id}`,
-        name: `${plan.name} (${plan.speed}) - Monthly Fiber Subscription`,
-        slug: plan.id,
-        brand: "MashupHost Fiber",
-        category: "fiber",
-        price: plan.price,
-        stock: 999,
-        inStock: true,
-        rating: 5.0,
-        reviewCount: 92,
-        shortDescription: plan.summary,
-        description: plan.summary,
-        imageUrl: "/fiber-home.jpg",
-        specs: plan.features,
-        warranty: "99.9% SLA Guarantee",
-        featured: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      },
-      1
-    );
-    setIsCartOpen(true);
-  };
+  const salesLink = whatsappLink("Hello MashupHost, I'd like to talk to sales about the ISP platform.");
 
   return (
-    <div className="min-h-screen bg-[#060A12] text-slate-100 font-sans selection:bg-amber-400 selection:text-slate-950 overflow-x-hidden">
-      {/* 1. TOP ANNOUNCEMENT BAR */}
-      <div className="bg-gradient-to-r from-amber-950/60 via-slate-900 to-amber-950/60 border-b border-amber-500/20 py-2 px-4 text-center text-xs font-medium text-slate-300">
-        <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
-          <div className="flex items-center gap-2">
-            <span className="flex h-2 w-2 relative">
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-            </span>
-            <span className="text-[11px] font-mono text-emerald-400 font-bold">
-              High-Speed Optical Fiber &amp; Genuine Hardware Across Kenya
-            </span>
-          </div>
+    <div className="force-light min-h-screen bg-white text-slate-900 antialiased selection:bg-blue-100 selection:text-blue-950">
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-3 focus:z-[60] focus:rounded-md focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:shadow"
+      >
+        Skip to content
+      </a>
+      <SiteHeader />
 
-          <div className="hidden md:flex items-center gap-2 text-slate-300 text-xs">
-            <span className="text-amber-400 font-bold">Special Offer:</span>
-            <span>Free Installation &amp; Dual-Band Router on select packages</span>
-          </div>
-
-          <a
-            href="https://wa.me/254703605266?text=Hello%20MashupHost%2C%20I%20want%20to%20order%20internet%20packages%20or%20hardware"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-amber-400 hover:text-amber-300 font-bold text-xs flex items-center gap-1.5 ml-auto sm:ml-0"
-          >
-            <IconWhatsApp size={13} className="text-[#25D366]" />
-            <span>WhatsApp 24/7: +254 703 605 266</span>
-            <span>&rarr;</span>
-          </a>
-        </div>
-      </div>
-
-      {/* 2. STICKY MODERN HEADER */}
-      <header className="sticky top-0 z-40 backdrop-blur-xl bg-[#060A12]/95 border-b border-slate-800/80 transition-all shadow-xl">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 min-h-[4.5rem] flex items-center justify-between gap-4">
-          {/* Brand Logo */}
-          <Link href="/" className="flex items-center gap-3 group">
-            <div className="relative h-10 w-10 rounded-xl overflow-hidden shadow-lg shadow-amber-500/10 border border-amber-500/40 group-hover:scale-105 transition-transform">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/logo.jpg" alt="MashupHost Logo" className="h-full w-full object-cover" />
+      <main id="main">
+        {/* ------------------------------------------------------------------ HERO */}
+        <section className="relative overflow-hidden border-b border-slate-200">
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,#f1f5f9_1px,transparent_1px),linear-gradient(to_bottom,#f1f5f9_1px,transparent_1px)] bg-[size:48px_48px] [mask-image:linear-gradient(to_bottom,black,transparent_75%)]"
+          />
+          <div className="relative mx-auto grid max-w-7xl items-center gap-12 px-4 pt-14 pb-16 sm:px-6 sm:pt-20 sm:pb-24 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-14 lg:px-8">
+            <div className="max-w-xl">
+              <p className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 shadow-sm">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
+                All-in-one ISP Management Platform
+              </p>
+              <h1 className="mt-6 text-[2.75rem] font-semibold leading-[1.02] tracking-[-0.04em] text-slate-950 sm:text-6xl lg:text-[4.25rem]">
+                Run Your ISP
+                <br />
+                <span className="text-blue-700">Smarter.</span>
+              </h1>
+              <p className="mt-6 text-lg leading-8 text-slate-600">
+                Manage subscribers, automate billing, collect <span className="font-medium text-slate-900">M-Pesa</span> payments, and control
+                your network — all from one powerful platform.
+              </p>
+              <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                <PrimaryButton href="/register">
+                  Get Started <IconArrowRight size={16} />
+                </PrimaryButton>
+                <SecondaryButton href="#product">
+                  View Demo <IconArrowRight size={16} />
+                </SecondaryButton>
+              </div>
+              <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-600">
+                {["Easy Setup", "No Long Contracts", "Kenya Support"].map((item) => (
+                  <li key={item} className="flex items-center gap-2">
+                    <IconCheck size={16} className="text-emerald-600" aria-hidden="true" />
+                    {item}
+                  </li>
+                ))}
+              </ul>
             </div>
+
+            <div className="min-w-0 lg:-mr-8 xl:-mr-16">
+              <DashboardOverviewPreview />
+            </div>
+          </div>
+        </section>
+
+        {/* ---------------------------------------------------------- INTEGRATIONS */}
+        <section id="integrations" aria-labelledby="integrations-title" className="scroll-mt-20 border-b border-slate-200 bg-slate-50/60">
+          <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
+            <h2 id="integrations-title" className="text-center text-sm font-medium text-slate-500">
+              Built for modern ISPs — works with
+            </h2>
+            <ul className="mt-8 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-slate-200 bg-slate-200 sm:grid-cols-3 lg:grid-cols-5">
+              {INTEGRATIONS.map((item) => (
+                <li key={item.name} className="flex flex-col items-center justify-center bg-white px-4 py-6 text-center last:col-span-2 sm:last:col-span-1">
+                  <span className={`text-lg font-semibold tracking-tight ${item.accent ? "text-emerald-700" : "text-slate-900"}`}>
+                    {item.name}
+                  </span>
+                  <span className="mt-1 text-xs text-slate-500">{item.note}</span>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-6 text-center text-sm text-slate-500">
+              Also connects with {MORE_INTEGRATIONS.slice(0, -1).join(", ")} and {MORE_INTEGRATIONS[MORE_INTEGRATIONS.length - 1]}.
+            </p>
+          </div>
+        </section>
+
+        {/* -------------------------------------------------------------- FEATURES */}
+        <section id="features" aria-labelledby="features-title" className="scroll-mt-20">
+          <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 sm:py-28 lg:px-8">
+            <SectionHeading
+              id="features-title"
+              eyebrow="Features"
+              title="Everything You Need to Run and Grow Your ISP"
+              body="The billing, payments and network tools a Kenyan ISP uses every day — connected, so nothing is re-typed."
+            />
+            <ul className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {FEATURES.map(({ title, body, icon: FeatureIcon, mpesa }) => (
+                <li
+                  key={title}
+                  className="group rounded-lg border border-slate-200 bg-white p-6 transition-[border-color,box-shadow] duration-200 hover:border-slate-300 hover:shadow-[0_8px_24px_-12px_rgba(15,23,42,0.18)]"
+                >
+                  <span
+                    className={`grid h-10 w-10 place-items-center rounded-md border ${
+                      mpesa ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-blue-100 bg-blue-50 text-blue-700"
+                    }`}
+                  >
+                    <FeatureIcon size={20} aria-hidden="true" />
+                  </span>
+                  <h3 className="mt-5 text-base font-semibold text-slate-950">{title}</h3>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">{body}</p>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </section>
+
+        {/* -------------------------------------------------------------- SHOWCASE */}
+        <section id="product" aria-labelledby="product-title" className="scroll-mt-20 border-y border-slate-200 bg-slate-50">
+          <div className="mx-auto grid max-w-7xl items-center gap-12 px-4 py-20 sm:px-6 sm:py-28 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-16 lg:px-8">
             <div>
-              <span className="text-xl font-black tracking-tight text-white group-hover:text-amber-400 transition-colors">
-                MASHUP<span className="text-amber-400">HOST</span>
-              </span>
-              <span className="hidden sm:block text-[10px] font-mono tracking-widest text-slate-400 uppercase font-semibold">
-                High-Speed Telecom &amp; Hardware
-              </span>
-            </div>
-          </Link>
-
-          {/* Desktop Navigation Links */}
-          <nav className="hidden xl:flex items-center gap-6 text-[11px] font-bold text-slate-300 tracking-wide uppercase">
-            <a href="#packages" className="hover:text-amber-400 transition-colors">Internet Packages</a>
-            <a href="#hardware" className="hover:text-amber-400 transition-colors flex items-center gap-1.5">
-              <span>Hardware Store</span>
-              <span className="px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[9px] font-mono font-bold">35+</span>
-            </a>
-            <a href="#solutions" className="hover:text-amber-400 transition-colors">Solutions</a>
-            <a href="#coverage" className="hover:text-amber-400 transition-colors">Coverage</a>
-            <a href="#faq" className="hover:text-amber-400 transition-colors">FAQ</a>
-            <Link href="/track" className="hover:text-cyan-300 transition-colors text-amber-400 flex items-center gap-1">
-              <span>📍</span>
-              <span>Track Order</span>
-            </Link>
-          </nav>
-
-          {/* Header Action Buttons */}
-          <div className="flex items-center gap-2 sm:gap-2.5">
-            {/* Quick Renew / Lipa Internet Button */}
-            <button
-              type="button"
-              onClick={() => setIsRenewOpen(true)}
-              className="px-2.5 sm:px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-500/20 via-teal-500/20 to-emerald-500/10 hover:from-emerald-500/30 hover:to-teal-500/30 border border-emerald-500/40 text-emerald-300 text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm active:scale-95"
-              title="Quick Renew Monthly Internet via M-Pesa"
-            >
-              <IconMpesa size={15} />
-              <span className="hidden sm:inline font-bold">Lipa Internet</span>
-              <span className="sm:hidden font-bold">Renew</span>
-            </button>
-
-            {/* Cart Trigger */}
-            <button
-              onClick={() => setIsCartOpen(true)}
-              aria-label="View shopping cart"
-              className="relative p-2.5 rounded-xl bg-slate-900 border border-slate-700 hover:border-amber-400 text-slate-200 hover:text-white transition-all active:scale-95 shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
-              title="View Cart"
-            >
-              <IconPackage size={17} />
-              {itemCount > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 h-5 w-5 rounded-full bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 font-black text-[10px] flex items-center justify-center shadow-lg">
-                  {itemCount}
-                </span>
-              )}
-            </button>
-
-            {/* Client Portal Button */}
-            <Link
-              href="/app"
-              className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-700 hover:border-amber-400/50 text-xs font-bold text-slate-200 hover:text-white transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
-            >
-              <IconUser size={15} />
-              <span>Portal</span>
-            </Link>
-
-            {/* WhatsApp Quick Action */}
-            <a
-              href="https://wa.me/254703605266?text=Hello%20MashupHost%2C%20I%20want%20to%20get%20connected%20to%20Fiber"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hidden lg:inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#25D366]/10 hover:bg-[#25D366]/20 border border-[#25D366]/30 text-emerald-300 text-xs font-bold transition-all"
-            >
-              <IconWhatsApp size={15} className="text-[#25D366]" />
-              <span>Chat on WhatsApp</span>
-            </a>
-
-            {/* Mobile Hamburger Toggle */}
-            <button
-              onClick={() => setIsMobileMenuOpen((prev) => !prev)}
-              aria-label="Toggle navigation menu"
-              className="xl:hidden p-2.5 rounded-xl bg-slate-900 border border-slate-700 hover:border-amber-400 text-slate-200 hover:text-white transition-all"
-            >
-              {isMobileMenuOpen ? <IconClose size={18} /> : <IconMenu size={18} />}
-            </button>
-          </div>
-        </div>
-
-        {/* Mobile Navigation Drawer */}
-        {isMobileMenuOpen && (
-          <div className="xl:hidden border-t border-slate-800 bg-[#060A12]/98 backdrop-blur-2xl px-5 py-6 space-y-5">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-              <span className="text-xs font-mono text-emerald-400 font-bold flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                MashupHost Kenya
-              </span>
-              <span className="text-[11px] text-slate-400 font-mono">Nairobi &bull; Nationwide</span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 text-xs font-bold">
-              <a
-                href="#packages"
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 hover:border-amber-400 text-white flex items-center gap-2"
-              >
-                <span>📦</span>
-                <span>Packages</span>
-              </a>
-              <a
-                href="#hardware"
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 hover:border-amber-400 text-cyan-400 flex items-center gap-2"
-              >
-                <span>🛒</span>
-                <span>Hardware (35+)</span>
-              </a>
-              <a
-                href="#solutions"
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 hover:border-amber-400 text-white flex items-center gap-2"
-              >
-                <span>⚡</span>
-                <span>Solutions</span>
-              </a>
-              <a
-                href="#coverage"
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 hover:border-amber-400 text-emerald-400 flex items-center gap-2"
-              >
-                <span>🗺️</span>
-                <span>Coverage</span>
-              </a>
-              <a
-                href="#faq"
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 hover:border-amber-400 text-white flex items-center gap-2"
-              >
-                <span>❓</span>
-                <span>FAQ</span>
-              </a>
-              <Link
-                href="/track"
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 hover:border-amber-400 text-cyan-300 flex items-center gap-2"
-              >
-                <span>📍</span>
-                <span>Track Order</span>
-              </Link>
-            </div>
-
-            <div className="pt-2 flex flex-col gap-2">
-              {/* Lipa Internet Quick Renew Mobile Trigger */}
-              <button
-                type="button"
-                onClick={() => {
-                  setIsMobileMenuOpen(false);
-                  setIsRenewOpen(true);
-                }}
-                className="w-full py-3 rounded-xl bg-gradient-to-r from-emerald-500/20 to-teal-500/20 border border-emerald-500/40 hover:border-emerald-400 text-emerald-300 font-bold text-xs flex items-center justify-center gap-2 transition-all shadow-md"
-              >
-                <IconMpesa size={16} />
-                <span>Lipa Internet &bull; Quick Renew (10s)</span>
-              </button>
-
-              <a
-                href="https://wa.me/254703605266?text=Hello%20MashupHost%2C%20I%20want%20to%20get%20connected%20to%20Fiber"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full py-3.5 rounded-xl bg-[#25D366] hover:bg-[#20bd5a] text-white font-black text-xs uppercase tracking-wide text-center flex items-center justify-center gap-2 shadow-lg"
-              >
-                <IconWhatsApp size={18} className="text-white" />
-                <span>Chat on WhatsApp (+254 703 605 266)</span>
-              </a>
-              <div className="grid grid-cols-2 gap-2">
-                <Link
-                  href="/app"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                  className="py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-center text-xs font-bold text-white flex items-center justify-center gap-1.5"
-                >
-                  <IconUser size={14} />
-                  <span>Customer Portal</span>
+              <SectionHeading
+                id="product-title"
+                eyebrow="The platform"
+                title="A Complete ISP Management Solution"
+                body="From subscriber management to payments and reporting, MashupHost gives you full control of your ISP business."
+              />
+              <ul className="mt-8 space-y-3.5">
+                {SHOWCASE_POINTS.map((point) => (
+                  <li key={point} className="flex gap-3 text-[15px] text-slate-700">
+                    <IconCheck size={18} className="mt-0.5 shrink-0 text-emerald-600" aria-hidden="true" />
+                    {point}
+                  </li>
+                ))}
+              </ul>
+              <div className="mt-10">
+                <Link href="/register" className="inline-flex items-center gap-1.5 text-sm font-semibold text-blue-700 hover:text-blue-800">
+                  Create your workspace <IconArrowRight size={16} />
                 </Link>
-                <button
-                  onClick={() => {
-                    setIsMobileMenuOpen(false);
-                    setIsCartOpen(true);
-                  }}
-                  className="py-2.5 rounded-xl bg-slate-900 border border-slate-700 text-center text-xs font-bold text-amber-400 flex items-center justify-center gap-1.5"
-                >
-                  <IconPackage size={14} />
-                  <span>Cart ({itemCount})</span>
-                </button>
               </div>
+            </div>
+            <div className="min-w-0">
+              <DashboardCustomersPreview />
             </div>
           </div>
-        )}
-      </header>
+        </section>
 
-      {/* 3. HERO SECTION */}
-      <section id="hero" className="relative pt-12 pb-16 md:pt-20 md:pb-24 overflow-hidden">
-        {/* Ambient Gradient Glows */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-96 bg-amber-500/10 blur-[130px] pointer-events-none" />
-        <div className="absolute top-40 right-10 w-80 h-80 bg-cyan-500/10 blur-[120px] pointer-events-none" />
-
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
-          <div className="max-w-3xl space-y-6 text-left">
-            {/* Real Status Badge */}
-            <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-mono font-bold uppercase tracking-wider">
-              <span className="h-2 w-2 rounded-full bg-emerald-400" />
-              <span>Optical Fiber Broadband &bull; Kenya</span>
-            </div>
-
-            {/* Main Headline */}
-            <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black text-white tracking-tight leading-[1.05]">
-              The Future of{" "}
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-cyan-400 to-emerald-400">
-                Connectivity
-              </span>
-            </h1>
-
-            {/* Clear Genuine Subtitle */}
-            <p className="text-base sm:text-xl text-slate-300 max-w-2xl leading-relaxed">
-              Ultra-fast fiber internet, enterprise networking hardware, and professional cabling solutions powering modern Kenyan homes and businesses with zero throttling.
-            </p>
-
-            {/* Real Action Buttons */}
-            <div className="flex flex-wrap items-center gap-3.5 pt-2">
-              <a
-                href="#packages"
-                className="px-7 py-4 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs sm:text-sm tracking-wide uppercase shadow-xl shadow-amber-500/25 transition-all flex items-center gap-2 active:scale-95"
-              >
-                <span>View Internet Packages</span>
-                <IconArrowRight size={16} />
-              </a>
-              <a
-                href="#hardware"
-                className="px-7 py-4 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-700 hover:border-amber-400 text-white font-bold text-xs sm:text-sm tracking-wide transition-all flex items-center gap-2 shadow-lg"
-              >
-                <IconPackage size={16} className="text-cyan-400" />
-                <span>Hardware Store</span>
-              </a>
-              <a
-                href="https://wa.me/254703605266?text=Hello%20MashupHost%2C%20I%20want%20to%20get%20connected%20to%20Fiber"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="px-6 py-4 rounded-xl bg-[#25D366]/10 hover:bg-[#25D366]/20 border border-[#25D366]/40 text-emerald-300 font-bold text-xs sm:text-sm transition-all flex items-center gap-2"
-              >
-                <IconWhatsApp size={17} className="text-[#25D366]" />
-                <span>WhatsApp Us</span>
-              </a>
-            </div>
-
-            {/* Real Service Guarantees (Replacing fake 50Gbps vanity numbers) */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-8 border-t border-slate-800/80 text-left">
-              <div className="space-y-1">
-                <span className="text-amber-400 font-mono font-bold text-sm block">100% Truly Unlimited</span>
-                <span className="text-xs text-slate-400 block">Zero data caps or FUP throttling</span>
-              </div>
-              <div className="space-y-1">
-                <span className="text-emerald-400 font-mono font-bold text-sm block">Instant M-Pesa</span>
-                <span className="text-xs text-slate-400 block">Automated renewal in seconds</span>
-              </div>
-              <div className="space-y-1">
-                <span className="text-cyan-300 font-mono font-bold text-sm block">Router Included</span>
-                <span className="text-xs text-slate-400 block">Dual-Band Gigabit equipment</span>
-              </div>
-              <div className="space-y-1">
-                <span className="text-white font-mono font-bold text-sm block">24-48h Setup</span>
-                <span className="text-xs text-slate-400 block">Professional optical splicing</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 4. TRUST BADGES ROW */}
-      <section className="border-y border-slate-800/80 bg-[#090D16] py-6">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-6 text-center sm:text-left">
-            {/* Badge 1 */}
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 text-lg shrink-0">
-                <IconLock size={18} />
-              </div>
-              <div>
-                <h4 className="text-xs font-black text-white">Secure Payments</h4>
-                <p className="text-[11px] text-slate-400">M-Pesa STK &amp; Paybill</p>
-              </div>
-            </div>
-
-            {/* Badge 2 */}
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/20 flex items-center justify-center text-cyan-400 text-lg shrink-0">
-                <IconShield size={18} />
-              </div>
-              <div>
-                <h4 className="text-xs font-black text-white">Genuine Hardware</h4>
-                <p className="text-[11px] text-slate-400">MikroTik &amp; Ubiquiti</p>
-              </div>
-            </div>
-
-            {/* Badge 3 */}
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 text-lg shrink-0">
-                <IconPackage size={18} />
-              </div>
-              <div>
-                <h4 className="text-xs font-black text-white">Fast Dispatch</h4>
-                <p className="text-[11px] text-slate-400">Nairobi &amp; 47 Counties</p>
-              </div>
-            </div>
-
-            {/* Badge 4 */}
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-yellow-500/10 border border-yellow-500/20 flex items-center justify-center text-yellow-400 text-lg shrink-0">
-                <IconLifeBuoy size={18} />
-              </div>
-              <div>
-                <h4 className="text-xs font-black text-white">24/7 Support</h4>
-                <p className="text-[11px] text-slate-400">Direct on WhatsApp</p>
-              </div>
-            </div>
-
-            {/* Badge 5 */}
-            <div className="flex items-center gap-3 col-span-2 sm:col-span-1">
-              <div className="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center text-sky-400 text-lg shrink-0">
-                <IconRouter size={18} />
-              </div>
-              <div>
-                <h4 className="text-xs font-black text-white">Clean Installation</h4>
-                <p className="text-[11px] text-slate-400">Structured Cabling</p>
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 5. WHAT WE OFFER */}
-      <section id="solutions" className="py-20 bg-[#060A12] relative">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
-          <div className="text-center max-w-3xl mx-auto space-y-3">
-            <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-mono font-bold uppercase">
-              <span>What We Offer</span>
-            </div>
-            <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight">
-              Complete Connectivity Solutions
-            </h2>
-            <p className="text-sm sm:text-base text-slate-300">
-              Everything you need to connect your home, business, or estate with reliable high-speed infrastructure.
-            </p>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {/* Card 1 */}
-            <div className="rounded-3xl bg-slate-950 p-6 border border-slate-800 hover:border-amber-400/50 transition-all space-y-4 shadow-xl group">
-              <div className="w-12 h-12 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 group-hover:scale-110 transition-transform">
-                <IconSpeed size={22} />
-              </div>
-              <h3 className="text-lg font-black text-white">High-Speed Fiber</h3>
-              <p className="text-xs text-slate-300 leading-relaxed">
-                Dedicated optical fiber connections up to 1Gbps for residences, estates, and business premises.
-              </p>
-              <a href="#packages" className="text-xs font-bold text-amber-400 hover:text-amber-300 inline-flex items-center gap-1">
-                <span>View Plans</span>
-                <span>&rarr;</span>
-              </a>
-            </div>
-
-            {/* Card 2 */}
-            <div className="rounded-3xl bg-slate-950 p-6 border border-slate-800 hover:border-cyan-400/50 transition-all space-y-4 shadow-xl group">
-              <div className="w-12 h-12 rounded-2xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 group-hover:scale-110 transition-transform">
-                <IconPackage size={22} />
-              </div>
-              <h3 className="text-lg font-black text-white">Hardware Store</h3>
-              <p className="text-xs text-slate-300 leading-relaxed">
-                Authentic MikroTik routers, switches, fiber patch cords, and accessories delivered nationwide.
-              </p>
-              <a href="#hardware" className="text-xs font-bold text-cyan-400 hover:text-cyan-300 inline-flex items-center gap-1">
-                <span>Browse Store</span>
-                <span>&rarr;</span>
-              </a>
-            </div>
-
-            {/* Card 3 */}
-            <div className="rounded-3xl bg-slate-950 p-6 border border-slate-800 hover:border-emerald-400/50 transition-all space-y-4 shadow-xl group">
-              <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 group-hover:scale-110 transition-transform">
-                <IconRouter size={22} />
-              </div>
-              <h3 className="text-lg font-black text-white">Network Engineering</h3>
-              <p className="text-xs text-slate-300 leading-relaxed">
-                Structured cabling, hotspot configuration, optical fusion splicing, and neat rack management.
-              </p>
-              <a
-                href="https://wa.me/254703605266?text=Hello%20MashupHost%2C%20I%20need%20Network%20Engineering%20Solutions"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-xs font-bold text-emerald-400 hover:text-emerald-300 inline-flex items-center gap-1"
-              >
-                <span>Talk to Engineer</span>
-                <span>&rarr;</span>
-              </a>
-            </div>
-
-            {/* Card 4 */}
-            <div className="rounded-3xl bg-slate-950 p-6 border border-slate-800 hover:border-yellow-400/50 transition-all space-y-4 shadow-xl group">
-              <div className="w-12 h-12 rounded-2xl bg-yellow-500/10 border border-yellow-500/30 flex items-center justify-center text-yellow-400 group-hover:scale-110 transition-transform">
-                <IconPulse size={22} />
-              </div>
-              <h3 className="text-lg font-black text-white">Power Backups</h3>
-              <p className="text-xs text-slate-300 leading-relaxed">
-                Mini DC UPS units to keep your optical router and CCTV online during power outages.
-              </p>
-              <a href="#hardware" className="text-xs font-bold text-yellow-400 hover:text-yellow-300 inline-flex items-center gap-1">
-                <span>View Mini UPS</span>
-                <span>&rarr;</span>
-              </a>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* 6. PACKAGES & PRICING */}
-      <section id="packages" className="py-20 bg-[#060A12] relative border-t border-slate-800/80">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
-          <div className="text-center max-w-3xl mx-auto space-y-3">
-            <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-mono font-bold uppercase">
-              <span>Transparent Pricing</span>
-            </div>
-            <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight">
-              High-Speed Internet Packages
-            </h2>
-            <p className="text-sm sm:text-base text-slate-300">
-              100% truly unlimited fiber internet with zero data caps, free router installation, and instant M-Pesa renewal.
-            </p>
-
-            {/* Quick Renew Callout Banner */}
-            <div className="max-w-3xl mx-auto rounded-2xl bg-gradient-to-r from-emerald-950/50 via-slate-900 to-emerald-950/50 border border-emerald-500/30 p-4 sm:p-5 flex flex-col sm:flex-row items-center justify-between gap-4 shadow-xl text-left mt-3">
-              <div className="flex items-center gap-3.5">
-                <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shrink-0">
-                  <IconMpesa size={20} />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-black text-white">Already Connected? Quick Renew Monthly Internet</h3>
-                    <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-mono font-bold uppercase">
-                      10s M-Pesa
-                    </span>
+        {/* ---------------------------------------------------------- HOW IT WORKS */}
+        <section aria-labelledby="how-title">
+          <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 sm:py-28 lg:px-8">
+            <SectionHeading id="how-title" eyebrow="How it works" title="Live in five steps" align="center" />
+            <ol className="relative mt-14 grid gap-0 lg:grid-cols-5 lg:gap-6">
+              {STEPS.map((step, i) => (
+                <li key={step.title} className="relative flex gap-5 pb-10 last:pb-0 lg:block lg:pb-0">
+                  {/* Connector: vertical on mobile, horizontal on desktop */}
+                  {i < STEPS.length - 1 && (
+                    <>
+                      <span aria-hidden="true" className="absolute left-5 top-11 bottom-1 w-px bg-slate-200 lg:hidden" />
+                      <span aria-hidden="true" className="absolute left-14 right-0 top-5 hidden h-px bg-slate-200 lg:block" />
+                    </>
+                  )}
+                  <span className="relative z-10 grid h-10 w-10 shrink-0 place-items-center rounded-full border border-slate-300 bg-white text-sm font-semibold tabular-nums text-slate-900">
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  <div className="pt-1.5 lg:pt-0">
+                    <h3 className="text-base font-semibold text-slate-950 lg:mt-5">{step.title}</h3>
+                    <p className="mt-1.5 text-sm leading-6 text-slate-600">{step.body}</p>
                   </div>
-                  <p className="text-xs text-slate-300 mt-0.5">
-                    Enter your Account Number (e.g. <span className="font-mono text-amber-400 font-bold">ACC-88921</span>) to renew service instantly without logging in.
+                </li>
+              ))}
+            </ol>
+          </div>
+        </section>
+
+        {/* --------------------------------------------------------------- PRICING */}
+        <section id="pricing" aria-labelledby="pricing-title" className="scroll-mt-20 border-y border-slate-200 bg-slate-50">
+          <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 sm:py-28 lg:px-8">
+            <div className="flex flex-col items-start justify-between gap-8 md:flex-row md:items-end">
+              <SectionHeading
+                id="pricing-title"
+                eyebrow="Pricing"
+                title="Simple, Transparent Pricing"
+                body="Choose a plan that fits your ISP business."
+              />
+              <div role="group" aria-label="Billing period" className="inline-flex shrink-0 rounded-md border border-slate-300 bg-white p-1">
+                {[
+                  { label: "Monthly", value: false },
+                  { label: annualSaving > 0 ? `Annual · save ${annualSaving}%` : "Annual", value: true },
+                ].map((opt) => (
+                  <button
+                    key={opt.label}
+                    type="button"
+                    onClick={() => setAnnual(opt.value)}
+                    aria-pressed={annual === opt.value}
+                    className={`rounded px-3.5 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 ${
+                      annual === opt.value ? "bg-slate-900 text-white" : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <ul className="mt-12 grid gap-4 lg:grid-cols-3">
+              {plans.map((plan) => {
+                const featured = plan.name === FEATURED_PLAN;
+                const isEnterprise = plan.name === "Enterprise";
+                return (
+                  <li
+                    key={plan.name}
+                    className={`flex flex-col rounded-lg border bg-white p-7 ${
+                      featured ? "border-blue-700 shadow-[0_0_0_1px_rgb(29,78,216)]" : "border-slate-200"
+                    }`}
+                  >
+                    <h3 className="text-lg font-semibold text-slate-950">{plan.name}</h3>
+                    <p className="mt-1 text-sm text-slate-500">{plan.audience}</p>
+                    <p className="mt-7 flex items-baseline gap-1.5">
+                      <span className="text-sm font-medium text-slate-500">KES</span>
+                      <span className="text-4xl font-semibold tabular-nums tracking-tight text-slate-950">
+                        {formatKes(annual ? plan.yearly : plan.monthly)}
+                      </span>
+                      <span className="text-sm text-slate-500">/ month</span>
+                    </p>
+                    <p className="mt-1.5 text-xs text-slate-500">
+                      {annual ? `Billed annually · KES ${formatKes(plan.yearly * 12)} per year` : "Billed monthly"}
+                    </p>
+                    <div className="mt-7">
+                      {isEnterprise ? (
+                        <a
+                          href={salesLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="block rounded-md border border-slate-300 px-4 py-2.5 text-center text-sm font-semibold text-slate-800 transition-colors hover:border-slate-400 hover:bg-slate-50"
+                        >
+                          Contact Sales
+                        </a>
+                      ) : (
+                        <Link
+                          href="/register"
+                          className={`block rounded-md px-4 py-2.5 text-center text-sm font-semibold transition-colors ${
+                            featured
+                              ? "bg-blue-700 text-white hover:bg-blue-800"
+                              : "border border-slate-300 text-slate-800 hover:border-slate-400 hover:bg-slate-50"
+                          }`}
+                        >
+                          Get Started
+                        </Link>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+
+            <div className="mt-6 rounded-lg border border-slate-200 bg-white p-7">
+              <div className="flex flex-col gap-6 lg:flex-row lg:gap-12">
+                <div className="lg:w-64 lg:shrink-0">
+                  <h3 className="text-base font-semibold text-slate-950">Included in every plan</h3>
+                  <p className="mt-1.5 text-sm leading-6 text-slate-600">
+                    No per-router licence fees. Plans are sized to your network — ask us if you&apos;re unsure which fits.
                   </p>
                 </div>
+                <ul className="grid flex-1 gap-x-8 gap-y-3 sm:grid-cols-2">
+                  {PLAN_INCLUDES.map((item) => (
+                    <li key={item} className="flex gap-2.5 text-sm text-slate-700">
+                      <IconCheck size={17} className="mt-0.5 shrink-0 text-emerald-600" aria-hidden="true" />
+                      {item}
+                    </li>
+                  ))}
+                </ul>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsRenewOpen(true)}
-                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs uppercase tracking-wider transition-all shadow-md shrink-0 flex items-center gap-1.5 active:scale-95"
-              >
-                <IconMpesa size={14} />
-                <span>Lipa Internet Now</span>
-              </button>
-            </div>
-
-            {/* Tab Controls */}
-            <div className="inline-flex p-1.5 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl mt-4">
-              <button
-                type="button"
-                onClick={() => setPlanTab("home")}
-                className={`px-5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
-                  planTab === "home"
-                    ? "bg-amber-400 text-slate-950 font-black shadow-md"
-                    : "text-slate-400 hover:text-white"
-                }`}
-              >
-                Home Fiber
-              </button>
-              <button
-                type="button"
-                onClick={() => setPlanTab("business")}
-                className={`px-5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
-                  planTab === "business"
-                    ? "bg-amber-400 text-slate-950 font-black shadow-md"
-                    : "text-slate-400 hover:text-white"
-                }`}
-              >
-                Dedicated Business (1:1)
-              </button>
-              <button
-                type="button"
-                onClick={() => setPlanTab("ultra")}
-                className={`px-5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all ${
-                  planTab === "ultra"
-                    ? "bg-amber-400 text-slate-950 font-black shadow-md"
-                    : "text-slate-400 hover:text-white"
-                }`}
-              >
-                Ultra Gigabit (1Gbps)
-              </button>
             </div>
           </div>
+        </section>
 
-          {/* Pricing Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredPlans.map((plan) => (
-              <div
-                key={plan.id}
-                className={`relative rounded-3xl p-6 transition-all duration-300 flex flex-col justify-between shadow-xl ${
-                  plan.popular
-                    ? "bg-gradient-to-b from-slate-900 to-slate-950 border-2 border-amber-400/80 shadow-amber-500/10"
-                    : "bg-slate-950 border border-slate-800 hover:border-slate-700"
-                }`}
-              >
-                {plan.popular && (
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-3.5 py-0.5 rounded-full bg-gradient-to-r from-amber-500 to-yellow-400 text-slate-950 font-black text-[10px] tracking-wider uppercase shadow-md">
-                    Most Popular
-                  </div>
-                )}
-
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="text-lg font-black text-white">{plan.name}</h3>
-                    <p className="text-xs text-slate-400 mt-1 min-h-[2rem] leading-relaxed">{plan.summary}</p>
-                  </div>
-
-                  <div className="p-3 rounded-2xl bg-slate-900/80 border border-slate-800 flex items-baseline justify-between">
-                    <div>
-                      <span className="text-xs font-bold text-slate-400 font-mono">KES</span>
-                      <span className="text-2xl font-black text-white font-mono ml-1">
-                        {plan.price.toLocaleString()}
-                      </span>
-                    </div>
-                    <span className="text-xs font-mono font-bold text-amber-400">{plan.speed}</span>
-                  </div>
-
-                  <ul className="space-y-2.5 text-xs text-slate-300 pt-2 border-t border-slate-800/80">
-                    {plan.features.map((feat, idx) => (
-                      <li key={idx} className="flex items-start gap-2">
-                        <span className="text-emerald-400 shrink-0 mt-0.5">
-                          <IconCheck size={14} />
-                        </span>
-                        <span>{feat}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-
-                <div className="pt-6 space-y-2">
-                  <button
-                    type="button"
-                    onClick={() => handleOrderPlan(plan)}
-                    className="w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs uppercase tracking-wider transition-all shadow-md active:scale-95 flex items-center justify-center gap-2"
-                  >
-                    <IconMpesa size={16} />
-                    <span>Order with M-Pesa</span>
-                  </button>
-                  <a
-                    href={`https://wa.me/254703605266?text=Hello%20MashupHost%2C%20I%20want%20to%20order%20the%20${encodeURIComponent(
-                      plan.name
-                    )}%20(${plan.speed})%20package`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-center text-xs font-bold text-emerald-400 flex items-center justify-center gap-1.5 transition-colors"
-                  >
-                    <IconWhatsApp size={14} className="text-[#25D366]" />
-                    <span>Inquire on WhatsApp</span>
-                  </a>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* 7. HARDWARE STORE */}
-      <section id="hardware" className="py-20 bg-[#090D16] border-t border-slate-800/80 relative">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-10">
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-6">
-            <div className="space-y-3 max-w-2xl">
-              <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs font-mono font-bold uppercase">
-                <span>Enterprise Telecom Hardware</span>
-              </div>
-              <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight">
-                Networking Hardware Store
-              </h2>
-              <p className="text-sm sm:text-base text-slate-300">
-                Genuine MikroTik routers, switches, fiber cables, solar power backups, and CCTV systems with full warranty.
-              </p>
-            </div>
-
-            {/* Search Input */}
-            <div className="w-full md:w-80">
-              <input
-                type="text"
-                placeholder="Search routers, cables, switches..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full px-4 py-3 rounded-2xl bg-slate-900 border border-slate-700 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-400 transition-colors shadow-lg"
-              />
-            </div>
-          </div>
-
-          {/* Category Filter Pills */}
-          <div className="flex flex-wrap gap-2 pt-2">
-            {[
-              { id: "all", label: "All Hardware" },
-              { id: "routers", label: "Routers & ONUs" },
-              { id: "switches", label: "Gigabit Switches" },
-              { id: "wireless", label: "Access Points" },
-              { id: "fiber", label: "Fiber & SFP Cables" },
-              { id: "solar", label: "Mini DC UPS Backups" },
-              { id: "cctv", label: "CCTV & Security" },
-            ].map((cat) => (
-              <button
-                key={cat.id}
-                type="button"
-                onClick={() => setActiveCategory(cat.id)}
-                className={`px-4 py-2 rounded-xl text-xs font-bold transition-all ${
-                  activeCategory === cat.id
-                    ? "bg-amber-400 text-slate-950 font-black shadow-md"
-                    : "bg-slate-900/80 border border-slate-800 text-slate-300 hover:text-white hover:border-slate-700"
-                }`}
-              >
-                {cat.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Products Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredProducts.slice(0, 16).map((product: HardwareProduct) => (
-              <HardwareProductCard key={product.id} product={product} onQuickBuy={() => setIsCartOpen(true)} />
-            ))}
-          </div>
-
-          <div className="text-center pt-4">
-            <Link
-              href="/track"
-              className="inline-flex items-center gap-2 text-xs font-bold text-cyan-400 hover:text-cyan-300 underline"
-            >
-              <span>Ordered hardware? Track your dispatch parcel status here &rarr;</span>
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      {/* 8. COVERAGE EXPLORER */}
-      <section id="coverage" className="py-20 bg-[#060A12] border-t border-slate-800/80">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-8 text-center">
-          <div className="space-y-3">
-            <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-mono font-bold uppercase">
-              <span>Fiber Network Reach</span>
-            </div>
-            <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight">
-              Check Fiber Coverage For Your Area
-            </h2>
-            <p className="text-sm sm:text-base text-slate-300">
-              We connect homes and businesses across Nairobi, Kiambu, Machakos, Nakuru, Eldoret, and expanding towns.
-            </p>
-          </div>
-
-          <form onSubmit={handleCoverageCheck} className="flex flex-col sm:flex-row gap-3 max-w-xl mx-auto">
-            <input
-              type="text"
-              placeholder="Enter your estate or town (e.g. Utawala, Kilimani, Thika...)"
-              value={coverageSearch}
-              onChange={(e) => setCoverageSearch(e.target.value)}
-              className="flex-1 px-5 py-4 rounded-2xl bg-slate-900 border border-slate-700 text-xs sm:text-sm text-white placeholder:text-slate-500 focus:outline-none focus:border-amber-400 transition-colors shadow-xl"
+        {/* ---------------------------------------------------- BUILT FOR OPERATORS */}
+        <section id="about" aria-labelledby="about-title" className="scroll-mt-20">
+          <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 sm:py-28 lg:px-8">
+            <SectionHeading
+              id="about-title"
+              eyebrow="Built for ISP operators"
+              title="Made for the way Kenyan ISPs actually work"
+              body="MashupHost is built around M-Pesa, MikroTik and the day-to-day of running a network in Kenya — not adapted from software made for somewhere else."
             />
-            <button
-              type="submit"
-              className="px-8 py-4 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-slate-950 font-black text-xs sm:text-sm uppercase tracking-wider transition-all shadow-xl active:scale-95 flex items-center justify-center gap-2 shrink-0"
-            >
-              <IconWhatsApp size={16} />
-              <span>Check on WhatsApp</span>
-            </button>
-          </form>
-        </div>
-      </section>
-
-      {/* 9. FREQUENTLY ASKED QUESTIONS */}
-      <section id="faq" className="py-20 bg-[#060A12] border-t border-slate-800/80">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
-          <div className="text-center space-y-3">
-            <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-mono font-bold uppercase">
-              <span>Got Questions?</span>
-            </div>
-            <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight">
-              Frequently Asked Questions
-            </h2>
-            <p className="text-sm sm:text-base text-slate-300">
-              Honest, transparent answers about our optical internet packages, installation, and hardware.
-            </p>
-          </div>
-
-          <div className="space-y-4">
-            {FAQS.map((faq, idx) => (
-              <div
-                key={idx}
-                className="rounded-2xl bg-slate-950 border border-slate-800/90 overflow-hidden transition-colors shadow-lg"
-              >
-                <button
-                  type="button"
-                  onClick={() => setActiveFaq(activeFaq === idx ? null : idx)}
-                  className="w-full p-5 text-left flex items-center justify-between gap-4 font-bold text-sm text-white hover:text-amber-400 transition-colors"
-                >
-                  <span>{faq.q}</span>
-                  <span className="text-amber-400 text-lg font-mono">{activeFaq === idx ? "−" : "+"}</span>
-                </button>
-                {activeFaq === idx && (
-                  <div className="px-5 pb-5 pt-1 text-xs text-slate-300 leading-relaxed border-t border-slate-900">
-                    {faq.a}
+            <ul className="mt-14 grid gap-x-10 gap-y-10 sm:grid-cols-2 lg:grid-cols-3">
+              {OPERATOR_POINTS.map(({ title, body, icon: PointIcon }) => (
+                <li key={title} className="flex gap-4">
+                  <PointIcon size={20} className="mt-0.5 shrink-0 text-blue-700" aria-hidden="true" />
+                  <div>
+                    <h3 className="text-[15px] font-semibold text-slate-950">{title}</h3>
+                    <p className="mt-1.5 text-sm leading-6 text-slate-600">{body}</p>
                   </div>
-                )}
-              </div>
-            ))}
+                </li>
+              ))}
+            </ul>
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* 10. GET CONNECTED CTA */}
-      <section className="py-20 bg-gradient-to-r from-slate-950 via-[#111622] to-slate-950 border-t border-amber-500/30 relative overflow-hidden">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-6 relative z-10">
-          <h2 className="text-3xl sm:text-5xl font-black text-white tracking-tight">
-            Ready to Experience High-Speed Fiber?
-          </h2>
-          <p className="text-sm sm:text-base text-slate-300 max-w-xl mx-auto">
-            Order your home or business plan today with instant M-Pesa automated activation and same-day installation dispatch.
-          </p>
-
-          <div className="flex flex-wrap items-center justify-center gap-4 pt-2">
-            <a
-              href="#packages"
-              className="px-8 py-4 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-sm tracking-wide uppercase shadow-xl shadow-amber-500/25 transition-all active:scale-95"
-            >
-              View Internet Packages
-            </a>
-            <a
-              href="https://wa.me/254703605266?text=Hello%20MashupHost%2C%20I%20want%20to%20get%20connected%20to%20Fiber"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="px-8 py-4 rounded-xl bg-[#25D366]/15 hover:bg-[#25D366]/25 border border-[#25D366]/40 text-emerald-300 font-bold text-sm transition-all flex items-center gap-2.5 active:scale-95 shadow-lg"
-            >
-              <IconWhatsApp size={18} className="text-[#25D366]" />
-              <span>WhatsApp Us (+254 703 605 266)</span>
-            </a>
-          </div>
-        </div>
-      </section>
-
-      {/* 11. FOOTER */}
-      <footer className="bg-[#04060C] border-t border-slate-800/80 pt-16 pb-12 text-slate-400 text-xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-12">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8">
-            {/* Col 1 */}
-            <div className="lg:col-span-2 space-y-4">
-              <div className="flex items-center gap-3">
-                <div className="h-9 w-9 rounded-xl overflow-hidden border border-amber-500/40">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src="/logo.jpg" alt="MashupHost Logo" className="h-full w-full object-cover" />
-                </div>
-                <span className="text-base font-black text-white">
-                  MASHUP<span className="text-amber-400">HOST</span>
-                </span>
+        {/* ------------------------------------------------------------------- FAQ */}
+        {faqs.length > 0 && (
+          <section aria-labelledby="faq-title" className="border-t border-slate-200">
+            <div className="mx-auto grid max-w-7xl gap-10 px-4 py-20 sm:px-6 sm:py-28 lg:grid-cols-[minmax(0,4fr)_minmax(0,8fr)] lg:px-8">
+              <div>
+                <SectionHeading id="faq-title" eyebrow="FAQ" title="Questions, answered" />
+                <p className="mt-4 text-sm leading-6 text-slate-600">
+                  Something else?{" "}
+                  <a href="#support" className="font-medium text-blue-700 hover:text-blue-800">
+                    Talk to our team
+                  </a>
+                  .
+                </p>
               </div>
-              <p className="text-xs text-slate-400 leading-relaxed max-w-sm">
-                Kenya’s high-speed optical fiber network &amp; enterprise hardware store. Truly unlimited data, automated M-Pesa billing, and nationwide equipment delivery.
-              </p>
-              <p className="text-xs text-slate-400">
-                Nairobi Operations Hub &bull; 24/7 Dispatch Hotline: <strong className="text-white">+254 703 605 266</strong>
-              </p>
+              <dl className="divide-y divide-slate-200 border-y border-slate-200">
+                {faqs.map((faq, index) => {
+                  const isOpen = openFaq === index;
+                  return (
+                    <div key={faq.q}>
+                      <dt>
+                        <button
+                          type="button"
+                          onClick={() => setOpenFaq(isOpen ? null : index)}
+                          aria-expanded={isOpen}
+                          aria-controls={`faq-${index}`}
+                          className="flex w-full items-start justify-between gap-6 py-5 text-left text-[15px] font-medium text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600"
+                        >
+                          <span>{faq.q}</span>
+                          <span
+                            aria-hidden="true"
+                            className={`mt-0.5 grid h-5 w-5 shrink-0 place-items-center text-slate-400 transition-transform duration-200 ${isOpen ? "rotate-45" : ""}`}
+                          >
+                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                              <path d="M7 1v12M1 7h12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                            </svg>
+                          </span>
+                        </button>
+                      </dt>
+                      <dd id={`faq-${index}`} hidden={!isOpen} className="pb-5 pr-10 text-sm leading-6 text-slate-600">
+                        {faq.a}
+                      </dd>
+                    </div>
+                  );
+                })}
+              </dl>
             </div>
+          </section>
+        )}
 
-            {/* Col 2 */}
-            <div className="space-y-3">
-              <h4 className="text-xs font-black uppercase tracking-wider text-white">Services</h4>
-              <ul className="space-y-2 text-xs">
-                <li><a href="#packages" className="hover:text-amber-400 transition-colors">Home Fiber Internet</a></li>
-                <li><a href="#packages" className="hover:text-amber-400 transition-colors">Dedicated Business 1:1</a></li>
-                <li><a href="#packages" className="hover:text-amber-400 transition-colors">Ultra Gigabit 1Gbps</a></li>
-                <li><a href="#coverage" className="hover:text-amber-400 transition-colors">Coverage Check</a></li>
-                <li><Link href="/track" className="text-amber-400 hover:text-amber-300 font-bold transition-colors">📍 Track My Order</Link></li>
-              </ul>
-            </div>
-
-            {/* Col 3 */}
-            <div className="space-y-3">
-              <h4 className="text-xs font-black uppercase tracking-wider text-white">Hardware Shop</h4>
-              <ul className="space-y-2 text-xs">
-                <li><a href="#hardware" className="hover:text-amber-400 transition-colors">MikroTik Routers</a></li>
-                <li><a href="#hardware" className="hover:text-amber-400 transition-colors">Ubiquiti APs</a></li>
-                <li><a href="#hardware" className="hover:text-amber-400 transition-colors">Mini DC UPS</a></li>
-                <li><a href="#hardware" className="hover:text-amber-400 transition-colors">Fiber Cables &amp; Patch Cords</a></li>
-                <li><a href="#hardware" className="hover:text-amber-400 transition-colors">CCTV Cameras</a></li>
-              </ul>
-            </div>
-
-            {/* Col 4 */}
-            <div className="space-y-3">
-              <h4 className="text-xs font-black uppercase tracking-wider text-white">Account &amp; Legal</h4>
-              <ul className="space-y-2 text-xs">
-                <li><Link href="/app" className="hover:text-amber-400 transition-colors">Customer Portal</Link></li>
-                <li><Link href="/terms" className="hover:text-amber-400 transition-colors">Terms of Service</Link></li>
-                <li><Link href="/refund-policy" className="hover:text-amber-400 transition-colors">Refund Policy</Link></li>
-                <li><Link href="/referral-policy" className="hover:text-amber-400 transition-colors">Referral Policy</Link></li>
-                <li>
+        {/* ------------------------------------------------------ SUPPORT + FINAL CTA */}
+        <section id="support" aria-labelledby="cta-title" className="scroll-mt-20 bg-slate-950">
+          <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 sm:py-24 lg:px-8">
+            <div className="grid gap-12 lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:items-end">
+              <div>
+                <h2 id="cta-title" className="text-3xl font-semibold tracking-[-0.025em] text-white sm:text-4xl">
+                  Ready to Run Your ISP Smarter?
+                </h2>
+                <p className="mt-4 max-w-xl text-lg leading-8 text-slate-300">
+                  Manage your network, customers and payments from one powerful platform.
+                </p>
+                <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+                  <Link
+                    href="/register"
+                    className="inline-flex items-center justify-center gap-2 rounded-md bg-white px-5 py-3 text-sm font-semibold text-slate-950 transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950"
+                  >
+                    Get Started <IconArrowRight size={16} />
+                  </Link>
                   <a
-                    href="https://wa.me/254703605266?text=Hello%20MashupHost%20Support"
+                    href={salesLink}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="hover:text-emerald-400 transition-colors flex items-center gap-1 text-[#25D366]"
+                    className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-700 px-5 py-3 text-sm font-semibold text-white transition-colors hover:border-slate-500 hover:bg-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
                   >
-                    <IconWhatsApp size={13} />
-                    <span>WhatsApp Support</span>
+                    Contact Sales
                   </a>
-                </li>
-              </ul>
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-6">
+                <p className="text-sm font-semibold text-white">Talk to a person</p>
+                <p className="mt-1.5 text-sm leading-6 text-slate-400">
+                  Setup help, billing questions or a walkthrough — our team in Nairobi answers on WhatsApp.
+                </p>
+                <div className="mt-5 space-y-3 text-sm">
+                  <a
+                    href={whatsappLink("Hello MashupHost Support")}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-3 text-slate-200 hover:text-white"
+                  >
+                    <IconWhatsApp size={18} className="text-emerald-400" aria-hidden="true" />
+                    {SUPPORT_PHONE_DISPLAY}
+                  </a>
+                  {footer.supportEmail && (
+                    <a href={`mailto:${footer.supportEmail}`} className="flex items-center gap-3 text-slate-200 hover:text-white">
+                      <IconMessage size={18} className="text-slate-500" aria-hidden="true" />
+                      {footer.supportEmail}
+                    </a>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
+        </section>
+      </main>
 
-          <div className="pt-8 border-t border-slate-900 flex flex-wrap items-center justify-between gap-4 text-[11px] text-slate-400">
-            <p>&copy; {new Date().getFullYear()} MASHUPHOST TELECOM. All rights reserved.</p>
-            <div className="flex items-center gap-4 text-slate-400">
-              <span>M-Pesa Safaricom Daraja Verified</span>
-              <span>&bull;</span>
-              <span>Kenya Internet Exchange (KIXP) Peered</span>
-            </div>
-          </div>
-        </div>
-      </footer>
+      <SiteFooter supportEmail={footer.supportEmail} copyrightYear={footer.copyrightYear} />
 
-      {/* 12. FLOATING WHATSAPP ASSISTANCE BUTTON */}
-      <div className="fixed bottom-6 right-6 z-50 flex items-center gap-3">
-        {/* Floating Desktop Tooltip Banner */}
-        <div className="hidden lg:flex items-center gap-2 px-3.5 py-2 rounded-2xl bg-slate-900/95 border border-emerald-500/30 text-white text-xs font-medium shadow-2xl backdrop-blur-md">
-          <span className="h-2 w-2 rounded-full bg-[#25D366]" />
-          <span className="text-slate-300">
-            Need help? <span className="text-[#25D366] font-bold">Chat with NOC</span>
-          </span>
-        </div>
-
-        {/* Real WhatsApp Brand Floating Button */}
-        <a
-          href="https://wa.me/254703605266?text=Hello%20MashupHost%2C%20I%20want%20to%20inquire%20about%20fiber%20internet%20packages%20and%20hardware."
-          target="_blank"
-          rel="noopener noreferrer"
-          className="group relative flex items-center justify-center gap-2.5 p-3.5 sm:px-4 sm:py-3.5 rounded-full bg-[#25D366] hover:bg-[#20bd5a] text-white font-bold text-xs shadow-2xl shadow-emerald-500/50 hover:shadow-emerald-500/70 transition-all hover:scale-105 active:scale-95 ring-4 ring-emerald-500/20"
-          title="Chat on WhatsApp (+254 703 605 266)"
-          aria-label="Chat with MashupHost NOC on WhatsApp"
-        >
-          <IconWhatsApp size={22} className="text-white drop-shadow-md" />
-          <span className="hidden sm:inline font-black tracking-wide uppercase text-[11px] text-white">
-            WhatsApp
-          </span>
-        </a>
-      </div>
-
-      {/* 13. CART DRAWER WITH M-PESA CHECKOUT & AUTO-ACCOUNT CREATION */}
-      <CartDrawer isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} />
-
-      {/* 14. LIPA INTERNET / QUICK RENEW MODAL */}
-      <QuickRenewModal isOpen={isRenewOpen} onClose={() => setIsRenewOpen(false)} />
+      {/* Floating WhatsApp — kept from the previous homepage; it is the business's main support
+          channel. Small and quiet so it never covers content on a phone. */}
+      <a
+        href={whatsappLink("Hello MashupHost, I have a question about the ISP platform.")}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label={`Chat with MashupHost on WhatsApp (${SUPPORT_PHONE_DISPLAY})`}
+        className="fixed bottom-5 right-5 z-40 grid h-12 w-12 place-items-center rounded-full bg-[#25D366] text-white shadow-[0_6px_20px_-6px_rgba(15,23,42,0.45)] transition-transform hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2"
+      >
+        <IconWhatsApp size={24} />
+      </a>
     </div>
   );
 }

@@ -6,11 +6,12 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import Link from "next/link";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
-import { Button, Card, ErrorText, Input, Label, Badge } from "@/components/ui";
-import { IconArrowRight, IconShield, IconCheck, IconPulse } from "@/components/icons";
+import { ErrorText, Input, Label } from "@/components/ui";
+import { IconCheck } from "@/components/icons";
+import { AuthShell, Spinner, authPrimaryButton, authSecondaryButton } from "@/components/marketing/auth-shell";
 
 const schema = z.object({
-  tenantSlug: z.string().min(1, "Tenant slug is required"),
+  tenantSlug: z.string().min(1, "Enter your organization"),
   email: z.string().email("Invalid email address"),
 });
 type FormValues = z.infer<typeof schema>;
@@ -39,95 +40,52 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <main className="relative flex min-h-screen items-center justify-center px-4 bg-obsidian-950 text-slate-100 font-sans selection:bg-brand-500 selection:text-white">
-      {/* Dynamic Cyber Ambient Glow */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-        <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[800px] h-[500px] bg-brand-500/15 blur-[140px] rounded-full" />
-        <div className="absolute bottom-10 right-10 w-[600px] h-[400px] bg-cyan-500/10 blur-[130px] rounded-full" />
-        <div className="absolute inset-0 bg-grid-pattern opacity-50" />
-      </div>
-
-      <Card className="relative z-10 w-full max-w-md p-8 shadow-2xl border-slate-800 bg-slate-900/90 backdrop-blur-xl">
-        {/* Brand Logo Header */}
-        <div className="flex flex-col items-center text-center mb-6">
-          <Link href="/" className="group mb-4">
-            <div className="h-16 w-16 overflow-hidden rounded-2xl ring-2 ring-cyan-500/40 shadow-xl shadow-cyan-500/25 bg-slate-950 flex items-center justify-center transition-transform group-hover:scale-105">
-              <img src="/logo.jpg" alt="Mashupkgrid ISP Logo" className="h-full w-full object-cover" />
-            </div>
-          </Link>
-
-          <Badge variant="info">Account Security</Badge>
-          <h1 className="text-2xl font-black text-white tracking-tight mt-2">
-            Reset Password
-          </h1>
-          <p className="text-xs text-slate-400 mt-1 max-w-xs">
-            We will dispatch a secure recovery token to your registered email address.
-          </p>
-        </div>
-
-        {sent ? (
-          <div className="text-center py-4 space-y-4 font-sans">
-            <div className="p-4 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 text-xs font-mono">
-              <IconCheck size={20} className="mx-auto mb-2 text-emerald-400" />
-              If an account exists for that email, a password recovery token has been dispatched. Please check your inbox and spam folder.
-            </div>
-
-            <Link href="/login" className="block">
-              <Button className="w-full py-2.5 font-semibold shadow-glow">
-                Return to Operator Sign In
-              </Button>
-            </Link>
+    <AuthShell
+      title="Reset your password"
+      description="Enter your organization and email, and we'll send you a link to set a new password."
+    >
+      {sent ? (
+        <div className="space-y-5">
+          <div role="status" className="flex gap-3 rounded-md border border-emerald-200 bg-emerald-50 p-4 text-sm leading-6 text-emerald-900">
+            <IconCheck size={18} className="mt-0.5 shrink-0 text-emerald-700" aria-hidden="true" />
+            <span>If an account exists for that email, a reset link is on its way. Check your inbox and spam folder.</span>
           </div>
-        ) : (
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            <div>
-              <Label htmlFor="tenantSlug">Tenant Organization ID / Slug</Label>
-              <Input
-                id="tenantSlug"
-                placeholder="e.g. demo-isp or master"
-                className="font-mono text-xs"
-                {...register("tenantSlug")}
-              />
-              {errors.tenantSlug && <ErrorText>{errors.tenantSlug.message}</ErrorText>}
-            </div>
-
-            <div>
-              <Label htmlFor="email">Registered Email Address</Label>
-              <Input
-                id="email"
-                type="email"
-                placeholder="operator@yourisp.co.ke"
-                className="font-mono text-xs"
-                {...register("email")}
-              />
-              {errors.email && <ErrorText>{errors.email.message}</ErrorText>}
-            </div>
-
-            {serverError && <ErrorText>{serverError}</ErrorText>}
-
-            <Button type="submit" disabled={isSubmitting} className="w-full py-3 font-bold shadow-glow gap-2">
-              {isSubmitting ? <IconPulse size={14} className="animate-spin" /> : <IconArrowRight size={14} />}
-              <span>{isSubmitting ? "Dispatching Token..." : "Send Reset Token"}</span>
-            </Button>
-
-            <div className="text-center pt-2">
-              <Link href="/login" className="text-xs text-slate-400 hover:text-white transition-colors">
-                &larr; Back to sign in
-              </Link>
-            </div>
-          </form>
-        )}
-
-        {/* Footer */}
-        <div className="mt-6 pt-4 border-t border-slate-800/80 text-[11px] font-mono text-slate-500 flex items-center justify-between">
-          <Link href="/terms" className="hover:text-slate-400">Terms</Link>
-          <span className="flex items-center gap-1 text-emerald-400">
-            <IconShield size={12} />
-            <span>TLS 1.3 Active</span>
-          </span>
-          <Link href="/refund-policy" className="hover:text-slate-400">Refunds</Link>
+          <Link href="/login" className={authSecondaryButton}>
+            Back to sign in
+          </Link>
         </div>
-      </Card>
-    </main>
+      ) : (
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
+          <div>
+            <Label htmlFor="tenantSlug">Organization</Label>
+            <Input id="tenantSlug" placeholder="e.g. demo-isp or master" autoComplete="organization" className="font-mono" {...register("tenantSlug")} />
+            {errors.tenantSlug && <ErrorText>{errors.tenantSlug.message}</ErrorText>}
+          </div>
+
+          <div>
+            <Label htmlFor="email">Email</Label>
+            <Input id="email" type="email" autoComplete="email" placeholder="you@yourisp.co.ke" {...register("email")} />
+            {errors.email && <ErrorText>{errors.email.message}</ErrorText>}
+          </div>
+
+          {serverError && (
+            <div role="alert" className="rounded-md border border-red-200 bg-red-50 px-3.5 py-3 text-sm text-red-800">
+              {serverError}
+            </div>
+          )}
+
+          <button type="submit" disabled={isSubmitting} className={authPrimaryButton}>
+            {isSubmitting && <Spinner />}
+            {isSubmitting ? "Sending…" : "Send reset link"}
+          </button>
+
+          <p className="text-center text-sm">
+            <Link href="/login" className="font-medium text-slate-600 hover:text-slate-950">
+              &larr; Back to sign in
+            </Link>
+          </p>
+        </form>
+      )}
+    </AuthShell>
   );
 }
