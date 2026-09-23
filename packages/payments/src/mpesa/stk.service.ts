@@ -6,6 +6,8 @@ import { initiateStkPush, queryStkPushStatus } from "./daraja-client.js";
 import { normalizeKenyanPhone } from "./phone.js";
 import { completeStkRequest } from "./callback.service.js";
 import { buildMpesaCallbackUrl } from "./callback-url.js";
+import { getSettlementSettings } from "../gateway/settings.service.js";
+import { getOrCreateCustomerReference, getOrCreateInvoiceReference } from "../gateway/payment-reference.service.js";
 
 /**
  * Whose M-Pesa account collects this payment.
@@ -17,8 +19,9 @@ import { buildMpesaCallbackUrl } from "./callback-url.js";
  *
  * Getting this wrong in either direction is a money bug: collect with the tenant's credentials
  * while crediting the ledger and they are paid twice; collect with the platform's while skipping
- * the credit and they are never paid at all. The single source of truth is collectionMode, read
- * here and in creditTenantForPayment, and nowhere else.
+ * the credit and they are never paid at all. collectionMode is read once, here, when the push is
+ * initiated, and stamped on the request as `collectedBy`; the callback credits the ledger from that
+ * stamp, so a tenant switching modes while a payment is in flight cannot misattribute it.
  */
 async function resolveCollectingCredentials(
   tenantId: string
@@ -28,6 +31,14 @@ async function resolveCollectingCredentials(
     select: { collectionMode: true, slug: true },
   });
   const collectedByPlatform = tenant?.collectionMode === "PLATFORM";
+  if (collectedByPlatform) {
+    const settings = await getSettlementSettings();
+    if (!settings.gatewayEnabled) {
+      throw new ConflictError(
+        "Online payments are temporarily unavailable — the MashupHost payment gateway is switched off. Please try again later."
+      );
+    }
+  }
   return {
     credentials: collectedByPlatform
       ? await getPlatformMpesaCredentials()
@@ -61,7 +72,8 @@ export interface InitiateStkPushInput {
   invoiceId?: string | null;
   phone: string;
   amountMinor: number;
-  initiatedByUserId: string;
+  /** Null for a customer paying through the public checkout page. */
+  initiatedByUserId: string | null;
 }
 
 /**
@@ -96,6 +108,16 @@ export async function initiateStkPushForCustomer(
   const phone = normalizeKenyanPhone(input.phone);
   const callbackUrl = buildMpesaCallbackUrl();
 
+  // On the platform paybill the account reference must say whose money this is. A payment
+  // reference identifies tenant, customer and invoice on its own, and it is what reconciliation
+  // matches on.
+  const paymentReference = collection.collectedByPlatform
+    ? input.invoiceId
+      ? await getOrCreateInvoiceReference(tenantId, input.invoiceId)
+      : await getOrCreateCustomerReference(tenantId, customer.id)
+    : null;
+  if (paymentReference) accountReference = paymentReference.reference;
+
   const response = await initiateStkPush({
     credentials: collection.credentials,
     phone,
@@ -116,6 +138,8 @@ export async function initiateStkPushForCustomer(
       merchantRequestId: response.MerchantRequestID,
       checkoutRequestId: response.CheckoutRequestID,
       status: "PENDING",
+      collectedBy: collection.collectedByPlatform ? "PLATFORM" : "OWN",
+      paymentReferenceId: paymentReference?.id ?? null,
     },
   });
 }
@@ -160,6 +184,7 @@ export async function initiateHotspotPurchaseStkPush(
       merchantRequestId: response.MerchantRequestID,
       checkoutRequestId: response.CheckoutRequestID,
       status: "PENDING",
+      collectedBy: collection.collectedByPlatform ? "PLATFORM" : "OWN",
     },
   });
 }
@@ -189,9 +214,11 @@ export async function queryAndReconcileStkRequest(
   const request = await getStkRequestOrThrow(tenantId, checkoutRequestId);
   if (request.status !== "PENDING") return { request, unresolvedSuccess: false };
 
-  const collection = await resolveCollectingCredentials(tenantId);
-  // Same account that pushed it: a status query signed by a different shortcode cannot find it.
-  const result = await queryStkPushStatus(collection.credentials, checkoutRequestId);
+  // Same account that pushed it — recorded on the request, not re-derived from the tenant's current
+  // mode: a status query signed by a different shortcode cannot find it.
+  const credentials =
+    request.collectedBy === "PLATFORM" ? await getPlatformMpesaCredentials() : await getMpesaCredentials(tenantId);
+  const result = await queryStkPushStatus(credentials, checkoutRequestId);
   const resultCode = Number(result.ResultCode);
 
   if (Number.isNaN(resultCode)) return { request, unresolvedSuccess: false }; // still pending

@@ -242,12 +242,14 @@ async function main() {
     { repeat: { every: 60 * 60_000 }, removeOnComplete: true, removeOnFail: 50 }
   );
 
-  // Settlement runs hourly rather than per payment: batching means one B2B fee per tenant per
-  // hour instead of one per voucher sold, and a tenant owed nothing is skipped entirely.
+  // Settlements: a 5-minute tick. The platform's settlement policy decides what each tick does —
+  // INSTANT settles what is owed (batched per tick, so one M-Pesa transfer fee per tenant rather
+  // than one per payment); DAILY/WEEKLY act only once their slot has passed. See
+  // runScheduledSettlements.
   await billingQueue.add(
     JOB_NAMES.runTenantPayouts,
     {},
-    { repeat: { every: 60 * 60_000 }, removeOnComplete: true, removeOnFail: 50 }
+    { repeat: { every: 5 * 60_000 }, removeOnComplete: true, removeOnFail: 50 }
   );
   // Every 2 minutes: covers the "delayed callback" case without hammering Safaricom's Query API.
   await mpesaQueue.add(

@@ -1,5 +1,4 @@
 import { createHmac } from "node:crypto";
-import { creditTenantForPayment } from "../ledger.service.js";
 import { prisma, type Prisma } from "@mashupkgrid/database";
 import { NotFoundError, timingSafeStringEqual, generateSecureToken } from "@mashupkgrid/shared";
 import { recordPaymentForInvoiceWithDb, topUpWalletWithDb } from "@mashupkgrid/billing";
@@ -184,13 +183,8 @@ export async function completePaystackTransaction(
           },
         });
         paymentId = hotspotPayment.id;
-        await creditTenantForPayment(tx, {
-          tenantId,
-          paymentId: hotspotPayment.id,
-          amountMinor: hotspotPayment.amountMinor,
-          currency: hotspotPayment.currency,
-          description: "Hotspot voucher sale",
-        });
+        // No tenant ledger credit: Paystack collects with the tenant's own keys (see config.service.ts),
+        // so this money went straight to the tenant and the platform owes them nothing for it.
       } else if (transaction.customerId) {
         // 2. Subscriber Invoice Payment or Wallet Top-Up
         // Always the amount WE requested when the transaction was initialized, never the
@@ -217,13 +211,8 @@ export async function completePaystackTransaction(
               idempotencyKey: reference,
             });
         paymentId = paymentResult.payment.id;
-        await creditTenantForPayment(tx, {
-          tenantId,
-          paymentId: paymentResult.payment.id,
-          amountMinor: paymentResult.payment.amountMinor,
-          currency: paymentResult.payment.currency,
-          description: transaction.invoiceId ? "Invoice payment" : "Wallet top-up",
-        });
+        // No tenant ledger credit: Paystack collects with the tenant's own keys (see config.service.ts),
+        // so this money went straight to the tenant and the platform owes them nothing for it.
       }
 
       return tx.paystackTransaction.update({

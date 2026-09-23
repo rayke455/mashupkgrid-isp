@@ -1,4 +1,7 @@
 process.env["NODE_ENV"] = "test";
+// Integration tests (src/__tests__/integration) run against TEST_DATABASE_URL when it is set; the
+// harness refuses any database whose name does not end in _test.
+if (process.env["TEST_DATABASE_URL"]) process.env["DATABASE_URL"] = process.env["TEST_DATABASE_URL"];
 process.env["DATABASE_URL"] ??= "postgresql://mashupkgrid:mashupkgrid@localhost:5432/mashupkgrid_isp_test?schema=public";
 process.env["REDIS_URL"] ??= "redis://localhost:6379";
 process.env["JWT_ACCESS_SECRET"] ??= "test-access-secret-0123456789-0123456789";

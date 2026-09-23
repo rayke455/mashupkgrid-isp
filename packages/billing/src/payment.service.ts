@@ -271,3 +271,9 @@ async function refundPaymentCore(db: Db, tenantId: string, paymentId: string, re
 export async function refundPayment(tenantId: string, paymentId: string, reason: string): Promise<Payment> {
   return prisma.$transaction((tx) => refundPaymentCore(tx, tenantId, paymentId, reason));
 }
+
+/** The reversal inside a caller's transaction — for flows that must reverse the payment and
+ *  record other effects of the same reversal (e.g. a gateway ledger debit) atomically. */
+export async function refundPaymentWithDb(db: Db, tenantId: string, paymentId: string, reason: string): Promise<Payment> {
+  return refundPaymentCore(db, tenantId, paymentId, reason);
+}

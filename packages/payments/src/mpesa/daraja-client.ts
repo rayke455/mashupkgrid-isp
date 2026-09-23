@@ -240,3 +240,65 @@ export async function initiateB2BPayment(params: B2BPaymentParams): Promise<B2BP
   }
   return body;
 }
+
+export interface B2CPaymentParams {
+  /** OAuth credentials of the Daraja app, with `shortcode` set to the B2C-enabled shortcode. */
+  credentials: MpesaCredentials;
+  initiatorName: string;
+  securityCredential: string;
+  /** Our own id for the request. Daraja v3 echoes it back on the result callback, which is what
+   *  ties an asynchronous result to exactly one settlement. */
+  originatorConversationId: string;
+  /** Recipient MSISDN, 2547XXXXXXXX / 2541XXXXXXXX. */
+  phone: string;
+  amountMinor: number;
+  remarks: string;
+  occasion?: string;
+  resultUrl: string;
+  queueTimeoutUrl: string;
+}
+
+/**
+ * Business-to-customer payment — sends money to an M-Pesa phone number (a tenant who chose to be
+ * settled to their phone).
+ *
+ * As with B2B, a 0 ResponseCode only means Safaricom ACCEPTED the request. The money has moved
+ * only when the result callback says ResultCode 0; until then the settlement stays PROCESSING.
+ * `BusinessPayment` is the command for an unsolicited payment to a registered M-Pesa customer.
+ */
+export async function initiateB2CPayment(params: B2CPaymentParams): Promise<B2BPaymentResponse> {
+  const { credentials } = params;
+  const baseUrl = BASE_URLS[credentials.environment];
+  const accessToken = await getAccessToken(credentials);
+
+  const response = await fetch(`${baseUrl}/mpesa/b2c/v3/paymentrequest`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    keepalive: true,
+    body: JSON.stringify({
+      OriginatorConversationID: params.originatorConversationId,
+      InitiatorName: params.initiatorName,
+      SecurityCredential: params.securityCredential,
+      CommandID: "BusinessPayment",
+      // Whole shillings — M-Pesa has no cents.
+      Amount: Math.round(params.amountMinor / 100),
+      PartyA: credentials.shortcode,
+      PartyB: params.phone,
+      Remarks: params.remarks.slice(0, 100),
+      QueueTimeOutURL: params.queueTimeoutUrl,
+      ResultURL: params.resultUrl,
+      Occassion: (params.occasion ?? "Settlement").slice(0, 100),
+    }),
+  });
+
+  const body = (await response.json()) as B2BPaymentResponse & {
+    errorMessage?: string;
+    errorCode?: string;
+  };
+  if (!response.ok || body.ResponseCode !== "0") {
+    throw new Error(
+      `M-Pesa B2C payment failed: ${body.errorMessage ?? body.ResponseDescription ?? response.status}`
+    );
+  }
+  return { ...body, OriginatorConversationID: body.OriginatorConversationID || params.originatorConversationId };
+}

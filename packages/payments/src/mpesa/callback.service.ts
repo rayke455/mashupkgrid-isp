@@ -1,5 +1,5 @@
 import { prisma, type MpesaStkRequest, type Prisma } from "@mashupkgrid/database";
-import { creditTenantForPayment } from "../ledger.service.js";
+import { recordPlatformCollection, upgradeProvisionalReceipt } from "../gateway/collection.service.js";
 import { NotFoundError, generateSecureToken } from "@mashupkgrid/shared";
 import { recordPaymentForInvoiceWithDb, topUpWalletWithDb } from "@mashupkgrid/billing";
 
@@ -34,6 +34,9 @@ export function parseCallbackMetadata(items?: StkCallbackItem[]): StkCallbackMet
 export interface StkCallbackOutcome {
   handled: boolean;
   checkoutRequestId?: string;
+  /** The request had already been resolved — this delivery changed no money. */
+  duplicate?: boolean;
+  tenantId?: string;
 }
 
 /**
@@ -68,6 +71,7 @@ export async function handleStkCallback(rawPayload: unknown): Promise<StkCallbac
   }
 
   const metadata = parseCallbackMetadata(stkCallback.CallbackMetadata?.Item);
+  const wasPending = existing.status === "PENDING";
 
   await completeStkRequest(existing.tenantId, checkoutRequestId, {
     resultCode: stkCallback.ResultCode,
@@ -76,7 +80,7 @@ export async function handleStkCallback(rawPayload: unknown): Promise<StkCallbac
     raw: rawPayload,
   });
 
-  return { handled: true, checkoutRequestId };
+  return { handled: true, checkoutRequestId, duplicate: !wasPending, tenantId: existing.tenantId };
 }
 
 export interface StkResultInput {
@@ -99,6 +103,10 @@ export async function completeStkRequest(
   result: StkResultInput
 ): Promise<MpesaStkRequest> {
   return prisma.$transaction(async (tx) => {
+    // Serialise every resolution of this request. Without the lock, a real callback and a status
+    // query (or two deliveries of the same callback) arriving together could both read PENDING and
+    // both try to record the payment.
+    await tx.$queryRaw`SELECT "id" FROM "mpesa_stk_requests" WHERE "checkoutRequestId" = ${checkoutRequestId} FOR UPDATE`;
     const request = await tx.mpesaStkRequest.findUnique({ where: { checkoutRequestId } });
     if (!request || request.tenantId !== tenantId) throw new NotFoundError("STK push request");
     // Idempotent: if already completed, check if this is the real Safaricom callback arriving
@@ -124,6 +132,7 @@ export async function completeStkRequest(
             where: { id: request.paymentId },
             data: { reference: realReceipt },
           });
+          await upgradeProvisionalReceipt(tx, request.paymentId, realReceipt);
         }
         return updated;
       }
@@ -244,15 +253,21 @@ export async function completeStkRequest(
           },
         });
 
-        // Only credits tenants on PLATFORM collection — for everyone else this money went
-        // straight to their own paybill and there is nothing to owe them.
-        await creditTenantForPayment(tx, {
-          tenantId,
-          paymentId: hotspotPayment.id,
-          amountMinor: hotspotPayment.amountMinor,
-          currency: hotspotPayment.currency,
-          description: "Hotspot voucher sale",
-        });
+        // Only money the PLATFORM collected is owed to the tenant. Decided by who collected this
+        // push when it was initiated — not the tenant's mode now, which may have changed since.
+        if (request.collectedBy === "PLATFORM") {
+          await recordPlatformCollection(tx, {
+            tenantId,
+            paymentId: hotspotPayment.id,
+            grossMinor: hotspotPayment.amountMinor,
+            currency: hotspotPayment.currency,
+            channel: "MPESA_STK",
+            providerReference: receiptNumber,
+            providerRequestId: checkoutRequestId,
+            payerPhone: request.phone,
+            description: "Hotspot voucher sale",
+          });
+        }
 
         return tx.mpesaStkRequest.update({
           where: { id: request.id },
@@ -275,9 +290,18 @@ export async function completeStkRequest(
       // for — trusting it as an override would let a forged "success" callback credit an
       // arbitrary amount instead of only ever completing the payment that was actually pending.
       const amountMinor = request.amountMinor;
-      const paymentResult = request.invoiceId
+      // The invoice may have been paid in full since this push was sent (a second push, a cash
+      // payment). Safaricom has already taken this money, so recording it must not fail — it goes
+      // to the customer's wallet instead of throwing and rolling back the whole callback.
+      const invoiceStillPayable = request.invoiceId
+        ? await tx.invoice.findFirst({
+            where: { id: request.invoiceId, tenantId, status: { in: ["PENDING", "PARTIALLY_PAID", "OVERDUE"] } },
+            select: { id: true },
+          })
+        : null;
+      const paymentResult = invoiceStillPayable
         ? await recordPaymentForInvoiceWithDb(tx, tenantId, {
-            invoiceId: request.invoiceId,
+            invoiceId: invoiceStillPayable.id,
             method: "MPESA",
             amountMinor,
             reference: receiptNumber,
@@ -296,13 +320,25 @@ export async function completeStkRequest(
             idempotencyKey: receiptNumber,
           });
 
-      await creditTenantForPayment(tx, {
-        tenantId,
-        paymentId: paymentResult.payment.id,
-        amountMinor: paymentResult.payment.amountMinor,
-        currency: paymentResult.payment.currency,
-        description: request.invoiceId ? "Invoice payment" : "Wallet top-up",
-      });
+      if (request.collectedBy === "PLATFORM") {
+        await recordPlatformCollection(tx, {
+          tenantId,
+          paymentId: paymentResult.payment.id,
+          // What M-Pesa actually collected. On an overpayment the Payment row holds only the part
+          // applied to the invoice (the rest goes to the customer's wallet) — but the platform
+          // received all of it, so all of it is owed to the tenant.
+          grossMinor: amountMinor,
+          currency: paymentResult.payment.currency,
+          channel: "MPESA_STK",
+          providerReference: receiptNumber,
+          providerRequestId: checkoutRequestId,
+          payerPhone: request.phone,
+          customerId: request.customerId,
+          invoiceId: invoiceStillPayable?.id ?? null,
+          paymentReferenceId: request.paymentReferenceId,
+          description: invoiceStillPayable ? "Invoice payment" : "Wallet top-up",
+        });
+      }
 
       return tx.mpesaStkRequest.update({
         where: { id: request.id },

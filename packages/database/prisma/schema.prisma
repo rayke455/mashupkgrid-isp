@@ -26,29 +26,29 @@ enum UserStatus {
 }
 
 model Tenant {
-  id         String       @id @default(uuid())
-  name       String
-  slug       String       @unique
-  status     TenantStatus @default(ACTIVE)
-  planTier   String       @default("standard")
-  timezone   String       @default("Africa/Nairobi")
-  currency   String       @default("KES")
+  id                     String                  @id @default(uuid())
+  name                   String
+  slug                   String                  @unique
+  status                 TenantStatus            @default(ACTIVE)
+  planTier               String                  @default("standard")
+  timezone               String                  @default("Africa/Nairobi")
+  currency               String                  @default("KES")
   /// White-label branding — a single hex color (e.g. "#2563eb"), expanded into a full Tailwind
   /// shade scale client-side (apps/web/src/lib/color-scale.ts) rather than storing 11 values.
-  brandColor String?
-  logoUrl    String?
+  brandColor             String?
+  logoUrl                String?
   /// Set once, at tenant creation (now() + 7 days) — never extended automatically. Null means
   /// "not on a trial" (e.g. a tenant created before this existed, or one a super admin marked
   /// as paid/exempt). See apps/worker's expire-trials job for what actually happens when this
   /// passes, and apps/api's login flow for the countdown a tenant's own staff see.
-  trialEndsAt DateTime?
+  trialEndsAt            DateTime?
   /// A fixed catalog of feature keys (see packages/shared/src/features.ts) a super admin has
   /// turned OFF for this specific tenant — empty means every feature is available. Deliberately
   /// a disable-list, not an enable-list: a newly added feature is available to every existing
   /// tenant by default instead of silently missing until someone remembers to grant it.
-  ledgerEntries    TenantLedgerEntry[]
-  payouts          TenantPayout[]
-  disabledFeatures String[] @default([])
+  ledgerEntries          TenantLedgerEntry[]
+  payouts                TenantPayout[]
+  disabledFeatures       String[]                @default([])
   /// Where this tenant's customer payments land.
   ///
   /// OWN (the default, and what every existing tenant keeps) means the tenant's own M-Pesa
@@ -56,29 +56,37 @@ model Tenant {
   /// PLATFORM means the platform's paybill collects on their behalf and owes them the balance,
   /// which is what the ledger and payouts below settle. Making this explicit per tenant is what
   /// stops the aggregator model silently changing where an existing tenant's money goes.
-  collectionMode   TenantCollectionMode @default(OWN)
+  collectionMode         TenantCollectionMode    @default(OWN)
   /// Where a payout is sent. Not credentials — this platform pushes money TO this number, so it
   /// needs no secret from the tenant, only the destination.
-  payoutShortcode  String?
+  payoutShortcode        String?
   /// "PAYBILL" | "TILL" — selects the Daraja B2B command (BusinessPayBill vs BusinessBuyGoods).
-  payoutShortcodeType String @default("PAYBILL")
+  payoutShortcodeType    String                  @default("PAYBILL")
   /// Payment methods this tenant has switched OFF for their captive portal, e.g. ["PAYSTACK"].
   ///
   /// A disable-list rather than an enable-list, matching disabledFeatures above and for the same
   /// reason: a method that becomes available to a tenant (they configure a gateway, or they are
   /// switched to platform collection) should appear on their portal without anyone remembering
   /// to opt them in. Turning one off is the deliberate act, so that is what gets recorded.
-  portalPaymentsDisabled String[] @default([])
-  createdAt  DateTime     @default(now())
-  updatedAt  DateTime     @updatedAt
-  deletedAt  DateTime?
+  /// Per-tenant fee override; null falls back to PlatformSettlementSettings.
+  feePercentBpsOverride  Int?
+  feeFixedMinorOverride  Int?
+  settlementDestinations SettlementDestination[]
+  gatewayTransactions    GatewayTransaction[]
+  paymentReferences      PaymentReference[]
+  gatewayRefunds         GatewayRefund[]
+  paymentWebhookEvents   PaymentWebhookEvent[]
+  portalPaymentsDisabled String[]                @default([])
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  deletedAt              DateTime?
 
-  users     User[]
-  roles     Role[]
-  userRoles UserRole[]
-  sessions  Session[]
-  auditLogs AuditLog[]
-  apiKeys   ApiKey[]
+  users            User[]
+  roles            Role[]
+  userRoles        UserRole[]
+  sessions         Session[]
+  auditLogs        AuditLog[]
+  apiKeys          ApiKey[]
   webhookEndpoints WebhookEndpoint[]
 
   customers        Customer[]
@@ -114,10 +122,10 @@ model Tenant {
   hotspotPackages  HotspotPackage[]
   hotspotVouchers  HotspotVoucher[]
   networkSyncTasks NetworkSyncTask[]
+  provisioningJobs ProvisioningJob[]
 
   @@index([status])
   @@map("tenants")
-  provisioningJobs       ProvisioningJob[]
 }
 
 model User {
@@ -143,11 +151,11 @@ model User {
   emailVerificationTokens EmailVerificationToken[]
   passwordResetTokens     PasswordResetToken[]
   loginAttempts           LoginAttempt[]
-  auditLogsAsActor        AuditLog[]                @relation("AuditLogActor")
+  auditLogsAsActor        AuditLog[]               @relation("AuditLogActor")
   customerProfile         Customer?
   apiKeysCreated          ApiKey[]
-  ticketsAssigned         Ticket[]                  @relation("TicketAssignee")
-  ticketsCreated          Ticket[]                  @relation("TicketCreatedBy")
+  ticketsAssigned         Ticket[]                 @relation("TicketAssignee")
+  ticketsCreated          Ticket[]                 @relation("TicketCreatedBy")
   ticketMessages          TicketMessage[]
 
   // Composite-unique keeps email unique within a tenant. Super-admin rows (tenantId = null)
@@ -211,27 +219,27 @@ model UserRole {
 }
 
 model Session {
-  id                 String    @id @default(uuid())
-  userId             String
-  user               User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tenantId           String?
-  tenant             Tenant?   @relation(fields: [tenantId], references: [id])
-  refreshTokenHash   String    @unique
-  userAgent          String?
-  ipAddress          String?
-  createdAt          DateTime  @default(now())
-  expiresAt          DateTime
-  revokedAt          DateTime?
-  revokedReason      String?
-  lastUsedAt         DateTime  @default(now())
+  id               String    @id @default(uuid())
+  userId           String
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenantId         String?
+  tenant           Tenant?   @relation(fields: [tenantId], references: [id])
+  refreshTokenHash String    @unique
+  userAgent        String?
+  ipAddress        String?
+  createdAt        DateTime  @default(now())
+  expiresAt        DateTime
+  revokedAt        DateTime?
+  revokedReason    String?
+  lastUsedAt       DateTime  @default(now())
 
   // Refresh-token rotation chain: each successful refresh revokes this row and creates a new
   // one pointing back here via previousSessionId. A replay of an already-rotated (revoked)
   // refresh token is detected because its hash still resolves to a *revoked* row — that is
   // treated as stolen-token reuse and revokes every session the user holds.
-  previousSessionId String?   @unique
-  previousSession    Session? @relation("SessionRotation", fields: [previousSessionId], references: [id])
-  nextSession        Session? @relation("SessionRotation")
+  previousSessionId String?  @unique
+  previousSession   Session? @relation("SessionRotation", fields: [previousSessionId], references: [id])
+  nextSession       Session? @relation("SessionRotation")
 
   @@index([userId])
   @@map("sessions")
@@ -351,20 +359,20 @@ model ApiKey {
 /// Paystack's inbound webhooks but for our own outbound deliveries) and POSTed to `url` by the
 /// worker's webhook queue, never inline in the request that triggered the event.
 model WebhookEndpoint {
-  id               String    @id @default(uuid())
-  tenantId         String
-  tenant           Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  url              String
-  description      String?
-  secretEncrypted  String
-  events           String[]
-  isActive         Boolean   @default(true)
-  createdByUserId  String?
-  lastTriggeredAt  DateTime?
-  lastStatusCode   Int?
-  consecutiveFailures Int    @default(0)
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  id                  String    @id @default(uuid())
+  tenantId            String
+  tenant              Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  url                 String
+  description         String?
+  secretEncrypted     String
+  events              String[]
+  isActive            Boolean   @default(true)
+  createdByUserId     String?
+  lastTriggeredAt     DateTime?
+  lastStatusCode      Int?
+  consecutiveFailures Int       @default(0)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   deliveries WebhookDelivery[]
 
@@ -380,7 +388,7 @@ model WebhookDelivery {
   payload           Json
   statusCode        Int?
   success           Boolean
-  errorMessage       String?
+  errorMessage      String?
   attemptedAt       DateTime        @default(now())
 
   @@index([webhookEndpointId, attemptedAt])
@@ -433,12 +441,15 @@ model Customer {
   mpesaC2BTransactions MpesaC2BTransaction[]
   paystackTransactions PaystackTransaction[]
 
-  radiusUsers RadiusUser[]
+  gatewayTransactions GatewayTransaction[]
+  paymentReferences   PaymentReference[]
+
+  radiusUsers      RadiusUser[]
+  provisioningJobs ProvisioningJob[]
 
   @@unique([tenantId, customerNumber])
   @@index([tenantId, status])
   @@map("customers")
-  provisioningJobs ProvisioningJob[]
 }
 
 enum BillingCycle {
@@ -451,9 +462,9 @@ enum BillingCycle {
 }
 
 model Package {
-  id                   String       @id @default(uuid())
+  id                   String             @id @default(uuid())
   tenantId             String
-  tenant               Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant               Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   name                 String
   description          String?
   downloadKbps         Int
@@ -461,18 +472,18 @@ model Package {
   burstDownloadKbps    Int?
   burstUploadKbps      Int?
   dataCapMb            Int?
-  billingCycle         BillingCycle @default(MONTHLY)
+  billingCycle         BillingCycle       @default(MONTHLY)
   /// Required and used only when billingCycle = CUSTOM.
   durationDays         Int?
   priceMinor           Int
-  currency             String       @default("KES")
-  installationFeeMinor Int          @default(0)
-  activationFeeMinor   Int          @default(0)
+  currency             String             @default("KES")
+  installationFeeMinor Int                @default(0)
+  activationFeeMinor   Int                @default(0)
   /// Whole-percent tax rate (16 = 16%) — kept as an integer to avoid floating-point tax math.
   taxPercent           Int?
-  isActive             Boolean      @default(true)
-  createdAt            DateTime     @default(now())
-  updatedAt            DateTime     @updatedAt
+  isActive             Boolean            @default(true)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
   deletedAt            DateTime?
   // --- Network service configuration (spec section 3) ------------------------------------
   // A package is what determines a subscriber's network setup, so the VLAN, pool, profiles and
@@ -480,19 +491,19 @@ model Package {
   // All nullable: packages predating this module have none of it, and a package still bills
   // correctly without it -- what it cannot do is drive automatic provisioning, which is exactly
   // the distinction the provisioning job surfaces rather than silently guessing a default.
-  serviceType    NetworkServiceType @default(PPPOE)
-  vlanId         String?
-  vlan           Vlan?              @relation(fields: [vlanId], references: [id], onDelete: SetNull)
-  ipPoolId       String?
-  ipPool         IPPool?            @relation(fields: [ipPoolId], references: [id], onDelete: SetNull)
+  serviceType          NetworkServiceType @default(PPPOE)
+  vlanId               String?
+  vlan                 Vlan?              @relation(fields: [vlanId], references: [id], onDelete: SetNull)
+  ipPoolId             String?
+  ipPool               IPPool?            @relation(fields: [ipPoolId], references: [id], onDelete: SetNull)
   /// Names of profiles that must already exist on the device. Stored as free text because they
   /// are the vendor's own identifiers, not something this system owns or can validate offline;
   /// the provisioning job verifies them against the device and fails loudly if absent.
-  pppoeProfile   String?
-  hotspotProfile String?
-  routerId       String?
-  router         Router?            @relation(fields: [routerId], references: [id], onDelete: SetNull)
-  fairUsagePolicy String?
+  pppoeProfile         String?
+  hotspotProfile       String?
+  routerId             String?
+  router               Router?            @relation(fields: [routerId], references: [id], onDelete: SetNull)
+  fairUsagePolicy      String?
 
   customerServices CustomerService[]
   hotspotVouchers  HotspotVoucher[]
@@ -535,13 +546,13 @@ model CustomerService {
   /// must be able to see that rather than have one status paper over the other.
   provisioningStatus ServiceProvisioningStatus @default(PENDING)
 
-  invoices   Invoice[]
-  radiusUser RadiusUser?
+  invoices         Invoice[]
+  radiusUser       RadiusUser?
+  provisioningJobs ProvisioningJob[]
 
   @@index([tenantId, status])
   @@index([nextBillingAt])
   @@map("customer_services")
-  provisioningJobs ProvisioningJob[]
 }
 
 enum InvoiceStatus {
@@ -583,6 +594,8 @@ model Invoice {
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
 
+  gatewayTransactions  GatewayTransaction[]
+  paymentReference     PaymentReference?
   items                InvoiceItem[]
   payments             Payment[]
   mpesaStkRequests     MpesaStkRequest[]
@@ -687,10 +700,11 @@ model Payment {
   reversalReason   String?
   createdAt        DateTime      @default(now())
 
-  receipt              Receipt?
-  mpesaStkRequest      MpesaStkRequest?
-  mpesaC2BTxn          MpesaC2BTransaction?
-  paystackTransaction  PaystackTransaction?
+  gatewayTransaction  GatewayTransaction?
+  receipt             Receipt?
+  mpesaStkRequest     MpesaStkRequest?
+  mpesaC2BTxn         MpesaC2BTransaction?
+  paystackTransaction PaystackTransaction?
 
   @@index([tenantId, createdAt])
   @@index([customerId])
@@ -843,15 +857,15 @@ model CaptivePortalConfig {
 }
 
 model LiveChatConfig {
-  id                   String   @id @default(uuid())
-  tenantId             String   @unique
-  tenant               Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  isActive             Boolean  @default(false)
-  widgetId             String?
-  showOnHotspotPortal  Boolean  @default(true)
-  showOnDashboard      Boolean  @default(true)
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  id                  String   @id @default(uuid())
+  tenantId            String   @unique
+  tenant              Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  isActive            Boolean  @default(false)
+  widgetId            String?
+  showOnHotspotPortal Boolean  @default(true)
+  showOnDashboard     Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
 
   @@map("live_chat_configs")
 }
@@ -901,6 +915,21 @@ model WhatsappConnection {
 /// platform*, collected through the platform's own paybill/till, never a tenant's own M-Pesa
 /// config (that would just be an ISP paying itself). A singleton — application code always
 /// reads/writes the single row, there's no tenantId here at all.
+// ============================================================================================
+// MashupHost Payment Gateway & Settlement
+//
+// Money flow: customer payment → verified provider callback → GatewayTransaction (gross, fee,
+// net) → append-only TenantLedgerEntry rows → TenantPayout (a settlement) → tenant destination.
+// Collection, ledger and settlement are separate records on purpose: nothing ever moves a
+// customer's payment straight to a tenant without the ledger recording it first.
+//
+// Money is integer minor units (cents) throughout, matching the rest of the billing system —
+// exact arithmetic with no floating point. Invariants the application relies on (net = gross −
+// fee, ledger rows never change, one in-flight settlement per tenant, …) are enforced in the
+// database by the CHECK constraints, partial unique indexes and triggers in migration
+// 20260923010000_payment_gateway_settlement, not only in code.
+// ============================================================================================
+
 enum TenantCollectionMode {
   OWN
   PLATFORM
@@ -911,95 +940,399 @@ enum TenantLedgerDirection {
   DEBIT
 }
 
-enum TenantPayoutStatus {
-  PENDING
+/// What a ledger row represents. The pair (sourceType, sourceId) stays the idempotency key.
+enum TenantLedgerEntryType {
+  CUSTOMER_PAYMENT
+  PLATFORM_FEE
+  SETTLEMENT
+  SETTLEMENT_REVERSAL
+  PAYMENT_REVERSAL
+  FEE_REVERSAL
+  REFUND
+  ADJUSTMENT
+}
+
+/// A settlement's lifecycle. SETTLED is only ever reached on provider confirmation (or, for a
+/// MANUAL settlement, an audited super-admin action carrying the transfer reference).
+enum SettlementStatus {
+  REQUESTED
+  AWAITING_APPROVAL
   PROCESSING
-  COMPLETED
+  SETTLED
+  FAILED
+  CANCELLED
+}
+
+enum SettlementProviderKind {
+  MPESA_B2B
+  MPESA_B2C
+  MANUAL
+  SANDBOX
+}
+
+enum SettlementTrigger {
+  AUTOMATIC
+  TENANT_REQUEST
+  ADMIN
+}
+
+enum SettlementMode {
+  AUTOMATIC
+  MANUAL
+}
+
+enum SettlementFrequency {
+  INSTANT
+  DAILY
+  WEEKLY
+  MANUAL
+}
+
+enum SettlementDestinationType {
+  MPESA_PHONE
+  BANK_ACCOUNT
+  TILL
+  PAYBILL
+}
+
+enum DestinationVerificationStatus {
+  UNVERIFIED
+  VERIFIED
   FAILED
 }
 
-/// Double-entry-ish record of what this platform owes a tenant whose payments it collects.
-///
-/// A CREDIT is a customer payment received into the platform's account on the tenant's behalf; a
-/// DEBIT is a payout sent to them. The balance is the sum, and it is derived rather than stored:
-/// a cached balance that drifts from its entries is the classic way money goes missing on paper.
+enum PaymentEnvironment {
+  SANDBOX
+  PRODUCTION
+}
+
+enum GatewayChannel {
+  MPESA_STK
+  MPESA_C2B
+}
+
+enum GatewayTransactionStatus {
+  COMPLETED
+  PARTIALLY_REFUNDED
+  REFUNDED
+  REVERSED
+}
+
+enum TransactionSettlementStatus {
+  UNSETTLED
+  SETTLEMENT_PENDING
+  SETTLED
+}
+
+enum PaymentReferencePurpose {
+  CUSTOMER_ACCOUNT
+  INVOICE
+}
+
+enum GatewayRefundKind {
+  REFUND
+  REVERSAL
+}
+
+enum GatewayRefundStatus {
+  PENDING_CUSTOMER_PAYOUT
+  COMPLETED
+}
+
+enum WebhookEventStatus {
+  RECEIVED
+  PROCESSED
+  DUPLICATE
+  IGNORED
+  REJECTED
+  FAILED
+}
+
+/// Append-only: a database trigger rejects UPDATE and DELETE. Corrections are new rows.
 model TenantLedgerEntry {
-  id          String                @id @default(uuid())
-  tenantId    String
-  tenant      Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  direction   TenantLedgerDirection
-  amountMinor Int
-  currency    String                @default("KES")
-  description String
-  /// What produced this entry — "Payment" or "TenantPayout". Together with sourceId this is
-  /// UNIQUE, which is what makes crediting idempotent: a replayed gateway callback that reaches
-  /// the same payment twice cannot credit the tenant twice.
-  sourceType  String
-  sourceId    String
-  createdAt   DateTime              @default(now())
+  id                   String                @id @default(uuid())
+  tenantId             String
+  tenant               Tenant                @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  direction            TenantLedgerDirection
+  entryType            TenantLedgerEntryType
+  amountMinor          Int
+  currency             String                @default("KES")
+  description          String
+  sourceType           String
+  sourceId             String
+  gatewayTransactionId String?
+  gatewayTransaction   GatewayTransaction?   @relation(fields: [gatewayTransactionId], references: [id], onDelete: Restrict)
+  settlementId         String?
+  settlement           TenantPayout?         @relation(fields: [settlementId], references: [id], onDelete: Restrict)
+  createdByUserId      String?
+  createdAt            DateTime              @default(now())
 
   @@unique([sourceType, sourceId])
   @@index([tenantId, createdAt])
+  @@index([gatewayTransactionId])
+  @@index([settlementId])
   @@map("tenant_ledger_entries")
 }
 
-/// One attempt to send a tenant their balance over Daraja B2B.
+/// A settlement: money this platform sends a tenant. Kept as the existing tenant_payouts table
+/// (extended) rather than a second, parallel settlements table.
 model TenantPayout {
-  id                      String             @id @default(uuid())
-  tenantId                String
-  tenant                  Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  amountMinor             Int
-  currency                String             @default("KES")
-  destinationShortcode    String
-  destinationType         String
-  status                  TenantPayoutStatus @default(PENDING)
-  /// Daraja's own handles, kept so a payout can be chased with Safaricom by reference and so a
-  /// result callback can find the row it belongs to.
-  conversationId          String?
-  originatorConversationId String?           @unique
-  transactionId           String?
-  resultCode              Int?
-  resultDesc              String?
-  failureReason           String?
-  createdAt               DateTime           @default(now())
-  updatedAt               DateTime           @updatedAt
-  completedAt             DateTime?
+  id                       String                 @id @default(uuid())
+  settlementNumber         String                 @unique
+  tenantId                 String
+  tenant                   Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  amountMinor              Int
+  currency                 String                 @default("KES")
+  destinationId            String?
+  destination              SettlementDestination? @relation(fields: [destinationId], references: [id], onDelete: Restrict)
+  /// The destination exactly as it was when the settlement was created (masked).
+  destinationSnapshot      Json?
+  destinationShortcode     String?
+  destinationType          String
+  provider                 SettlementProviderKind @default(MPESA_B2B)
+  environment              PaymentEnvironment     @default(PRODUCTION)
+  trigger                  SettlementTrigger      @default(AUTOMATIC)
+  status                   SettlementStatus       @default(REQUESTED)
+  requestedByUserId        String?
+  approvedByUserId         String?
+  approvedAt               DateTime?
+  processingStartedAt      DateTime?
+  conversationId           String?
+  originatorConversationId String?                @unique
+  /// The provider's own reference for the transfer (M-Pesa TransactionID, or a manual bank ref).
+  transactionId            String?
+  resultCode               Int?
+  resultDesc               String?
+  failureReason            String?
+  providerConfirmedAt      DateTime?
+  /// Daraja reported a queue timeout: outcome unknown, held for review — never auto-failed.
+  timedOutAt               DateTime?
+  retryOfId                String?                @unique
+  retryOf                  TenantPayout?          @relation("SettlementRetry", fields: [retryOfId], references: [id], onDelete: Restrict)
+  retry                    TenantPayout?          @relation("SettlementRetry")
+  resolvedByUserId         String?
+  notes                    String?
+  createdAt                DateTime               @default(now())
+  updatedAt                DateTime               @updatedAt
+  /// When the settlement reached SETTLED.
+  completedAt              DateTime?
+  failedAt                 DateTime?
+  cancelledAt              DateTime?
+
+  ledgerEntries       TenantLedgerEntry[]
+  gatewayTransactions GatewayTransaction[]
 
   @@index([tenantId, createdAt])
+  @@index([status, createdAt])
   @@map("tenant_payouts")
 }
 
+model SettlementDestination {
+  id                         String                        @id @default(uuid())
+  tenantId                   String
+  tenant                     Tenant                        @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  type                       SettlementDestinationType
+  accountName                String
+  phone                      String?
+  bankName                   String?
+  bankBranch                 String?
+  bankAccountNumberEncrypted String?
+  bankAccountLast4           String?
+  tillNumber                 String?
+  paybillNumber              String?
+  paybillAccountReference    String?
+  /// VERIFIED once a provider has confirmed a settlement to this destination.
+  verificationStatus         DestinationVerificationStatus @default(UNVERIFIED)
+  verifiedAt                 DateTime?
+  isActive                   Boolean                       @default(true)
+  deactivatedAt              DateTime?
+  createdByUserId            String?
+  createdAt                  DateTime                      @default(now())
+  updatedAt                  DateTime                      @updatedAt
+
+  settlements TenantPayout[]
+
+  @@index([tenantId, isActive])
+  @@map("settlement_destinations")
+}
+
+/// One row per payment the platform collected on a tenant's behalf. Amounts are immutable
+/// (trigger); only status, refunded total and settlement linkage change afterwards.
+model GatewayTransaction {
+  id                 String                      @id @default(uuid())
+  txnNumber          String                      @unique
+  tenantId           String
+  tenant             Tenant                      @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  paymentId          String                      @unique
+  payment            Payment                     @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  customerId         String?
+  customer           Customer?                   @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  invoiceId          String?
+  invoice            Invoice?                    @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  paymentReferenceId String?
+  paymentReference   PaymentReference?           @relation(fields: [paymentReferenceId], references: [id], onDelete: SetNull)
+  channel            GatewayChannel
+  /// M-Pesa receipt number (may start PRV- until Safaricom's own receipt arrives).
+  providerReference  String
+  /// STK CheckoutRequestID, when collected by STK push.
+  providerRequestId  String?
+  payerPhone         String?
+  environment        PaymentEnvironment
+  currency           String                      @default("KES")
+  grossMinor         Int
+  feeMinor           Int
+  netMinor           Int
+  /// The fee rule in force when this payment landed — changing the fee never rewrites history.
+  feePercentBps      Int
+  feeFixedMinor      Int
+  refundedMinor      Int                         @default(0)
+  status             GatewayTransactionStatus    @default(COMPLETED)
+  settlementStatus   TransactionSettlementStatus @default(UNSETTLED)
+  settlementId       String?
+  settlement         TenantPayout?               @relation(fields: [settlementId], references: [id], onDelete: Restrict)
+  description        String
+  completedAt        DateTime                    @default(now())
+  createdAt          DateTime                    @default(now())
+  updatedAt          DateTime                    @updatedAt
+
+  ledgerEntries TenantLedgerEntry[]
+  refunds       GatewayRefund[]
+
+  @@unique([channel, providerReference])
+  @@index([tenantId, createdAt])
+  @@index([tenantId, status])
+  @@index([settlementId])
+  @@index([customerId])
+  @@index([createdAt])
+  @@map("gateway_transactions")
+}
+
+/// A reference a customer pays against, which is what routes a platform-collected payment to
+/// the right tenant, customer and invoice — never the payer's phone number.
+model PaymentReference {
+  id         String                  @id @default(uuid())
+  reference  String                  @unique
+  tenantId   String
+  tenant     Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  customerId String?
+  customer   Customer?               @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  invoiceId  String?                 @unique
+  invoice    Invoice?                @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  purpose    PaymentReferencePurpose
+  createdAt  DateTime                @default(now())
+
+  gatewayTransactions GatewayTransaction[]
+  stkRequests         MpesaStkRequest[]
+
+  @@index([tenantId])
+  @@index([customerId])
+  @@map("payment_references")
+}
+
+model GatewayRefund {
+  id                   String              @id @default(uuid())
+  refundNumber         String              @unique
+  tenantId             String
+  tenant               Tenant              @relation(fields: [tenantId], references: [id], onDelete: Restrict)
+  gatewayTransactionId String
+  gatewayTransaction   GatewayTransaction  @relation(fields: [gatewayTransactionId], references: [id], onDelete: Restrict)
+  kind                 GatewayRefundKind
+  amountMinor          Int
+  /// The share of the platform fee handed back to the tenant with this refund.
+  feeReturnedMinor     Int
+  reason               String
+  status               GatewayRefundStatus
+  externalReference    String?
+  createdByUserId      String?
+  completedByUserId    String?
+  completedAt          DateTime?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  @@index([gatewayTransactionId])
+  @@index([tenantId, createdAt])
+  @@map("gateway_refunds")
+}
+
+/// Every inbound provider callback, processed or not — including duplicates and rejections.
+model PaymentWebhookEvent {
+  id                   String             @id @default(uuid())
+  provider             String
+  eventType            String
+  externalId           String?
+  tenantId             String?
+  tenant               Tenant?            @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  status               WebhookEventStatus @default(RECEIVED)
+  transactionReference String?
+  payload              Json
+  response             Json?
+  errorMessage         String?
+  sourceIp             String?
+  receivedAt           DateTime           @default(now())
+  processedAt          DateTime?
+
+  @@index([provider, eventType, externalId])
+  @@index([receivedAt])
+  @@index([status, receivedAt])
+  @@index([tenantId, receivedAt])
+  @@map("payment_webhook_events")
+}
+
+/// Platform-wide gateway and settlement policy (singleton, id = "platform").
+model PlatformSettlementSettings {
+  id                     String              @id @default("platform")
+  gatewayEnabled         Boolean             @default(false)
+  feePercentBps          Int                 @default(0)
+  feeFixedMinor          Int                 @default(0)
+  settlementMode         SettlementMode      @default(AUTOMATIC)
+  settlementFrequency    SettlementFrequency @default(DAILY)
+  settlementMinimumMinor Int                 @default(100)
+  /// Hour of day (Africa/Nairobi) DAILY/WEEKLY runs happen.
+  settlementHourEat      Int                 @default(9)
+  /// ISO weekday (1 = Monday) for WEEKLY runs.
+  settlementWeekday      Int                 @default(1)
+  lastScheduledRunAt     DateTime?
+  updatedByUserId        String?
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+
+  @@map("platform_settlement_settings")
+}
+
 model PlatformMpesaConfig {
-  id                      String   @id @default(uuid())
-  isActive                Boolean  @default(false)
-  consumerKeyEncrypted    String?
-  consumerSecretEncrypted String?
-  shortcode               String?
-  passkeyEncrypted        String?
+  id                              String   @id @default(uuid())
+  isActive                        Boolean  @default(false)
+  consumerKeyEncrypted            String?
+  consumerSecretEncrypted         String?
+  shortcode                       String?
+  passkeyEncrypted                String?
   /// B2B initiator. Separate Daraja product from STK Push with its own approval: the initiator
   /// name, and that user's password encrypted against Safaricom's public certificate (the
   /// operator generates that blob and pastes it — this platform never sees the plain password).
-  initiatorName           String?
-  initiatorCredentialEncrypted String?
+  initiatorName                   String?
+  initiatorCredentialEncrypted    String?
   /// Smallest balance, in cents, an automatic payout run will send. A platform decision rather
   /// than an env var: whether a B2B fee is worth paying on a small balance is a commercial
   /// judgement the operator makes and changes, not something that should need a redeploy.
   /// Defaults to 1 — every cent collected is remitted.
-  payoutMinimumMinor      Int      @default(1)
-  environment             String   @default("sandbox")
+  b2cShortcode                    String?
+  b2cInitiatorName                String?
+  b2cInitiatorCredentialEncrypted String?
+  payoutMinimumMinor              Int      @default(1)
+  environment                     String   @default("sandbox")
   /// --- Donate / "Buy Me a Coffee" M-Pesa gateway ---
   /// When true, the public donate page's M-Pesa STK push is enabled. When false, only the
   /// manual Paybill fallback instructions are shown.
-  donateEnabled           Boolean  @default(false)
+  donateEnabled                   Boolean  @default(false)
   /// The Paybill or Till number displayed on the donate page's manual fallback instructions,
   /// and used as the collecting shortcode for donation STK pushes when the platform's own
   /// credentials are configured. Null means "use the platform shortcode".
-  donatePaybill           String?
+  donatePaybill                   String?
   /// The M-Pesa account reference shown to donors (e.g. "COFFEE"). Defaults to "COFFEE" in
   /// application code when null.
-  donateAccountReference  String?
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
+  donateAccountReference          String?
+  createdAt                       DateTime @default(now())
+  updatedAt                       DateTime @updatedAt
 
   @@map("platform_mpesa_config")
 }
@@ -1083,14 +1416,14 @@ enum SubscriptionBillingCycle {
 /// unrelated concept. `Tenant.planTier` (a decorative, unenforced string) predates this model and
 /// is left untouched — fully superseded by `TenantSubscription` going forward.
 model TenantPlan {
-  id                String                   @id @default(uuid())
+  id                String   @id @default(uuid())
   name              String
-  slug              String                   @unique
+  slug              String   @unique
   description       String?
   monthlyPriceMinor Int
   annualPriceMinor  Int?
   /// Replaces the previously-hardcoded TRIAL_DAYS constant — trial length is now per-plan.
-  trialDays         Int                      @default(7)
+  trialDays         Int      @default(7)
   /// Null = unlimited. Only customers/routers are enforced today (see plan-limits.ts) — no
   /// staff-seat or SMS/month fields here since nothing creates staff or counts SMS yet to check
   /// a limit against.
@@ -1098,12 +1431,12 @@ model TenantPlan {
   maxRouters        Int?
   /// Subset of packages/shared's TENANT_FEATURES — what this plan includes. Checked alongside
   /// (not instead of) Tenant.disabledFeatures by requireFeature.
-  features          String[]                 @default([])
-  isDefault         Boolean                  @default(false)
-  isActive          Boolean                  @default(true)
-  sortOrder         Int                      @default(0)
-  createdAt         DateTime                 @default(now())
-  updatedAt         DateTime                 @updatedAt
+  features          String[] @default([])
+  isDefault         Boolean  @default(false)
+  isActive          Boolean  @default(true)
+  sortOrder         Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   subscriptions TenantSubscription[]
 
@@ -1166,14 +1499,14 @@ model TenantSubscriptionPayment {
 /// a dashboard banner on next login/page-load; `AnnouncementDismissal` is per-user so dismissing
 /// it doesn't hide it from the tenant's other staff.
 model PlatformAnnouncement {
-  id              String                   @id @default(uuid())
+  id              String               @id @default(uuid())
   tenantId        String?
-  tenant          Tenant?                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant          Tenant?              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   title           String
   body            String
-  severity        AnnouncementSeverity     @default(INFO)
+  severity        AnnouncementSeverity @default(INFO)
   createdByUserId String?
-  createdAt       DateTime                 @default(now())
+  createdAt       DateTime             @default(now())
   expiresAt       DateTime?
 
   dismissals AnnouncementDismissal[]
@@ -1256,27 +1589,27 @@ enum TicketPriority {
 /// customer's behalf. The `tickets.read`/`tickets.manage` permissions already existed in the RBAC
 /// catalog (packages/shared/src/permissions.ts) with nothing to point them at — this is that.
 model Ticket {
-  id               String          @id @default(uuid())
+  id               String         @id @default(uuid())
   tenantId         String
-  tenant           Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant           Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   customerId       String?
-  customer         Customer?       @relation(fields: [customerId], references: [id])
+  customer         Customer?      @relation(fields: [customerId], references: [id])
   contactName      String?
   contactPhone     String?
   contactEmail     String?
   subject          String
-  status           TicketStatus    @default(OPEN)
-  priority         TicketPriority  @default(NORMAL)
+  status           TicketStatus   @default(OPEN)
+  priority         TicketPriority @default(NORMAL)
   /// Where this ticket came from — lets staff tell a walk-in hotspot report apart from a
   /// logged-in subscriber's own request at a glance, without parsing contact fields.
-  source           String          @default("STAFF")
+  source           String         @default("STAFF")
   assignedToUserId String?
-  assignedToUser   User?           @relation("TicketAssignee", fields: [assignedToUserId], references: [id])
+  assignedToUser   User?          @relation("TicketAssignee", fields: [assignedToUserId], references: [id])
   createdByUserId  String?
-  createdByUser    User?           @relation("TicketCreatedBy", fields: [createdByUserId], references: [id])
+  createdByUser    User?          @relation("TicketCreatedBy", fields: [createdByUserId], references: [id])
   resolvedAt       DateTime?
-  createdAt        DateTime        @default(now())
-  updatedAt        DateTime        @updatedAt
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
 
   messages TicketMessage[]
 
@@ -1339,6 +1672,11 @@ model MpesaStkRequest {
   payment            Payment?               @relation(fields: [paymentId], references: [id])
   /// The raw callback payload, stored verbatim before any business logic runs — the source
   /// record survives even if a processing bug loses the parsed result.
+  /// Whose account collected this push, fixed when it was initiated. The ledger is credited only
+  /// for PLATFORM collections, whatever the tenant's mode is by the time the callback lands.
+  collectedBy        TenantCollectionMode   @default(OWN)
+  paymentReferenceId String?
+  paymentReference   PaymentReference?      @relation(fields: [paymentReferenceId], references: [id], onDelete: SetNull)
   rawCallback        Json?
   createdAt          DateTime               @default(now())
   updatedAt          DateTime               @updatedAt
@@ -1351,22 +1689,25 @@ model MpesaStkRequest {
 /// are null until reconciliation (automatic by BillRefNumber, or manual in the admin UI)
 /// resolves which customer/invoice the payment belongs to.
 model MpesaC2BTransaction {
-  id                String    @id @default(uuid())
-  tenantId          String
-  tenant            Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  transactionId     String    @unique
+  id                String               @id @default(uuid())
+  /// Null only for a payment to the PLATFORM paybill whose reference matched no tenant yet.
+  tenantId          String?
+  tenant            Tenant?              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  transactionId     String               @unique
   shortcode         String
   amountMinor       Int
   msisdn            String
   billRefNumber     String?
   transactionTime   DateTime
   matchedCustomerId String?
-  matchedCustomer   Customer? @relation(fields: [matchedCustomerId], references: [id])
-  paymentId         String?   @unique
-  payment           Payment?  @relation(fields: [paymentId], references: [id])
+  matchedCustomer   Customer?            @relation(fields: [matchedCustomerId], references: [id])
+  paymentId         String?              @unique
+  payment           Payment?             @relation(fields: [paymentId], references: [id])
+  collectedBy       TenantCollectionMode @default(OWN)
+  assignedByUserId  String?
   rawPayload        Json
-  reconciled        Boolean   @default(false)
-  createdAt         DateTime  @default(now())
+  reconciled        Boolean              @default(false)
+  createdAt         DateTime             @default(now())
 
   @@index([tenantId, reconciled])
   @@map("mpesa_c2b_transactions")
@@ -1383,16 +1724,16 @@ enum PaystackTransactionStatus {
 /// transaction, only ever moved to COMPLETED/FAILED by a verified webhook or an explicit
 /// verify-transaction call — never by the initiating request returning successfully.
 model PaystackTransaction {
-  id                 String                    @id @default(uuid())
-  tenantId           String
-  tenant             Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  customerId         String?
-  customer           Customer?                 @relation(fields: [customerId], references: [id])
-  invoiceId          String?
-  invoice            Invoice?                  @relation(fields: [invoiceId], references: [id])
-  hotspotPackageId   String?
-  hotspotPackage     HotspotPackage?           @relation(fields: [hotspotPackageId], references: [id])
-  hotspotVoucherCode String?
+  id                   String                    @id @default(uuid())
+  tenantId             String
+  tenant               Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customerId           String?
+  customer             Customer?                 @relation(fields: [customerId], references: [id])
+  invoiceId            String?
+  invoice              Invoice?                  @relation(fields: [invoiceId], references: [id])
+  hotspotPackageId     String?
+  hotspotPackage       HotspotPackage?           @relation(fields: [hotspotPackageId], references: [id])
+  hotspotVoucherCode   String?
   /// The router's own `link-login-only` URL, captured from the captive-portal page at purchase
   /// time — Paystack's checkout is a full off-site redirect, so it's the only way the browser
   /// still knows where to POST the voucher back to once it returns (see /return in
@@ -1402,26 +1743,26 @@ model PaystackTransaction {
   /// now nothing persisted it) — without this a Paystack-paid hotspot customer has no identity
   /// on the transaction row at all, unlike M-Pesa's `phone`. Null for a non-hotspot transaction,
   /// where the buyer is always a known `Customer` via `customerId` instead.
-  hotspotEmail       String?
+  hotspotEmail         String?
   /// The phone the guest gave at checkout. Already collected by the purchase form and passed
   /// into initiatePaystackHotspotPurchase all along, but previously discarded — it's what the
   /// voucher's WhatsApp delivery is addressed to, the same role MpesaStkRequest.phone plays for
   /// the M-Pesa path. Null for a non-hotspot transaction.
-  hotspotPhone       String?
-  initiatedByUserId  String?
-  reference          String                    @unique
-  amountMinor        Int
-  currency           String                    @default("KES")
-  status             PaystackTransactionStatus @default(PENDING)
-  authorizationUrl   String?
-  gatewayResponse    String?
-  paymentId          String?                   @unique
-  payment            Payment?                  @relation(fields: [paymentId], references: [id])
+  hotspotPhone         String?
+  initiatedByUserId    String?
+  reference            String                    @unique
+  amountMinor          Int
+  currency             String                    @default("KES")
+  status               PaystackTransactionStatus @default(PENDING)
+  authorizationUrl     String?
+  gatewayResponse      String?
+  paymentId            String?                   @unique
+  payment              Payment?                  @relation(fields: [paymentId], references: [id])
   /// The raw webhook/verify payload, stored verbatim before any business logic runs — same
   /// "source record survives a processing bug" rationale as MpesaStkRequest.rawCallback.
-  rawWebhook         Json?
-  createdAt          DateTime                  @default(now())
-  updatedAt          DateTime                  @updatedAt
+  rawWebhook           Json?
+  createdAt            DateTime                  @default(now())
+  updatedAt            DateTime                  @updatedAt
 
   @@index([tenantId, status])
   @@map("paystack_transactions")
@@ -1446,67 +1787,67 @@ enum RouterStatus {
 /// Router credentials are AES-256-GCM encrypted at rest — decrypted only in-process by
 /// apps/api / apps/worker, never sent to apps/web (docs/architecture/06).
 model Router {
-  id                String       @id @default(uuid())
-  tenantId          String
-  tenant            Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  name              String
-  vendor            RouterVendor @default(MIKROTIK)
+  id                   String       @id @default(uuid())
+  tenantId             String
+  tenant               Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name                 String
+  vendor               RouterVendor @default(MIKROTIK)
   /// Null until the router either calls home (see provisionTokenHash) or an admin fills it in
   /// manually — a row can exist "pending" with generated credentials but no known address yet.
-  host              String?
-  apiPort           Int          @default(8728)
-  useTls            Boolean      @default(false)
-  usernameEncrypted String
-  passwordEncrypted String
+  host                 String?
+  apiPort              Int          @default(8728)
+  useTls               Boolean      @default(false)
+  usernameEncrypted    String
+  passwordEncrypted    String
   /// Hash of the one-time token embedded in the paste-and-run provisioning script — the router
   /// itself presents this token when it calls back to /routers/provision/:token/callback, which
   /// is how `host` above gets populated without an admin ever typing an IP. Null for routers
   /// linked the old manual-entry way (host/credentials filled in directly).
-  provisionTokenHash String?     @unique
-  provisionedAt      DateTime?
+  provisionTokenHash   String?      @unique
+  provisionedAt        DateTime?
   /// WireGuard remote access — lets the platform reach this router's API even when it has no
   /// public IP / is behind NAT (the common case for a real customer-premises router), instead
   /// of requiring `host` to already be directly reachable. Once set, `host` is updated to this
   /// tunnel IP so every existing host-based feature (test-connection, hotspot script, live
   /// sessions) keeps working unchanged — nothing else in the app needs to know VPN exists.
-  vpnRegisterTokenHash String?   @unique
+  vpnRegisterTokenHash String?      @unique
   vpnPublicKey         String?
   vpnIp                String?
   vpnConfiguredAt      DateTime?
-  status            RouterStatus @default(UNKNOWN)
+  status               RouterStatus @default(UNKNOWN)
   /// PPPoE server settings, per router because they are a network-design choice that differs by
   /// site: which port or VLAN faces the subscribers, and what addresses they are handed. Left
   /// null on a hotspot-only router, in which case the provisioning script emits no PPPoE section
   /// at all rather than imposing an addressing plan that could collide with a live network.
   /// The interface PPPoE listens on (e.g. "ether2", "vlan100", or the LAN bridge).
-  pppoeInterface    String?
+  pppoeInterface       String?
   /// The gateway address subscribers see, e.g. "10.10.0.1". Must sit outside pppoePoolRange.
-  pppoeGatewayIp    String?
+  pppoeGatewayIp       String?
   /// RouterOS pool range for subscriber addresses, e.g. "10.10.0.2-10.10.255.254".
-  pppoePoolRange    String?
+  pppoePoolRange       String?
   /// Drop traffic that arrived via a customer's own phone hotspot or travel router, so one
   /// voucher cannot serve a whole room. Off by default because the detection is TTL-based and
   /// therefore imperfect — see buildAntiTetheringSection for exactly who it can wrongly block.
-  blockTethering    Boolean      @default(false)
-  lastSeenAt        DateTime?
-  lastError         String?
-  cpuLoadPercent    Int?
-  memoryUsedBytes   BigInt?
-  memoryTotalBytes  BigInt?
-  uptimeSeconds     Int?
-  createdAt         DateTime     @default(now())
-  updatedAt         DateTime     @updatedAt
-  deletedAt         DateTime?
+  blockTethering       Boolean      @default(false)
+  lastSeenAt           DateTime?
+  lastError            String?
+  cpuLoadPercent       Int?
+  memoryUsedBytes      BigInt?
+  memoryTotalBytes     BigInt?
+  uptimeSeconds        Int?
+  createdAt            DateTime     @default(now())
+  updatedAt            DateTime     @updatedAt
+  deletedAt            DateTime?
 
   vlans            Vlan[]
   packages         Package[]
-  ipPools     IPPool[]
-  radiusNas   RadiusNas[]
-  syncTasks   NetworkSyncTask[]
+  ipPools          IPPool[]
+  radiusNas        RadiusNas[]
+  syncTasks        NetworkSyncTask[]
+  provisioningJobs ProvisioningJob[]
 
   @@index([tenantId, status])
   @@map("routers")
-  provisioningJobs ProvisioningJob[]
 }
 
 enum IpVersion {
@@ -1546,17 +1887,17 @@ enum IPAddressStatus {
 }
 
 model IPAddress {
-  id         String          @id @default(uuid())
-  tenantId   String
-  tenant     Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  poolId     String
-  pool       IPPool          @relation(fields: [poolId], references: [id], onDelete: Cascade)
-  address    String
-  status     IPAddressStatus @default(AVAILABLE)
-  assignedToRadiusUserId String? @unique
-  assignedToRadiusUser   RadiusUser? @relation(fields: [assignedToRadiusUserId], references: [id])
-  createdAt  DateTime        @default(now())
-  updatedAt  DateTime        @updatedAt
+  id                     String          @id @default(uuid())
+  tenantId               String
+  tenant                 Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  poolId                 String
+  pool                   IPPool          @relation(fields: [poolId], references: [id], onDelete: Cascade)
+  address                String
+  status                 IPAddressStatus @default(AVAILABLE)
+  assignedToRadiusUserId String?         @unique
+  assignedToRadiusUser   RadiusUser?     @relation(fields: [assignedToRadiusUserId], references: [id])
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
 
   @@unique([poolId, address])
   @@index([tenantId, status])
@@ -1595,29 +1936,29 @@ enum RadiusUserStatus {
 /// Customer/CustomerService/Tenant that bare `radcheck` rows can't express. Kept in sync with
 /// `RadCheck`/`RadReply` by packages/radius's provisioning service (docs/architecture/06).
 model RadiusUser {
-  id                  String            @id @default(uuid())
-  tenantId            String
-  tenant              Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  customerId          String
-  customer            Customer          @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  customerServiceId   String            @unique
-  customerService     CustomerService   @relation(fields: [customerServiceId], references: [id], onDelete: Cascade)
-  username            String            @unique
+  id                String           @id @default(uuid())
+  tenantId          String
+  tenant            Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customerId        String
+  customer          Customer         @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customerServiceId String           @unique
+  customerService   CustomerService  @relation(fields: [customerServiceId], references: [id], onDelete: Cascade)
+  username          String           @unique
   /// AES-256-GCM at rest in *this* table; the provisioning service decrypts it once to mirror
   /// the plaintext into `RadCheck` (Cleartext-Password), which is what FreeRADIUS actually
   /// reads — see the RadiusNas.secret comment for why that mirror can't itself be encrypted.
-  passwordEncrypted   String
-  status              RadiusUserStatus  @default(ACTIVE)
-  connectionType      String            @default("PPPOE")
-  staticIp            String?
-  downloadKbps        Int?
-  uploadKbps          Int?
-  simultaneousUse     Int               @default(1)
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
+  passwordEncrypted String
+  status            RadiusUserStatus @default(ACTIVE)
+  connectionType    String           @default("PPPOE")
+  staticIp          String?
+  downloadKbps      Int?
+  uploadKbps        Int?
+  simultaneousUse   Int              @default(1)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
 
-  assignedIp   IPAddress?
-  syncTasks    NetworkSyncTask[]
+  assignedIp IPAddress?
+  syncTasks  NetworkSyncTask[]
 
   @@index([tenantId, status])
   @@map("radius_users")
@@ -1693,25 +2034,25 @@ enum VoucherStatus {
 }
 
 model HotspotPackage {
-  id              String           @id @default(uuid())
+  id              String   @id @default(uuid())
   tenantId        String
-  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   name            String
   description     String?
   priceMinor      Int
-  currency        String           @default("KES")
+  currency        String   @default("KES")
   durationMinutes Int
   dataCapMb       Int?
   downloadKbps    Int?
   uploadKbps      Int?
-  isPopular       Boolean          @default(false)
+  isPopular       Boolean  @default(false)
   badge           String?
-  simultaneousUse Int              @default(1)
-  blockTethering  Boolean          @default(false)
-  appPolicy       String?          @default("ALL")
-  isActive        Boolean          @default(true)
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  simultaneousUse Int      @default(1)
+  blockTethering  Boolean  @default(false)
+  appPolicy       String?  @default("ALL")
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
   hotspotVouchers      HotspotVoucher[]
   mpesaStkRequests     MpesaStkRequest[]
@@ -1864,7 +2205,7 @@ model Vlan {
   subnetCidr String?
   gateway    String?
   ipPoolId   String?
-  ipPool     IPPool? @relation(fields: [ipPoolId], references: [id], onDelete: SetNull)
+  ipPool     IPPool?  @relation(fields: [ipPoolId], references: [id], onDelete: SetNull)
   dnsServers String[] @default([])
 
   downloadKbps Int?
@@ -1873,8 +2214,8 @@ model Vlan {
 
   /// Whether an administrator has this VLAN switched on in the billing system. Distinct from
   /// provisioningStatus, which reflects the device.
-  isEnabled          Boolean                 @default(true)
-  provisioningStatus VlanProvisioningStatus  @default(NOT_PROVISIONED)
+  isEnabled             Boolean                @default(true)
+  provisioningStatus    VlanProvisioningStatus @default(NOT_PROVISIONED)
   /// The device's own error text from the last failed provisioning attempt, surfaced verbatim to
   /// the admin rather than replaced with a generic message they cannot act on.
   lastProvisioningError String?
@@ -1884,17 +2225,18 @@ model Vlan {
   /// yet, and inventing one before a real OLT integration exists would be guessing at a vendor's
   /// data shape. They are here so the VLAN record can carry the identifiers a future OLT adapter
   /// will need without a second migration against live data.
-  oltDeviceRef   String?
-  ponPort        String?
-  serviceVlanTag Int?
+  oltDeviceRef    String?
+  ponPort         String?
+  serviceVlanTag  Int?
   customerVlanTag Int?
-  vlanMode       String?
+  vlanMode        String?
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   deletedAt DateTime?
 
-  packages Package[]
+  packages         Package[]
+  provisioningJobs ProvisioningJob[]
 
   /// The duplicate-VLAN-ID rule the spec calls for, enforced by the database rather than by a
   /// service-layer check alone. Note Postgres treats NULLs as distinct, so this constrains only
@@ -1904,7 +2246,6 @@ model Vlan {
   @@index([tenantId, isEnabled])
   @@index([tenantId, type])
   @@map("vlans")
-  provisioningJobs ProvisioningJob[]
 }
 
 /// A unit of network configuration work, queued rather than run inside the request that
@@ -1965,18 +2306,18 @@ model ProvisioningJob {
 /// only carries the LATEST error, and 'it failed three times with the same timeout' is a
 /// different diagnosis from 'it failed three times for three different reasons'.
 model ProvisioningLog {
-  id     String          @id @default(uuid())
-  jobId  String
-  job    ProvisioningJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  attempt Int
-  succeeded Boolean
+  id         String          @id @default(uuid())
+  jobId      String
+  job        ProvisioningJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  attempt    Int
+  succeeded  Boolean
   /// Verbatim device response or error. Never rewritten into a friendlier message here; the
   /// UI may summarise, but the record keeps what the device said.
-  message String
+  message    String
   /// Individual steps within the attempt, so a partial failure shows which step broke.
-  steps   Json?
+  steps      Json?
   durationMs Int?
-  createdAt DateTime @default(now())
+  createdAt  DateTime        @default(now())
 
   @@index([jobId, attempt])
   @@map("provisioning_logs")

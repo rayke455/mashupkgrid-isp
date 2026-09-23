@@ -167,12 +167,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       show: isTenantScoped && has("billing.read"),
     },
     {
-      href: "/settlement",
-      label: "Settlement",
-      icon: <IconInvoice size={18} />,
-      show: isTenantScoped && has("payments.read"),
-    },
-    {
       href: "/purchase-attempts",
       label: "Purchase attempts",
       icon: <IconPulse size={18} />,
@@ -253,12 +247,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       show: isTenantScoped && has("audit_logs.read"),
     },
     {
-      href: "/payments-setup",
-      label: "Payment Gateways",
-      icon: <IconMpesa size={18} />,
-      show: isTenantScoped && (has("settings.manage") || has("billing.manage")),
-    },
-    {
       href: "/shop",
       label: "Hardware Store",
       icon: <IconPackage size={18} />,
@@ -272,15 +260,27 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     },
   ];
 
+  // Payments: the MashupHost gateway — collections, balance and settlements. Its own section for
+  // both audiences, because money held on a tenant's behalf is the platform's largest liability.
+  const tenantPaymentItems: NavItem[] = [
+    { href: "/payments", label: "Overview", icon: <IconDashboard size={18} />, show: isTenantScoped && has("payments.read") },
+    { href: "/payments/transactions", label: "Transactions", icon: <IconMpesa size={18} />, show: isTenantScoped && has("payments.read") },
+    { href: "/payments/balance", label: "Balance", icon: <IconInvoice size={18} />, show: isTenantScoped && has("payments.read") },
+    { href: "/payments/settlements", label: "Settlements", icon: <IconLayers size={18} />, show: isTenantScoped && has("payments.read") },
+    { href: "/payments/settings", label: "Payment Settings", icon: <IconMaintenance size={18} />, show: isTenantScoped && has("payments.read") },
+  ];
+
+  const platformPaymentItems: NavItem[] = [
+    { href: "/admin/payments", label: "Overview", icon: <IconDashboard size={18} />, show: !isTenantScoped && has("platform_payments.read") },
+    { href: "/admin/payments/transactions", label: "Transactions", icon: <IconMpesa size={18} />, show: !isTenantScoped && has("platform_payments.read") },
+    { href: "/admin/payments/settlements", label: "Settlements", icon: <IconLayers size={18} />, show: !isTenantScoped && has("platform_payments.read") },
+    { href: "/admin/payments/reconciliation", label: "Reconciliation", icon: <IconShield size={18} />, show: !isTenantScoped && has("platform_payments.read") },
+    { href: "/admin/payments/gateway", label: "Payment Gateway", icon: <IconLock size={18} />, show: !isTenantScoped && has("platform_payments.read") },
+    { href: "/admin/payments/fees", label: "Fees", icon: <IconInvoice size={18} />, show: !isTenantScoped && has("platform_payments.read") },
+    { href: "/admin/payments/webhooks", label: "Webhooks", icon: <IconPulse size={18} />, show: !isTenantScoped && has("platform_payments.read") },
+  ];
+
   const platformItems: NavItem[] = [
-    {
-      // Money held on tenants' behalf is the platform's largest liability, so it sits at the top
-      // of the platform section rather than inside a settings page.
-      href: "/money",
-      label: "Money management",
-      icon: <IconInvoice size={18} />,
-      show: !isTenantScoped && has("tenants.read"),
-    },
     {
       href: "/tenants",
       label: "Tenants",
@@ -417,6 +417,25 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                       label={item.label}
                       icon={item.icon}
                       active={isActive(item.href)}
+                    />
+                  ))}
+              </>
+            )}
+
+            {[...tenantPaymentItems, ...platformPaymentItems].some((item) => item.show) && (
+              <>
+                <p className="mb-1.5 mt-6 px-3 text-[10px] font-mono font-bold uppercase tracking-wider text-slate-400">
+                  Payments
+                </p>
+                {[...tenantPaymentItems, ...platformPaymentItems]
+                  .filter((item) => item.show)
+                  .map((item) => (
+                    <NavLink
+                      key={item.href}
+                      href={item.href}
+                      label={item.label}
+                      icon={item.icon}
+                      active={item.href === "/payments" || item.href === "/admin/payments" ? pathname === item.href : isActive(item.href)}
                     />
                   ))}
               </>

@@ -14,4 +14,4 @@ export * from "./paystack/index.js";
 export * from "./pesapal/index.js";
 export * from "./purchase-attempts.service.js";
 export * from "./ledger.service.js";
-export * from "./payout.service.js";
+export * from "./gateway/index.js";

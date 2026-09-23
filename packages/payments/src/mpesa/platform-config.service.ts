@@ -43,7 +43,13 @@ export interface SetPlatformMpesaConfigInput {
    *  before they have B2B approval. */
   initiatorName?: string;
   initiatorCredential?: string;
-  /** Smallest balance an automatic payout run will send, in cents. */
+  /** B2C (settlements to an M-Pesa phone) runs on its own B2C-enabled shortcode with its own
+   *  initiator; Safaricom approves B2C separately from B2B. */
+  b2cShortcode?: string;
+  b2cInitiatorName?: string;
+  b2cInitiatorCredential?: string;
+  /** Superseded by PlatformSettlementSettings.settlementMinimumMinor; kept for older clients.
+   *  Smallest balance an automatic payout run will send, in cents. */
   payoutMinimumMinor?: number;
   /** --- Donate / "Buy Me a Coffee" M-Pesa gateway --- */
   donateEnabled?: boolean;
@@ -70,6 +76,11 @@ export async function setPlatformMpesaConfig(input: SetPlatformMpesaConfigInput)
     ...(input.initiatorName !== undefined ? { initiatorName: input.initiatorName || null } : {}),
     ...(input.initiatorCredential
       ? { initiatorCredentialEncrypted: encryptAtRest(input.initiatorCredential, env.ENCRYPTION_KEY) }
+      : {}),
+    ...(input.b2cShortcode !== undefined ? { b2cShortcode: input.b2cShortcode.trim() || null } : {}),
+    ...(input.b2cInitiatorName !== undefined ? { b2cInitiatorName: input.b2cInitiatorName.trim() || null } : {}),
+    ...(input.b2cInitiatorCredential
+      ? { b2cInitiatorCredentialEncrypted: encryptAtRest(input.b2cInitiatorCredential, env.ENCRYPTION_KEY) }
       : {}),
     ...(input.payoutMinimumMinor !== undefined
       ? { payoutMinimumMinor: Math.max(1, Math.floor(input.payoutMinimumMinor)) }
@@ -133,6 +144,55 @@ export async function getPlatformB2BStatus(): Promise<{
     configured: Boolean(config?.initiatorName && config.initiatorCredentialEncrypted),
     initiatorName: config?.initiatorName ?? null,
     payoutMinimumMinor: config?.payoutMinimumMinor ?? 1,
+  };
+}
+
+/** Safe-to-display B2C status — never the credential. */
+export async function getPlatformB2CStatus(): Promise<{
+  configured: boolean;
+  shortcode: string | null;
+  initiatorName: string | null;
+}> {
+  const config = await getCachedPlatformConfig();
+  return {
+    configured: Boolean(config?.b2cShortcode && config?.b2cInitiatorName && config?.b2cInitiatorCredentialEncrypted),
+    shortcode: config?.b2cShortcode ?? null,
+    initiatorName: config?.b2cInitiatorName ?? null,
+  };
+}
+
+export interface PayoutInitiator {
+  initiatorName: string;
+  securityCredential: string;
+}
+
+/** Decrypted initiator for B2B settlements. Server-side only — never returned to any client. */
+export async function getPlatformB2BInitiator(): Promise<PayoutInitiator> {
+  const config = await getCachedPlatformConfig();
+  if (!config?.initiatorName || !config.initiatorCredentialEncrypted) {
+    throw new ValidationError(
+      "B2B initiator is not configured — set the initiator name and security credential in the platform payment gateway settings."
+    );
+  }
+  return {
+    initiatorName: config.initiatorName,
+    securityCredential: decryptAtRest(config.initiatorCredentialEncrypted, env.ENCRYPTION_KEY),
+  };
+}
+
+/** Decrypted B2C credentials: the platform Daraja app, pointed at the B2C shortcode. */
+export async function getPlatformB2CCredentials(): Promise<{ credentials: MpesaCredentials } & PayoutInitiator> {
+  const config = await getCachedPlatformConfig();
+  if (!config?.b2cShortcode || !config.b2cInitiatorName || !config.b2cInitiatorCredentialEncrypted) {
+    throw new ValidationError(
+      "B2C is not configured — set the B2C shortcode, initiator name and security credential in the platform payment gateway settings."
+    );
+  }
+  const base = await getPlatformMpesaCredentials();
+  return {
+    credentials: { ...base, shortcode: config.b2cShortcode },
+    initiatorName: config.b2cInitiatorName,
+    securityCredential: decryptAtRest(config.b2cInitiatorCredentialEncrypted, env.ENCRYPTION_KEY),
   };
 }
 
