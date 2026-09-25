@@ -1,7 +1,7 @@
 import { randomInt } from "node:crypto";
 import { hashToken, generateSecureToken, ConflictError, ValidationError } from "@mashupkgrid/shared";
 import { redis } from "./redis.js";
-import { enqueueSendWhatsappOtp } from "./queue.js";
+import { enqueueSendWhatsappOtp, enqueueSendEmailOtp } from "./queue.js";
 
 const CODE_TTL_SECONDS = 10 * 60; // matches the frontend wizard's 10-minute countdown
 const TICKET_TTL_SECONDS = 15 * 60; // a little slack past the code's own expiry to finish the rest of the form
@@ -12,49 +12,67 @@ interface StoredOtp {
   attempts: number;
 }
 
-function otpKey(purpose: string, phone: string): string {
-  return `wa-otp:${purpose}:${phone}`;
+function otpKey(purpose: string, identifier: string): string {
+  return `otp:${purpose}:${identifier}`;
 }
 
-function ticketKey(purpose: string, phone: string): string {
-  return `wa-otp-ticket:${purpose}:${phone}`;
+function ticketKey(purpose: string, identifier: string): string {
+  return `otp-ticket:${purpose}:${identifier}`;
 }
 
 /** Loosely normalizes a phone number for OTP purposes: strips everything but digits and a
- *  leading `+`. Deliberately not the stricter Kenya-only normalizeKenyanPhoneE164 (packages/sms)
- *  since the ISP registration wizard this backs supports many countries — the WhatsApp JID this
- *  ultimately becomes (packages/whatsapp's phoneToWhatsAppJid) only needs digits, no particular
- *  country's format. */
+ *  leading `+`. Automatically formats Kenyan local format (07... / 01...) into +254... so WhatsApp
+ *  and SMS gateways never drop messages due to missing country codes. */
 export function normalizePhoneForOtp(input: string): string {
-  const digits = input.replace(/[^\d]/g, "");
+  let digits = input.replace(/[^\d]/g, "");
+  if (digits.length === 10 && digits.startsWith("0")) {
+    digits = `254${digits.slice(1)}`;
+  } else if (digits.length === 9 && (digits.startsWith("7") || digits.startsWith("1"))) {
+    digits = `254${digits}`;
+  }
   if (digits.length < 8) {
     throw new ValidationError("Enter a valid phone number");
   }
   return `+${digits}`;
 }
 
-/** Generates a 6-digit code, stores only its hash (never the plaintext — same pattern as
- *  emailVerificationToken/passwordResetToken), and enqueues the actual WhatsApp send for the
- *  worker (which owns the live paired session) to deliver. */
+export function normalizeEmailForOtp(input: string): string {
+  const clean = input.trim().toLowerCase();
+  if (!clean.includes("@") || clean.length < 5) {
+    throw new ValidationError("Enter a valid email address");
+  }
+  return clean;
+}
+
+/** Generates a 6-digit code, stores only its hash (never the plaintext), and enqueues WhatsApp delivery. */
 export async function requestWhatsappOtp(phone: string, purpose: string): Promise<void> {
   const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
   const stored: StoredOtp = { codeHash: hashToken(code), attempts: 0 };
   await redis.set(otpKey(purpose, phone), JSON.stringify(stored), "EX", CODE_TTL_SECONDS);
-  // No tenant yet — ISP registration OTPs are sent before the tenant that could own a WhatsApp
-  // session exists, so these go out on the platform line.
+  // Also set legacy key for backwards-compatibility
+  await redis.set(`wa-otp:${purpose}:${phone}`, JSON.stringify(stored), "EX", CODE_TTL_SECONDS);
   await enqueueSendWhatsappOtp({ tenantId: null, phone, code });
 }
 
-/** Verifies a typed code against the stored hash. On success, issues a one-time verification
- *  ticket (returned here, and separately consumed by consumeWhatsappOtpTicket) that proves this
- *  phone was actually verified — without this, a caller could skip straight to submitting the
- *  final form claiming success, since the form itself has no other way to prove the code was
- *  ever checked. On failure, counts the attempt toward MAX_VERIFY_ATTEMPTS and locks the code out
- *  once exceeded (a fresh one must be requested), the same brute-force bound login.ts applies to
- *  password attempts. */
-export async function verifyWhatsappOtp(phone: string, purpose: string, code: string): Promise<string> {
-  const key = otpKey(purpose, phone);
-  const raw = await redis.get(key);
+/** Generates a 6-digit code and enqueues Email delivery (useful when WhatsApp is unavailable). */
+export async function requestEmailOtp(email: string, purpose: string): Promise<void> {
+  const cleanEmail = normalizeEmailForOtp(email);
+  const code = String(randomInt(0, 1_000_000)).padStart(6, "0");
+  const stored: StoredOtp = { codeHash: hashToken(code), attempts: 0 };
+  await redis.set(otpKey(purpose, cleanEmail), JSON.stringify(stored), "EX", CODE_TTL_SECONDS);
+  await enqueueSendEmailOtp({ email: cleanEmail, code, purpose });
+}
+
+/** Verifies a typed code against the stored hash for any identifier (phone or email). */
+export async function verifyOtpIdentifier(identifier: string, purpose: string, code: string): Promise<string> {
+  let key = otpKey(purpose, identifier);
+  let raw = await redis.get(key);
+  if (!raw) {
+    // Check legacy key
+    const legacyKey = `wa-otp:${purpose}:${identifier}`;
+    raw = await redis.get(legacyKey);
+    if (raw) key = legacyKey;
+  }
   if (!raw) {
     throw new ValidationError("This code has expired or was never requested — request a new one");
   }
@@ -74,19 +92,38 @@ export async function verifyWhatsappOtp(phone: string, purpose: string, code: st
 
   await redis.del(key); // one-time use — a verified code can't be replayed
   const ticket = generateSecureToken();
-  await redis.set(ticketKey(purpose, phone), ticket, "EX", TICKET_TTL_SECONDS);
+  await redis.set(ticketKey(purpose, identifier), ticket, "EX", TICKET_TTL_SECONDS);
+  // Also set legacy key
+  await redis.set(`wa-otp-ticket:${purpose}:${identifier}`, ticket, "EX", TICKET_TTL_SECONDS);
   return ticket;
 }
 
-/** Consumed by the final registration endpoint — proves this exact phone actually completed
- *  OTP verification for this exact purpose before the account gets created. One-time use: the
- *  ticket is deleted the moment it's checked, whether or not it matched, so it can never be
- *  replayed against a second registration attempt. */
-export async function consumeWhatsappOtpTicket(phone: string, purpose: string, ticket: string): Promise<void> {
-  const key = ticketKey(purpose, phone);
-  const stored = await redis.get(key);
+export async function verifyWhatsappOtp(phone: string, purpose: string, code: string): Promise<string> {
+  return verifyOtpIdentifier(phone, purpose, code);
+}
+
+export async function verifyEmailOtp(email: string, purpose: string, code: string): Promise<string> {
+  return verifyOtpIdentifier(normalizeEmailForOtp(email), purpose, code);
+}
+
+export async function consumeOtpTicket(identifier: string, purpose: string, ticket: string): Promise<void> {
+  let key = ticketKey(purpose, identifier);
+  let stored = await redis.get(key);
+  if (!stored) {
+    const legacyKey = `wa-otp-ticket:${purpose}:${identifier}`;
+    stored = await redis.get(legacyKey);
+    await redis.del(legacyKey);
+  }
   await redis.del(key);
   if (!stored || stored !== ticket) {
-    throw new ValidationError("Phone verification is missing or expired — verify your WhatsApp code again");
+    throw new ValidationError("Verification is missing or expired — verify your code again");
   }
+}
+
+export async function consumeWhatsappOtpTicket(phone: string, purpose: string, ticket: string): Promise<void> {
+  return consumeOtpTicket(phone, purpose, ticket);
+}
+
+export async function consumeEmailOtpTicket(email: string, purpose: string, ticket: string): Promise<void> {
+  return consumeOtpTicket(normalizeEmailForOtp(email), purpose, ticket);
 }

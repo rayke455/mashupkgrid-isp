@@ -5,6 +5,8 @@ import { QUEUE_NAMES, JOB_NAMES } from "@mashupkgrid/shared";
 import { handleSendVerificationEmail } from "./jobs/send-verification-email.js";
 import { handleSendPasswordResetEmail } from "./jobs/send-password-reset-email.js";
 import { handleSendPaymentConfirmationEmail } from "./jobs/send-payment-confirmation-email.js";
+import { handleSendTenantWelcomeEmail } from "./jobs/send-tenant-welcome-email.js";
+import { handleSendEmailOtp } from "./jobs/send-email-otp.js";
 import { handleApplyScheduledMaintenance } from "./jobs/apply-scheduled-maintenance.js";
 import { handleCleanupExpiredTokens } from "./jobs/cleanup-expired-tokens.js";
 import {
@@ -53,6 +55,10 @@ async function main() {
           return handleSendPasswordResetEmail(job.data);
         case JOB_NAMES.sendPaymentConfirmationEmail:
           return handleSendPaymentConfirmationEmail(job.data);
+        case JOB_NAMES.sendTenantWelcomeEmail:
+          return handleSendTenantWelcomeEmail(job.data);
+        case JOB_NAMES.sendEmailOtp:
+          return handleSendEmailOtp(job.data);
         default:
           throw new Error(`Unknown job in queue "${QUEUE_NAMES.email}": ${job.name}`);
       }

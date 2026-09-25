@@ -30,6 +30,7 @@ import {
   enqueueSendVerificationEmail,
   enqueueSendPasswordResetEmail,
   enqueueSendWhatsappTenantWelcome,
+  enqueueSendTenantWelcomeEmail,
 } from "../lib/queue.js";
 
 /**
@@ -412,6 +413,16 @@ export async function registerIspTenant(
     dashboardUrl: `https://${tenant.slug}.${env.PLATFORM_BASE_DOMAIN}/login`,
     portalUrl: `${env.APP_WEB_URL}/hotspot/${tenant.slug}`,
   }).catch((err) => console.error("[auth] failed to enqueue tenant welcome WhatsApp:", err));
+
+  // Welcome the new ISP owner via Email with their Subdomain, Username and links
+  await enqueueSendTenantWelcomeEmail({
+    email: cleanEmail,
+    ownerName: body.name.trim(),
+    companyName: tenant.name,
+    subdomain: tenant.slug,
+    dashboardUrl: `https://${tenant.slug}.${env.PLATFORM_BASE_DOMAIN}/login`,
+    portalUrl: `${env.APP_WEB_URL}/hotspot/${tenant.slug}`,
+  }).catch((err) => console.error("[auth] failed to enqueue tenant welcome Email:", err));
 
   return { tenant, user, session };
 }

@@ -79,14 +79,15 @@ export function IspRegistrationWizard() {
   const [nationalPhone, setNationalPhone] = useState("");
 
   // Step 2: OTP State
+  const [otpChannel, setOtpChannel] = useState<"whatsapp" | "email">("whatsapp");
   const [otpDigits, setOtpDigits] = useState<string[]>(["", "", "", "", "", ""]);
   const [otpTimer, setOtpTimer] = useState(600); // 10 minutes
   const [resendCooldown, setResendCooldown] = useState(60);
   const [isSendingOtp, setIsSendingOtp] = useState(false);
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
-  // Proof this exact phone completed OTP verification — the backend requires this on final
+  // Proof this exact phone/email completed OTP verification — the backend requires this on final
   // submission (see apps/api's /isp-registration route) so skipping straight to step 5 can't
-  // create an account without ever actually verifying the WhatsApp code.
+  // create an account without ever actually verifying the code.
   const [phoneVerificationTicket, setPhoneVerificationTicket] = useState<string | null>(null);
   const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
@@ -248,10 +249,19 @@ export function IspRegistrationWizard() {
 
     setIsSendingOtp(true);
     try {
-      await apiFetch("/api/v1/auth/isp-registration/whatsapp-otp/send", {
+      const endpoint =
+        otpChannel === "whatsapp"
+          ? "/api/v1/auth/isp-registration/whatsapp-otp/send"
+          : "/api/v1/auth/isp-registration/email-otp/send";
+      const body =
+        otpChannel === "whatsapp"
+          ? { phone: `+${selectedCountryInfo.phoneCode} ${nationalPhone.trim()}` }
+          : { email: email.trim().toLowerCase() };
+
+      await apiFetch(endpoint, {
         method: "POST",
         skipAuth: true,
-        body: JSON.stringify({ phone: `+${selectedCountryInfo.phoneCode} ${nationalPhone.trim()}` }),
+        body: JSON.stringify(body),
       });
 
       setOtpDigits(["", "", "", "", "", ""]);
@@ -262,7 +272,11 @@ export function IspRegistrationWizard() {
         otpInputRefs.current[0]?.focus();
       }, 100);
     } catch (err) {
-      setErrorMessage(err instanceof ApiRequestError ? err.message : "Couldn't send the WhatsApp code — try again.");
+      setErrorMessage(
+        err instanceof ApiRequestError
+          ? err.message
+          : `Couldn't send the ${otpChannel === "whatsapp" ? "WhatsApp" : "Email"} verification code — try again.`
+      );
     } finally {
       setIsSendingOtp(false);
     }
@@ -272,17 +286,30 @@ export function IspRegistrationWizard() {
     setErrorMessage(null);
     setIsSendingOtp(true);
     try {
-      await apiFetch("/api/v1/auth/isp-registration/whatsapp-otp/send", {
+      const endpoint =
+        otpChannel === "whatsapp"
+          ? "/api/v1/auth/isp-registration/whatsapp-otp/send"
+          : "/api/v1/auth/isp-registration/email-otp/send";
+      const body =
+        otpChannel === "whatsapp"
+          ? { phone: `+${selectedCountryInfo.phoneCode} ${nationalPhone.trim()}` }
+          : { email: email.trim().toLowerCase() };
+
+      await apiFetch(endpoint, {
         method: "POST",
         skipAuth: true,
-        body: JSON.stringify({ phone: `+${selectedCountryInfo.phoneCode} ${nationalPhone.trim()}` }),
+        body: JSON.stringify(body),
       });
       setOtpDigits(["", "", "", "", "", ""]);
       setOtpTimer(600);
       setResendCooldown(60);
       otpInputRefs.current[0]?.focus();
     } catch (err) {
-      setErrorMessage(err instanceof ApiRequestError ? err.message : "Couldn't resend the WhatsApp code — try again.");
+      setErrorMessage(
+        err instanceof ApiRequestError
+          ? err.message
+          : `Couldn't resend the ${otpChannel === "whatsapp" ? "WhatsApp" : "Email"} code — try again.`
+      );
     } finally {
       setIsSendingOtp(false);
     }
@@ -326,22 +353,37 @@ export function IspRegistrationWizard() {
     e.preventDefault();
     const code = otpDigits.join("");
     if (code.length < 6) {
-      setErrorMessage("Please enter all 6 digits of your WhatsApp verification code.");
+      setErrorMessage(`Please enter all 6 digits of your ${otpChannel === "whatsapp" ? "WhatsApp" : "Email"} verification code.`);
       return;
     }
 
     setErrorMessage(null);
     setIsVerifyingOtp(true);
     try {
-      const res = await apiFetch<{ verified: boolean; ticket: string }>(
-        "/api/v1/auth/isp-registration/whatsapp-otp/verify",
-        {
-          method: "POST",
-          skipAuth: true,
-          body: JSON.stringify({ phone: `+${selectedCountryInfo.phoneCode} ${nationalPhone.trim()}`, code }),
-        }
-      );
+      const verifyEndpoint =
+        otpChannel === "whatsapp"
+          ? "/api/v1/auth/isp-registration/whatsapp-otp/verify"
+          : "/api/v1/auth/isp-registration/email-otp/verify";
+      const verifyBody =
+        otpChannel === "whatsapp"
+          ? { phone: `+${selectedCountryInfo.phoneCode} ${nationalPhone.trim()}`, code }
+          : { email: email.trim().toLowerCase(), code };
+
+      const res = await apiFetch<{
+        verified: boolean;
+        ticket: string;
+        subdomain?: string;
+        subdomainUrl?: string;
+        companyName?: string;
+      }>(verifyEndpoint, {
+        method: "POST",
+        skipAuth: true,
+        body: JSON.stringify(verifyBody),
+      });
+
       setPhoneVerificationTicket(res.ticket);
+      if (res.subdomain) setSlug(res.subdomain);
+      if (res.companyName) setCompanyName(res.companyName);
       setStep(3);
     } catch (err) {
       setErrorMessage(err instanceof ApiRequestError ? err.message : "Couldn't verify that code — try again.");
@@ -417,6 +459,7 @@ export function IspRegistrationWizard() {
           email: email.trim().toLowerCase(),
           phone: fullPhone,
           phoneVerificationTicket,
+          verificationType: otpChannel,
           country: operatingCountry,
           timezone,
           currency,
@@ -510,20 +553,31 @@ export function IspRegistrationWizard() {
           )}
 
           {/* ============================================================ */}
-          {/* STEP 1: CONTACT & WHATSAPP */}
+          {/* STEP 1: CONTACT & VERIFICATION */}
           {/* ============================================================ */}
           {step === 1 && (
             <form onSubmit={handleStep1Submit} className="space-y-4">
               <div className="text-left space-y-1">
                 <h1 className="text-xl sm:text-2xl font-semibold text-slate-950 tracking-tight">
-                  Manage your ISP business
+                  Tenant Account Setup
                 </h1>
                 <p className="text-xs text-slate-600 leading-relaxed">
-                  Streamline operations, automate billing, and delight your customers — start by verifying your WhatsApp number.
+                  Verify your account credentials and access your ISP tenant subdomain.
                 </p>
               </div>
 
-              <div className="space-y-3.5 pt-2 text-left text-xs">
+              {/* Rule 1 Badge */}
+              <div className="p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-lg text-left">
+                <div className="flex items-center gap-1.5 text-amber-800 dark:text-amber-400 font-semibold text-xs">
+                  <span>🔒</span>
+                  <span>Authorized Tenants Only</span>
+                </div>
+                <p className="text-[11px] text-amber-900/80 dark:text-amber-300/80 mt-0.5">
+                  Registration is restricted to provisioned tenants in the system. Strangers cannot request OTP or register.
+                </p>
+              </div>
+
+              <div className="space-y-3 pt-1 text-left text-xs">
                 <div>
                   <Label htmlFor="reg-name" className="text-slate-700">
                     Full name <span className="text-red-600">*</span>
@@ -553,13 +607,13 @@ export function IspRegistrationWizard() {
                     className="mt-1 bg-white border-slate-300 text-slate-950 focus:border-blue-600"
                   />
                   <p className="text-[10px] text-slate-500 mt-1">
-                    Your sign-in address — no temporary inboxes.
+                    Your authorized tenant email registered in the system.
                   </p>
                 </div>
 
                 <div>
                   <Label htmlFor="reg-phone" className="text-slate-700">
-                    WhatsApp number <span className="text-red-600">*</span>
+                    WhatsApp phone number <span className="text-red-600">*</span>
                   </Label>
                   <div className="mt-1 flex gap-2">
                     <select
@@ -578,14 +632,42 @@ export function IspRegistrationWizard() {
                       type="tel"
                       value={nationalPhone}
                       onChange={(e) => setNationalPhone(e.target.value)}
-                      placeholder="7XX XXX XXX"
+                      placeholder="07XX XXX XXX or 7XX XXX XXX"
                       required
                       className="flex-1 bg-white border-slate-300 text-slate-950 font-mono focus:border-blue-600"
                     />
                   </div>
                   <p className="text-[10px] text-slate-500 mt-1">
-                    We&apos;ll send a 6-digit code to this number on WhatsApp.
+                    Kenyan numbers auto-format to +254.
                   </p>
+                </div>
+
+                <div>
+                  <Label className="text-slate-700 block mb-1">Receive verification code via:</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setOtpChannel("whatsapp")}
+                      className={`py-2 px-3 rounded-md text-xs font-medium border flex items-center justify-center gap-1.5 transition-all ${
+                        otpChannel === "whatsapp"
+                          ? "bg-emerald-500/10 border-emerald-500 text-emerald-700 font-bold"
+                          : "bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200/60"
+                      }`}
+                    >
+                      <span>💬</span> WhatsApp
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setOtpChannel("email")}
+                      className={`py-2 px-3 rounded-md text-xs font-medium border flex items-center justify-center gap-1.5 transition-all ${
+                        otpChannel === "email"
+                          ? "bg-blue-500/10 border-blue-500 text-blue-700 font-bold"
+                          : "bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200/60"
+                      }`}
+                    >
+                      <span>✉️</span> Email
+                    </button>
+                  </div>
                 </div>
 
                 <Button
@@ -593,7 +675,7 @@ export function IspRegistrationWizard() {
                   disabled={isSendingOtp}
                   className="w-full py-2.5 font-bold text-xs flex items-center justify-center gap-1.5 mt-4"
                 >
-                  <span>{isSendingOtp ? "Sending code..." : "Send WhatsApp code"}</span>
+                  <span>{isSendingOtp ? "Sending verification code..." : `Send ${otpChannel === "whatsapp" ? "WhatsApp" : "Email"} Code`}</span>
                   {!isSendingOtp && <IconArrowRight size={14} />}
                 </Button>
               </div>
@@ -607,17 +689,19 @@ export function IspRegistrationWizard() {
             <form onSubmit={handleVerifyOtp} className="space-y-4 text-left">
               <div className="space-y-1">
                 <h2 className="text-xl sm:text-2xl font-semibold text-slate-950 tracking-tight">
-                  Check your WhatsApp
+                  Check your {otpChannel === "whatsapp" ? "WhatsApp" : "Email"}
                 </h2>
                 <p className="text-xs text-slate-600">
-                  We sent a 6-digit verification code on WhatsApp to{" "}
-                  <strong className="text-blue-700 font-mono">{formattedWhatsApp}</strong>.{" "}
+                  We sent a 6-digit code to{" "}
+                  <strong className="text-blue-700 font-mono">
+                    {otpChannel === "whatsapp" ? formattedWhatsApp : email}
+                  </strong>.{" "}
                   <button
                     type="button"
                     onClick={() => setStep(1)}
-                    className="text-blue-700 hover:underline inline"
+                    className="text-blue-700 hover:underline inline ml-1"
                   >
-                    Use a different number
+                    Change details
                   </button>
                 </p>
               </div>
@@ -655,24 +739,31 @@ export function IspRegistrationWizard() {
                   disabled={otpDigits.join("").length < 6 || isVerifyingOtp}
                   className="w-full py-2.5 font-bold text-xs flex items-center justify-center gap-1.5 mt-2"
                 >
-                  <span>{isVerifyingOtp ? "Verifying..." : "Verify code"}</span>
+                  <span>{isVerifyingOtp ? "Verifying..." : "Verify code & Continue"}</span>
                   {!isVerifyingOtp && <IconArrowRight size={14} />}
                 </Button>
 
-                <div className="text-center pt-2">
+                <div className="flex items-center justify-between pt-2 text-xs">
                   <button
                     type="button"
                     disabled={resendCooldown > 0 || isSendingOtp}
                     onClick={sendOtpCode}
-                    className={`text-xs font-mono ${
-                      resendCooldown > 0 || isSendingOtp ? "text-slate-600" : "text-blue-700 hover:underline"
+                    className={`font-mono ${
+                      resendCooldown > 0 ? "text-slate-400" : "text-blue-700 hover:underline"
                     }`}
                   >
-                    {isSendingOtp
-                      ? "Sending..."
-                      : resendCooldown > 0
-                        ? `Resend code in ${resendCooldown}s`
-                        : "Didn't get it? Resend code"}
+                    {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : "Resend code"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setOtpChannel(otpChannel === "whatsapp" ? "email" : "whatsapp");
+                      setStep(1);
+                    }}
+                    className="text-slate-500 hover:text-slate-800 text-[11px] underline"
+                  >
+                    {otpChannel === "whatsapp" ? "Switch to Email code" : "Switch to WhatsApp code"}
                   </button>
                 </div>
               </div>

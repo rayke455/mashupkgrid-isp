@@ -13,6 +13,7 @@ Thumbs.db
 uploads/
 prisma/dev.db
 *.tsbuildinfo
+*.rdb
 
 # One-off hardware-debugging scratch scripts (packages/database/*.cjs) — these hardcode real
 # secrets copied from .env for convenience during live router testing (encryption key, RADIUS

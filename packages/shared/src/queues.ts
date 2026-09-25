@@ -38,6 +38,24 @@ export const sendPaymentConfirmationEmailJobSchema = z.object({
 });
 export type SendPaymentConfirmationEmailJob = z.infer<typeof sendPaymentConfirmationEmailJobSchema>;
 
+export const sendTenantWelcomeEmailJobSchema = z.object({
+  email: z.string().email(),
+  ownerName: z.string(),
+  companyName: z.string(),
+  subdomain: z.string(),
+  dashboardUrl: z.string(),
+  portalUrl: z.string(),
+  temporaryPassword: z.string().optional(),
+});
+export type SendTenantWelcomeEmailJob = z.infer<typeof sendTenantWelcomeEmailJobSchema>;
+
+export const sendEmailOtpJobSchema = z.object({
+  email: z.string().email(),
+  code: z.string().length(6),
+  purpose: z.string(),
+});
+export type SendEmailOtpJob = z.infer<typeof sendEmailOtpJobSchema>;
+
 export const applyScheduledMaintenanceJobSchema = z.object({});
 export type ApplyScheduledMaintenanceJob = z.infer<typeof applyScheduledMaintenanceJobSchema>;
 
@@ -181,6 +199,8 @@ export const JOB_NAMES = {
   whatsappConnect: "whatsapp-connect",
   whatsappDisconnect: "whatsapp-disconnect",
   whatsappTestMessage: "whatsapp-test-message",
+  sendTenantWelcomeEmail: "send-tenant-welcome-email",
+  sendEmailOtp: "send-email-otp",
 } as const;
 
 /** Webhook event types a tenant can subscribe an endpoint to. Kept in `shared` (not just the API)

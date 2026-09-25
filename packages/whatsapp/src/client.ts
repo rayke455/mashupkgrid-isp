@@ -215,7 +215,14 @@ export function isSelfChat(sock: WASocket, remoteJid?: string | null): boolean {
  *  Strips every non-digit rather than just a leading `+`. If already a JID (contains @), preserves it. */
 export function phoneToWhatsAppJid(phone: string): string {
   if (phone.includes("@")) return phone;
-  return `${phone.replace(/\D/g, "")}@s.whatsapp.net`;
+  let digits = phone.replace(/\D/g, "");
+  // Auto-normalize Kenyan local phone numbers (e.g. 0712345678 or 0112345678 -> 254712345678 or 254112345678)
+  if (digits.length === 10 && digits.startsWith("0")) {
+    digits = `254${digits.slice(1)}`;
+  } else if (digits.length === 9 && (digits.startsWith("7") || digits.startsWith("1"))) {
+    digits = `254${digits}`;
+  }
+  return `${digits}@s.whatsapp.net`;
 }
 
 export async function sendWhatsAppMessage(sock: WASocket, e164Phone: string, text: string): Promise<void> {

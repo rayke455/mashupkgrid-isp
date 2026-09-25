@@ -14,6 +14,7 @@ import {
   buildKeywordSearchWhere,
   TENANT_FEATURES,
   isReservedSubdomain,
+  hashPassword,
 } from "@mashupkgrid/shared";
 import { getActiveDestination, setActiveDestination, presentDestination } from "@mashupkgrid/payments";
 import { authenticate } from "../plugins/authenticate.js";
@@ -21,6 +22,8 @@ import { resolveTenant } from "../plugins/tenant.js";
 import { checkMaintenance } from "../plugins/maintenance.js";
 import { requirePermission } from "../plugins/authorize.js";
 import { writeAuditLog } from "../lib/audit.js";
+import { enqueueSendWhatsappTenantWelcome, enqueueSendTenantWelcomeEmail } from "../lib/queue.js";
+import { normalizePhoneForOtp } from "../lib/whatsapp-otp.js";
 
 const preHandler = [authenticate, resolveTenant, checkMaintenance] as const;
 
@@ -50,7 +53,10 @@ const createTenantSchema = z.object({
   planId: z.string().uuid().optional(),
   /** Only used to kick off the onboarding-fee STK push right away — never stored on the tenant
    *  itself (a tenant's real billing contact is whichever staff account signs in first). */
-  ownerPhone: z.string().min(9).optional(),
+  ownerPhone: z.string().min(8).optional(),
+  ownerName: z.string().min(2).optional(),
+  ownerEmail: z.string().email().optional(),
+  ownerPassword: z.string().min(8).optional(),
 });
 
 const settlementSchema = z.object({
@@ -183,9 +189,31 @@ interface TenantUsage {
     "/",
     { config: { audience: "platform" }, preHandler: [...preHandler, requirePermission("tenants.create")] },
     async (request, reply) => {
-      const { ownerPhone, planId: requestedPlanId, ...tenantFields } = createTenantSchema.parse(request.body);
-      if (isReservedSubdomain(tenantFields.slug)) {
-        throw new ConflictError(`"${tenantFields.slug}" is a reserved subdomain — choose a different tenant slug`);
+      const {
+        ownerPhone,
+        ownerName,
+        ownerEmail,
+        ownerPassword,
+        planId: requestedPlanId,
+        ...tenantFields
+      } = createTenantSchema.parse(request.body);
+
+      const cleanSlug = tenantFields.slug.trim().toLowerCase();
+      if (isReservedSubdomain(cleanSlug)) {
+        throw new ConflictError(`"${cleanSlug}" is a reserved subdomain — choose a different tenant slug`);
+      }
+
+      const existingTenant = await prisma.tenant.findUnique({ where: { slug: cleanSlug } });
+      if (existingTenant) {
+        throw new ConflictError(`The address "${cleanSlug}" is already taken. Please pick another name.`);
+      }
+
+      const cleanEmail = ownerEmail ? ownerEmail.trim().toLowerCase() : undefined;
+      if (cleanEmail) {
+        const existingUser = await prisma.user.findFirst({ where: { email: cleanEmail } });
+        if (existingUser) {
+          throw new ConflictError(`An account with email "${cleanEmail}" already exists in the system.`);
+        }
       }
 
       const plan = requestedPlanId
@@ -201,10 +229,7 @@ interface TenantUsage {
       const tenant = await prisma.tenant.create({
         data: {
           ...tenantFields,
-          // New tenants are aggregated by default: this platform's paybill collects and owes
-          // them the balance, so an ISP can start selling immediately with nothing to configure
-          // but the number they want paying into. The column default stays OWN so every tenant
-          // created before this keeps collecting on their own account, untouched.
+          slug: cleanSlug,
           collectionMode: "PLATFORM",
           trialEndsAt,
           subscription: {
@@ -213,12 +238,71 @@ interface TenantUsage {
         },
       });
 
-      // Best-effort — a tenant should exist even if the platform's own M-Pesa isn't configured
-      // yet, or the owner didn't give a phone number at creation time. A super admin can trigger
-      // the onboarding-fee charge later from the tenant's own page once either is sorted out.
-      if (ownerPhone) {
+      let createdUser = null;
+      let temporaryPassword = null;
+      const normalizedPhone = ownerPhone ? normalizePhoneForOtp(ownerPhone) : undefined;
+
+      if (cleanEmail) {
+        // Generate or use provided password
+        temporaryPassword = ownerPassword?.trim() || `ISP-${Math.random().toString(36).slice(2, 6).toUpperCase()}!${Math.floor(1000 + Math.random() * 9000)}`;
+        const passwordHash = await hashPassword(temporaryPassword);
+
+        createdUser = await prisma.user.create({
+          data: {
+            tenantId: tenant.id,
+            email: cleanEmail,
+            phone: normalizedPhone || "",
+            passwordHash,
+            status: "ACTIVE",
+            emailVerifiedAt: new Date(),
+          },
+        });
+
+        const ownerRole =
+          (await prisma.role.findFirst({ where: { name: "ISP_OWNER", tenantId: null } })) ??
+          (await prisma.role.findFirst({ where: { name: "OWNER", tenantId: null } })) ??
+          (await prisma.role.findFirst({ where: { isSystem: true, tenantId: null } }));
+
+        if (ownerRole) {
+          await prisma.userRole.upsert({
+            where: { userId_roleId_tenantId: { userId: createdUser.id, roleId: ownerRole.id, tenantId: tenant.id } },
+            update: {},
+            create: { userId: createdUser.id, roleId: ownerRole.id, tenantId: tenant.id },
+          });
+        }
+
+        const dashboardUrl = `https://${cleanSlug}.${env.PLATFORM_BASE_DOMAIN}/login`;
+        const portalUrl = `${env.APP_WEB_URL}/hotspot/${cleanSlug}`;
+
+        // Send Welcome via WhatsApp if phone is available
+        if (normalizedPhone) {
+          await enqueueSendWhatsappTenantWelcome({
+            tenantId: null,
+            phone: normalizedPhone,
+            ownerName: ownerName?.trim() || tenant.name,
+            companyName: tenant.name,
+            username: cleanEmail,
+            dashboardUrl,
+            portalUrl,
+          }).catch((err) => request.log.warn({ err, tenantId: tenant.id }, "Failed to enqueue welcome WhatsApp"));
+        }
+
+        // Send Welcome Email containing subdomain, credentials, and dashboard links
+        await enqueueSendTenantWelcomeEmail({
+          email: cleanEmail,
+          ownerName: ownerName?.trim() || tenant.name,
+          companyName: tenant.name,
+          subdomain: cleanSlug,
+          dashboardUrl,
+          portalUrl,
+          temporaryPassword,
+        }).catch((err) => request.log.warn({ err, tenantId: tenant.id }, "Failed to enqueue welcome Email"));
+      }
+
+      // Best-effort onboarding STK push
+      if (normalizedPhone) {
         try {
-          await initiateOnboardingFeeStkPush(tenant.id, ownerPhone);
+          await initiateOnboardingFeeStkPush(tenant.id, normalizedPhone);
         } catch (err) {
           request.log.warn({ err, tenantId: tenant.id }, "Onboarding-fee STK push failed at tenant creation");
         }
@@ -234,7 +318,26 @@ interface TenantUsage {
         ipAddress: request.ip,
         userAgent: request.headers["user-agent"] ?? null,
       });
-      reply.status(201).send(successResponse(withPlatformUrl(tenant), request.id));
+
+      reply.status(201).send(
+        successResponse(
+          {
+            ...withPlatformUrl(tenant),
+            owner: createdUser
+              ? {
+                  id: createdUser.id,
+                  email: createdUser.email,
+                  name: ownerName?.trim() || tenant.name,
+                  phone: normalizedPhone,
+                  temporaryPassword,
+                }
+              : null,
+            subdomainUrl: `https://${cleanSlug}.${env.PLATFORM_BASE_DOMAIN}`,
+            dashboardLoginUrl: `https://${cleanSlug}.${env.PLATFORM_BASE_DOMAIN}/login`,
+          },
+          request.id
+        )
+      );
     }
   );
 

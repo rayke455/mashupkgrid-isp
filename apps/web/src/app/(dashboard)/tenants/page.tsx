@@ -432,6 +432,17 @@ export default function TenantsPage() {
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [ownerPhone, setOwnerPhone] = useState("");
+  const [ownerName, setOwnerName] = useState("");
+  const [ownerEmail, setOwnerEmail] = useState("");
+  const [ownerPassword, setOwnerPassword] = useState("");
+  const [provisionSuccessData, setProvisionSuccessData] = useState<{
+    name: string;
+    slug: string;
+    subdomainUrl: string;
+    dashboardLoginUrl: string;
+    owner?: { email: string; name: string; phone?: string; temporaryPassword?: string } | null;
+  } | null>(null);
+  const [copiedCredentials, setCopiedCredentials] = useState(false);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "ACTIVE" | "TRIAL" | "SUSPENDED" | "ATTENTION">("ALL");
   const [error, setError] = useState<string | null>(null);
@@ -456,15 +467,31 @@ export default function TenantsPage() {
 
   const createTenant = useMutation({
     mutationFn: () =>
-      apiFetch("/api/v1/platform/tenants", {
+      apiFetch<{
+        name: string;
+        slug: string;
+        subdomainUrl: string;
+        dashboardLoginUrl: string;
+        owner?: { email: string; name: string; phone?: string; temporaryPassword?: string } | null;
+      }>("/api/v1/platform/tenants", {
         method: "POST",
-        body: JSON.stringify({ name, slug: slug.toLowerCase().trim(), ownerPhone: ownerPhone.trim() || undefined }),
+        body: JSON.stringify({
+          name,
+          slug: slug.toLowerCase().trim(),
+          ownerName: ownerName.trim() || undefined,
+          ownerEmail: ownerEmail.trim() || undefined,
+          ownerPhone: ownerPhone.trim() || undefined,
+          ownerPassword: ownerPassword.trim() || undefined,
+        }),
       }),
-    onSuccess: () => {
+    onSuccess: (res) => {
+      setProvisionSuccessData(res);
       setName("");
       setSlug("");
+      setOwnerName("");
+      setOwnerEmail("");
       setOwnerPhone("");
-      setShowProvision(false);
+      setOwnerPassword("");
       queryClient.invalidateQueries({ queryKey: ["tenants"] });
     },
     onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to create tenant"),
@@ -635,13 +662,84 @@ export default function TenantsPage() {
         </Card>
       )}
 
+      {/* Provision Success Dialog / Card */}
+      {provisionSuccessData && (
+        <Card className="border-emerald-500/50 bg-emerald-500/5 dark:bg-emerald-950/20 space-y-4">
+          <div className="flex items-center justify-between pb-3 border-b border-emerald-500/20">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">🎉</span>
+              <div>
+                <h3 className="font-bold text-slate-900 dark:text-white">Tenant Provisioned Successfully!</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Subdomain and credentials have been dispatched via WhatsApp and Email to the tenant owner.
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setProvisionSuccessData(null)}
+              className="text-xs"
+            >
+              Dismiss
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
+            <div className="bg-white dark:bg-slate-900/60 p-3 rounded-lg border border-slate-200 dark:border-slate-800">
+              <span className="text-xs text-slate-500 block">Dedicated Subdomain</span>
+              <a
+                href={provisionSuccessData.dashboardLoginUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="font-mono text-purple-600 dark:text-purple-400 font-semibold text-xs hover:underline flex items-center gap-1 mt-0.5"
+              >
+                {provisionSuccessData.subdomainUrl}
+                <span>↗</span>
+              </a>
+            </div>
+
+            <div className="bg-white dark:bg-slate-900/60 p-3 rounded-lg border border-slate-200 dark:border-slate-800">
+              <span className="text-xs text-slate-500 block">Owner Login Username</span>
+              <span className="font-semibold text-slate-900 dark:text-white text-xs block mt-0.5">
+                {provisionSuccessData.owner?.email ?? "No owner account"}
+              </span>
+            </div>
+
+            {provisionSuccessData.owner?.temporaryPassword && (
+              <div className="sm:col-span-2 bg-white dark:bg-slate-900/60 p-3 rounded-lg border border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                <div>
+                  <span className="text-xs text-slate-500 block">Temporary Password</span>
+                  <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400 text-sm">
+                    {provisionSuccessData.owner.temporaryPassword}
+                  </span>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    const text = `Organization: ${provisionSuccessData.name}\nSubdomain: ${provisionSuccessData.subdomainUrl}\nUsername: ${provisionSuccessData.owner?.email}\nPassword: ${provisionSuccessData.owner?.temporaryPassword}\nLogin: ${provisionSuccessData.dashboardLoginUrl}`;
+                    navigator.clipboard.writeText(text);
+                    setCopiedCredentials(true);
+                    setTimeout(() => setCopiedCredentials(false), 2500);
+                  }}
+                  className="text-xs font-semibold"
+                >
+                  {copiedCredentials ? "Copied! ✓" : "Copy All Credentials"}
+                </Button>
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
+
       {/* Provision New Tenant Card */}
       {showProvision && (
         <Card className="border-purple-500/40 space-y-4">
           <div className="pb-2 border-b border-slate-100 dark:border-slate-800">
             <h2 className="font-bold text-base text-slate-900 dark:text-white">Provision New ISP Tenant</h2>
             <p className="text-xs text-slate-500">
-              Creates a dedicated tenant domain, FreeRADIUS database slice, and 7-day trial.
+              Creates a dedicated tenant domain, owner credentials, FreeRADIUS database slice, and trial. Dispatches welcome details via WhatsApp & Email.
             </p>
           </div>
           <form
@@ -678,24 +776,60 @@ export default function TenantsPage() {
                 required
               />
               <p className="text-[10px] text-slate-400 mt-1 font-mono">
-                URL: https://{slug || "your-slug"}.{data?.platformBaseDomain ?? "billing.example.com"}
+                URL: https://{slug || "your-slug"}.{data?.platformBaseDomain ?? "mashuphost.tech"}
               </p>
             </div>
-            <div className="sm:col-span-2">
-              <Label htmlFor="ownerPhone">Owner M-Pesa Phone (Optional)</Label>
+            <div>
+              <Label htmlFor="ownerName">Owner Full Name (Optional)</Label>
+              <Input
+                id="ownerName"
+                placeholder="e.g. Jane Mwangi"
+                value={ownerName}
+                onChange={(e) => setOwnerName(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label htmlFor="ownerEmail">Owner Email (For Login & Credentials)</Label>
+              <Input
+                id="ownerEmail"
+                type="email"
+                placeholder="owner@isp.co.ke"
+                value={ownerEmail}
+                onChange={(e) => setOwnerEmail(e.target.value)}
+                required
+              />
+              <HintText>Receives subdomain details, username and temporary password.</HintText>
+            </div>
+            <div>
+              <Label htmlFor="ownerPhone">Owner Phone (WhatsApp & M-Pesa)</Label>
               <Input
                 id="ownerPhone"
                 placeholder="0712345678"
                 value={ownerPhone}
                 onChange={(e) => setOwnerPhone(e.target.value)}
+                required
               />
               <HintText>
-                If provided, an onboarding STK push for KES 450 is dispatched immediately.
+                Receives WhatsApp welcome message. Auto-normalizes to Kenyan international format (+254).
               </HintText>
             </div>
-            <div className="sm:col-span-2 pt-1">
+            <div>
+              <Label htmlFor="ownerPassword">Initial Password (Optional)</Label>
+              <Input
+                id="ownerPassword"
+                type="password"
+                placeholder="Leave blank to auto-generate"
+                value={ownerPassword}
+                onChange={(e) => setOwnerPassword(e.target.value)}
+              />
+              <HintText>Auto-generates a secure password if left empty.</HintText>
+            </div>
+            <div className="sm:col-span-2 pt-1 flex items-center justify-between">
+              <Button type="button" variant="outline" onClick={() => setShowProvision(false)}>
+                Cancel
+              </Button>
               <Button type="submit" disabled={createTenant.isPending} className="bg-purple-600 hover:bg-purple-700 text-white font-bold">
-                {createTenant.isPending ? "Provisioning..." : "Create Tenant Account"}
+                {createTenant.isPending ? "Provisioning..." : "Create Tenant Account & Send Credentials"}
               </Button>
             </div>
           </form>

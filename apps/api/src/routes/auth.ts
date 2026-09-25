@@ -1,8 +1,8 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { prisma } from "@mashupkgrid/database";
-import { isProduction } from "@mashupkgrid/config";
-import { successResponse, ValidationError, isReservedSubdomain } from "@mashupkgrid/shared";
+import { env, isProduction } from "@mashupkgrid/config";
+import { successResponse, ValidationError, ForbiddenError, isReservedSubdomain } from "@mashupkgrid/shared";
 import { authenticate } from "../plugins/authenticate.js";
 import { resolveTenant } from "../plugins/tenant.js";
 import { checkMaintenance } from "../plugins/maintenance.js";
@@ -12,7 +12,16 @@ import { getCachedPermissions } from "../lib/permission-cache.js";
 import * as authService from "../services/auth.service.js";
 import { getPlatformGoogleAuthConfig, setPlatformGoogleAuthConfig } from "../services/google-auth-config.service.js";
 import { writeAuditLog } from "../lib/audit.js";
-import { normalizePhoneForOtp, requestWhatsappOtp, verifyWhatsappOtp, consumeWhatsappOtpTicket } from "../lib/whatsapp-otp.js";
+import {
+  normalizePhoneForOtp,
+  normalizeEmailForOtp,
+  requestWhatsappOtp,
+  verifyWhatsappOtp,
+  consumeWhatsappOtpTicket,
+  requestEmailOtp,
+  verifyEmailOtp,
+  consumeEmailOtpTicket,
+} from "../lib/whatsapp-otp.js";
 
 const REFRESH_COOKIE = "refresh_token";
 const REFRESH_COOKIE_PATH = "/api/v1/auth/refresh";
@@ -327,7 +336,9 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
   // phone-verification use of the same helper.
   const WHATSAPP_OTP_PURPOSE = "isp_registration";
 
-  const whatsappOtpPhoneSchema = z.object({ phone: z.string().min(8, "Enter a valid WhatsApp phone number") });
+  const whatsappOtpPhoneSchema = z.object({
+    phone: z.string().min(8, "Enter a valid WhatsApp phone number"),
+  });
 
   app.post(
     "/isp-registration/whatsapp-otp/send",
@@ -335,8 +346,38 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     async (request, reply) => {
       const body = whatsappOtpPhoneSchema.parse(request.body);
       const phone = normalizePhoneForOtp(body.phone);
+
+      // Rule 1: This should work only for tenants in system, not strangers.
+      // Look up if this phone belongs to a tenant user or an existing tenant in the system.
+      const authorizedTenant = await prisma.user.findFirst({
+        where: {
+          OR: [
+            { phone },
+            { phone: phone.replace(/^\+/, "") },
+            { phone: phone.replace(/^\+254/, "0") },
+          ],
+        },
+        include: { tenant: true },
+      });
+
+      if (!authorizedTenant) {
+        throw new ForbiddenError(
+          "Access Denied: This phone number is not registered as an authorized tenant in the system. Strangers cannot request OTP. Please contact your platform administrator."
+        );
+      }
+
       await requestWhatsappOtp(phone, WHATSAPP_OTP_PURPOSE);
-      reply.send(successResponse({ sent: true }, request.id));
+      reply.send(
+        successResponse(
+          {
+            sent: true,
+            method: "whatsapp",
+            tenantName: authorizedTenant.tenant?.name,
+            subdomain: authorizedTenant.tenant?.slug,
+          },
+          request.id
+        )
+      );
     }
   );
 
@@ -352,7 +393,106 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       const body = whatsappOtpVerifySchema.parse(request.body);
       const phone = normalizePhoneForOtp(body.phone);
       const ticket = await verifyWhatsappOtp(phone, WHATSAPP_OTP_PURPOSE, body.code);
-      reply.send(successResponse({ verified: true, ticket }, request.id));
+
+      // Fetch tenant details so the tenant is given their subdomain details, username and email
+      const user = await prisma.user.findFirst({
+        where: {
+          OR: [
+            { phone },
+            { phone: phone.replace(/^\+/, "") },
+            { phone: phone.replace(/^\+254/, "0") },
+          ],
+        },
+        include: { tenant: true },
+      });
+
+      reply.send(
+        successResponse(
+          {
+            verified: true,
+            ticket,
+            subdomain: user?.tenant?.slug,
+            subdomainUrl: user?.tenant?.slug ? `https://${user.tenant.slug}.${env.PLATFORM_BASE_DOMAIN}` : undefined,
+            username: user?.email,
+            email: user?.email,
+            companyName: user?.tenant?.name,
+          },
+          request.id
+        )
+      );
+    }
+  );
+
+  const emailOtpSchema = z.object({
+    email: z.string().email("Enter a valid email address"),
+  });
+
+  app.post(
+    "/isp-registration/email-otp/send",
+    { config: { audience: "public", rateLimit: otpRateLimitConfig }, preHandler: [checkMaintenance] },
+    async (request, reply) => {
+      const body = emailOtpSchema.parse(request.body);
+      const email = normalizeEmailForOtp(body.email);
+
+      // Rule 1: This should work only for tenants in system, not strangers.
+      const authorizedTenant = await prisma.user.findFirst({
+        where: { email },
+        include: { tenant: true },
+      });
+
+      if (!authorizedTenant) {
+        throw new ForbiddenError(
+          "Access Denied: This email address is not registered as an authorized tenant in the system. Strangers cannot request OTP. Please contact your platform administrator."
+        );
+      }
+
+      await requestEmailOtp(email, WHATSAPP_OTP_PURPOSE);
+      reply.send(
+        successResponse(
+          {
+            sent: true,
+            method: "email",
+            tenantName: authorizedTenant.tenant?.name,
+            subdomain: authorizedTenant.tenant?.slug,
+          },
+          request.id
+        )
+      );
+    }
+  );
+
+  const emailOtpVerifySchema = z.object({
+    email: z.string().email(),
+    code: z.string().length(6, "Enter the 6-digit code"),
+  });
+
+  app.post(
+    "/isp-registration/email-otp/verify",
+    { config: { audience: "public", rateLimit: otpRateLimitConfig }, preHandler: [checkMaintenance] },
+    async (request, reply) => {
+      const body = emailOtpVerifySchema.parse(request.body);
+      const email = normalizeEmailForOtp(body.email);
+      const ticket = await verifyEmailOtp(email, WHATSAPP_OTP_PURPOSE, body.code);
+
+      const user = await prisma.user.findFirst({
+        where: { email },
+        include: { tenant: true },
+      });
+
+      reply.send(
+        successResponse(
+          {
+            verified: true,
+            ticket,
+            subdomain: user?.tenant?.slug,
+            subdomainUrl: user?.tenant?.slug ? `https://${user.tenant.slug}.${env.PLATFORM_BASE_DOMAIN}` : undefined,
+            username: user?.email,
+            email: user?.email,
+            companyName: user?.tenant?.name,
+          },
+          request.id
+        )
+      );
     }
   );
 
@@ -362,7 +502,8 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     slug: z.string().min(3).max(30).regex(/^[a-z0-9-]+$/, "Slug must only contain lowercase letters, numbers, and dashes"),
     email: z.string().email("Enter a valid email address"),
     phone: z.string().min(8, "Enter a valid WhatsApp phone number"),
-    phoneVerificationTicket: z.string().min(1, "Verify your WhatsApp code before continuing"),
+    phoneVerificationTicket: z.string().min(1, "Verify your verification code before continuing"),
+    verificationType: z.enum(["whatsapp", "email"]).optional().default("whatsapp"),
     country: z.string().optional().default("KE"),
     timezone: z.string().optional().default("Africa/Nairobi"),
     currency: z.string().optional().default("KES"),
@@ -370,10 +511,6 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     heardAboutUs: z.string().optional(),
   });
 
-  // Creates a whole tenant, an owner account, and a trial subscription from an unauthenticated
-  // request. Without a limit here the only bound was the 300/min global one, which is enough to
-  // mass-register thousands of tenants (and burn the platform WhatsApp line sending each one a
-  // welcome message). Reuses the OTP limit: a legitimate signup happens once.
   app.post(
     "/isp-registration",
     {
@@ -382,11 +519,17 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     },
     async (request, reply) => {
       const body = ispRegistrationSchema.parse(request.body);
-      await consumeWhatsappOtpTicket(
-        normalizePhoneForOtp(body.phone),
-        WHATSAPP_OTP_PURPOSE,
-        body.phoneVerificationTicket
-      );
+
+      if (body.verificationType === "email") {
+        await consumeEmailOtpTicket(body.email, WHATSAPP_OTP_PURPOSE, body.phoneVerificationTicket);
+      } else {
+        await consumeWhatsappOtpTicket(
+          normalizePhoneForOtp(body.phone),
+          WHATSAPP_OTP_PURPOSE,
+          body.phoneVerificationTicket
+        );
+      }
+
       const device = deviceFromRequest(request);
       const { tenant, user, session } = await authService.registerIspTenant(body, device);
 
@@ -397,6 +540,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
           {
             user: { id: user.id, email: user.email, tenantId: user.tenantId },
             tenant: { id: tenant.id, name: tenant.name, slug: tenant.slug },
+            subdomainUrl: `https://${tenant.slug}.${env.PLATFORM_BASE_DOMAIN}`,
             accessToken: session.accessToken,
             expiresInSeconds: session.expiresInSeconds,
           },

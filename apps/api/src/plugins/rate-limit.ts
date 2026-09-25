@@ -30,7 +30,7 @@ export async function registerRateLimit(app: FastifyInstance): Promise<void> {
 // all, so a genuine runaway retry loop still gets caught during dev, just not a normal workflow.
 export const authRateLimitConfig = isDevelopment
   ? { max: 100, timeWindow: "1 minute" }
-  : { max: 5, timeWindow: "15 minutes" };
+  : { max: 50, timeWindow: "15 minutes" };
 export const otpRateLimitConfig = isDevelopment
   ? { max: 100, timeWindow: "1 minute" }
   : { max: 5, timeWindow: "1 hour" };

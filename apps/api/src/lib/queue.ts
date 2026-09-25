@@ -13,6 +13,8 @@ import {
   type WhatsappConnectJob,
   type WhatsappDisconnectJob,
   type WhatsappTestMessageJob,
+  type SendTenantWelcomeEmailJob,
+  type SendEmailOtpJob,
 } from "@mashupkgrid/shared";
 
 const connection = { url: env.REDIS_URL };
@@ -20,6 +22,24 @@ const connection = { url: env.REDIS_URL };
 const emailQueue = new Queue(QUEUE_NAMES.email, { connection });
 const webhooksQueue = new Queue(QUEUE_NAMES.webhooks, { connection });
 const whatsappQueue = new Queue(QUEUE_NAMES.whatsapp, { connection });
+
+export async function enqueueSendTenantWelcomeEmail(data: SendTenantWelcomeEmailJob): Promise<void> {
+  await emailQueue.add(JOB_NAMES.sendTenantWelcomeEmail, data, {
+    attempts: 5,
+    backoff: { type: "exponential", delay: 5000 },
+    removeOnComplete: 1000,
+    removeOnFail: 5000,
+  });
+}
+
+export async function enqueueSendEmailOtp(data: SendEmailOtpJob): Promise<void> {
+  await emailQueue.add(JOB_NAMES.sendEmailOtp, data, {
+    attempts: 3,
+    backoff: { type: "exponential", delay: 3000 },
+    removeOnComplete: 1000,
+    removeOnFail: 2000,
+  });
+}
 
 export async function enqueueSendVerificationEmail(data: SendVerificationEmailJob): Promise<void> {
   await emailQueue.add(JOB_NAMES.sendVerificationEmail, data, {
