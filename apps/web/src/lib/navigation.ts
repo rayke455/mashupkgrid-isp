@@ -140,6 +140,7 @@ function platformSections(has: Has): NavSection[] {
         ...(has("plans.manage") ? [{ href: "/plans", label: "Subscription plans", icon: "layers", keywords: "pricing tiers" } as NavItem] : []),
         ...(has("maintenance.manage") ? [{ href: "/maintenance", label: "Maintenance mode", icon: "maintenance", keywords: "downtime" } as NavItem] : []),
         ...(has("maintenance.manage") ? [{ href: "/automation", label: "Automation", icon: "automation", keywords: "jobs scheduler worker queues" } as NavItem] : []),
+        ...(has("maintenance.manage") ? [{ href: "/admin/walled-garden", label: "Walled garden", icon: "shield", keywords: "hotspot allowed hosts before login paywall" } as NavItem] : []),
       ],
     },
     {

@@ -15,6 +15,7 @@ import { allocateNextVpnIp, registerWireguardPeer, removeWireguardPeer } from ".
 import { ensureWinboxRelayPort } from "./winbox-relay.service.js";
 import { APP_FILTER_RULE_COUNT, APP_FILTER_TAG } from "./app-filter.js";
 import { rememberActiveDevices } from "./hotspot-device.service.js";
+import { listPlatformWalledGardenHosts } from "./walled-garden.js";
 
 export interface RouterHeartbeatMetrics {
   cpuLoadPercent?: number;
@@ -554,7 +555,13 @@ export async function reconcileRouterProvisioning(routerId: string, options: { f
       radiusHost,
       radiusSecret: decryptAtRest(router.passwordEncrypted, env.ENCRYPTION_KEY),
       retiredRadiusHosts: radiusHost === LEGACY_PLATFORM_ADDRESS ? [] : [LEGACY_PLATFORM_ADDRESS],
-      walledGardenHosts: [hostOf(env.APP_PORTAL_URL || "https://captive.mashuphost.tech"), hostOf(routerFacingApiBase())].filter(Boolean),
+      walledGardenHosts: [
+        hostOf(env.APP_PORTAL_URL || "https://captive.mashuphost.tech"),
+        hostOf(routerFacingApiBase()),
+        // What a super admin allowed from the dashboard — this pass is how a router that is
+        // already online picks up a host added after it was linked.
+        ...(await listPlatformWalledGardenHosts()),
+      ].filter(Boolean),
       appFilter: {
         scriptUrl: `${routerFacingApiBase()}/api/v1/hotspot/${router.tenant.slug}/mikrotik-app-filter.rsc`,
         tag: APP_FILTER_TAG,
