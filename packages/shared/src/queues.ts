@@ -38,6 +38,13 @@ export const sendPaymentConfirmationEmailJobSchema = z.object({
 });
 export type SendPaymentConfirmationEmailJob = z.infer<typeof sendPaymentConfirmationEmailJobSchema>;
 
+/** Which moment of onboarding this message marks. A self-registered ISP is PENDING_APPROVAL
+ *  until a super admin approves it, and telling them "you're live, here's your dashboard" at
+ *  registration, before they can sign in, is what "pending" avoids; "approved" is the real
+ *  welcome with the working links; "rejected" says so, with the reason. */
+export const tenantOnboardingStageSchema = z.enum(["pending", "approved", "rejected"]);
+export type TenantOnboardingStage = z.infer<typeof tenantOnboardingStageSchema>;
+
 export const sendTenantWelcomeEmailJobSchema = z.object({
   email: z.string().email(),
   ownerName: z.string(),
@@ -46,8 +53,12 @@ export const sendTenantWelcomeEmailJobSchema = z.object({
   dashboardUrl: z.string(),
   portalUrl: z.string(),
   temporaryPassword: z.string().optional(),
+  stage: tenantOnboardingStageSchema.default("approved"),
+  /** Only for "rejected": what the applicant is told. */
+  reason: z.string().max(500).optional(),
 });
-export type SendTenantWelcomeEmailJob = z.infer<typeof sendTenantWelcomeEmailJobSchema>;
+// z.input, not z.infer: `stage` has a default, so producers may omit it while the worker's parse fills it.
+export type SendTenantWelcomeEmailJob = z.input<typeof sendTenantWelcomeEmailJobSchema>;
 
 export const sendEmailOtpJobSchema = z.object({
   email: z.string().email(),
@@ -105,8 +116,10 @@ export const sendWhatsappTenantWelcomeJobSchema = z.object({
   username: z.string(),
   dashboardUrl: z.string(),
   portalUrl: z.string(),
+  stage: tenantOnboardingStageSchema.default("approved"),
+  reason: z.string().max(500).optional(),
 });
-export type SendWhatsappTenantWelcomeJob = z.infer<typeof sendWhatsappTenantWelcomeJobSchema>;
+export type SendWhatsappTenantWelcomeJob = z.input<typeof sendWhatsappTenantWelcomeJobSchema>;
 
 /**
  * Tells a subscriber what just happened to their internet (spec section 20). Sent only AFTER a

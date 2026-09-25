@@ -62,10 +62,38 @@ export async function handleSendWhatsappTenantWelcome(payload: unknown): Promise
   const data = sendWhatsappTenantWelcomeJobSchema.parse(payload);
   const socket = requireSocket(data.tenantId);
 
+  if (data.stage === "pending") {
+    await sendWhatsAppMessage(
+      socket,
+      data.phone,
+      [
+        `Hi ${data.ownerName}, thanks for registering *${data.companyName}* on MASHUPKGRID ISP.`,
+        "",
+        "Your application is with our team for approval. You will get a message here and by email the moment it is approved, with your sign-in link.",
+        "",
+        `Username: ${data.username}`,
+      ].join("\n")
+    );
+    return;
+  }
+  if (data.stage === "rejected") {
+    await sendWhatsAppMessage(
+      socket,
+      data.phone,
+      [
+        `Hi ${data.ownerName}, we could not approve *${data.companyName}* on MASHUPKGRID ISP.`,
+        ...(data.reason ? ["", `Reason: ${data.reason}`] : []),
+        "",
+        "Reply to this message if you think this is a mistake or want to reapply.",
+      ].join("\n")
+    );
+    return;
+  }
+
   const message = [
     `🎉 Welcome aboard, ${data.ownerName}!`,
     "",
-    `*${data.companyName}* is now live on MASHUPKGRID ISP.`,
+    `*${data.companyName}* has been approved and is now live on MASHUPKGRID ISP.`,
     "",
     `👤 Username: ${data.username}`,
     `🔗 Your dashboard: ${data.dashboardUrl}`,

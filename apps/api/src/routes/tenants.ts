@@ -15,6 +15,7 @@ import {
   TENANT_FEATURES,
   isReservedSubdomain,
   hashPassword,
+  type TenantOnboardingStage,
 } from "@mashupkgrid/shared";
 import { getActiveDestination, setActiveDestination, presentDestination } from "@mashupkgrid/payments";
 import { authenticate } from "../plugins/authenticate.js";
@@ -78,12 +79,73 @@ const listQuerySchema = paginationQuerySchema.extend({
   search: z.string().optional(),
   sortBy: z.string().optional(),
   sortOrder: z.enum(["asc", "desc"]).optional(),
+  status: z.enum(["ACTIVE", "SUSPENDED", "CANCELLED", "PENDING_APPROVAL"]).optional(),
 });
 
 const idParamsSchema = z.object({ tenantId: z.string().uuid() });
 
 const SORTABLE_FIELDS = ["name", "slug", "createdAt", "status"] as const;
 const SEARCHABLE_FIELDS = ["name", "slug"];
+
+/**
+ * Tells the ISP's owner about an approval decision on every channel they gave us: email always
+ * (it is the username), WhatsApp when they registered a phone. The owner is the earliest user of
+ * the tenant, which is the account registration created. Best-effort: the decision is already
+ * committed, so a queue hiccup is logged, not thrown.
+ */
+async function notifyTenantOwner(
+  tenant: Tenant,
+  stage: TenantOnboardingStage,
+  reason?: string
+): Promise<{ email: boolean; whatsapp: boolean }> {
+  const owner = await prisma.user.findFirst({
+    where: { tenantId: tenant.id, deletedAt: null },
+    orderBy: { createdAt: "asc" },
+    select: { email: true, phone: true },
+  });
+  if (!owner) return { email: false, whatsapp: false };
+
+  const dashboardUrl = `https://${tenant.slug}.${env.PLATFORM_BASE_DOMAIN}/login`;
+  const portalUrl = `${env.APP_WEB_URL}/hotspot/${tenant.slug}`;
+  const ownerName = owner.email.split("@")[0] ?? "there";
+  const notified = { email: false, whatsapp: false };
+
+  try {
+    await enqueueSendTenantWelcomeEmail({
+      email: owner.email,
+      ownerName,
+      companyName: tenant.name,
+      subdomain: tenant.slug,
+      dashboardUrl,
+      portalUrl,
+      stage,
+      reason,
+    });
+    notified.email = true;
+  } catch (err) {
+    console.error(`[tenants] could not enqueue ${stage} email for tenant ${tenant.id}`, err);
+  }
+
+  if (owner.phone) {
+    try {
+      await enqueueSendWhatsappTenantWelcome({
+        tenantId: null,
+        phone: owner.phone,
+        ownerName,
+        companyName: tenant.name,
+        username: owner.email,
+        dashboardUrl,
+        portalUrl,
+        stage,
+        reason,
+      });
+      notified.whatsapp = true;
+    } catch (err) {
+      console.error(`[tenants] could not enqueue ${stage} WhatsApp for tenant ${tenant.id}`, err);
+    }
+  }
+  return notified;
+}
 
 export async function tenantRoutes(app: FastifyInstance): Promise<void> {
 /**
@@ -154,7 +216,11 @@ interface TenantUsage {
     { config: { audience: "platform" }, preHandler: [...preHandler, requirePermission("tenants.read")] },
     async (request, reply) => {
       const query = listQuerySchema.parse(request.query);
-      const where = { deletedAt: null, ...buildKeywordSearchWhere(query.search, SEARCHABLE_FIELDS) };
+      const where = {
+        deletedAt: null,
+        ...(query.status ? { status: query.status } : {}),
+        ...buildKeywordSearchWhere(query.search, SEARCHABLE_FIELDS),
+      };
       const [items, total] = await Promise.all([
         prisma.tenant.findMany({
           where,
@@ -483,6 +549,73 @@ interface TenantUsage {
         userAgent: request.headers["user-agent"] ?? null,
       });
       reply.send(successResponse(withPlatformUrl(after), request.id));
+    }
+  );
+
+  /**
+   * Approval of a self-registered ISP. Registration leaves the tenant PENDING_APPROVAL (its owner
+   * cannot sign in, its captive portal refuses customers) and tells the owner to wait; this is
+   * the moment they are told they are live, on both channels they gave us, with the links that
+   * now work. Idempotent on an already-active tenant so a double click sends one welcome.
+   */
+  app.post(
+    "/:tenantId/approve",
+    { config: { audience: "platform" }, preHandler: [...preHandler, requirePermission("tenants.update")] },
+    async (request, reply) => {
+      const { tenantId } = idParamsSchema.parse(request.params);
+      const before = await prisma.tenant.findUnique({ where: { id: tenantId } });
+      if (!before || before.deletedAt) throw new NotFoundError("Tenant");
+      if (before.status !== "PENDING_APPROVAL") {
+        throw new ConflictError(`This tenant is ${before.status.toLowerCase().replace("_", " ")}, not awaiting approval`);
+      }
+
+      const after = await prisma.tenant.update({ where: { id: tenantId }, data: { status: "ACTIVE" } });
+      await writeAuditLog({
+        tenantId,
+        actorUserId: request.user!.id,
+        action: "tenant.approved",
+        resourceType: "Tenant",
+        resourceId: tenantId,
+        before: { status: before.status },
+        after: { status: after.status },
+        ipAddress: request.ip,
+        userAgent: request.headers["user-agent"] ?? null,
+      });
+
+      const notified = await notifyTenantOwner(after, "approved");
+      reply.send(successResponse({ ...withPlatformUrl(after), notified }, request.id));
+    }
+  );
+
+  app.post(
+    "/:tenantId/reject",
+    { config: { audience: "platform" }, preHandler: [...preHandler, requirePermission("tenants.update")] },
+    async (request, reply) => {
+      const { tenantId } = idParamsSchema.parse(request.params);
+      const { reason } = z.object({ reason: z.string().trim().max(500).optional() }).parse(request.body ?? {});
+      const before = await prisma.tenant.findUnique({ where: { id: tenantId } });
+      if (!before || before.deletedAt) throw new NotFoundError("Tenant");
+      if (before.status !== "PENDING_APPROVAL") {
+        throw new ConflictError("Only a tenant awaiting approval can be rejected");
+      }
+
+      // CANCELLED, not deleted: the application and its audit trail stay visible, and the slug
+      // stays reserved so a rejected applicant cannot simply re-register around the decision.
+      const after = await prisma.tenant.update({ where: { id: tenantId }, data: { status: "CANCELLED" } });
+      await writeAuditLog({
+        tenantId,
+        actorUserId: request.user!.id,
+        action: "tenant.rejected",
+        resourceType: "Tenant",
+        resourceId: tenantId,
+        before: { status: before.status },
+        after: { status: after.status, reason: reason ?? null },
+        ipAddress: request.ip,
+        userAgent: request.headers["user-agent"] ?? null,
+      });
+
+      const notified = await notifyTenantOwner(after, "rejected", reason);
+      reply.send(successResponse({ ...withPlatformUrl(after), notified }, request.id));
     }
   );
 

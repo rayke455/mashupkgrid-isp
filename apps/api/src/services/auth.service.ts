@@ -460,6 +460,9 @@ export async function registerIspTenant(
     // from now on, and the welcome message is the first and often only place they are told it.
     dashboardUrl: `https://${tenant.slug}.${env.PLATFORM_BASE_DOMAIN}/login`,
     portalUrl: `${env.APP_WEB_URL}/hotspot/${tenant.slug}`,
+    // The tenant is PENDING_APPROVAL: this says "we have your application", not "you're live".
+    // The real welcome goes out from POST /platform/tenants/:id/approve.
+    stage: "pending",
   }).catch((err) => console.error("[auth] failed to enqueue tenant welcome WhatsApp:", err));
 
   // Welcome the new ISP owner via Email with their Subdomain, Username and links
@@ -470,6 +473,7 @@ export async function registerIspTenant(
     subdomain: tenant.slug,
     dashboardUrl: `https://${tenant.slug}.${env.PLATFORM_BASE_DOMAIN}/login`,
     portalUrl: `${env.APP_WEB_URL}/hotspot/${tenant.slug}`,
+    stage: "pending",
   }).catch((err) => console.error("[auth] failed to enqueue tenant welcome Email:", err));
 
   return { tenant, user, session };

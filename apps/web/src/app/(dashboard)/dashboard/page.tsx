@@ -195,6 +195,13 @@ export default function DashboardHomePage() {
     enabled: isPlatform,
   });
 
+  const { data: pendingTenants } = useQuery({
+    queryKey: ["platform-tenants-pending"],
+    queryFn: () => apiFetch<PaginatedTenants>("/api/v1/platform/tenants?status=PENDING_APPROVAL&limit=1"),
+    enabled: isPlatform,
+    refetchInterval: 60_000,
+  });
+
   const { data: platformMaintenance } = useQuery({
     queryKey: ["platform-maintenance"],
     queryFn: () => apiFetch<MaintenanceStatus>("/api/v1/maintenance", { skipAuth: true }),
@@ -361,7 +368,7 @@ export default function DashboardHomePage() {
       {/* Super admin */}
       {isPlatform && (
         <>
-          <MetricGrid columns={4}>
+          <MetricGrid columns={5}>
             <Metric
               label="ISPs on the platform"
               value={platformTenants?.pagination.total ?? "—"}
@@ -374,6 +381,13 @@ export default function DashboardHomePage() {
               hint={platformMaintenance ? (platformMaintenance.active ? "Customers see the maintenance notice" : "No maintenance scheduled") : undefined}
               tone={platformMaintenance?.active ? "warn" : undefined}
               href="/maintenance"
+            />
+            <Metric
+              label="Awaiting approval"
+              value={pendingTenants ? pendingTenants.pagination.total : "—"}
+              hint={pendingTenants ? (pendingTenants.pagination.total > 0 ? "New ISPs waiting for you to approve them" : "No applications waiting") : undefined}
+              tone={pendingTenants && pendingTenants.pagination.total > 0 ? "warn" : undefined}
+              href="/tenants"
             />
             <Metric label="Payments" value="Gateway" hint="Collections, settlements and reconciliation" href="/admin/payments" />
             <Metric label="Automation" value={automationMetric.value} hint={automationMetric.hint} tone={automationMetric.tone} href="/automation" />
