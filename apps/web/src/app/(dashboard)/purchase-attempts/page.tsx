@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { apiFetch } from "@/lib/api-client";
-import { Badge, Card } from "@/components/ui";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiFetch, ApiRequestError } from "@/lib/api-client";
+import { useAuth } from "@/lib/auth-context";
+import { Badge, Button, Card } from "@/components/ui";
 
 type AttemptStatus = "PENDING" | "COMPLETED" | "FAILED" | "ABANDONED";
 
@@ -63,6 +64,40 @@ function when(iso: string): string {
 export default function PurchaseAttemptsPage() {
   const [status, setStatus] = useState<AttemptStatus | "ALL">("ALL");
   const [days, setDays] = useState(7);
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const canClean = Boolean(user?.permissions.includes("payments.refund"));
+  const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
+
+  // Housekeeping: failed and abandoned prompts are worth a call this week and are noise after.
+  // The server never deletes a completed attempt or one linked to a payment, whatever is asked.
+  const cleanup = useMutation({
+    mutationFn: (olderThanDays: number) =>
+      Promise.all([
+        apiFetch<{ deleted: number }>("/api/v1/payments/purchase-attempts/cleanup", { method: "POST", body: JSON.stringify({ olderThanDays }) }),
+        apiFetch<{ deleted: number }>("/api/v1/payments/cleanup", { method: "POST", body: JSON.stringify({ olderThanDays }) }),
+      ]),
+    onSuccess: ([attempts, payments]) => {
+      setNotice({ ok: true, text: `Removed ${attempts.deleted} failed or abandoned attempt${attempts.deleted === 1 ? "" : "s"} and ${payments.deleted} failed payment record${payments.deleted === 1 ? "" : "s"}.` });
+      queryClient.invalidateQueries({ queryKey: ["purchase-attempts"] });
+    },
+    onError: (err) => setNotice({ ok: false, text: err instanceof ApiRequestError ? err.message : "Clean-up failed" }),
+  });
+  const removeOne = useMutation({
+    mutationFn: (attempt: PurchaseAttempt) => apiFetch(`/api/v1/payments/purchase-attempts/${attempt.provider}/${attempt.id}`, { method: "DELETE" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["purchase-attempts"] }),
+    onError: (err) => setNotice({ ok: false, text: err instanceof ApiRequestError ? err.message : "Could not delete this attempt" }),
+  });
+  const askCleanup = () => {
+    const answer = window.prompt("Delete failed and abandoned attempts (and failed payment records) older than how many days? Completed payments are never touched.", "7");
+    if (answer === null) return;
+    const daysBack = Number(answer);
+    if (!Number.isInteger(daysBack) || daysBack < 1) {
+      setNotice({ ok: false, text: "Enter a whole number of days, at least 1." });
+      return;
+    }
+    cleanup.mutate(daysBack);
+  };
 
   const { data, isLoading } = useQuery({
     queryKey: ["purchase-attempts", status, days],
@@ -80,15 +115,34 @@ export default function PurchaseAttemptsPage() {
 
   return (
     <div className="max-w-5xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">
-          Purchase attempts
-        </h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          Everyone who started a payment — including the ones that never completed. A customer who
-          tried and failed is usually one phone call away from paying.
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">
+            Purchase attempts
+          </h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Everyone who started a payment — including the ones that never completed. A customer who
+            tried and failed is usually one phone call away from paying.
+          </p>
+        </div>
+        {canClean && (
+          <Button variant="outline" size="sm" onClick={askCleanup} disabled={cleanup.isPending} className="shrink-0">
+            {cleanup.isPending ? "Cleaning up…" : "Clean up old failures"}
+          </Button>
+        )}
       </div>
+
+      {notice && (
+        <div
+          className={`rounded-lg border px-4 py-3 text-sm ${
+            notice.ok
+              ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+              : "border-rose-500/25 bg-rose-500/10 text-rose-700 dark:text-rose-300"
+          }`}
+        >
+          {notice.text}
+        </div>
+      )}
 
       {summary && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
@@ -182,6 +236,18 @@ export default function PurchaseAttemptsPage() {
                   <p className="text-xs text-slate-500 dark:text-slate-400">{attempt.phone}</p>
                 )}
                 <p className="mt-0.5 font-mono text-[10px] text-slate-400">{attempt.reference}</p>
+                {canClean && attempt.status !== "COMPLETED" && !attempt.voucherCode && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm("Delete this attempt? It never became a payment.")) removeOne.mutate(attempt);
+                    }}
+                    disabled={removeOne.isPending}
+                    className="mt-1 text-xs text-slate-400 hover:text-rose-500 disabled:opacity-50"
+                  >
+                    Delete
+                  </button>
+                )}
               </div>
             </div>
           </Card>

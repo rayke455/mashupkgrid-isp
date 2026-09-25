@@ -196,3 +196,53 @@ export async function summarisePurchaseAttempts(
     conversionRate: total === 0 ? null : Math.round((completed / total) * 100),
   };
 }
+
+// --- housekeeping ------------------------------------------------------------------------------
+
+export type PurgeablePurchaseAttemptStatus = Exclude<PurchaseAttemptStatus, "COMPLETED">;
+
+export interface PurgePurchaseAttemptsOptions {
+  /** Rows older than this many days. Never less than 1: today's failures are the ones worth a call. */
+  olderThanDays: number;
+  statuses?: PurgeablePurchaseAttemptStatus[];
+}
+
+/**
+ * Deletes the attempts that will never turn into money: failed, abandoned and long-stale pending
+ * rows, older than the cut-off. A COMPLETED attempt is never touched, and neither is any row
+ * already linked to a Payment (`paymentId` set) whatever its status says — that link is the
+ * reconciliation trail for money that did arrive.
+ */
+export async function purgePurchaseAttempts(
+  tenantId: string,
+  options: PurgePurchaseAttemptsOptions
+): Promise<{ mpesa: number; gateway: number }> {
+  const days = Math.max(1, Math.floor(options.olderThanDays));
+  const cutoff = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const statuses = options.statuses?.length ? options.statuses : (["FAILED", "ABANDONED"] as PurgeablePurchaseAttemptStatus[]);
+
+  const [mpesa, gateway] = await Promise.all([
+    prisma.mpesaStkRequest.deleteMany({
+      where: { tenantId, paymentId: null, createdAt: { lt: cutoff }, status: { in: statuses.map((s) => MPESA_STATUS[s]) } },
+    }),
+    prisma.paystackTransaction.deleteMany({
+      where: { tenantId, paymentId: null, createdAt: { lt: cutoff }, status: { in: statuses.map((s) => GATEWAY_STATUS[s]) } },
+    }),
+  ]);
+  return { mpesa: mpesa.count, gateway: gateway.count };
+}
+
+/** Deletes one attempt by the id the list handed out. Same rule: never a completed one, never one
+ *  linked to a payment. Returns false when there was nothing deletable by that id in this tenant. */
+export async function deletePurchaseAttempt(tenantId: string, provider: PurchaseAttemptProvider, id: string): Promise<boolean> {
+  if (provider === "MPESA") {
+    const result = await prisma.mpesaStkRequest.deleteMany({
+      where: { id, tenantId, paymentId: null, status: { in: ["FAILED", "CANCELLED", "PENDING"] } },
+    });
+    return result.count === 1;
+  }
+  const result = await prisma.paystackTransaction.deleteMany({
+    where: { id, tenantId, paymentId: null, status: { in: ["FAILED", "ABANDONED", "PENDING"] } },
+  });
+  return result.count === 1;
+}
