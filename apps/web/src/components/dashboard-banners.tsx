@@ -45,12 +45,17 @@ export function DashboardBanners() {
 
   const dismiss = useMutation({
     mutationFn: (id: string) => apiFetch(`/api/v1/announcements/${id}/dismiss`, { method: "POST" }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["announcements-mine"] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["announcements-mine"] });
+      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+    },
   });
+  // Only what needs attention interrupts the page; routine notices live in the bell.
+  const urgent = announcements?.filter((a) => a.severity !== "INFO");
 
   const trial = user?.tenantTrialEndsAt ? trialCountdown(user.tenantTrialEndsAt) : null;
 
-  if (!trial && (!announcements || announcements.length === 0)) return null;
+  if (!trial && (!urgent || urgent.length === 0)) return null;
 
   return (
     <div className="space-y-3 mb-6 w-full min-w-0">
@@ -59,7 +64,7 @@ export function DashboardBanners() {
           className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-2xl border p-4 text-xs sm:text-sm shadow-xs transition-all ${
             trial.expired
               ? "bg-rose-50 border-rose-200 text-rose-800 dark:bg-rose-950/40 dark:border-rose-900/60 dark:text-rose-200"
-              : "bg-gradient-to-r from-amber-500/10 via-amber-500/5 to-transparent border-amber-300 dark:border-amber-500/30 text-amber-900 dark:text-amber-200"
+              : "bg-amber-50 border-amber-300 text-amber-900 dark:bg-amber-500/10 dark:border-amber-500/25 dark:text-amber-200"
           }`}
         >
           <div className="flex items-center gap-3 min-w-0">
@@ -84,7 +89,7 @@ export function DashboardBanners() {
         </div>
       )}
 
-      {announcements?.map((a) => (
+      {urgent?.map((a) => (
         <div
           key={a.id}
           className={`flex flex-col sm:flex-row sm:items-start justify-between gap-3 rounded-2xl border p-3.5 sm:p-4 text-xs sm:text-sm shadow-xs ${SEVERITY_STYLES[a.severity]}`}

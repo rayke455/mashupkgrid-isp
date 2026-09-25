@@ -1,6 +1,6 @@
 "use client";
 
-import type { CaptiveThemeProps } from "./types";
+import { appOnlyLabel, type CaptiveThemeProps } from "./types";
 
 function formatDuration(minutes: number): string {
   if (minutes < 60) return `${minutes} Mins`;
@@ -127,6 +127,9 @@ export function VibrantRetailTheme({
                           {formatDuration(pkg.durationMinutes)}
                         </span>
                         <h3 className="font-black text-sm text-slate-900 mt-2 line-clamp-1">{pkg.name}</h3>
+                        {appOnlyLabel(pkg.appPolicy) && (
+                          <span className="mt-1 inline-block rounded-md bg-pink-50 px-2 py-0.5 text-[10px] font-black text-pink-700">{appOnlyLabel(pkg.appPolicy)}</span>
+                        )}
                         <p className="text-[10px] text-slate-400 mt-0.5">
                           {pkg.downloadKbps ? `${Math.round(pkg.downloadKbps / 1000)} Mbps Speed` : "High Speed"}
                         </p>

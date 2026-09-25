@@ -9,8 +9,12 @@ import {
 } from "@mashupkgrid/shared";
 import { env } from "@mashupkgrid/config";
 import { createAdapterForRouter } from "./factory.js";
+import { MikroTikAdapter } from "./mikrotik/mikrotik.adapter.js";
 import type { DeviceHealth, DeviceSession, ConnectedAccessPoint } from "./adapter.interface.js";
 import { allocateNextVpnIp, registerWireguardPeer, removeWireguardPeer } from "./wireguard-peer.service.js";
+import { ensureWinboxRelayPort } from "./winbox-relay.service.js";
+import { APP_FILTER_RULE_COUNT, APP_FILTER_TAG } from "./app-filter.js";
+import { rememberActiveDevices } from "./hotspot-device.service.js";
 
 export interface RouterHeartbeatMetrics {
   cpuLoadPercent?: number;
@@ -184,8 +188,12 @@ async function syncRadiusNasRegistration(router: Router, sourceAddress: string):
   // this address that belongs to a DIFFERENT router is not ours to take — two routers sharing
   // one public address is unsupportable under source-IP-keyed auth, and stealing the row would
   // silently break whichever one lost the race. Leave it and make the reason visible instead.
-  const conflict = await prisma.radiusNas.findFirst({ where: { nasname: sourceAddress } });
-  if (conflict && conflict.routerId && conflict.routerId !== router.id) {
+  const conflict = await prisma.radiusNas.findFirst({
+    where: { nasname: sourceAddress },
+    include: { router: { select: { deletedAt: true } } },
+  });
+  // A row left behind by a removed router is not a live claim on the address.
+  if (conflict && conflict.routerId && conflict.routerId !== router.id && !conflict.router?.deletedAt) {
     console.warn(
       `[radius] Cannot register router ${router.id} at ${sourceAddress}: already registered to router ${conflict.routerId}. ` +
         `Both routers appear to share one public address — hotspot/PPPoE auth cannot work for both.`
@@ -282,6 +290,14 @@ export async function completeRouterProvisioning(
     console.warn(`[vlans] Auto-sync VLANs warning on provisioning:`, err);
   });
 
+  // A router that just came up on the VPN gets its remote-WinBox port straight away, so the
+  // dashboard can show it before the relay's next refresh.
+  if (env.ENABLE_WINBOX_RELAY && updated.vpnIp && !updated.winboxRelayPort) {
+    await ensureWinboxRelayPort(updated.id, env.WINBOX_RELAY_PORT_RANGE).catch((err) =>
+      console.warn("[winbox-relay] Could not assign a relay port on provisioning:", err)
+    );
+  }
+
   return updated;
 }
 
@@ -371,7 +387,7 @@ export async function completeVpnRegistration(vpnRegisterToken: string, publicKe
     console.warn("WireGuard peer registration deferred or host wg interface unavailable:", err);
   }
 
-  return prisma.router.update({
+  const updated = await prisma.router.update({
     where: { id: router.id },
     data: {
       status: "ONLINE",
@@ -383,6 +399,14 @@ export async function completeVpnRegistration(vpnRegisterToken: string, publicKe
       host: vpnIp,
     },
   });
+  if (env.ENABLE_WINBOX_RELAY) {
+    const port = await ensureWinboxRelayPort(router.id, env.WINBOX_RELAY_PORT_RANGE).catch((err) => {
+      console.warn("[winbox-relay] Could not assign a relay port on VPN registration:", err);
+      return null;
+    });
+    if (port) updated.winboxRelayPort = port;
+  }
+  return updated;
 }
 
 export async function updateRouter(tenantId: string, routerId: string, patch: UpdateRouterInput): Promise<Router> {
@@ -442,7 +466,13 @@ export async function deleteRouter(tenantId: string, routerId: string): Promise<
   if (router.vpnPublicKey) {
     await removeWireguardPeer(env.WIREGUARD_INTERFACE, router.vpnPublicKey);
   }
-  await prisma.router.update({ where: { id: routerId }, data: { deletedAt: new Date() } });
+  // Its RADIUS client registration goes too: a leftover row keeps the router's address claimed,
+  // and the same hardware re-added (or another router behind that address) could then never
+  // register — hotspot logins would get no RADIUS reply at all. The relay port is freed with it.
+  await prisma.$transaction([
+    prisma.radiusNas.deleteMany({ where: { routerId } }),
+    prisma.router.update({ where: { id: routerId }, data: { deletedAt: new Date(), winboxRelayPort: null } }),
+  ]);
 }
 
 /** How long after its last heartbeat a router is still considered alive when the platform
@@ -454,6 +484,86 @@ const HEARTBEAT_LIVENESS_WINDOW_MS = 2.5 * 60 * 1000;
 /** Opens a real connection to the router, runs a health check, and persists the result onto
  *  the Router row (status/lastSeenAt/lastError/resource usage) so the routers list reflects
  *  reality without a separate polling round-trip from the caller. */
+/** Base URL routers use to reach the API (see ROUTER_API_BASE_URL). */
+export function routerFacingApiBase(): string {
+  return (env.ROUTER_API_BASE_URL || env.APP_API_PUBLIC_URL).replace(/\/+$/, "");
+}
+
+/** The platform's historical default RADIUS/management address, still baked into older scripts. */
+export const LEGACY_PLATFORM_ADDRESS = "68.210.187.104";
+
+/** Where routers send RADIUS. */
+export function routerRadiusHost(): string {
+  return process.env["RADIUS_SERVER_HOST"] || LEGACY_PLATFORM_ADDRESS;
+}
+
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return "";
+  }
+}
+
+/** The portal and the API behind it: reachable even for app-only customers, so they can buy more. */
+export function appFilterPortalHosts(): string[] {
+  return [...new Set([hostOf(env.APP_PORTAL_URL || "https://captive.mashuphost.tech"), hostOf(routerFacingApiBase())].filter(Boolean))];
+}
+
+const RECONCILE_INTERVAL_MS = 10 * 60_000;
+/** Leave a just-linked router alone while its setup script is still running on it. */
+const RECONCILE_GRACE_AFTER_LINK_MS = 3 * 60_000;
+const lastReconciledAt = new Map<string, number>();
+
+/**
+ * Server-side self-repair for a linked router's hotspot essentials (login page + RADIUS server).
+ * Runs over the management API at most every 10 minutes per router, so an operator never has to
+ * fix a half-applied setup by hand. Returns what was changed, or null when it didn't run.
+ */
+export async function reconcileRouterProvisioning(routerId: string, options: { force?: boolean } = {}): Promise<string[] | null> {
+  const now = Date.now();
+  if (!options.force && now - (lastReconciledAt.get(routerId) ?? 0) < RECONCILE_INTERVAL_MS) return null;
+
+  const router = await prisma.router.findFirst({ where: { id: routerId, deletedAt: null }, include: { tenant: { select: { slug: true } } } });
+  if (!router?.host || router.vendor !== "MIKROTIK" || !router.tenant?.slug) return null;
+  if (!options.force && router.provisionedAt && now - router.provisionedAt.getTime() < RECONCILE_GRACE_AFTER_LINK_MS) return null;
+  lastReconciledAt.set(routerId, now);
+
+  const adapter = createAdapterForRouter({ ...router, host: router.host });
+  if (!(adapter instanceof MikroTikAdapter)) return null;
+  const radiusHost = routerRadiusHost();
+  try {
+    await adapter.connect();
+    // Phones online right now that the server doesn't know yet: remembered so they reconnect by MAC.
+    // Done first and on its own, so a slow router timing out on the setup checks below can't skip it.
+    let learned = 0;
+    try {
+      const sessions = await adapter.getActiveSessions();
+      learned = await rememberActiveDevices(router.tenantId, sessions.map((s) => ({ username: s.username, callerId: s.callerId })));
+    } catch (err) {
+      console.warn(`[routers] could not read connected phones on "${router.name}":`, err instanceof Error ? err.message : err);
+    }
+    if (learned > 0) console.log(`[routers] remembered ${learned} connected phone${learned === 1 ? "" : "s"} on "${router.name}" for automatic reconnect`);
+
+    const changes = await adapter.ensureHotspotProvisioning({
+      loginTemplateUrl: `${routerFacingApiBase()}/api/v1/hotspot/${router.tenant.slug}/mikrotik-login-template`,
+      radiusHost,
+      radiusSecret: decryptAtRest(router.passwordEncrypted, env.ENCRYPTION_KEY),
+      retiredRadiusHosts: radiusHost === LEGACY_PLATFORM_ADDRESS ? [] : [LEGACY_PLATFORM_ADDRESS],
+      walledGardenHosts: [hostOf(env.APP_PORTAL_URL || "https://captive.mashuphost.tech"), hostOf(routerFacingApiBase())].filter(Boolean),
+      appFilter: {
+        scriptUrl: `${routerFacingApiBase()}/api/v1/hotspot/${router.tenant.slug}/mikrotik-app-filter.rsc`,
+        tag: APP_FILTER_TAG,
+        expectedRules: APP_FILTER_RULE_COUNT,
+      },
+    });
+    if (changes.length > 0) console.log(`[routers] repaired "${router.name}": ${changes.join("; ")}`);
+    return changes;
+  } finally {
+    await adapter.disconnect().catch(() => {});
+  }
+}
+
 export async function testRouterConnection(tenantId: string, routerId: string): Promise<DeviceHealth> {
   const router = await getRouterOrThrow(tenantId, routerId);
   if (!router.host) {
@@ -721,30 +831,48 @@ export async function enforceRouterStrictTimeout(
   }
 }
 
-export async function enableRouterAntiVpnShield(
-  tenantId: string,
-  routerId: string
-): Promise<{ success: boolean; message: string }> {
+export type AntiTunnelStatus = { state: "applying" | "on" | "off" | "failed" | "unknown"; rules: number | null; expected: number };
+
+async function withRouterAdapter<T>(tenantId: string, routerId: string, fn: (adapter: ReturnType<typeof createAdapterForRouter>, name: string) => Promise<T>): Promise<T> {
   const router = await getRouterOrThrow(tenantId, routerId);
   const primaryHost = router.host || router.vpnIp;
   if (!primaryHost) {
-    throw new ConflictError(
-      `"${router.name}" hasn't checked in yet — paste the provisioning script on the router first.`
-    );
+    throw new ConflictError(`"${router.name}" hasn't checked in yet — paste the provisioning script on the router first.`);
   }
   const adapter = createAdapterForRouter({ ...router, host: primaryHost });
   try {
     await adapter.connect();
-    if (!adapter.enableAntiVpnShield) {
-      throw new ConflictError("Anti-VPN Shield is not supported on this router model");
-    }
-    return await adapter.enableAntiVpnShield();
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    throw new ConflictError(`Failed to apply Anti-VPN Shield on "${router.name}": ${message}`);
+    return await fn(adapter, router.name);
   } finally {
     await adapter.disconnect().catch(() => {});
   }
+}
+
+/** Starts turning "Block tunnelling apps" on or off (see anti-tunnel.ts). The router applies it in
+ *  the background; follow up with getRouterAntiTunnelStatus. */
+export async function startRouterAntiTunnelShield(tenantId: string, routerId: string, enabled: boolean): Promise<{ started: boolean }> {
+  return withRouterAdapter(tenantId, routerId, async (adapter, name) => {
+    if (!adapter.startAntiTunnelShield) throw new ConflictError("Tunnel blocking isn't supported on this router model.");
+    try {
+      return await adapter.startAntiTunnelShield(enabled);
+    } catch (err) {
+      throw new ConflictError(`Couldn't start turning tunnel blocking ${enabled ? "on" : "off"} on "${name}": ${err instanceof Error ? err.message : String(err)}`);
+    }
+  });
+}
+
+/** Where the router is with tunnel blocking, from what it recorded itself. */
+export async function getRouterAntiTunnelStatus(tenantId: string, routerId: string): Promise<AntiTunnelStatus> {
+  return withRouterAdapter<AntiTunnelStatus>(tenantId, routerId, async (adapter) => {
+    if (!adapter.getAntiTunnelStatus) throw new ConflictError("Tunnel blocking isn't supported on this router model.");
+    const s = await adapter.getAntiTunnelStatus();
+    const state: AntiTunnelStatus["state"] = s.state === "done" ? (s.rules === 0 ? "off" : "on") : s.state;
+    return { state, rules: s.rules, expected: s.expected };
+  }).catch((err) => {
+    // A router busy rewriting its firewall may refuse the login; that's "still working", not an error.
+    if (err instanceof ConflictError) throw err;
+    return { state: "unknown" as const, rules: null, expected: 0 };
+  });
 }
 
 export async function enableRouterPcqFairQueue(

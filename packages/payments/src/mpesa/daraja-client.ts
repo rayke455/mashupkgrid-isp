@@ -5,6 +5,14 @@ const BASE_URLS: Record<MpesaCredentials["environment"], string> = {
   production: "https://api.safaricom.co.ke",
 };
 
+/** Daraja base URL. MPESA_DARAJA_BASE_URL_OVERRIDE points sandbox calls at a local mock for
+ *  end-to-end testing; it never applies to production credentials or when NODE_ENV=production. */
+function darajaBaseUrl(environment: MpesaCredentials["environment"]): string {
+  const override = process.env["MPESA_DARAJA_BASE_URL_OVERRIDE"];
+  if (override && environment === "sandbox" && process.env["NODE_ENV"] !== "production") return override.replace(/\/+$/, "");
+  return BASE_URLS[environment];
+}
+
 interface CachedToken {
   accessToken: string;
   expiresAt: number;
@@ -20,7 +28,7 @@ async function getAccessToken(credentials: MpesaCredentials): Promise<string> {
   const cached = tokenCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.accessToken;
 
-  const baseUrl = BASE_URLS[credentials.environment];
+  const baseUrl = darajaBaseUrl(credentials.environment);
   const auth = Buffer.from(`${credentials.consumerKey}:${credentials.consumerSecret}`).toString("base64");
 
   const response = await fetch(`${baseUrl}/oauth/v1/generate?grant_type=client_credentials`, {
@@ -90,7 +98,7 @@ export interface StkPushResponse {
 /** Lipa na M-Pesa Online (STK Push) — https://developer.safaricom.co.ke/APIs/MpesaExpressSimulate */
 export async function initiateStkPush(params: StkPushParams): Promise<StkPushResponse> {
   const { credentials } = params;
-  const baseUrl = BASE_URLS[credentials.environment];
+  const baseUrl = darajaBaseUrl(credentials.environment);
   const accessToken = await getAccessToken(credentials);
   const timestamp = darajaTimestamp();
   const businessShortCode = darajaBusinessShortCode(credentials);
@@ -141,7 +149,7 @@ export async function queryStkPushStatus(
   credentials: MpesaCredentials,
   checkoutRequestId: string
 ): Promise<StkQueryResponse> {
-  const baseUrl = BASE_URLS[credentials.environment];
+  const baseUrl = darajaBaseUrl(credentials.environment);
   const accessToken = await getAccessToken(credentials);
   const timestamp = darajaTimestamp();
   // Must match the push exactly — a query signed with a different shortcode cannot find it.
@@ -205,7 +213,7 @@ export interface B2BPaymentResponse {
  */
 export async function initiateB2BPayment(params: B2BPaymentParams): Promise<B2BPaymentResponse> {
   const { credentials } = params;
-  const baseUrl = BASE_URLS[credentials.environment];
+  const baseUrl = darajaBaseUrl(credentials.environment);
   const accessToken = await getAccessToken(credentials);
 
   const response = await fetch(`${baseUrl}/mpesa/b2b/v1/paymentrequest`, {
@@ -239,4 +247,65 @@ export async function initiateB2BPayment(params: B2BPaymentParams): Promise<B2BP
     );
   }
   return body;
+}
+
+export interface B2CPaymentParams {
+  /** OAuth credentials of the Daraja app, with `shortcode` set to the B2C-enabled shortcode. */
+  credentials: MpesaCredentials;
+  initiatorName: string;
+  securityCredential: string;
+  /** Our own id for the request. Daraja v3 echoes it back on the result callback, which is what
+   *  ties an asynchronous result to exactly one settlement. */
+  originatorConversationId: string;
+  /** Recipient MSISDN, 2547XXXXXXXX / 2541XXXXXXXX. */
+  phone: string;
+  amountMinor: number;
+  remarks: string;
+  occasion?: string;
+  resultUrl: string;
+  queueTimeoutUrl: string;
+}
+
+/**
+ * Business-to-customer payment — sends money to an M-Pesa phone number (a tenant who chose to be
+ * settled to their phone).
+ *
+ * As with B2B, a 0 ResponseCode only means Safaricom ACCEPTED the request. The money has moved
+ * only when the result callback says ResultCode 0; until then the settlement stays PROCESSING.
+ * `BusinessPayment` is the command for an unsolicited payment to a registered M-Pesa customer.
+ */
+export async function initiateB2CPayment(params: B2CPaymentParams): Promise<B2BPaymentResponse> {
+  const { credentials } = params;
+  const baseUrl = darajaBaseUrl(credentials.environment);
+  const accessToken = await getAccessToken(credentials);
+
+  const response = await fetch(`${baseUrl}/mpesa/b2c/v1/paymentrequest`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+    keepalive: true,
+    body: JSON.stringify({
+      InitiatorName: params.initiatorName,
+      SecurityCredential: params.securityCredential,
+      CommandID: "BusinessPayment",
+      // Whole shillings — M-Pesa has no cents.
+      Amount: Math.round(params.amountMinor / 100),
+      PartyA: credentials.shortcode,
+      PartyB: params.phone,
+      Remarks: params.remarks.slice(0, 100),
+      QueueTimeOutURL: params.queueTimeoutUrl,
+      ResultURL: params.resultUrl,
+      Occassion: (params.occasion ?? "Settlement").slice(0, 100),
+    }),
+  });
+
+  const body = (await response.json()) as B2BPaymentResponse & {
+    errorMessage?: string;
+    errorCode?: string;
+  };
+  if (!response.ok || body.ResponseCode !== "0") {
+    throw new Error(
+      `M-Pesa B2C payment failed: ${body.errorMessage ?? body.ResponseDescription ?? response.status}`
+    );
+  }
+  return { ...body, OriginatorConversationID: body.OriginatorConversationID || params.originatorConversationId };
 }

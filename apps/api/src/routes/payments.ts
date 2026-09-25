@@ -2,8 +2,8 @@ import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { prisma } from "@mashupkgrid/database";
-import { recordPaymentForInvoice, topUpWallet, refundPayment } from "@mashupkgrid/billing";
-import { listPurchaseAttempts, summarisePurchaseAttempts } from "@mashupkgrid/payments";
+import { recordPaymentForInvoice, topUpWallet, refundPaymentWithDb } from "@mashupkgrid/billing";
+import { listPurchaseAttempts, summarisePurchaseAttempts, reverseGatewayTransactionForPayment } from "@mashupkgrid/payments";
 import {
   successResponse,
   ConflictError,
@@ -170,7 +170,19 @@ export async function paymentRoutes(app: FastifyInstance): Promise<void> {
       const { paymentId } = idParamsSchema.parse(request.params);
       const { reason } = refundSchema.parse(request.body);
 
-      const payment = await refundPayment(tenantId, paymentId, reason);
+      // One transaction: the billing reversal and — if the platform collected this payment — the
+      // matching debit on the tenant's gateway balance. Previously only the first happened, so a
+      // tenant kept money that had been refunded.
+      const { payment, gatewayRefund } = await prisma.$transaction(async (tx) => {
+        const reversed = await refundPaymentWithDb(tx, tenantId, paymentId, reason);
+        const refund = await reverseGatewayTransactionForPayment(tx, {
+          tenantId,
+          paymentId,
+          reason,
+          userId: request.user!.id,
+        });
+        return { payment: reversed, gatewayRefund: refund };
+      });
 
       await writeAuditLog({
         tenantId,
@@ -178,7 +190,12 @@ export async function paymentRoutes(app: FastifyInstance): Promise<void> {
         action: "payment.refunded",
         resourceType: "Payment",
         resourceId: paymentId,
-        after: { reason },
+        after: {
+          reason,
+          ...(gatewayRefund
+            ? { gatewayRefund: gatewayRefund.refundNumber, debitedFromBalanceMinor: gatewayRefund.amountMinor - gatewayRefund.feeReturnedMinor }
+            : {}),
+        },
         ipAddress: request.ip,
         userAgent: request.headers["user-agent"] ?? null,
       });

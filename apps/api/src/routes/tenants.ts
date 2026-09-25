@@ -15,6 +15,7 @@ import {
   TENANT_FEATURES,
   isReservedSubdomain,
 } from "@mashupkgrid/shared";
+import { getActiveDestination, setActiveDestination, presentDestination } from "@mashupkgrid/payments";
 import { authenticate } from "../plugins/authenticate.js";
 import { resolveTenant } from "../plugins/tenant.js";
 import { checkMaintenance } from "../plugins/maintenance.js";
@@ -268,17 +269,31 @@ interface TenantUsage {
       const before = await prisma.tenant.findUnique({ where: { id: tenantId } });
       if (!before || before.deletedAt) throw new NotFoundError("Tenant");
 
-      // Refusing this is the difference between "we owe you and cannot pay you" and a support
-      // ticket after the money is already collected.
-      if (body.collectionMode === "PLATFORM") {
-        const destination = body.payoutShortcode ?? before.payoutShortcode;
-        if (!destination) {
-          throw new ConflictError(
-            "Set this tenant's payout paybill or till before collecting on their behalf — otherwise their money accumulates with no way to send it."
-          );
-        }
+      // A paybill/till entered here becomes the tenant's active settlement destination — the
+      // record the settlement system actually pays to (packages/payments destination.service).
+      const shortcode = body.payoutShortcode?.trim();
+      const destinationBefore = await getActiveDestination(tenantId);
+      if (shortcode) {
+        const type = (body.payoutShortcodeType ?? before.payoutShortcodeType) === "TILL" ? "TILL" : "PAYBILL";
+        await setActiveDestination(
+          tenantId,
+          type === "TILL"
+            ? { type, accountName: before.name, tillNumber: shortcode }
+            : { type, accountName: before.name, paybillNumber: shortcode, paybillAccountReference: before.slug.slice(0, 20) },
+          request.user!.id
+        );
       }
 
+      // Refusing this is the difference between "we owe you and cannot pay you" and a support
+      // ticket after the money is already collected.
+      if (body.collectionMode === "PLATFORM" && !(await getActiveDestination(tenantId))) {
+        throw new ConflictError(
+          "Set this tenant's settlement destination before collecting on their behalf — otherwise their money accumulates with no way to send it."
+        );
+      }
+
+      // The payoutShortcode columns are no longer read by settlements; they are mirrored only so
+      // older screens that display them stay accurate.
       const after = await prisma.tenant.update({
         where: { id: tenantId },
         data: {
@@ -305,6 +320,8 @@ interface TenantUsage {
           collectionMode: after.collectionMode,
           payoutShortcode: after.payoutShortcode,
           payoutShortcodeType: after.payoutShortcodeType,
+          settlementDestinationChanged: Boolean(shortcode),
+          previousDestination: destinationBefore ? presentDestination(destinationBefore).label : null,
         },
         ipAddress: request.ip,
         userAgent: request.headers["user-agent"] ?? null,

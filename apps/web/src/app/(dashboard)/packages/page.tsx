@@ -108,14 +108,11 @@ export default function PackagesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2.5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-500/15 text-brand-600 dark:text-brand-400">
-              <IconPackage size={20} />
-            </span>
-            Bandwidth Packages &amp; Plans
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">
+            Packages
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Define PPPoE speed tiers, rate limits, and recurring subscription billing cycles.
+            Monthly internet plans for PPPoE subscribers: speed and price.
           </p>
         </div>
         <Button onClick={() => setShowForm((v) => !v)}>
@@ -274,7 +271,7 @@ export default function PackagesPage() {
 
       {/* EDIT BROADBAND PACKAGE MODAL */}
       {editingPackage && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 overflow-y-auto">
           <Card className="w-full max-w-lg bg-white dark:bg-obsidian-900 border-brand-500/40 shadow-2xl p-6 relative">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-obsidian-800 pb-4 mb-4">
               <div>

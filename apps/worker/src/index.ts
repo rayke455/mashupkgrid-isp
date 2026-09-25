@@ -35,6 +35,7 @@ import {
 } from "./jobs/whatsapp-notifications.js";
 import { createGracefulShutdown } from "./lib/shutdown.js";
 import { startRadiusServer } from "@mashupkgrid/radius";
+import { startWinboxRelay, loadWinboxRelayTargets } from "@mashupkgrid/network";
 import { whatsappConnectJobSchema, whatsappDisconnectJobSchema, whatsappTestMessageJobSchema } from "@mashupkgrid/shared";
 import { setConnectionStatus, clearPairingQr, pushTestChatMessage } from "@mashupkgrid/whatsapp";
 import { startWhatsAppRuntime, getManager } from "./lib/whatsapp-runtime.js";
@@ -242,12 +243,14 @@ async function main() {
     { repeat: { every: 60 * 60_000 }, removeOnComplete: true, removeOnFail: 50 }
   );
 
-  // Settlement runs hourly rather than per payment: batching means one B2B fee per tenant per
-  // hour instead of one per voucher sold, and a tenant owed nothing is skipped entirely.
+  // Settlements: a 5-minute tick. The platform's settlement policy decides what each tick does —
+  // INSTANT settles what is owed (batched per tick, so one M-Pesa transfer fee per tenant rather
+  // than one per payment); DAILY/WEEKLY act only once their slot has passed. See
+  // runScheduledSettlements.
   await billingQueue.add(
     JOB_NAMES.runTenantPayouts,
     {},
-    { repeat: { every: 60 * 60_000 }, removeOnComplete: true, removeOnFail: 50 }
+    { repeat: { every: 5 * 60_000 }, removeOnComplete: true, removeOnFail: 50 }
   );
   // Every 2 minutes: covers the "delayed callback" case without hammering Safaricom's Query API.
   await mpesaQueue.add(
@@ -273,10 +276,20 @@ async function main() {
     {},
     { repeat: { every: 20_000 }, removeOnComplete: true, removeOnFail: 100 }
   );
+  // Every 30 seconds, not 10: each poll is a full API login on the router, and a small hAP (650 MHz,
+  // 32 MB) spends real CPU on every one — at 10s it was measurably loaded before it served a single
+  // customer. Liveness also comes from the router's own 1-minute heartbeat, so 30s loses nothing.
+  // BullMQ keys a repeatable job by its interval, so changing `every` adds a second schedule
+  // beside the old one instead of replacing it. Drop any older router-poll schedule first.
+  for (const job of await networkQueue.getRepeatableJobs()) {
+    if (job.name === JOB_NAMES.pollRouterHealth && Number(job.every) !== 30_000) {
+      await networkQueue.removeRepeatableByKey(job.key);
+    }
+  }
   await networkQueue.add(
     JOB_NAMES.pollRouterHealth,
     {},
-    { repeat: { every: 10_000 }, removeOnComplete: true, removeOnFail: 50 }
+    { repeat: { every: 30_000 }, removeOnComplete: true, removeOnFail: 50 }
   );
   await networkQueue.add(
     JOB_NAMES.expireOverdueVouchers,
@@ -288,6 +301,15 @@ async function main() {
 
   const radiusServer = env.ENABLE_EMBEDDED_RADIUS_SERVER
     ? startRadiusServer({ authPort: env.RADIUS_AUTH_PORT, acctPort: env.RADIUS_ACCT_PORT })
+    : null;
+
+  // Remote WinBox: one public port per VPN-linked router, relayed over WireGuard. The worker
+  // shares the API container's network namespace in production, so it can reach wg0.
+  const winboxRelay = env.ENABLE_WINBOX_RELAY
+    ? startWinboxRelay({
+        loadTargets: () => loadWinboxRelayTargets(env.WINBOX_RELAY_PORT_RANGE),
+        allowedSources: env.WINBOX_RELAY_ALLOWED_SOURCES,
+      })
     : null;
 
   // Owns every WhatsApp session (one per linked tenant, plus the platform line) and restores
@@ -387,6 +409,7 @@ async function main() {
       () => webhooksWorker.close(),
       () => whatsappWorker.close(),
       () => radiusServer?.close() ?? Promise.resolve(),
+      () => winboxRelay?.close() ?? Promise.resolve(),
     ],
     (code) => process.exit(code),
     { log: console.log }

@@ -1,5 +1,6 @@
 import type { ComponentType } from "react";
 import type { CaptiveThemeProps, ThemeId, ThemeMeta } from "./types";
+import { MashupHostCleanTheme } from "./mashuphost-clean";
 import { GoldEnergyTheme } from "./gold-energy";
 import { SuntechBlueTheme } from "./suntech-blue";
 import { ModernGlassTheme } from "./modern-glass";
@@ -9,6 +10,7 @@ import { CyberpunkNeonTheme } from "./cyberpunk-neon";
 
 export * from "./types";
 export {
+  MashupHostCleanTheme,
   GoldEnergyTheme,
   SuntechBlueTheme,
   ModernGlassTheme,
@@ -18,6 +20,16 @@ export {
 };
 
 export const THEME_CATALOG: ThemeMeta[] = [
+  {
+    id: "mashuphost-clean",
+    name: "MashupHost Clean",
+    category: "Recommended",
+    description: "Fast, light and clear. Loads quickly on any phone, uses your logo and brand colour, and puts packages, voucher login and help on one screen.",
+    badgeColor: "bg-emerald-600 text-white",
+    accentColor: "border-emerald-500",
+    inlineHelp: true,
+    appearance: "light",
+  },
   {
     id: "gold-energy",
     name: "Gold Energy (SPICEZCOM Theme)",
@@ -69,6 +81,7 @@ export const THEME_CATALOG: ThemeMeta[] = [
 ];
 
 export const THEME_COMPONENTS: Record<ThemeId, ComponentType<CaptiveThemeProps>> = {
+  "mashuphost-clean": MashupHostCleanTheme,
   "gold-energy": GoldEnergyTheme,
   "suntech-blue": SuntechBlueTheme,
   "modern-glass": ModernGlassTheme,
@@ -81,5 +94,9 @@ export function getThemeComponent(themeId?: string | null): ComponentType<Captiv
   if (themeId && themeId in THEME_COMPONENTS) {
     return THEME_COMPONENTS[themeId as ThemeId];
   }
-  return GoldEnergyTheme;
+  return MashupHostCleanTheme;
+}
+
+export function getThemeMeta(themeId?: string | null): ThemeMeta {
+  return THEME_CATALOG.find((t) => t.id === themeId) ?? THEME_CATALOG[0]!;
 }

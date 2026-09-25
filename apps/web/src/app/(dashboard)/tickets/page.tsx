@@ -54,11 +54,8 @@ export default function TicketsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2.5">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-500/15 text-brand-600 dark:text-brand-400">
-            <IconLifeBuoy size={20} />
-          </span>
-          Support Tickets
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">
+          Support tickets
         </h1>
         <p className="text-sm text-slate-500 dark:text-slate-400">
           Requests from subscribers, hotspot walk-ins, and staff — reply, assign, and track to resolution.

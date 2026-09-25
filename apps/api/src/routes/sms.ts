@@ -1,6 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { setSmsConfig, getSmsConfigStatus, sendTenantSms } from "@mashupkgrid/sms";
+import { setSmsConfig, getSmsConfigStatus, sendTenantSms, setVoucherSmsEnabled } from "@mashupkgrid/sms";
 import { successResponse, ConflictError } from "@mashupkgrid/shared";
 import { authenticate } from "../plugins/authenticate.js";
 import { resolveTenant } from "../plugins/tenant.js";
@@ -21,6 +21,8 @@ const setConfigSchema = z.object({
   senderId: z.string().optional(),
   environment: z.enum(["sandbox", "production"]),
 });
+
+const voucherTextsSchema = z.object({ enabled: z.boolean() });
 
 const sendTestSchema = z.object({ phone: z.string().min(9), message: z.string().min(1).max(459) });
 
@@ -49,6 +51,29 @@ export async function smsRoutes(app: FastifyInstance): Promise<void> {
         resourceType: "SmsProviderConfig",
         resourceId: tenantId,
         after: { username: body.username, senderId: body.senderId ?? null, environment: body.environment },
+        ipAddress: request.ip,
+        userAgent: request.headers["user-agent"] ?? null,
+      });
+
+      reply.send(successResponse(await getSmsConfigStatus(tenantId), request.id));
+    }
+  );
+
+  app.put(
+    "/config/voucher-texts",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("settings.manage")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const { enabled } = voucherTextsSchema.parse(request.body);
+      await setVoucherSmsEnabled(tenantId, enabled);
+
+      await writeAuditLog({
+        tenantId,
+        actorUserId: request.user!.id,
+        action: "sms_config.voucher_texts_updated",
+        resourceType: "SmsProviderConfig",
+        resourceId: tenantId,
+        after: { sendVoucherSms: enabled },
         ipAddress: request.ip,
         userAgent: request.headers["user-agent"] ?? null,
       });

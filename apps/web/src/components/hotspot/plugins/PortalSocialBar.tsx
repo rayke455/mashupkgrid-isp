@@ -3,7 +3,7 @@
 import React from "react";
 import { SocialLinksConfig } from "@/lib/captive-portal-plugins/types";
 
-export function PortalSocialBar({ config }: { config: SocialLinksConfig }) {
+export function PortalSocialBar({ config, light = false }: { config: SocialLinksConfig; light?: boolean }) {
   if (!config.enabled) return null;
 
   const links = [
@@ -25,7 +25,7 @@ export function PortalSocialBar({ config }: { config: SocialLinksConfig }) {
           href={link.url}
           target="_blank"
           rel="noopener noreferrer"
-          className="w-8 h-8 rounded-full bg-slate-900/80 border border-slate-700/60 hover:border-brand-500/80 text-white flex items-center justify-center text-xs shadow-md backdrop-blur-md hover:scale-115 active:scale-95 transition-all"
+          className={`w-8 h-8 rounded-full flex items-center justify-center text-xs transition-colors ${light ? "border border-slate-200 bg-white text-slate-700 hover:bg-slate-100" : "bg-slate-900/80 border border-slate-700/60 hover:border-brand-500/80 text-white shadow-md backdrop-blur-md"}`}
           title={link.label}
         >
           {link.icon}

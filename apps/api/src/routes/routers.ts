@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { prisma, type Router as RouterRow } from "@mashupkgrid/database";
 import {
@@ -21,11 +21,15 @@ import {
   disconnectAllRouterSessions,
   applyRouterSpeedtestBoost,
   enforceRouterStrictTimeout,
-  enableRouterAntiVpnShield,
+  startRouterAntiTunnelShield,
+  getRouterAntiTunnelStatus,
   enableRouterPcqFairQueue,
   enableRouterSafeFamilyDns,
   checkRouterFirmwareUpdate,
   installRouterFirmwareUpdate,
+  routerFacingApiBase,
+  appFilterPortalHosts,
+  routerRadiusHost,
 } from "@mashupkgrid/network";
 import {
   buildMikrotikProvisioningScript,
@@ -116,6 +120,12 @@ async function getTenantPortalDomains(tenantId: string): Promise<string[]> {
   return domains.map((d) => d.hostname);
 }
 
+/** The address routers use to reach this API: ROUTER_API_BASE_URL when set (e.g. a LAN address
+ *  for testing a router next to a dev machine), otherwise the public API URL. */
+function routerApiBase(): string {
+  return routerFacingApiBase();
+}
+
 const provisioningScriptQuerySchema = z.object({ provisionToken: z.string().min(1) });
 // A WireGuard public key is exactly 32 bytes, standard-base64 encoded: 43 characters plus one
 // "=" of padding. Enforcing that shape matters because the value arrives as the raw body of an
@@ -200,6 +210,30 @@ function parseRouterUptime(uptimeStr: string): number {
     totalSeconds += parseInt(timeMatch[1], 10) * 3600 + parseInt(timeMatch[2], 10) * 60 + parseInt(timeMatch[3], 10);
   }
   return totalSeconds > 0 ? totalSeconds : 60;
+}
+
+const MAX_REPORTED_ACCESS_POINTS = 200;
+const clip = (value: string | undefined, max: number) => (value ? value.slice(0, max) : undefined);
+
+/** Parses a router's "iface;mac;identity;ip;board|…" report. Bounded, since it comes off the wire. */
+export function parseAccessPointReport(raw: string): ConnectedAccessPoint[] {
+  const aps: ConnectedAccessPoint[] = [];
+  for (const rec of raw.slice(0, 64_000).split("|")) {
+    if (aps.length >= MAX_REPORTED_ACCESS_POINTS) break;
+    const parts = rec.split(";").map((p) => p.trim());
+    const mac = parts[1];
+    if (!mac || !/^[0-9a-f]{2}([:-][0-9a-f]{2}){5}$/i.test(mac)) continue;
+    const ip = parts[3];
+    aps.push({
+      identity: clip(parts[2], 64) || "Access Point",
+      macAddress: mac.toUpperCase(),
+      interface: clip(parts[0], 32) || "ether2",
+      ipAddress: ip && ip !== "0.0.0.0" && ip !== "none" ? clip(ip, 45) : undefined,
+      board: clip(parts[4], 64),
+      detectionSource: "NEIGHBOR",
+    });
+  }
+  return aps;
 }
 
 export async function routerRoutes(app: FastifyInstance): Promise<void> {
@@ -322,7 +356,7 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
         : "68.210.187.104";
 
       const credentials = await getGeneratedCredentials(tenantId, routerId);
-      const callbackUrl = `${env.APP_API_PUBLIC_URL}/api/v1/routers/provision/${provisionToken}/callback`;
+      const callbackUrl = `${routerApiBase()}/api/v1/routers/provision/${provisionToken}/callback`;
       // No "demo-isp" fallback: the slug decides which tenant's captive portal this router
       // sends its customers to, so guessing it would quietly provision a router to serve
       // ANOTHER tenant's branding, packages and payment accounts. Failing loudly is the only
@@ -331,11 +365,12 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
       if (!tenantSlug) {
         throw new ConflictError("Could not determine this tenant's portal address — reload the dashboard and try again.");
       }
-      const loginTemplateUrl = `${env.APP_API_PUBLIC_URL}/api/v1/hotspot/${tenantSlug}/mikrotik-login-template`;
+      const loginTemplateUrl = `${routerApiBase()}/api/v1/hotspot/${tenantSlug}/mikrotik-login-template`;
 
       const script = buildMikrotikProvisioningScript(router, credentials, callbackUrl, {
-        radiusHost: process.env.RADIUS_SERVER_HOST || "68.210.187.104",
+        radiusHost: routerRadiusHost(),
         managementSource,
+        vpnSubnet: env.WIREGUARD_SUBNET_CIDR,
         serverPublicKey,
         serverHost,
         serverPort: env.WIREGUARD_LISTEN_PORT || 51820,
@@ -359,7 +394,11 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
         userAgent: request.headers["user-agent"] ?? null,
       });
 
-      const fetchCommand = `/tool fetch url="${env.APP_API_PUBLIC_URL}/api/v1/routers/provision/${provisionToken}/setup.rsc" dst-path=setup.rsc; :delay 2s; /import setup.rsc;`;
+      // The import runs as a background job (:execute), not in the operator's terminal: the script
+      // reconfigures Wi-Fi, the bridge and management access, which drops a WinBox session made
+      // through them — and an /import run inside that session dies with it, half-applied. Its
+      // output goes to mkg-setup.txt on the router for troubleshooting.
+      const fetchCommand = `/tool fetch url="${routerApiBase()}/api/v1/routers/provision/${provisionToken}/setup.rsc" dst-path=setup.rsc; :delay 2s; :execute script="/import setup.rsc" file=mkg-setup.txt; :put "Setup is running on the router. It shows Online in MashupHost within a minute."`;
       reply.send(successResponse({ script, fetchCommand, oneLiner: fetchCommand }, request.id));
     }
   );
@@ -368,7 +407,7 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
     "/social-firewall-script",
     { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("routers.read")] },
     async (request, reply) => {
-      const script = buildSocialFirewallOnlyScript();
+      const script = buildSocialFirewallOnlyScript({ portalHosts: appFilterPortalHosts() });
       reply.send(successResponse({ script }, request.id));
     }
   );
@@ -469,7 +508,7 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
       const { routerId } = idParamsSchema.parse(request.params);
       const { router, vpnRegisterToken } = await startVpnRegistration(tenantId, routerId);
 
-      const callbackUrl = `${env.APP_API_PUBLIC_URL}/api/v1/routers/vpn/${vpnRegisterToken}/register-peer`;
+      const callbackUrl = `${routerApiBase()}/api/v1/routers/vpn/${vpnRegisterToken}/register-peer`;
       const script = buildMikrotikVpnStartScript(router, callbackUrl, env.WIREGUARD_LISTEN_PORT);
 
       await writeAuditLog({
@@ -536,7 +575,14 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
       const { routerId } = idParamsSchema.parse(request.params);
       const router = await getRouterOrThrow(tenantId, routerId);
 
-      const script = buildMikrotikWinboxScript(router.name);
+      const script = buildMikrotikWinboxScript(router.name, {
+        managementSource: env.ROUTER_MANAGEMENT_SOURCE || "68.210.187.104",
+        vpnSubnet: env.WIREGUARD_SUBNET_CIDR,
+        apiPort: router.apiPort,
+        useTls: router.useTls,
+      });
+      const relayHost =
+        env.WINBOX_RELAY_PUBLIC_HOST || (env.WIREGUARD_SERVER_ENDPOINT || "68.210.187.104:51820").split(":")[0] || null;
       reply.send(
         successResponse(
           {
@@ -551,6 +597,13 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
               direct: router.host ? `${router.host}:8291` : null,
               vpn: router.vpnIp ? `${router.vpnIp}:8291` : null,
               cloudHost: "68.210.187.104",
+            },
+            // Remote WinBox through this server (see packages/network winbox-relay.service.ts).
+            relay: {
+              enabled: env.ENABLE_WINBOX_RELAY,
+              // Only once the router has registered its tunnel: a reserved vpnIp alone is not a tunnel.
+              vpnConnected: Boolean(router.vpnConfiguredAt && router.vpnPublicKey),
+              address: env.ENABLE_WINBOX_RELAY && router.winboxRelayPort && relayHost ? `${relayHost}:${router.winboxRelayPort}` : null,
             },
           },
           request.id
@@ -581,72 +634,30 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
     }
   );
 
-  // Outbound push from router: receives AP discovery report from MikroTik /tool fetch
-  // Works behind any locked modem, double-NAT, or carrier-grade NAT.
-  const handlePushAps = async (request: any, reply: any) => {
-    const params = (request.params || {}) as Record<string, string>;
-    const rawRouterId = (params.routerId || "").trim();
-    let router: RouterRow | null = null;
-
-    if (rawRouterId && rawRouterId !== "<ROUTER_ID>" && !rawRouterId.includes("<")) {
-      router = await prisma.router.findFirst({ where: { id: rawRouterId, deletedAt: null } });
-    }
-
-    if (!router) {
-      const clientIp = getClientIp(request);
-      router = await prisma.router.findFirst({
-        where: {
-          deletedAt: null,
-          OR: [{ host: clientIp }, { vpnIp: clientIp }],
-        },
-      });
-    }
-
-    if (!router) {
-      router = await prisma.router.findFirst({
-        where: { deletedAt: null },
-        orderBy: [{ lastSeenAt: "desc" }, { updatedAt: "desc" }],
-      });
-    }
-
+  // Outbound push from a router: its access-point discovery report, sent with /tool fetch so it
+  // works behind locked modems and CGNAT. Keyed by the router's own provisioning token, the same
+  // secret its heartbeat proves, so a caller can only ever write its own router's list.
+  app.all("/provision/:token/push-aps", { config: { audience: "system-critical" } }, async (request, reply) => {
+    const { token } = request.params as { token: string };
+    const router = await prisma.router.findFirst({ where: { provisionTokenHash: hashToken(token), deletedAt: null } });
     if (!router) throw new NotFoundError("Router");
 
     const query = (request.query as Record<string, string>) || {};
     let raw = typeof request.body === "string" ? request.body : "";
-    if (!raw && query.data) raw = query.data;
+    if (!raw && typeof query.data === "string") raw = query.data;
+    const aps = parseAccessPointReport(raw);
+    if (aps.length > 0) recordRouterReportedAccessPoints(router.id, aps, router.tenantId);
+    reply.status(200).send({ success: true, count: aps.length });
+  });
 
-    const aps: ConnectedAccessPoint[] = [];
-    const records = raw.split("|").map((s: string) => s.trim()).filter(Boolean);
-    for (const rec of records) {
-      const parts = rec.split(";").map((s: string) => s.trim());
-      if (parts.length >= 2) {
-        const iface = parts[0] || "ether2";
-        const mac = parts[1] || "";
-        const identity = parts[2] || "Access Point";
-        const ip = parts[3] || undefined;
-        const board = parts[4] || undefined;
-        if (mac) {
-          aps.push({
-            identity,
-            macAddress: mac.toUpperCase(),
-            interface: iface,
-            ipAddress: ip && ip !== "0.0.0.0" && ip !== "none" ? ip : undefined,
-            board,
-            detectionSource: "NEIGHBOR",
-          });
-        }
-      }
-    }
-
-    if (aps.length > 0) {
-      recordRouterReportedAccessPoints(router.id, aps, router.tenantId);
-    }
-
-    reply.status(200).send({ success: true, routerId: router.id, count: aps.length });
+  // The old unauthenticated form. It trusted any router id, then the caller's IP, then fell back
+  // to whichever router of ANY tenant was seen last, so anyone could overwrite another ISP's
+  // access-point list. Nothing generated today calls it.
+  const gonePushAps = async (_request: FastifyRequest, reply: FastifyReply) => {
+    reply.status(410).send({ success: false, error: { code: "GONE", message: "Re-run the router setup script." } });
   };
-
-  app.all("/:routerId/push-aps", { config: { audience: "system-critical" } }, handlePushAps);
-  app.all("/push-aps", { config: { audience: "system-critical" } }, handlePushAps);
+  app.all("/:routerId/push-aps", { config: { audience: "system-critical" } }, gonePushAps);
+  app.all("/push-aps", { config: { audience: "system-critical" } }, gonePushAps);
 
   /** Bulk maintenance/incident-response action, not a routine one — requires the same
    *  `routers.manage` permission as deleting a router, not just `routers.read`. */
@@ -720,18 +731,20 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
     }
   );
 
+  // "Block tunnelling apps": /enable-anti-vpn-shield turns it on, /disable-anti-vpn-shield off.
+  for (const [path, enabled] of [["enable-anti-vpn-shield", true], ["disable-anti-vpn-shield", false]] as const) {
   app.post(
-    "/:routerId/enable-anti-vpn-shield",
+    `/:routerId/${path}`,
     { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("routers.manage")] },
     async (request, reply) => {
       const tenantId = requireTenant(request.user!.tenantId);
       const { routerId } = idParamsSchema.parse(request.params);
-      const result = await enableRouterAntiVpnShield(tenantId, routerId);
+      const result = await startRouterAntiTunnelShield(tenantId, routerId, enabled);
 
       await writeAuditLog({
         tenantId,
         actorUserId: request.user!.id,
-        action: "router.anti_vpn_shield_enabled",
+        action: enabled ? "router.anti_vpn_shield_enabled" : "router.anti_vpn_shield_disabled",
         resourceType: "Router",
         resourceId: routerId,
         after: result,
@@ -740,6 +753,18 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
       });
 
       reply.send(successResponse(result, request.id));
+    }
+  );
+  }
+
+  // Where the router is with tunnel blocking; the dashboard polls this after turning it on or off.
+  app.get(
+    "/:routerId/anti-vpn-shield/status",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("routers.read")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const { routerId } = idParamsSchema.parse(request.params);
+      reply.send(successResponse(await getRouterAntiTunnelStatus(tenantId, routerId), request.id));
     }
   );
 
@@ -882,18 +907,19 @@ function getClientIp(request: { headers: Record<string, string | string[] | unde
       : "68.210.187.104";
 
     const credentials = await getGeneratedCredentials(router.tenantId, router.id);
-    const callbackUrl = `${env.APP_API_PUBLIC_URL}/api/v1/routers/provision/${token}/callback`;
+    const callbackUrl = `${routerApiBase()}/api/v1/routers/provision/${token}/callback`;
     // Same reasoning as the provisioning-script route above — never guess the tenant.
     const tenantSlug = router.tenant?.slug;
     if (!tenantSlug) {
       reply.status(500).header("Content-Type", "text/plain").send("# Error: router is not linked to a tenant\n");
       return;
     }
-    const loginTemplateUrl = `${env.APP_API_PUBLIC_URL}/api/v1/hotspot/${tenantSlug}/mikrotik-login-template`;
+    const loginTemplateUrl = `${routerApiBase()}/api/v1/hotspot/${tenantSlug}/mikrotik-login-template`;
 
     const script = buildMikrotikProvisioningScript(router, credentials, callbackUrl, {
-      radiusHost: process.env.RADIUS_SERVER_HOST || "68.210.187.104",
+      radiusHost: routerRadiusHost(),
       managementSource,
+      vpnSubnet: env.WIREGUARD_SUBNET_CIDR,
       serverPublicKey,
       serverHost,
       serverPort: env.WIREGUARD_LISTEN_PORT || 51820,

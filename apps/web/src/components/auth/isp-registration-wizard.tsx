@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
 import { Button, Card, Input, Label, Badge } from "@/components/ui";
+import { Logo } from "@/components/marketing/brand";
 import {
   IconCheck,
   IconLock,
@@ -198,17 +199,17 @@ export function IspRegistrationWizard() {
   const strengthMeta = useMemo(() => {
     switch (passwordStrengthScore) {
       case 1:
-        return { label: "Too weak", tone: "bg-rose-500", text: "text-rose-400" };
+        return { label: "Too weak", tone: "bg-rose-500", text: "text-red-700" };
       case 2:
-        return { label: "Weak", tone: "bg-orange-500", text: "text-orange-400" };
+        return { label: "Weak", tone: "bg-orange-500", text: "text-orange-700" };
       case 3:
-        return { label: "Fair", tone: "bg-amber-500", text: "text-amber-400" };
+        return { label: "Fair", tone: "bg-amber-500", text: "text-amber-700" };
       case 4:
-        return { label: "Strong", tone: "bg-emerald-500", text: "text-emerald-400" };
+        return { label: "Strong", tone: "bg-emerald-500", text: "text-emerald-700" };
       case 5:
-        return { label: "Excellent", tone: "bg-cyan-400", text: "text-cyan-300" };
+        return { label: "Excellent", tone: "bg-emerald-600", text: "text-emerald-700" };
       default:
-        return { label: "", tone: "bg-slate-700", text: "text-slate-500" };
+        return { label: "", tone: "bg-slate-200", text: "text-slate-500" };
     }
   }, [passwordStrengthScore]);
 
@@ -450,122 +451,58 @@ export function IspRegistrationWizard() {
   const formattedWhatsApp = `+${selectedCountryInfo.phoneCode} ${nationalPhone}`;
 
   return (
-    <div className="relative min-h-screen bg-[#070b14] text-slate-100 flex flex-col justify-between overflow-x-hidden font-sans selection:bg-brand-500 selection:text-white">
-      {/* High-Tech Animated Mesh & Constellation SVG */}
-      <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
-        {/* Radial Glow */}
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[500px] bg-gradient-to-tr from-brand-600/15 via-cyan-500/10 to-purple-600/15 blur-[140px] rounded-full" />
-        <div className="absolute inset-0 bg-[radial-gradient(#1e293b_1px,transparent_1px)] [background-size:24px_24px] opacity-40" />
-
-        {/* Network Constellation Grid */}
-        <svg
-          className="absolute inset-0 w-full h-full opacity-20"
-          viewBox="0 0 1200 800"
-          preserveAspectRatio="xMidYMid slice"
-          aria-hidden="true"
-        >
-          <g stroke="currentColor" strokeWidth="1" className="text-cyan-500/40">
-            <line x1="170" y1="160" x2="430" y2="300" />
-            <line x1="430" y1="300" x2="240" y2="540" />
-            <line x1="430" y1="300" x2="690" y2="220" />
-            <line x1="690" y1="220" x2="960" y2="360" />
-            <line x1="690" y1="220" x2="840" y2="560" />
-            <line x1="240" y1="540" x2="540" y2="660" />
-            <line x1="960" y1="360" x2="1040" y2="620" />
-            <line x1="540" y1="660" x2="840" y2="560" />
-            <line x1="1040" y1="120" x2="960" y2="360" />
-          </g>
-          <g fill="currentColor" className="text-cyan-400">
-            <circle cx="170" cy="160" r="3.5" />
-            <circle cx="430" cy="300" r="4.5" />
-            <circle cx="240" cy="540" r="3.5" />
-            <circle cx="690" cy="220" r="5" />
-            <circle cx="960" cy="360" r="4" />
-            <circle cx="840" cy="560" r="3.5" />
-            <circle cx="540" cy="660" r="3.5" />
-            <circle cx="1040" cy="620" r="3" />
-            <circle cx="1040" cy="120" r="3" />
-          </g>
-        </svg>
-      </div>
-
-      {/* Top Navbar */}
-      <header className="relative z-10 flex items-center justify-between px-5 sm:px-6 py-5 max-w-6xl w-full mx-auto">
-        <Link href="/" className="flex items-center gap-3 group">
-          <div className="h-10 w-10 rounded-xl overflow-hidden ring-2 ring-brand-500/40 shadow-glow bg-slate-900 flex items-center justify-center transition-transform group-hover:scale-105">
-            <img src="/logo.jpg" alt="MashupHost Logo" className="h-full w-full object-cover" />
-          </div>
-          <div>
-            <span className="text-base font-black tracking-tight text-white block">
-              MASHUPHOST
-            </span>
-            <span className="text-[10px] font-mono text-cyan-400 tracking-wider uppercase block">
-              ISP Telecom Engine
-            </span>
-          </div>
+    <div className="force-light flex min-h-screen flex-col bg-slate-50 text-slate-900 antialiased">
+      <header className="flex items-center justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4 sm:px-8">
+        <Link href="/" aria-label="MashupHost home" className="rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">
+          <Logo />
         </Link>
-
-        <div className="flex items-center gap-3 text-xs">
-          <span className="hidden sm:inline text-slate-400">Already have an ISP console?</span>
-          <Link
-            href="/login"
-            className="px-3.5 py-2 rounded-xl border border-slate-700 bg-slate-900/80 hover:border-brand-500/50 hover:bg-slate-800 text-white font-bold transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-400"
-          >
-            Sign in &rarr;
+        <p className="text-sm text-slate-600">
+          <span className="hidden sm:inline">Already have an account? </span>
+          <Link href="/login" className="font-semibold text-blue-700 hover:text-blue-800">
+            Sign in
           </Link>
-        </div>
+        </p>
       </header>
 
-      {/* Main Registration Card */}
-      <main className="relative z-10 flex-1 flex items-center justify-center px-4 py-8">
-        <div className="w-full max-w-md rounded-3xl border border-slate-700/80 bg-slate-950/90 backdrop-blur-2xl p-6 sm:p-9 shadow-2xl shadow-black/50">
-          {/* 5-Step Progress Track */}
-          <div className="mb-6">
-            <div className="flex items-center justify-between relative" aria-label={`Step ${step} of 5`}>
-              {/* Connecting line */}
-              <div className="absolute top-1/2 left-4 right-4 -translate-y-1/2 h-0.5 bg-slate-800 -z-0">
-                <div
-                  className="h-full bg-gradient-to-r from-brand-500 to-cyan-400 transition-all duration-300"
-                  style={{ width: `${((step - 1) / 4) * 100}%` }}
-                />
-              </div>
-
-              {[1, 2, 3, 4, 5].map((s) => {
-                const isDone = step > s;
-                const isActive = step === s;
-                return (
-                  <div
-                    key={s}
-                    className={`relative z-10 flex h-7 w-7 items-center justify-center rounded-full text-xs font-mono font-bold transition-all ${
-                      isDone
-                        ? "bg-brand-600 text-white ring-4 ring-brand-950 shadow-glow"
-                        : isActive
-                        ? "bg-cyan-500 text-slate-950 ring-4 ring-cyan-950/80 font-black scale-110 shadow-glow-cyan"
-                        : "bg-slate-900 border border-slate-800 text-slate-500"
-                    }`}
-                  >
-                    {isDone ? <IconCheck size={14} /> : s}
-                  </div>
-                );
-              })}
+      <main className="flex flex-1 items-start justify-center px-4 py-10 sm:items-center sm:py-14">
+        <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-6 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_12px_32px_-16px_rgba(15,23,42,0.18)] sm:p-8">
+          {/* 5-step progress */}
+          <div className="mb-7">
+            <div className="flex items-center justify-between text-xs text-slate-500">
+              <span>
+                Step <span className="font-semibold text-slate-900">{step}</span> of 5
+              </span>
+              {step > 1 && (
+                <button
+                  type="button"
+                  onClick={() => setStep((s) => (s > 1 ? ((s - 1) as any) : s))}
+                  className="rounded font-medium text-slate-600 hover:text-slate-950 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                >
+                  &larr; Back
+                </button>
+              )}
             </div>
-
-            {/* Back Button */}
-            {step > 1 && (
-              <button
-                type="button"
-                onClick={() => setStep((s) => (s > 1 ? ((s - 1) as any) : s))}
-                className="mt-3 flex items-center gap-1 text-[11px] font-mono text-slate-400 hover:text-cyan-400 transition-colors"
-              >
-                <span>&larr; Back</span>
-              </button>
-            )}
+            <div
+              className="mt-2.5 grid grid-cols-5 gap-1.5"
+              role="progressbar"
+              aria-label="Registration progress"
+              aria-valuemin={1}
+              aria-valuemax={5}
+              aria-valuenow={step}
+            >
+              {[1, 2, 3, 4, 5].map((s) => (
+                <span
+                  key={s}
+                  className={`h-1 rounded-full transition-colors duration-300 ${s <= step ? "bg-blue-700" : "bg-slate-200"}`}
+                />
+              ))}
+            </div>
           </div>
 
           {/* Global Error Banner */}
           {errorMessage && (
-            <div className="mb-5 p-3 rounded-xl bg-rose-950/60 border border-rose-800/80 text-rose-300 text-xs flex items-start gap-2">
-              <span className="shrink-0 mt-0.5 px-1 py-0.5 rounded bg-rose-900/80 text-rose-300 font-mono text-[9px] font-bold uppercase">
+            <div className="mb-5 p-3 rounded-md bg-red-50 border border-red-200 text-red-800 text-xs flex items-start gap-2">
+              <span className="shrink-0 mt-0.5 px-1 py-0.5 rounded bg-red-100 text-red-700 font-mono text-[9px] font-bold uppercase">
                 ERROR
               </span>
               <span className="leading-relaxed">{errorMessage}</span>
@@ -578,18 +515,18 @@ export function IspRegistrationWizard() {
           {step === 1 && (
             <form onSubmit={handleStep1Submit} className="space-y-4">
               <div className="text-left space-y-1">
-                <h1 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                <h1 className="text-xl sm:text-2xl font-semibold text-slate-950 tracking-tight">
                   Manage your ISP business
                 </h1>
-                <p className="text-xs text-slate-400 leading-relaxed">
+                <p className="text-xs text-slate-600 leading-relaxed">
                   Streamline operations, automate billing, and delight your customers — start by verifying your WhatsApp number.
                 </p>
               </div>
 
               <div className="space-y-3.5 pt-2 text-left text-xs">
                 <div>
-                  <Label htmlFor="reg-name" className="text-slate-300">
-                    Full name <span className="text-rose-400">*</span>
+                  <Label htmlFor="reg-name" className="text-slate-700">
+                    Full name <span className="text-red-600">*</span>
                   </Label>
                   <Input
                     id="reg-name"
@@ -598,13 +535,13 @@ export function IspRegistrationWizard() {
                     placeholder="e.g. John Kamau"
                     required
                     autoFocus
-                    className="mt-1 bg-slate-900 border-slate-800 text-white focus:border-brand-500"
+                    className="mt-1 bg-white border-slate-300 text-slate-950 focus:border-blue-600"
                   />
                 </div>
 
                 <div>
-                  <Label htmlFor="reg-email" className="text-slate-300">
-                    Email address <span className="text-rose-400">*</span>
+                  <Label htmlFor="reg-email" className="text-slate-700">
+                    Email address <span className="text-red-600">*</span>
                   </Label>
                   <Input
                     id="reg-email"
@@ -613,7 +550,7 @@ export function IspRegistrationWizard() {
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="name@company.com"
                     required
-                    className="mt-1 bg-slate-900 border-slate-800 text-white focus:border-brand-500"
+                    className="mt-1 bg-white border-slate-300 text-slate-950 focus:border-blue-600"
                   />
                   <p className="text-[10px] text-slate-500 mt-1">
                     Your sign-in address — no temporary inboxes.
@@ -621,14 +558,14 @@ export function IspRegistrationWizard() {
                 </div>
 
                 <div>
-                  <Label htmlFor="reg-phone" className="text-slate-300">
-                    WhatsApp number <span className="text-rose-400">*</span>
+                  <Label htmlFor="reg-phone" className="text-slate-700">
+                    WhatsApp number <span className="text-red-600">*</span>
                   </Label>
                   <div className="mt-1 flex gap-2">
                     <select
                       value={phoneCountry}
                       onChange={(e) => setPhoneCountry(e.target.value)}
-                      className="bg-slate-900 border border-slate-800 text-white rounded-xl px-2.5 py-2 text-xs font-mono focus:border-brand-500 focus:outline-none shrink-0"
+                      className="bg-white border border-slate-300 text-slate-950 rounded-md px-2.5 py-2 text-xs font-mono focus:border-blue-600 focus:outline-none shrink-0"
                     >
                       {COUNTRIES.map((c) => (
                         <option key={c.iso2} value={c.iso2}>
@@ -643,7 +580,7 @@ export function IspRegistrationWizard() {
                       onChange={(e) => setNationalPhone(e.target.value)}
                       placeholder="7XX XXX XXX"
                       required
-                      className="flex-1 bg-slate-900 border-slate-800 text-white font-mono focus:border-brand-500"
+                      className="flex-1 bg-white border-slate-300 text-slate-950 font-mono focus:border-blue-600"
                     />
                   </div>
                   <p className="text-[10px] text-slate-500 mt-1">
@@ -654,7 +591,7 @@ export function IspRegistrationWizard() {
                 <Button
                   type="submit"
                   disabled={isSendingOtp}
-                  className="w-full py-2.5 font-bold shadow-glow text-xs flex items-center justify-center gap-1.5 mt-4"
+                  className="w-full py-2.5 font-bold text-xs flex items-center justify-center gap-1.5 mt-4"
                 >
                   <span>{isSendingOtp ? "Sending code..." : "Send WhatsApp code"}</span>
                   {!isSendingOtp && <IconArrowRight size={14} />}
@@ -669,16 +606,16 @@ export function IspRegistrationWizard() {
           {step === 2 && (
             <form onSubmit={handleVerifyOtp} className="space-y-4 text-left">
               <div className="space-y-1">
-                <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                <h2 className="text-xl sm:text-2xl font-semibold text-slate-950 tracking-tight">
                   Check your WhatsApp
                 </h2>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-slate-600">
                   We sent a 6-digit verification code on WhatsApp to{" "}
-                  <strong className="text-cyan-400 font-mono">{formattedWhatsApp}</strong>.{" "}
+                  <strong className="text-blue-700 font-mono">{formattedWhatsApp}</strong>.{" "}
                   <button
                     type="button"
                     onClick={() => setStep(1)}
-                    className="text-brand-400 hover:underline inline"
+                    className="text-blue-700 hover:underline inline"
                   >
                     Use a different number
                   </button>
@@ -687,8 +624,8 @@ export function IspRegistrationWizard() {
 
               <div className="pt-3 space-y-3">
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-slate-400">Verification code</span>
-                  <span className="font-mono text-[11px] text-amber-400">
+                  <span className="text-slate-600">Verification code</span>
+                  <span className="font-mono text-[11px] text-amber-700">
                     Expires in {Math.floor(otpTimer / 60)}m {String(otpTimer % 60).padStart(2, "0")}s
                   </span>
                 </div>
@@ -708,7 +645,7 @@ export function IspRegistrationWizard() {
                       onChange={(e) => handleOtpChange(i, e.target.value)}
                       onKeyDown={(e) => handleOtpKeyDown(i, e)}
                       onPaste={handleOtpPaste}
-                      className="w-11 h-12 rounded-xl bg-slate-900 border border-slate-800 text-center font-mono text-lg font-bold text-white focus:border-brand-500 focus:ring-1 focus:ring-brand-500 focus:outline-none"
+                      className="w-11 h-12 rounded-md bg-white border border-slate-300 text-center font-mono text-lg font-bold text-slate-950 focus:border-blue-600 focus:ring-1 focus:ring-brand-500 focus:outline-none"
                     />
                   ))}
                 </div>
@@ -716,7 +653,7 @@ export function IspRegistrationWizard() {
                 <Button
                   type="submit"
                   disabled={otpDigits.join("").length < 6 || isVerifyingOtp}
-                  className="w-full py-2.5 font-bold shadow-glow text-xs flex items-center justify-center gap-1.5 mt-2"
+                  className="w-full py-2.5 font-bold text-xs flex items-center justify-center gap-1.5 mt-2"
                 >
                   <span>{isVerifyingOtp ? "Verifying..." : "Verify code"}</span>
                   {!isVerifyingOtp && <IconArrowRight size={14} />}
@@ -728,7 +665,7 @@ export function IspRegistrationWizard() {
                     disabled={resendCooldown > 0 || isSendingOtp}
                     onClick={sendOtpCode}
                     className={`text-xs font-mono ${
-                      resendCooldown > 0 || isSendingOtp ? "text-slate-600" : "text-brand-400 hover:underline"
+                      resendCooldown > 0 || isSendingOtp ? "text-slate-600" : "text-blue-700 hover:underline"
                     }`}
                   >
                     {isSendingOtp
@@ -748,18 +685,18 @@ export function IspRegistrationWizard() {
           {step === 3 && (
             <form onSubmit={handleStep3Submit} className="space-y-4 text-left">
               <div className="space-y-1">
-                <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                <h2 className="text-xl sm:text-2xl font-semibold text-slate-950 tracking-tight">
                   Name your account
                 </h2>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-slate-600">
                   Your ISP name becomes your permanent account address (a subdomain) — pick something short and memorable.
                 </p>
               </div>
 
               <div className="space-y-3 pt-2">
                 <div>
-                  <Label htmlFor="company-name" className="text-slate-300 text-xs">
-                    ISP / Company name <span className="text-rose-400">*</span>
+                  <Label htmlFor="company-name" className="text-slate-700 text-xs">
+                    ISP / Company name <span className="text-red-600">*</span>
                   </Label>
                   <Input
                     id="company-name"
@@ -768,36 +705,36 @@ export function IspRegistrationWizard() {
                     placeholder="e.g. Nairobi FastNet Telecom"
                     required
                     autoFocus
-                    className="mt-1 bg-slate-900 border-slate-800 text-white focus:border-brand-500"
+                    className="mt-1 bg-white border-slate-300 text-slate-950 focus:border-blue-600"
                   />
                 </div>
 
                 {/* Subdomain Preview with Live Indicator */}
                 <div
-                  className={`p-3 rounded-xl border font-mono text-xs flex items-center justify-between transition-all ${
+                  className={`p-3 rounded-md border font-mono text-xs flex items-center justify-between transition-all ${
                     slugStatus === "available"
-                      ? "bg-emerald-950/40 border-emerald-500/50 text-emerald-300"
+                      ? "bg-emerald-50 border-emerald-300 text-emerald-800"
                       : slugStatus === "unavailable"
-                      ? "bg-rose-950/40 border-rose-500/50 text-rose-300"
-                      : "bg-slate-900/90 border-slate-800 text-slate-400"
+                      ? "bg-red-50 border-red-300 text-red-800"
+                      : "bg-slate-50 border-slate-200 text-slate-600"
                   }`}
                 >
                   <div className="flex items-center gap-1 truncate">
-                    <strong className="text-white">{slug || "yourcompany"}</strong>
-                    <span className="text-slate-500">.mashupkgrid.com</span>
+                    <strong className="text-slate-950">{slug || "yourcompany"}</strong>
+                    <span className="text-slate-500">{tenantDomain(slug).slice((slug || "yourcompany").length)}</span>
                   </div>
 
                   <div className="shrink-0 flex items-center gap-1.5 text-[11px] font-bold">
                     {slugStatus === "checking" && (
-                      <span className="h-3 w-3 rounded-full border-2 border-cyan-400 border-t-transparent animate-spin" />
+                      <span className="h-3 w-3 rounded-full border-2 border-blue-600 border-t-transparent animate-spin" />
                     )}
                     {slugStatus === "available" && (
-                      <span className="flex items-center gap-1 text-emerald-400">
+                      <span className="flex items-center gap-1 text-emerald-700">
                         <IconCheck size={14} /> Available
                       </span>
                     )}
                     {slugStatus === "unavailable" && (
-                      <span className="text-rose-400 font-sans font-bold">Taken</span>
+                      <span className="text-red-600 font-sans font-bold">Taken</span>
                     )}
                   </div>
                 </div>
@@ -805,7 +742,7 @@ export function IspRegistrationWizard() {
                 {slugMessage && (
                   <p
                     className={`text-[11px] font-mono ${
-                      slugStatus === "available" ? "text-emerald-400" : "text-rose-400"
+                      slugStatus === "available" ? "text-emerald-700" : "text-red-600"
                     }`}
                   >
                     {slugMessage}
@@ -815,7 +752,7 @@ export function IspRegistrationWizard() {
                 {/* Suggestions if taken */}
                 {slugSuggestions.length > 0 && (
                   <div className="space-y-1.5 pt-1">
-                    <span className="text-[10px] text-slate-400 font-mono block uppercase">
+                    <span className="text-[10px] text-slate-600 font-mono block uppercase">
                       Try one of these suggestions:
                     </span>
                     <div className="flex flex-wrap gap-1.5">
@@ -829,9 +766,9 @@ export function IspRegistrationWizard() {
                             setSlugMessage("Available — this will be your account address.");
                             setSlugSuggestions([]);
                           }}
-                          className="px-2.5 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-cyan-300 text-[11px] font-mono transition-all"
+                          className="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-50 border border-slate-300 text-blue-700 text-[11px] font-mono transition-all"
                         >
-                          {sug}.mashupkgrid.com
+                          {tenantDomain(sug)}
                         </button>
                       ))}
                     </div>
@@ -841,7 +778,7 @@ export function IspRegistrationWizard() {
                 <Button
                   type="submit"
                   disabled={slugStatus !== "available"}
-                  className="w-full py-2.5 font-bold shadow-glow text-xs flex items-center justify-center gap-1.5 mt-2"
+                  className="w-full py-2.5 font-bold text-xs flex items-center justify-center gap-1.5 mt-2"
                 >
                   <span>Continue</span>
                   <IconArrowRight size={14} />
@@ -856,44 +793,44 @@ export function IspRegistrationWizard() {
           {step === 4 && (
             <form onSubmit={handleStep4Submit} className="space-y-4 text-left">
               <div className="space-y-1">
-                <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                <h2 className="text-xl sm:text-2xl font-semibold text-slate-950 tracking-tight">
                   Where you operate
                 </h2>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-slate-600">
                   Set your country, timezone, and billing currency — we&apos;ll use these as your account defaults.
                 </p>
               </div>
 
               {/* Verified Badges Preview */}
-              <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-1.5 text-[11px] font-mono">
-                <div className="flex justify-between items-center text-slate-400">
+              <div className="p-3 rounded-md bg-white border border-slate-300 space-y-1.5 text-[11px] font-mono">
+                <div className="flex justify-between items-center text-slate-600">
                   <span>Email:</span>
-                  <span className="text-white flex items-center gap-1">
-                    <IconCheck size={12} className="text-emerald-400" /> {email}
+                  <span className="text-slate-950 flex items-center gap-1">
+                    <IconCheck size={12} className="text-emerald-700" /> {email}
                   </span>
                 </div>
-                <div className="flex justify-between items-center text-slate-400">
+                <div className="flex justify-between items-center text-slate-600">
                   <span>WhatsApp:</span>
-                  <span className="text-white flex items-center gap-1">
-                    <IconCheck size={12} className="text-emerald-400" /> {formattedWhatsApp}
+                  <span className="text-slate-950 flex items-center gap-1">
+                    <IconCheck size={12} className="text-emerald-700" /> {formattedWhatsApp}
                   </span>
                 </div>
-                <div className="flex justify-between items-center text-slate-400">
+                <div className="flex justify-between items-center text-slate-600">
                   <span>Subdomain:</span>
-                  <span className="text-cyan-400 font-bold">{tenantDomain(slug)}</span>
+                  <span className="text-blue-700 font-bold">{tenantDomain(slug)}</span>
                 </div>
               </div>
 
               <div className="space-y-3 pt-1 text-xs">
                 <div>
-                  <Label htmlFor="country-select" className="text-slate-300">
-                    Operating Country <span className="text-rose-400">*</span>
+                  <Label htmlFor="country-select" className="text-slate-700">
+                    Operating Country <span className="text-red-600">*</span>
                   </Label>
                   <select
                     id="country-select"
                     value={operatingCountry}
                     onChange={(e) => handleCountryChange(e.target.value)}
-                    className="w-full mt-1 bg-slate-900 border border-slate-800 text-white rounded-xl px-3 py-2 text-xs focus:border-brand-500 focus:outline-none"
+                    className="w-full mt-1 bg-white border border-slate-300 text-slate-950 rounded-md px-3 py-2 text-xs focus:border-blue-600 focus:outline-none"
                   >
                     {COUNTRIES.map((c) => (
                       <option key={c.iso2} value={c.iso2}>
@@ -905,14 +842,14 @@ export function IspRegistrationWizard() {
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <Label htmlFor="tz-select" className="text-slate-300">
-                      Timezone <span className="text-rose-400">*</span>
+                    <Label htmlFor="tz-select" className="text-slate-700">
+                      Timezone <span className="text-red-600">*</span>
                     </Label>
                     <select
                       id="tz-select"
                       value={timezone}
                       onChange={(e) => setTimezone(e.target.value)}
-                      className="w-full mt-1 bg-slate-900 border border-slate-800 text-white rounded-xl px-2.5 py-2 text-xs font-mono focus:border-brand-500 focus:outline-none"
+                      className="w-full mt-1 bg-white border border-slate-300 text-slate-950 rounded-md px-2.5 py-2 text-xs font-mono focus:border-blue-600 focus:outline-none"
                     >
                       <option value="Africa/Nairobi">Africa/Nairobi (EAT)</option>
                       <option value="Africa/Kampala">Africa/Kampala</option>
@@ -926,14 +863,14 @@ export function IspRegistrationWizard() {
                   </div>
 
                   <div>
-                    <Label htmlFor="curr-select" className="text-slate-300">
-                      Billing Currency <span className="text-rose-400">*</span>
+                    <Label htmlFor="curr-select" className="text-slate-700">
+                      Billing Currency <span className="text-red-600">*</span>
                     </Label>
                     <select
                       id="curr-select"
                       value={currency}
                       onChange={(e) => setCurrency(e.target.value)}
-                      className="w-full mt-1 bg-slate-900 border border-slate-800 text-white rounded-xl px-2.5 py-2 text-xs font-mono focus:border-brand-500 focus:outline-none"
+                      className="w-full mt-1 bg-white border border-slate-300 text-slate-950 rounded-md px-2.5 py-2 text-xs font-mono focus:border-blue-600 focus:outline-none"
                     >
                       <option value="KES">KES — Kenyan Shilling</option>
                       <option value="USD">USD — US Dollar ($)</option>
@@ -947,14 +884,14 @@ export function IspRegistrationWizard() {
                 </div>
 
                 <div>
-                  <Label htmlFor="source-select" className="text-slate-300">
+                  <Label htmlFor="source-select" className="text-slate-700">
                     How did you hear about us?
                   </Label>
                   <select
                     id="source-select"
                     value={heardAboutUs}
                     onChange={(e) => setHeardAboutUs(e.target.value)}
-                    className="w-full mt-1 bg-slate-900 border border-slate-800 text-white rounded-xl px-3 py-2 text-xs focus:border-brand-500 focus:outline-none"
+                    className="w-full mt-1 bg-white border border-slate-300 text-slate-950 rounded-md px-3 py-2 text-xs focus:border-blue-600 focus:outline-none"
                   >
                     {HEARD_ABOUT_OPTIONS.map((opt) => (
                       <option key={opt} value={opt}>
@@ -966,7 +903,7 @@ export function IspRegistrationWizard() {
 
                 <Button
                   type="submit"
-                  className="w-full py-2.5 font-bold shadow-glow text-xs flex items-center justify-center gap-1.5 mt-2"
+                  className="w-full py-2.5 font-bold text-xs flex items-center justify-center gap-1.5 mt-2"
                 >
                   <span>Continue</span>
                   <IconArrowRight size={14} />
@@ -981,10 +918,10 @@ export function IspRegistrationWizard() {
           {step === 5 && (
             <form onSubmit={handleFinalSubmit} className="space-y-4 text-left">
               <div className="space-y-1">
-                <h2 className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                <h2 className="text-xl sm:text-2xl font-semibold text-slate-950 tracking-tight">
                   Secure your account
                 </h2>
-                <p className="text-xs text-slate-400">
+                <p className="text-xs text-slate-600">
                   Choose a strong password — you&apos;ll use it to sign in to your ISP console.
                 </p>
               </div>
@@ -992,8 +929,8 @@ export function IspRegistrationWizard() {
               <div className="space-y-3.5 pt-2 text-xs">
                 {/* Password Input */}
                 <div>
-                  <Label htmlFor="reg-pw" className="text-slate-300">
-                    Password <span className="text-rose-400">*</span>
+                  <Label htmlFor="reg-pw" className="text-slate-700">
+                    Password <span className="text-red-600">*</span>
                   </Label>
                   <div className="relative mt-1">
                     <Input
@@ -1004,14 +941,14 @@ export function IspRegistrationWizard() {
                       placeholder="At least 10 characters"
                       required
                       autoFocus
-                      className="bg-slate-900 border-slate-800 text-white pr-10 focus:border-brand-500"
+                      className="bg-white border-slate-300 text-slate-950 pr-10 focus:border-blue-600"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
                       aria-pressed={showPassword}
                       aria-label={showPassword ? "Hide password" : "Show password"}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 text-xs"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700 text-xs"
                     >
                       {showPassword ? "Hide" : "Show"}
                     </button>
@@ -1025,7 +962,7 @@ export function IspRegistrationWizard() {
                           <div
                             key={level}
                             className={`flex-1 rounded-full transition-all ${
-                              passwordStrengthScore >= level ? strengthMeta.tone : "bg-slate-800"
+                              passwordStrengthScore >= level ? strengthMeta.tone : "bg-slate-200"
                             }`}
                           />
                         ))}
@@ -1036,10 +973,10 @@ export function IspRegistrationWizard() {
                           {strengthMeta.label}
                         </span>
                         <div className="flex gap-2 text-slate-500">
-                          <span className={passwordCriteria.length ? "text-emerald-400" : ""}>10+ chars</span>
-                          <span className={passwordCriteria.bothCases ? "text-emerald-400" : ""}>aA</span>
-                          <span className={passwordCriteria.hasNumber ? "text-emerald-400" : ""}>123</span>
-                          <span className={passwordCriteria.hasSymbol ? "text-emerald-400" : ""}>#$%</span>
+                          <span className={passwordCriteria.length ? "text-emerald-700" : ""}>10+ chars</span>
+                          <span className={passwordCriteria.bothCases ? "text-emerald-700" : ""}>aA</span>
+                          <span className={passwordCriteria.hasNumber ? "text-emerald-700" : ""}>123</span>
+                          <span className={passwordCriteria.hasSymbol ? "text-emerald-700" : ""}>#$%</span>
                         </div>
                       </div>
                     </div>
@@ -1048,8 +985,8 @@ export function IspRegistrationWizard() {
 
                 {/* Confirm Password Input */}
                 <div>
-                  <Label htmlFor="reg-confirm-pw" className="text-slate-300">
-                    Confirm password <span className="text-rose-400">*</span>
+                  <Label htmlFor="reg-confirm-pw" className="text-slate-700">
+                    Confirm password <span className="text-red-600">*</span>
                   </Label>
                   <div className="relative mt-1">
                     <Input
@@ -1059,20 +996,20 @@ export function IspRegistrationWizard() {
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       placeholder="Re-enter your password"
                       required
-                      className="bg-slate-900 border-slate-800 text-white pr-10 focus:border-brand-500"
+                      className="bg-white border-slate-300 text-slate-950 pr-10 focus:border-blue-600"
                     />
                     <button
                       type="button"
                       onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                       aria-pressed={showConfirmPassword}
                       aria-label={showConfirmPassword ? "Hide confirmed password" : "Show confirmed password"}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 text-xs"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-700 text-xs"
                     >
                       {showConfirmPassword ? "Hide" : "Show"}
                     </button>
                   </div>
                   {confirmPassword && password !== confirmPassword && (
-                    <p className="text-[10px] text-rose-400 mt-1">Passwords do not match.</p>
+                    <p className="text-[10px] text-red-600 mt-1">Passwords do not match.</p>
                   )}
                 </div>
 
@@ -1082,16 +1019,12 @@ export function IspRegistrationWizard() {
                     type="checkbox"
                     checked={agreeTerms}
                     onChange={(e) => setAgreeTerms(e.target.checked)}
-                    className="mt-0.5 rounded border-slate-800 bg-slate-900 text-brand-600 focus:ring-brand-500"
+                    className="mt-0.5 rounded border-slate-300 bg-white text-brand-600 focus:ring-brand-500"
                   />
-                  <span className="text-[11px] text-slate-400 leading-snug">
+                  <span className="text-[11px] text-slate-600 leading-snug">
                     I agree to the{" "}
-                    <Link href="/terms" target="_blank" className="text-cyan-400 hover:underline">
-                      Terms of service
-                    </Link>{" "}
-                    and{" "}
-                    <Link href="/privacy" target="_blank" className="text-cyan-400 hover:underline">
-                      Privacy policy
+                    <Link href="/terms" target="_blank" className="text-blue-700 hover:underline">
+                      Terms of Service
                     </Link>
                     .
                   </span>
@@ -1100,7 +1033,7 @@ export function IspRegistrationWizard() {
                 <Button
                   type="submit"
                   disabled={isSubmitting || !agreeTerms || password !== confirmPassword}
-                  className="w-full py-3 font-bold shadow-glow text-xs flex items-center justify-center gap-1.5 mt-3"
+                  className="w-full py-3 font-bold text-xs flex items-center justify-center gap-1.5 mt-3"
                 >
                   {isSubmitting ? (
                     <span className="flex items-center gap-2">
@@ -1121,8 +1054,9 @@ export function IspRegistrationWizard() {
       </main>
 
       {/* Footer */}
-      <footer className="relative z-10 py-5 text-center text-xs text-slate-600 font-mono">
-        &copy; {new Date().getFullYear()} MashupKgrid ISP Telecom Engine. All rights reserved.
+      <footer className="px-5 py-6 text-center text-xs text-slate-500">
+        &copy; {new Date().getFullYear()} MashupHost &middot;{" "}
+        <Link href="/terms" className="hover:text-slate-800">Terms</Link>
       </footer>
     </div>
   );

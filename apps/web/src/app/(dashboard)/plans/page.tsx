@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
 import { Button, Card, ErrorText, HintText, Input, Label, Badge } from "@/components/ui";
-import { IconLayers } from "@/components/icons";
 
 const TENANT_FEATURES = [
   { key: "AI_ASSISTANT", label: "AI Assistant" },
@@ -153,11 +152,8 @@ export default function PlansPage() {
     <div className="max-w-4xl space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2.5">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400">
-              <IconLayers size={20} />
-            </span>
-            Subscription Plans
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">
+            Subscription plans
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
             The catalog of plans sold to ISP tenants — pricing, trial length, usage limits, and features.

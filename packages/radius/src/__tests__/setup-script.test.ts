@@ -1,0 +1,137 @@
+import { describe, expect, it } from "vitest";
+import type { Router } from "@mashupkgrid/database";
+import { buildMikrotikProvisioningScript, buildMikrotikWinboxScript, managementSources } from "../setup-script.js";
+
+const router = { id: "11111111-1111-1111-1111-111111111111", name: "hAP test", apiPort: 8728, useTls: false } as unknown as Router;
+const credentials = { username: "mashupkgrid-api", password: "router-generated-secret" };
+const callbackUrl = "https://api.example.com/api/v1/routers/provision/token123/callback";
+
+/** Every firewall rule that accepts traffic to the router itself (chain=input). */
+function inputAcceptRules(script: string): string[] {
+  return script.split("\n").filter((l) => l.includes("/ip firewall filter add") && l.includes("chain=input") && l.includes("action=accept"));
+}
+
+describe("router setup script — management access", () => {
+  const script = buildMikrotikProvisioningScript(router, credentials, callbackUrl, {
+    managementSource: "68.210.187.104",
+    vpnSubnet: "10.90.0.0/16",
+    loginTemplateUrl: "https://api.example.com/api/v1/hotspot/demo-isp/mikrotik-login-template",
+  });
+
+  it("never opens the API or WinBox to the whole internet", () => {
+    const rules = inputAcceptRules(script);
+    expect(rules.length).toBeGreaterThan(0);
+    for (const rule of rules) expect(rule).toContain('src-address-list="mashup-mgmt"');
+    expect(script).not.toMatch(/dst-port=8291 action=accept/);
+  });
+
+  it("allows exactly the platform, its VPN and the router's LAN", () => {
+    for (const source of ["68.210.187.104", "10.90.0.0/16", "192.168.88.0/24"]) {
+      expect(script).toContain(`list="mashup-mgmt" address=${source}`);
+    }
+    expect(script).toContain("/ip service set api disabled=no port=8728 address=68.210.187.104,10.90.0.0/16,192.168.88.0/24");
+    expect(script).toContain("/ip service set winbox disabled=no port=8291 address=68.210.187.104,10.90.0.0/16,192.168.88.0/24");
+  });
+
+  it("removes the old internet-open rules when re-run on an existing router", () => {
+    expect(script).toContain('/ip firewall filter remove [find comment="MASHUPKGRID ISP API"]');
+    expect(script).toContain('/ip firewall filter remove [find comment="MASHUPKGRID WINBOX REMOTE"]');
+  });
+
+  it("turns off the unused API variant, telnet and FTP", () => {
+    expect(script).toContain("/ip service set api-ssl disabled=yes");
+    expect(script).toContain("/ip service set telnet disabled=yes");
+    expect(script).toContain("/ip service set ftp disabled=yes");
+    expect(script).not.toContain("/ip service set api disabled=yes");
+  });
+
+  it("restricts api-ssl instead when the router uses TLS", () => {
+    const tls = buildMikrotikProvisioningScript({ ...router, apiPort: 8729, useTls: true } as Router, credentials, callbackUrl, { managementSource: "68.210.187.104" });
+    expect(tls).toContain("/ip service set api-ssl disabled=no port=8729 address=");
+    expect(tls).toContain("/ip service set api disabled=yes");
+    expect(tls).not.toContain("/ip service set api-ssl disabled=yes");
+    expect(inputAcceptRules(tls).every((r) => r.includes("dst-port=8729,8291") && r.includes("mashup-mgmt"))).toBe(true);
+  });
+
+  it("adds the VPN only when the server has a WireGuard key, using the configured subnet", () => {
+    expect(script).not.toContain("/interface wireguard add");
+    const withVpn = buildMikrotikProvisioningScript(router, credentials, callbackUrl, {
+      managementSource: "68.210.187.104",
+      vpnSubnet: "10.77.0.0/16",
+      serverPublicKey: "SERVERPUBLICKEYAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+      vpnIp: "10.77.0.9",
+    });
+    expect(withVpn).toContain("/interface wireguard add name=mkg-wg");
+    expect(withVpn).toContain("allowed-address=10.77.0.0/16");
+    expect(withVpn).toContain("list=\"mashup-mgmt\" address=10.77.0.0/16");
+  });
+
+  it("points RADIUS at the configured server", () => {
+    const lan = buildMikrotikProvisioningScript(router, credentials, callbackUrl, { radiusHost: "192.168.1.183", managementSource: "192.168.1.183" });
+    expect(lan).toContain("/radius add service=ppp,hotspot address=192.168.1.183");
+    expect(lan).toContain('list="mashup-mgmt" address=192.168.1.183');
+  });
+});
+
+describe("router setup script — one rejected command can't stop the rest", () => {
+  const script = buildMikrotikProvisioningScript(router, credentials, callbackUrl, {
+    managementSource: "192.168.1.183",
+    portalHost: "http://192.168.1.183:3000",
+    loginTemplateUrl: "http://192.168.1.183:4000/api/v1/hotspot/demo-isp/mikrotik-login-template",
+    serverPublicKey: "SERVERPUBLICKEYAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
+    blockTethering: true,
+  });
+
+  it("has no bare top-level command that could abort /import", () => {
+    const bare = script.split("\n").filter((l) => l.startsWith("/"));
+    expect(bare).toEqual([]);
+  });
+
+  it("never puts a wildcard host in the IP walled garden (RouterOS rejects it)", () => {
+    const ipWalled = script.split("\n").filter((l) => l.includes("walled-garden ip add"));
+    expect(ipWalled.length).toBeGreaterThan(0);
+    for (const l of ipWalled) expect(l).not.toContain("*");
+    expect(script).toContain('walled-garden add dst-host=*.safaricom.co.ke action=allow');
+  });
+
+  it("creates the management account before anything that can drop the operator's session", () => {
+    const at = (needle: string) => script.indexOf(needle);
+    const userAdd = at("/user add name=mashupkgrid-api");
+    expect(userAdd).toBeGreaterThan(0);
+    for (const disruptive of ["/interface bridge port", "/ip service set winbox", "/interface wireless set wlan1"]) {
+      expect(userAdd).toBeLessThan(at(disruptive));
+    }
+    // Wi-Fi is renamed last of all.
+    expect(at("/interface wireless set wlan1")).toBeGreaterThan(at("mkg-heartbeat"));
+  });
+
+  it("installs the light per-app filter on every router, after everything essential", () => {
+    const at = (needle: string) => script.indexOf(needle);
+    const filter = at('comment="MASHUPKGRID APP FILTER"');
+    expect(filter).toBeGreaterThan(0);
+    expect(script).not.toContain("total-memory"); // no memory threshold any more
+    expect(at("/interface wireguard add name=mkg-wg")).toBeLessThan(filter);
+    expect(at("mkg-heartbeat")).toBeLessThan(filter);
+    // App-only customers can still reach the portal and API to buy full internet.
+    expect(script).toContain('list="mashup-dest-portal" address=192.168.1.183');
+  });
+
+  it("still sets up the heartbeat and the VPN after the walled garden", () => {
+    const at = (needle: string) => script.indexOf(needle);
+    expect(at("mkg-heartbeat")).toBeGreaterThan(at("walled-garden"));
+    expect(at("/interface wireguard add name=mkg-wg")).toBeGreaterThan(at("walled-garden"));
+  });
+});
+
+describe("WinBox access script", () => {
+  it("restricts WinBox to the platform, VPN and LAN instead of opening it", () => {
+    const script = buildMikrotikWinboxScript("hAP test", { managementSource: "68.210.187.104", vpnSubnet: "10.90.0.0/16" });
+    for (const rule of inputAcceptRules(script)) expect(rule).toContain('src-address-list="mashup-mgmt"');
+    expect(script).not.toMatch(/dst-port=8291 action=accept/);
+    expect(script).toContain("/ip service set winbox disabled=no port=8291 address=68.210.187.104,10.90.0.0/16,192.168.88.0/24");
+  });
+
+  it("ignores anything that isn't an IPv4 address or CIDR", () => {
+    expect(managementSources({ managementSource: "evil;/system reset", vpnSubnet: "10.90.0.0/16" })).toEqual(["10.90.0.0/16", "192.168.88.0/24"]);
+  });
+});

@@ -6,7 +6,12 @@ const config: Config = {
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
   ],
-  darkMode: "class",
+  // Class-based dark mode, with one opt-out: anything inside `.force-light` renders its light
+  // styles even though the root <html> carries `dark`. The public marketing, legal and auth pages
+  // are a light design, and the shared primitives in components/ui.tsx (Input, Label, Card…)
+  // would otherwise always resolve their `dark:` variants there. The dashboard never uses
+  // `.force-light`, so its behaviour is identical to plain `darkMode: "class"`.
+  darkMode: ["variant", "&:is(.dark *):not(:is(.force-light, .force-light *))"],
   theme: {
     extend: {
       colors: {

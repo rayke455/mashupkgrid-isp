@@ -24,6 +24,25 @@
   color-scheme: dark;
 }
 
+/* Public site (homepage, legal and auth pages): a light design with the MashupHost blue as the
+   brand scale, so shared primitives like <Button> and <Input> match it. Scoped to this wrapper —
+   the dashboard and tenant white-label theming (TenantThemeStyle) are untouched. The dark-variant
+   opt-out for this class lives in tailwind.config.ts. */
+.force-light {
+  color-scheme: light;
+  --brand-50: 239 246 255;
+  --brand-100: 219 234 254;
+  --brand-200: 191 219 254;
+  --brand-300: 147 197 253;
+  --brand-400: 96 165 250;
+  --brand-500: 59 130 246;
+  --brand-600: 37 99 235;
+  --brand-700: 29 78 216;
+  --brand-800: 30 64 175;
+  --brand-900: 30 58 138;
+  --brand-950: 23 37 84;
+}
+
 body {
   font-feature-settings: "cv02", "cv03", "cv04", "cv11";
 }
@@ -264,4 +283,10 @@ input[type="range"] {
 .hover-lift-card:hover {
   transform: translateY(-3px);
   box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+}
+
+/* The root <body> is dark for the dashboard; behind the light public pages that would show as a
+   navy band on iOS overscroll and on any page shorter than the viewport. */
+body:has(.force-light) {
+  background-color: #ffffff;
 }

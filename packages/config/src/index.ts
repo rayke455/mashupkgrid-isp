@@ -121,6 +121,31 @@ const envSchema = z.object({
     .optional()
     .default("68.210.187.104"),
 
+  /** Base URL routers use to reach this API (setup script, check-ins, hotspot login page).
+   *  Defaults to APP_API_PUBLIC_URL. Set it when routers should use a different address from
+   *  browsers and Safaricom — e.g. http://192.168.1.183:4000 to test a router on the same LAN as
+   *  a dev machine, so its check-ins arrive from the same address its RADIUS packets do. */
+  ROUTER_API_BASE_URL: z.string().optional().default(""),
+
+  /** Remote WinBox through this server: the worker listens on one TCP port per VPN-linked
+   *  router and relays it over WireGuard to that router's WinBox (port 8291). Opt-in — it only
+   *  works where the WireGuard interface exists (production), and the port range must also be
+   *  published by the container and opened in the host firewall. */
+  ENABLE_WINBOX_RELAY: z
+    .string()
+    .optional()
+    .default("false")
+    .transform((v) => v === "true"),
+  WINBOX_RELAY_PORT_RANGE: z
+    .string()
+    .regex(/^\d{2,5}-\d{2,5}$/, "WINBOX_RELAY_PORT_RANGE must look like 20000-20199")
+    // Must match the range docker-compose.prod.yml publishes for the api service.
+    .default("20000-20199"),
+  /** Host operators type into WinBox. Defaults to the WireGuard endpoint's host. */
+  WINBOX_RELAY_PUBLIC_HOST: z.string().optional().default(""),
+  /** Optional comma-separated IPv4 addresses/CIDRs allowed to use the relay (e.g. your office). */
+  WINBOX_RELAY_ALLOWED_SOURCES: z.string().optional().default(""),
+
   SMTP_HOST: z.string().optional().default(""),
   SMTP_PORT: z.coerce.number().int().positive().default(587),
   SMTP_USER: z.string().optional().default(""),

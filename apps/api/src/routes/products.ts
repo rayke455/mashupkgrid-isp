@@ -2,1471 +2,352 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import * as fs from "fs";
 import * as path from "path";
-import { successResponse, ForbiddenError, UnauthorizedError } from "@mashupkgrid/shared";
+import { prisma, type StoreOrder, type StoreProduct } from "@mashupkgrid/database";
+import { successResponse, ForbiddenError, NotFoundError, UnauthorizedError } from "@mashupkgrid/shared";
+import {
+  createStoreOrder,
+  findStoreOrderForBuyer,
+  startStoreOrderPayment,
+  verifyStoreOrderPayment,
+  type StoreOrderItemSnapshot,
+} from "@mashupkgrid/payments";
 import { authenticate } from "../plugins/authenticate.js";
 import { resolveTenant } from "../plugins/tenant.js";
 import { checkMaintenance } from "../plugins/maintenance.js";
 import { writeAuditLog } from "../lib/audit.js";
+import { STORE_SEED_PRODUCTS, type SeedProduct } from "../lib/store-catalog-seed.js";
 
-export interface HardwareProduct {
-  id: string;
-  name: string;
-  slug: string;
-  brand: string;
-  category: "routers" | "switches" | "wireless" | "fiber" | "solar" | "cctv";
-  price: number; // KES
-  originalPrice?: number;
-  stock: number;
-  inStock: boolean;
-  rating: number;
-  reviewCount: number;
-  badge?: string;
-  shortDescription: string;
-  description: string;
-  imageUrl: string;
-  specs: string[];
-  warranty: string;
-  featured: boolean;
-  createdAt: string;
-  updatedAt: string;
+const CATEGORIES = ["routers", "switches", "wireless", "fiber", "solar", "cctv"] as const;
+
+// --- Catalogue ------------------------------------------------------------------------------------
+
+/** The store used to keep its catalogue in data/hardware-products.json. Fills an empty table once:
+ *  from that file when a server still has it (keeping any price edits), otherwise from the seed. */
+let catalogReady: Promise<void> | null = null;
+function ensureStoreCatalog(): Promise<void> {
+  catalogReady ??= (async () => {
+    if ((await prisma.storeProduct.count()) > 0) return;
+    let source: SeedProduct[] = STORE_SEED_PRODUCTS;
+    const legacyFile = path.join(process.cwd(), "data", "hardware-products.json");
+    try {
+      if (fs.existsSync(legacyFile)) source = JSON.parse(fs.readFileSync(legacyFile, "utf-8")) as SeedProduct[];
+    } catch {
+      // Unreadable file: the seed is still a correct starting catalogue.
+    }
+    await prisma.storeProduct.createMany({
+      data: source.map((p) => ({
+        id: p.id,
+        slug: p.slug,
+        name: p.name,
+        brand: p.brand,
+        category: p.category,
+        priceMinor: Math.round(p.price * 100),
+        originalPriceMinor: p.originalPrice ? Math.round(p.originalPrice * 100) : null,
+        stock: p.stock,
+        badge: p.badge ?? null,
+        shortDescription: p.shortDescription,
+        description: p.description,
+        imageUrl: p.imageUrl,
+        specs: p.specs,
+        warranty: p.warranty,
+        featured: p.featured,
+      })),
+      skipDuplicates: true,
+    });
+  })().catch((err) => {
+    catalogReady = null; // retry on the next request
+    throw err;
+  });
+  return catalogReady;
 }
 
-export interface HardwareOrderItem {
-  productId: string;
-  name: string;
-  quantity: number;
-  price: number;
-}
-
-export interface HardwareOrder {
-  id: string;
-  customerName: string;
-  phone: string;
-  email?: string;
-  county: string;
-  deliveryAddress: string;
-  items: HardwareOrderItem[];
-  subtotal: number;
-  shippingFee: number;
-  totalAmount: number;
-  mpesaReceiptNumber?: string;
-  status: "PENDING" | "PAID" | "PROCESSING" | "DISPATCHED" | "DELIVERED" | "CANCELLED";
-  createdAt: string;
-  updatedAt: string;
-  account?: {
-    created: boolean;
-    customerName: string;
-    phone: string;
-    customerNumber: string;
-    accountNumber: string;
-    tempPin: string;
-    loginUrl: string;
+/** What the web store works with: whole shillings, as it always has. */
+function toPublicProduct(p: StoreProduct) {
+  return {
+    id: p.id,
+    slug: p.slug,
+    name: p.name,
+    brand: p.brand,
+    category: p.category,
+    price: p.priceMinor / 100,
+    originalPrice: p.originalPriceMinor ? p.originalPriceMinor / 100 : undefined,
+    stock: p.stock,
+    inStock: p.stock > 0,
+    badge: p.badge ?? undefined,
+    shortDescription: p.shortDescription,
+    description: p.description,
+    imageUrl: p.imageUrl,
+    specs: p.specs,
+    warranty: p.warranty,
+    featured: p.featured,
+    createdAt: p.createdAt,
+    updatedAt: p.updatedAt,
   };
 }
 
-const DEFAULT_PRODUCTS: HardwareProduct[] = [
-  // 1. Routers & ONUs
-  {
-    id: "prod_mikrotik_hex",
-    name: "MikroTik hEX (RB750Gr3) 5-Port Gigabit Router",
-    slug: "mikrotik-hex-rb750gr3",
-    brand: "MikroTik",
-    category: "routers",
-    price: 8500,
-    originalPrice: 9500,
-    stock: 42,
-    inStock: true,
-    rating: 4.9,
-    reviewCount: 128,
-    badge: "Bestseller",
-    shortDescription: "5x Gigabit Ethernet, Dual Core 880MHz CPU, 256MB RAM, RouterOS L4. The gold standard for Kenyan hotspots.",
-    description: "The MikroTik hEX is a 5-port Gigabit Ethernet router for locations where wireless connectivity is not required. Compact, affordable, and incredibly powerful with hardware encryption and full RouterOS v7 support.",
-    imageUrl: "/products/mikrotik-hex.jpg",
-    specs: [
-      "5x 10/100/1000 Gigabit Ethernet Ports",
-      "Dual Core 880MHz MT7621A CPU",
-      "256MB RAM & Hardware IPsec Encryption",
-      "Full RouterOS L4 License included",
-      "Supports 150+ Concurrent Hotspot Vouchers",
-    ],
-    warranty: "1 Year Official MikroTik Warranty",
-    featured: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "prod_mikrotik_hap_ax2",
-    name: "MikroTik hAP ax2 (WiFi 6 Gen6 Dual-Band Router)",
-    slug: "mikrotik-hap-ax2",
-    brand: "MikroTik",
-    category: "routers",
-    price: 14800,
-    originalPrice: 16500,
-    stock: 18,
-    inStock: true,
-    rating: 4.8,
-    reviewCount: 64,
-    badge: "WiFi 6 High Speed",
-    shortDescription: "WiFi 6 (802.11ax), Quad-Core 864MHz ARM CPU, 1GB RAM, 5x Gigabit Ports, PoE Out.",
-    description: "Supercharge your café, restaurant, or residential hotspot with state-of-the-art WiFi 6 speeds up to 1800Mbps. Handles heavy simultaneous streaming effortlessly.",
-    imageUrl: "/products/mikrotik-hap-ax2.jpg",
-    specs: [
-      "WiFi 6 802.11ax/ac Dual-Band (574 + 1200 Mbps)",
-      "Quad-Core 864MHz IPQ-6010 ARM64 CPU",
-      "1GB RAM & RouterOS v7 License 4",
-      "5x Gigabit Ports with Passive PoE Output on Port 5",
-      "Ideal for 80+ simultaneous wireless clients",
-    ],
-    warranty: "1 Year Official Warranty",
-    featured: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "prod_mikrotik_hap_ax3",
-    name: "MikroTik hAP ax3 High-Power Quad-Core WiFi 6 Router",
-    slug: "mikrotik-hap-ax3",
-    brand: "MikroTik",
-    category: "routers",
-    price: 21500,
-    originalPrice: 24000,
-    stock: 15,
-    inStock: true,
-    rating: 5.0,
-    reviewCount: 53,
-    badge: "High Power",
-    shortDescription: "Quad-Core 1.8GHz ARM, 1GB RAM, 1x 2.5G Port, 4x Gigabit Ports, External High-Gain Antennas.",
-    description: "MikroTik's flagship residential and SME router. Extreme processing muscle for advanced firewall filtering, wireguard VPN encryption, and high-density WiFi 6 coverage.",
-    imageUrl: "/products/mikrotik-hap-ax3.jpg",
-    specs: [
-      "1x 2.5 Gigabit Ethernet Port + 4x Gigabit Ports",
-      "Quad-Core 1.8GHz Qualcomm IPQ-6010 CPU",
-      "1GB RAM + 128MB NAND storage",
-      "Dual-Band WiFi 6 with external 5.5dBi antennas",
-      "PoE-in and PoE-out on designated ports",
-    ],
-    warranty: "1 Year Official Warranty",
-    featured: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "prod_mikrotik_rb5009",
-    name: "MikroTik RB5009UG+S+IN Heavy-Duty Carrier Router",
-    slug: "mikrotik-rb5009ug-s-in",
-    brand: "MikroTik",
-    category: "routers",
-    price: 28500,
-    originalPrice: 32000,
-    stock: 12,
-    inStock: true,
-    rating: 5.0,
-    reviewCount: 42,
-    badge: "Carrier Grade",
-    shortDescription: "7x 1G Ports, 1x 2.5G Port, 1x 10G SFP+ Cage, Quad-Core 1.4GHz, 1GB DDR4 RAM.",
-    description: "The ultimate ISP aggregation router. Compact enough to mount four in a 1U rack, yet powerful enough to route 10Gbps line rate traffic with complex PPPoE queues and FreeRADIUS authentication.",
-    imageUrl: "/products/mikrotik-rb5009.jpg",
-    specs: [
-      "1x 10G SFP+ Port for Fiber Uplink",
-      "1x 2.5G Ultra-Fast Ethernet Port",
-      "7x 1G Gigabit Ethernet Ports",
-      "Marvell Armada Quad-Core 1.4GHz CPU",
-      "1GB DDR4 RAM + RouterOS L5",
-    ],
-    warranty: "2 Years Carrier Warranty",
-    featured: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "prod_mikrotik_ccr2004",
-    name: "MikroTik Cloud Core CCR2004-16G-2S+ Gateway",
-    slug: "mikrotik-ccr2004-16g-2s-plus",
-    brand: "MikroTik",
-    category: "routers",
-    price: 65000,
-    originalPrice: 72000,
-    stock: 5,
-    inStock: true,
-    rating: 5.0,
-    reviewCount: 19,
-    badge: "Enterprise NOC Core",
-    shortDescription: "16x Gigabit Ports, 2x 10G SFP+ Cages, 4GB RAM, 4-Core 1.7GHz AL32400 64-bit CPU.",
-    description: "Engineered for regional Kenyan ISPs serving thousands of PPPoE and Hotspot customers. Dual redundant power supplies prevent downtime even during mains power outages.",
-    imageUrl: "/products/mikrotik-ccr2004.jpg",
-    specs: [
-      "16x Gigabit Ethernet Ports",
-      "2x 10G SFP+ Fiber Transceiver Ports",
-      "Annapurna Alpine 4-Core 1.7GHz 64-bit CPU",
-      "4GB DDR4 High-Speed RAM",
-      "Dual Redundant Built-In Power Supplies (100-240V)",
-    ],
-    warranty: "2 Years Carrier Warranty",
-    featured: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "prod_hsgq_xpon_onu",
-    name: "HSGQ XPON ONU 1GE+1FE+WiFi GPON/EPON",
-    slug: "hsgq-xpon-onu-wifi",
-    brand: "HSGQ",
-    category: "routers",
-    price: 2800,
-    originalPrice: 3200,
-    stock: 140,
-    inStock: true,
-    rating: 4.7,
-    reviewCount: 88,
-    badge: "Top Value",
-    shortDescription: "Dual-mode GPON/EPON optical ONU with built-in 300Mbps WiFi & 2 LAN Ports.",
-    description: "The standard subscriber unit deployed by leading Kenyan fiber ISPs. Auto-adapts to EPON and GPON OLTs with OMCI remote management, TR-069, and PPPoE dialer built-in.",
-    imageUrl: "/products/hsgq-xpon-onu.jpg",
-    specs: [
-      "SC/UPC or SC/APC Fiber Input",
-      "1x Gigabit + 1x Fast Ethernet LAN",
-      "300Mbps 2.4GHz High Gain 5dBi Antennas",
-      "Supports PPPoE, Static IP, DHCP & Bridge modes",
-      "Compatible with Huawei, ZTE, VSOL & HSGQ OLTs",
-    ],
-    warranty: "1 Year Replacement Warranty",
-    featured: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "prod_huawei_hg8310m",
-    name: "Huawei EchoLife HG8310M GPON ONT Terminal Bridge",
-    slug: "huawei-hg8310m-gpon-ont",
-    brand: "Huawei",
-    category: "routers",
-    price: 2200,
-    originalPrice: 2600,
-    stock: 85,
-    inStock: true,
-    rating: 4.8,
-    reviewCount: 71,
-    badge: "Ultra Compact",
-    shortDescription: "1x GE Gigabit Port, SC/UPC optical input, plug & play bridge mode for external routers.",
-    description: "Reliable optical network terminal designed for FTTH subscribers paired with a dedicated MikroTik or customer router. Ultra-low power consumption and exceptional stability.",
-    imageUrl: "/products/huawei-hg8310m.jpg",
-    specs: [
-      "1x Gigabit Ethernet LAN Port",
-      "SC/UPC GPON Class B+ Optical Interface",
-      "Full OMCI and TR-069 remote provisioning",
-      "Compact palm-sized low-power design (<3W)",
-      "High lightning and surge protection",
-    ],
-    warranty: "1 Year Official Warranty",
-    featured: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "prod_huawei_hg8546m",
-    name: "Huawei HG8546M Optical Terminal 1GE+3FE+WiFi+POTS",
-    slug: "huawei-hg8546m-wifi-ont",
-    brand: "Huawei",
-    category: "routers",
-    price: 3500,
-    originalPrice: 4000,
-    stock: 60,
-    inStock: true,
-    rating: 4.7,
-    reviewCount: 65,
-    badge: "All-in-One",
-    shortDescription: "1x GE + 3x FE Ports, 300Mbps WiFi, 1x Voice (POTS), GPON subscriber gateway.",
-    description: "Versatile subscriber gateway with built-in Wi-Fi routing and telephone port. Ideal for residential FTTH deployments needing multi-port wired and wireless connectivity.",
-    imageUrl: "/products/huawei-hg8546m.jpg",
-    specs: [
-      "1x Gigabit + 3x Fast Ethernet RJ45 Ports",
-      "300Mbps 2.4GHz 802.11n Wi-Fi",
-      "1x POTS RJ11 Voice Telephone Port",
-      "Supports PPPoE and NAT routing modes",
-      "SC/UPC Optical port with Class B+ optics",
-    ],
-    warranty: "1 Year Official Warranty",
-    featured: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-
-  // 2. Switches
-  {
-    id: "prod_mikrotik_crs326",
-    name: "MikroTik CRS326-24G-2S+RM 24-Port Cloud Switch",
-    slug: "mikrotik-crs326-24g-2s-rm",
-    brand: "MikroTik",
-    category: "switches",
-    price: 26000,
-    originalPrice: 29500,
-    stock: 15,
-    inStock: true,
-    rating: 4.9,
-    reviewCount: 38,
-    badge: "10G Uplink",
-    shortDescription: "24x Gigabit RJ45 Ports, 2x 10G SFP+ Ports, Dual Boot (RouterOS / SwOS), 1U Rackmount.",
-    description: "Non-blocking wire-speed Layer 3 switch with dual SFP+ cages for 10Gbps fiber links. SwOS mode delivers lightning-fast switching, while RouterOS provides full L3 routing capabilities.",
-    imageUrl: "/products/mikrotik-crs326.jpg",
-    specs: [
-      "24x 10/100/1000 Gigabit RJ45 Ethernet Ports",
-      "2x 10G SFP+ Optical Transceiver Cages",
-      "Dual-Boot: SwOS (Switch OS) or RouterOS L5",
-      "VLAN tagging, MAC filtering, Port Mirroring, Storm Control",
-      "1U 19-Inch Rackmount Metal Enclosure",
-    ],
-    warranty: "1 Year Official Warranty",
-    featured: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "prod_mikrotik_crs328",
-    name: "MikroTik CRS328-24P-4S+RM 24-Port Gigabit PoE+ Switch",
-    slug: "mikrotik-crs328-24p-4s-rm",
-    brand: "MikroTik",
-    category: "switches",
-    price: 54000,
-    originalPrice: 60000,
-    stock: 8,
-    inStock: true,
-    rating: 5.0,
-    reviewCount: 27,
-    badge: "500W PoE Core",
-    shortDescription: "24x Gigabit PoE+ Ports, 4x 10G SFP+ Cages, 500W Auto-Sensing Power Budget, 1U.",
-    description: "The ultimate switch for large ISP POPs and CCTV installations. Auto-detects 802.3af/at PoE and passive 24V PoE, letting you power access points and cameras directly.",
-    imageUrl: "/products/mikrotik-crs328.jpg",
-    specs: [
-      "24x Gigabit Ethernet Ports with Auto PoE Out",
-      "4x 10G SFP+ Optical Uplink Cages",
-      "Dual 500W Built-in Redundant Power Supplies",
-      "Supports 802.3af/at & 24V Passive PoE per port",
-      "Dual Boot RouterOS L5 / SwOS",
-    ],
-    warranty: "2 Years Carrier Warranty",
-    featured: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "prod_poe_switch_8port",
-    name: "8-Port Gigabit 48V PoE Switch (120W Total Budget)",
-    slug: "8-port-gigabit-48v-poe-switch",
-    brand: "MashupKGrid Certified",
-    category: "switches",
-    price: 6500,
-    originalPrice: 7800,
-    stock: 28,
-    inStock: true,
-    rating: 4.8,
-    reviewCount: 52,
-    badge: "Essential",
-    shortDescription: "8x Gigabit PoE+ Ports (802.3af/at) + 2x Gigabit Uplinks. Powers APs & CCTV cameras.",
-    description: "Reliable plug-and-play PoE switch for powering access points and security cameras with built-in surge protection and 250m long-distance CCTV transmission mode.",
-    imageUrl: "/products/poe-switch-8port.jpg",
-    specs: [
-      "8x 10/100/1000 Mbps PoE Ports (IEEE 802.3af/at)",
-      "2x 10/100/1000 Mbps Gigabit Uplink Ports",
-      "120W Total PoE Power Supply",
-      "One-Key VLAN Isolation switch",
-      "6kV Lightning & Surge Protection",
-    ],
-    warranty: "1 Year Official Warranty",
-    featured: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "prod_poe_switch_16port",
-    name: "16-Port Gigabit 48V AI PoE Switch with 2x SFP (250W)",
-    slug: "16-port-gigabit-poe-switch-sfp",
-    brand: "MashupKGrid Certified",
-    category: "switches",
-    price: 14500,
-    originalPrice: 16800,
-    stock: 16,
-    inStock: true,
-    rating: 4.9,
-    reviewCount: 34,
-    badge: "High Capacity",
-    shortDescription: "16x Gigabit PoE+ Ports, 2x Gigabit Uplinks + 2x Gigabit SFP slots, 250W PSU.",
-    description: "Industrial-grade 16-port PoE switch equipped with optical SFP fiber uplinks. Features AI PoE watchdog to automatically reboot unresponsive cameras and APs.",
-    imageUrl: "/products/poe-switch-16port.jpg",
-    specs: [
-      "16x 10/100/1000 Mbps PoE+ Ports",
-      "2x Gigabit Uplinks + 2x Gigabit SFP Fiber Slots",
-      "250W Internal Heavy-Duty Power Supply",
-      "AI PoE Watchdog auto-restart function",
-      "1U 19-inch rackmount brackets included",
-    ],
-    warranty: "1 Year Official Warranty",
-    featured: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "prod_switch_24port_managed",
-    name: "24-Port Gigabit Managed Layer-2 Rackmount Switch",
-    slug: "24-port-gigabit-managed-switch",
-    brand: "MashupKGrid Certified",
-    category: "switches",
-    price: 18000,
-    originalPrice: 21000,
-    stock: 14,
-    inStock: true,
-    rating: 4.8,
-    reviewCount: 29,
-    badge: "L2 Managed",
-    shortDescription: "24x Gigabit Ports, 4x Gigabit SFP Uplinks, Web GUI, CLI, SNMP, VLAN & QoS.",
-    description: "Carrier-class enterprise access switch with full L2 management suite including 802.1Q VLANs, Link Aggregation (LACP), Spanning Tree (STP/RSTP), and ACL packet filtering.",
-    imageUrl: "/products/switch-24port-managed.jpg",
-    specs: [
-      "24x 10/100/1000 Mbps Gigabit Ports",
-      "4x Gigabit SFP Combo Optical Ports",
-      "Full Web GUI, Telnet, SSH & SNMP management",
-      "4K 802.1Q VLAN support & IGMP Snooping",
-      "Standard 1U 19-inch metal chassis",
-    ],
-    warranty: "2 Years Official Warranty",
-    featured: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-
-  // 3. Wireless & Access Points
-  {
-    id: "prod_ubiquiti_unifi_6_lite",
-    name: "Ubiquiti UniFi 6 Lite (U6-Lite) Ceiling Access Point",
-    slug: "ubiquiti-unifi-6-lite",
-    brand: "Ubiquiti",
-    category: "wireless",
-    price: 16500,
-    originalPrice: 18500,
-    stock: 24,
-    inStock: true,
-    rating: 4.9,
-    reviewCount: 76,
-    badge: "Popular AP",
-    shortDescription: "WiFi 6 2x2 MIMO, 1.5 Gbps aggregate throughput, PoE powered, sleek low-profile mount.",
-    description: "Compact ceiling or wall-mounted access point with WiFi 6 technology. Perfect for high-density hotspot environments like hotel lobbies, shopping arcades, and student hostels.",
-    imageUrl: "/products/ubiquiti-unifi-6-lite.jpg",
-    specs: [
-      "WiFi 6 (802.11ax) 2x2 High-Efficiency MIMO",
-      "5 GHz band (2x2 MU-MIMO and OFDMA) up to 1.2 Gbps",
-      "2.4 GHz band (2x2 MIMO) up to 300 Mbps",
-      "Powered with 802.3af standard PoE",
-      "Centrally managed via UniFi Network application",
-    ],
-    warranty: "1 Year Official Warranty",
-    featured: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "prod_ubiquiti_unifi_6_pro",
-    name: "Ubiquiti UniFi 6 Pro (U6-Pro) High-Density Dual-Band AP",
-    slug: "ubiquiti-unifi-6-pro",
-    brand: "Ubiquiti",
-    category: "wireless",
-    price: 24500,
-    originalPrice: 27000,
-    stock: 18,
-    inStock: true,
-    rating: 5.0,
-    reviewCount: 48,
-    badge: "High Density",
-    shortDescription: "WiFi 6 4x4 MIMO, 5.3 Gbps aggregate throughput, 300+ client capacity, IP54 rated.",
-    description: "High-performance access point engineered for stadium lounges, large offices, campuses, and busy coffee shops. Massive 4x4 spatial streams guarantee zero buffering.",
-    imageUrl: "/products/ubiquiti-unifi-6-pro.jpg",
-    specs: [
-      "4x4 MU-MIMO 5 GHz band (4.8 Gbps)",
-      "2x2 MIMO 2.4 GHz band (573.5 Mbps)",
-      "300+ concurrent client device capacity",
-      "802.3at PoE+ powered",
-      "Weather-resistant IP54 dust and splash rating",
-    ],
-    warranty: "1 Year Official Warranty",
-    featured: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "prod_ubiquiti_ac_mesh",
-    name: "Ubiquiti UniFi AC Mesh (UAP-AC-M) Outdoor Access Point",
-    slug: "ubiquiti-unifi-ac-mesh",
-    brand: "Ubiquiti",
-    category: "wireless",
-    price: 15200,
-    originalPrice: 17000,
-    stock: 30,
-    inStock: true,
-    rating: 4.8,
-    reviewCount: 82,
-    badge: "Outdoor Ready",
-    shortDescription: "Weatherproof 802.11ac outdoor AP with dual omni antennas. Mesh multi-hop coverage.",
-    description: "Built for extreme weather resistance in Kenyan outdoor parks, swimming pools, market squares, and perimeter security. Can be pole mounted or wall mounted anywhere.",
-    imageUrl: "/products/ubiquiti-ac-mesh.jpg",
-    specs: [
-      "Simultaneous Dual-Band 2x2 MIMO",
-      "Speeds up to 867 Mbps on 5GHz & 300 Mbps on 2.4GHz",
-      "Two detachable external high-gain omni antennas",
-      "Wireless uplink / Mesh multi-hop hopping",
-      "802.3af PoE / 24V Passive PoE compatible",
-    ],
-    warranty: "1 Year Official Warranty",
-    featured: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "prod_ubiquiti_litebeam_5ac",
-    name: "Ubiquiti LiteBeam 5AC Gen2 (LBE-5AC-Gen2) 23dBi",
-    slug: "ubiquiti-litebeam-5ac-gen2",
-    brand: "Ubiquiti",
-    category: "wireless",
-    price: 9200,
-    originalPrice: 10500,
-    stock: 35,
-    inStock: true,
-    rating: 4.8,
-    reviewCount: 95,
-    badge: "Long Range PtP",
-    shortDescription: "5GHz airMAX ac CPE with 23dBi directional antenna for links up to 20km+.",
-    description: "Lightweight and ultra-rugged point-to-point wireless bridge. Delivers 450+ Mbps throughput across long distances to connect remote base stations or estate towers.",
-    imageUrl: "/products/ubiquiti-litebeam-5ac.jpg",
-    specs: [
-      "5GHz airMAX ac technology (450+ Mbps)",
-      "23dBi directional reflector antenna",
-      "Dedicated management WiFi radio for instant smartphone setup",
-      "InnerFeed technology integrates radio into feedhorn",
-      "Gigabit Ethernet with 24V Passive PoE adapter included",
-    ],
-    warranty: "1 Year Official Warranty",
-    featured: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "prod_ubiquiti_powerbeam_5ac",
-    name: "Ubiquiti PowerBeam 5AC Gen2 (PBE-5AC-Gen2) 25dBi Dish",
-    slug: "ubiquiti-powerbeam-5ac-gen2",
-    brand: "Ubiquiti",
-    category: "wireless",
-    price: 18500,
-    originalPrice: 21000,
-    stock: 14,
-    inStock: true,
-    rating: 4.9,
-    reviewCount: 39,
-    badge: "High Gain 25dBi",
-    shortDescription: "5GHz 25dBi dish PtP bridge, 450+ Mbps, improved noise immunity for noisy RF areas.",
-    description: "Tight beamwidth directional dish bridge designed to cut through dense RF interference in urban estates. Ideal for long-distance tower-to-tower backhaul links up to 25km.",
-    imageUrl: "/products/ubiquiti-powerbeam-5ac.jpg",
-    specs: [
-      "400mm 25dBi precision reflector dish",
-      "Dedicated Wi-Fi management radio for UNMS/UISP",
-      "Processor: Atheros MIPS 74Kc 720 MHz",
-      "Gigabit Ethernet port with 24V PoE injector included",
-      "Wind survivability rated up to 200 km/h",
-    ],
-    warranty: "1 Year Official Warranty",
-    featured: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "prod_mikrotik_cap_ax",
-    name: "MikroTik cAP ax WiFi 6 Ceiling Mount Hotspot AP",
-    slug: "mikrotik-cap-ax",
-    brand: "MikroTik",
-    category: "wireless",
-    price: 16800,
-    originalPrice: 19000,
-    stock: 20,
-    inStock: true,
-    rating: 4.9,
-    reviewCount: 44,
-    badge: "CAPsMAN Core",
-    shortDescription: "WiFi 6 Dual-Band ceiling AP, Quad-Core 1.8GHz, 1GB RAM, 2x Gigabit Ports, PoE Out.",
-    description: "Powerful ceiling AP seamlessly controlled by MikroTik CAPsMAN centralized controller. Features an auxiliary Gigabit port with PoE-out to power another AP or CCTV camera.",
-    imageUrl: "/products/mikrotik-cap-ax.jpg",
-    specs: [
-      "Dual-Band WiFi 6 (802.11ax/ac/n) up to 1.77 Gbps",
-      "Quad-Core 1.8GHz IPQ-6010 ARM64 CPU",
-      "2x Gigabit Ethernet ports (PoE-in + PoE-out)",
-      "Native CAPsMAN v2 centralized network management",
-      "Sleek round & square interchangeable ceiling mounts included",
-    ],
-    warranty: "1 Year Official Warranty",
-    featured: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-
-  // 4. Fiber Optics
-  {
-    id: "prod_fiber_drop_cable_1000m",
-    name: "1000M FTTH 2-Core Single Mode Drop Cable Drum",
-    slug: "1000m-ftth-2-core-drop-cable",
-    brand: "MashupKGrid Certified",
-    category: "fiber",
-    price: 8500,
-    originalPrice: 9800,
-    stock: 22,
-    inStock: true,
-    rating: 4.9,
-    reviewCount: 47,
-    badge: "Bulk Saver",
-    shortDescription: "G657A1 Bend-Insensitive 2-Core Fiber with steel strength messenger wire for aerial spans.",
-    description: "Premium FTTH outdoor drop cable on a heavy wooden drum. Engineered to withstand intense tropical sun, wind tension, and tree branch friction without signal loss.",
-    imageUrl: "/products/fiber-drop-cable-1000m.jpg",
-    specs: [
-      "1000 Meters per wooden drum",
-      "2-Core G657A1 Single Mode 9/125um fiber",
-      "Phosphatized steel messenger wire (1.0mm) for pole spans",
-      "Two parallel FRP strength members protect optical cores",
-      "UV-resistant LSZH (Low Smoke Zero Halogen) jacket",
-    ],
-    warranty: "5 Years Manufacturer Warranty",
-    featured: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "prod_sc_upc_connectors_100pk",
-    name: "SC/UPC Fiber Fast Connectors (100-Pack Box)",
-    slug: "sc-upc-fiber-fast-connectors-100pk",
-    brand: "MashupKGrid Certified",
-    category: "fiber",
-    price: 3500,
-    originalPrice: 4200,
-    stock: 50,
-    inStock: true,
-    rating: 4.7,
-    reviewCount: 63,
-    badge: "Technician Favorite",
-    shortDescription: "Field assembly optical connectors. Insertion loss <0.3dB, no fusion splicer needed.",
-    description: "Terminate subscriber drops in under 90 seconds in the field. Pre-embedded fiber core and ceramic ferrule ensure low insertion loss and high return loss.",
-    imageUrl: "/products/sc-upc-connectors-100pk.jpg",
-    specs: [
-      "Standard SC/UPC Blue connector",
-      "Insertion Loss: <= 0.3dB, Return Loss: >= 50dB",
-      "Compatible with 2.0x3.0mm drop cable & 0.9mm fiber",
-      "Reusable up to 10 times during field troubleshooting",
-      "Packaged in 100-piece hard protective workshop box",
-    ],
-    warranty: "Quality Verified",
-    featured: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "prod_sc_apc_connectors_100pk",
-    name: "SC/APC Fiber Fast Connectors Green (100-Pack Box)",
-    slug: "sc-apc-fiber-fast-connectors-100pk",
-    brand: "MashupKGrid Certified",
-    category: "fiber",
-    price: 3800,
-    originalPrice: 4500,
-    stock: 45,
-    inStock: true,
-    rating: 4.8,
-    reviewCount: 51,
-    badge: "Low Return Loss",
-    shortDescription: "Angled Polish SC/APC (Green), Return Loss >=60dB, perfect for GPON and CATV video.",
-    description: "Precision 8-degree angled physical contact fiber connector. Dramatically lowers optical back-reflection, preventing laser damage and ensuring clean fiber TV/broadband signals.",
-    imageUrl: "/products/sc-apc-connectors-100pk.jpg",
-    specs: [
-      "SC/APC Angled Physical Contact (Green)",
-      "Return Loss: >= 60dB, Insertion Loss: <= 0.3dB",
-      "Ceramic ferrule pre-polished to telecom standard",
-      "Pre-embedded core with index matching gel",
-      "Box of 100 connectors with length guides",
-    ],
-    warranty: "Quality Verified",
-    featured: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "prod_sfp_plus_10g_module",
-    name: "10G SFP+ 1310nm 10km Single Mode Optical Transceiver",
-    slug: "10g-sfp-plus-10km-transceiver",
-    brand: "MashupKGrid Certified",
-    category: "fiber",
-    price: 3200,
-    originalPrice: 3800,
-    stock: 40,
-    inStock: true,
-    rating: 5.0,
-    reviewCount: 31,
-    badge: "10G Speed",
-    shortDescription: "10Gbps Dual LC 1310nm 10km DDM SFP+ Module, MikroTik & Ubiquiti 100% compatible.",
-    description: "Plug-and-play 10 Gigabit optical transceiver for connecting MikroTik CCR routers, CRS switches, and OLT uplinks with live DDM temperature and optical power monitoring.",
-    imageUrl: "/products/sfp-plus-10g-module.jpg",
-    specs: [
-      "10 Gbps data rate (10GBASE-LR)",
-      "1310nm DFB Laser transmitter up to 10km reach",
-      "Dual LC Optical Interface",
-      "Digital Diagnostic Monitoring (DDM/DOM) support",
-      "Fully tested with MikroTik, Ubiquiti, Cisco, and Huawei gear",
-    ],
-    warranty: "2 Years Replacement Warranty",
-    featured: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "prod_sfp_1g_bidi_pair",
-    name: "1.25G Gigabit SFP BiDi WDM 20km Module (Tx1310/Tx1550 Pair)",
-    slug: "1-25g-sfp-bidi-wdm-pair",
-    brand: "MashupKGrid Certified",
-    category: "fiber",
-    price: 3600,
-    originalPrice: 4200,
-    stock: 35,
-    inStock: true,
-    rating: 4.9,
-    reviewCount: 26,
-    badge: "Single Fiber Pair",
-    shortDescription: "1-Core Bi-Directional Gigabit SFP pair. Doubles existing fiber cable capacity.",
-    description: "Run gigabit connections over a single fiber optic strand. Uses 1310nm and 1550nm wavelength multiplexing to transmit and receive on the same optical core up to 20km.",
-    imageUrl: "/products/sfp-1g-bidi-pair.jpg",
-    specs: [
-      "Transmits & receives over 1 single optical strand",
-      "Data Rate: 1.25 Gbps (1000BASE-BX)",
-      "Pair includes: 1x 1310nm-Tx/1550nm-Rx & 1x 1550nm-Tx/1310nm-Rx",
-      "Simplex SC or LC optical interface",
-      "Reach: Up to 20km single mode fiber",
-    ],
-    warranty: "2 Years Replacement Warranty",
-    featured: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "prod_fiber_nap_box_16core",
-    name: "16-Core Outdoor Fiber Distribution Termination Box (FAT/NAP)",
-    slug: "16-core-fiber-distribution-box-nap",
-    brand: "MashupKGrid Certified",
-    category: "fiber",
-    price: 3800,
-    originalPrice: 4500,
-    stock: 32,
-    inStock: true,
-    rating: 4.8,
-    reviewCount: 41,
-    badge: "IP65 Outdoor",
-    shortDescription: "Wall/pole mount outdoor distribution box with 16 drop ports & PLC splitter slot.",
-    description: "Heavy-duty outdoor distribution box for residential fiber rollouts. Includes lock and key, internal splice tray, adapter panel, and rubber weather seals for all 16 subscriber lines.",
-    imageUrl: "/products/fiber-nap-box-16core.jpg",
-    specs: [
-      "16 Subscriber Drop Ports + 2 Main Trunk Cable Ports",
-      "IP65 waterproof & UV-resistant engineering ABS plastic",
-      "Holds 1x8 or 1x16 PLC optical splitter",
-      "Integrated splice tray with 24 fusion splice slots",
-      "Includes pole mounting steel straps and wall screws",
-    ],
-    warranty: "3 Years Manufacturer Warranty",
-    featured: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "prod_optical_toolkit_opm_vfl",
-    name: "Optical Power Meter (OPM) & Visual Fault Locator (VFL) Kit",
-    slug: "optical-power-meter-opm-vfl-kit",
-    brand: "MashupKGrid Certified",
-    category: "fiber",
-    price: 6500,
-    originalPrice: 7800,
-    stock: 25,
-    inStock: true,
-    rating: 4.9,
-    reviewCount: 58,
-    badge: "Tech Essential",
-    shortDescription: "Handheld OPM (-70 to +10 dBm) + 30mW Red Laser Pen (30km) + FC/SC/ST adapters.",
-    description: "Every fiber technician's indispensable field diagnostics toolkit. Accurately measures optical power loss and instantly pinpoints breaks, microbends, and bad splices using red laser light.",
-    imageUrl: "/products/optical-toolkit-opm-vfl.jpg",
-    specs: [
-      "Optical Power Meter: -70 to +10 dBm range (850/1300/1310/1490/1550/1625nm)",
-      "Visual Fault Locator: 30mW High-Intensity Red Laser (up to 30km)",
-      "Universal 2.5mm connector supports SC, FC, and ST",
-      "Backlit LCD display for dark manholes and basements",
-      "Rugged protective silicone case + carrying pouch",
-    ],
-    warranty: "1 Year Official Warranty",
-    featured: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-
-  // 5. Solar & Power Backup
-  {
-    id: "prod_mini_dc_ups",
-    name: "Mini DC UPS 8800mAh Backup for Wi-Fi Routers",
-    slug: "mini-dc-ups-8800mah-router-backup",
-    brand: "MashupKGrid Certified",
-    category: "solar",
-    price: 3800,
-    originalPrice: 4500,
-    stock: 65,
-    inStock: true,
-    rating: 4.9,
-    reviewCount: 140,
-    badge: "Must-Have",
-    shortDescription: "Keeps your MikroTik, ONU & fiber router running for 4-6 hours during KPLC blackouts.",
-    description: "Never lose hotspot sales or client internet during power cuts. Automatically switches to lithium battery in zero milliseconds with multiple DC voltage outputs (9V/12V/15V/24V PoE).",
-    imageUrl: "/products/mini-dc-ups-8800.jpg",
-    specs: [
-      "8800mAh High-Capacity Li-Ion Battery Pack",
-      "Outputs: 9V DC, 12V DC, 15V/24V Passive PoE & 5V USB",
-      "0ms transfer time — router never reboots during power cut",
-      "Smart overcharge and short-circuit protection",
-      "Universal splitter cable included for dual router + ONU connection",
-    ],
-    warranty: "1 Year Replacement Warranty",
-    featured: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "prod_mini_dc_ups_10400",
-    name: "Mini DC UPS 10400mAh High-Capacity Router Backup with USB",
-    slug: "mini-dc-ups-10400mah-router-backup",
-    brand: "MashupKGrid Certified",
-    category: "solar",
-    price: 4500,
-    originalPrice: 5200,
-    stock: 48,
-    inStock: true,
-    rating: 4.9,
-    reviewCount: 96,
-    badge: "Extended Runtime",
-    shortDescription: "10,400mAh lithium battery. 6-8 hours continuous router runtime. Multi-voltage DC + USB.",
-    description: "Upgraded capacity for dual-band WiFi 6 routers and multiple subscriber terminals. Keeps your residential or commercial connection completely active through prolonged blackouts.",
-    imageUrl: "/products/mini-dc-ups-10400.jpg",
-    specs: [
-      "10,400mAh (4x 2600mAh grade-A lithium cells)",
-      "Outputs: 5V USB (phone charging), 9V/12V DC selector, 15V/24V PoE",
-      "Microprocessor control guarantees maximum reliability",
-      "LED battery capacity indicator bar (25% / 50% / 75% / 100%)",
-      "Dual DC output cable for running router + ONU simultaneously",
-    ],
-    warranty: "1 Year Replacement Warranty",
-    featured: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "prod_lifepo4_battery_100ah",
-    name: "12V 100Ah LiFePO4 Lithium Battery for POP Sites",
-    slug: "12v-100ah-lifepo4-lithium-battery",
-    brand: "MashupKGrid Certified",
-    category: "solar",
-    price: 42000,
-    originalPrice: 48000,
-    stock: 8,
-    inStock: true,
-    rating: 5.0,
-    reviewCount: 22,
-    badge: "10-Year Life",
-    shortDescription: "4000+ Cycles, Smart BMS, 1.28kWh capacity. The ultimate battery for ISP base stations.",
-    description: "Replaces 4x heavy lead-acid gel batteries with one compact lithium unit. Built-in smart BMS protects against over-discharge, overheating, and short circuits during heavy solar cycling.",
-    imageUrl: "/products/lifepo4-battery-100ah.jpg",
-    specs: [
-      "12.8V Nominal Voltage / 100Ah Capacity (1280Wh)",
-      "Grade-A LiFePO4 Prismatic Cells with 4,000+ deep cycles",
-      "Integrated 100A Battery Management System (BMS)",
-      "Supports series/parallel connections for 24V or 48V systems",
-      "Weight: Only 11kg (1/3rd of equivalent lead acid battery)",
-    ],
-    warranty: "5 Years Manufacturer Warranty",
-    featured: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "prod_hybrid_inverter_1kva",
-    name: "1KVA / 1000W Pure Sine Wave Hybrid Solar Inverter (12V)",
-    slug: "1kva-hybrid-solar-inverter-12v",
-    brand: "MashupKGrid Certified",
-    category: "solar",
-    price: 28000,
-    originalPrice: 32000,
-    stock: 10,
-    inStock: true,
-    rating: 4.9,
-    reviewCount: 18,
-    badge: "Pure Sine Wave",
-    shortDescription: "Built-in 50A PWM solar charger, AC mains bypass, 1000W continuous pure sine wave power.",
-    description: "Compact all-in-one power station for telecom towers, server racks, and remote POP cabinets. Combines inverter, solar charge controller, and intelligent battery charger in one unit.",
-    imageUrl: "/products/hybrid-inverter-1kva.jpg",
-    specs: [
-      "1000W Continuous Pure Sine Wave AC 230V output",
-      "12V DC battery input compatible with LiFePO4 & Gel",
-      "Built-in 50A solar charger & 20A mains AC charger",
-      "Configurable AC/Solar input priority via LCD screen",
-      "Cold start function & comprehensive overload protection",
-    ],
-    warranty: "2 Years Official Warranty",
-    featured: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-
-  // 6. CCTV & Security
-  {
-    id: "prod_hikvision_2mp_bullet",
-    name: "Hikvision 2MP Outdoor Bullet IR Night Vision IP Camera",
-    slug: "hikvision-2mp-outdoor-bullet-camera",
-    brand: "Hikvision",
-    category: "cctv",
-    price: 4800,
-    originalPrice: 5500,
-    stock: 35,
-    inStock: true,
-    rating: 4.8,
-    reviewCount: 68,
-    badge: "Weatherproof IP67",
-    shortDescription: "1080P Full HD, 30m Smart IR Night Vision, PoE Powered, IP67 Weatherproof metal case.",
-    description: "Industry-standard outdoor security camera for compound security, gate entrances, and building perimeters. Features smart IR illumination that prevents overexposure at night.",
-    imageUrl: "/products/hikvision-2mp-bullet.jpg",
-    specs: [
-      "1/2.8 Progressive Scan CMOS 1080P Full HD",
-      "Fixed 2.8mm or 4mm lens with wide 103-degree field of view",
-      "Up to 30 meters Smart IR night vision range",
-      "PoE (802.3af) or 12V DC power input",
-      "IP67 rugged weatherproof metal casing",
-    ],
-    warranty: "2 Years Official Warranty",
-    featured: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "prod_dahua_4mp_dome",
-    name: "Dahua 4MP Full-Color Starlight Dome IP Camera",
-    slug: "dahua-4mp-full-color-dome-camera",
-    brand: "Dahua",
-    category: "cctv",
-    price: 6800,
-    originalPrice: 7800,
-    stock: 24,
-    inStock: true,
-    rating: 4.9,
-    reviewCount: 43,
-    badge: "24/7 Color Night",
-    shortDescription: "4MP Quad-HD, 24/7 Full Color in pitch darkness, built-in microphone, AI human detection.",
-    description: "Delivers vivid full-color video even in zero ambient lighting. Built-in high-sensitivity microphone captures clear audio, while onboard AI human and vehicle detection stops false alarms.",
-    imageUrl: "/products/dahua-4mp-dome.jpg",
-    specs: [
-      "4-Megapixel Quad-HD resolution (2560 x 1440)",
-      "Full-Color Starlight sensor with warm LED illuminator (30m)",
-      "Built-in high-fidelity microphone for real-time audio recording",
-      "SMD Plus: AI Human and Vehicle detection classification",
-      "PoE powered & IP67 water/dust resistant",
-    ],
-    warranty: "2 Years Official Warranty",
-    featured: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "prod_nvr_8ch_4k_poe",
-    name: "8-Channel 4K Ultra-HD Network Video Recorder (NVR) with PoE",
-    slug: "8-channel-4k-poe-nvr",
-    brand: "MashupKGrid Certified",
-    category: "cctv",
-    price: 18500,
-    originalPrice: 21500,
-    stock: 12,
-    inStock: true,
-    rating: 4.9,
-    reviewCount: 31,
-    badge: "4K Ready",
-    shortDescription: "8x Independent PoE Ports, supports up to 8MP/4K cameras, H.265+, 1x SATA up to 10TB.",
-    description: "Plug cameras directly into the back with zero IP configuration. Automatically provides power and video through single Ethernet cables, with seamless mobile viewing app for iOS & Android.",
-    imageUrl: "/products/nvr-8ch-poe.jpg",
-    specs: [
-      "8 Independent Gigabit PoE Network Interfaces",
-      "Decodes up to 4K / 8MP Ultra-HD resolution per channel",
-      "H.265+ ultra-efficient compression saves 75% hard disk space",
-      "HDMI & VGA simultaneous video outputs",
-      "Free mobile app for instant remote viewing anywhere",
-    ],
-    warranty: "2 Years Official Warranty",
-    featured: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "prod_cat6_cable_305m_outdoor",
-    name: "305M Cat6 Pure Copper Outdoor UV-Resistant Cable Drum",
-    slug: "305m-cat6-pure-copper-outdoor-cable",
-    brand: "MashupKGrid Certified",
-    category: "cctv",
-    price: 13500,
-    originalPrice: 15500,
-    stock: 20,
-    inStock: true,
-    rating: 5.0,
-    reviewCount: 56,
-    badge: "100% Solid Copper",
-    shortDescription: "23AWG Solid Bare Copper, double PE outdoor jacket, waterproof tape, Fluke tested.",
-    description: "Crucial for long PoE runs up to 100 meters without voltage drop. Built with 100% solid oxygen-free pure copper (NOT cheap copper-clad aluminium) and heavy double jacket for outdoor exposure.",
-    imageUrl: "/products/cat6-cable-305m.jpg",
-    specs: [
-      "305 Meters (1000 ft) per pull-box drum",
-      "23AWG Solid Bare Copper conductors (0.57mm)",
-      "Double Jacket: Inner PVC + Outer UV-Proof Polyethylene (PE)",
-      "Cross separator spline prevents crosstalk interference",
-      "100% Fluke Channel & Permanent Link test passed",
-    ],
-    warranty: "5 Years Manufacturer Warranty",
-    featured: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "prod_cabinet_9u_wallmount",
-    name: "9U Wall Mount 19-Inch Network Equipment Cabinet",
-    slug: "9u-wall-mount-network-cabinet",
-    brand: "MashupKGrid Certified",
-    category: "cctv",
-    price: 8900,
-    originalPrice: 10500,
-    stock: 15,
-    inStock: true,
-    rating: 4.8,
-    reviewCount: 37,
-    badge: "Heavy Duty",
-    shortDescription: "600x450mm, toughened glass lockable door, removable side panels, cooling fan included.",
-    description: "Secures routers, PoE switches, NVRs, and fiber patch panels neatly off the floor. Keeps delicate telecom gear safe from tampering, dust, rodents, and overheating.",
-    imageUrl: "/products/network-cabinet-9u.jpg",
-    specs: [
-      "9U Standard 19-inch mounting profile (600mm width x 450mm depth)",
-      "Toughened safety glass front door with security cylinder lock",
-      "Removable side panels for easy cabling access",
-      "Pre-installed top low-noise cooling extraction fan",
-      "Includes 20 sets of cage nuts, bolts, and shelf",
-    ],
-    warranty: "3 Years Manufacturer Warranty",
-    featured: false,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-];
-
-const DATA_DIR = path.join(process.cwd(), "data");
-const PRODUCTS_FILE = path.join(DATA_DIR, "hardware-products.json");
-const ORDERS_FILE = path.join(DATA_DIR, "hardware-orders.json");
-
-function ensureDataFiles() {
-  if (!fs.existsSync(DATA_DIR)) {
-    fs.mkdirSync(DATA_DIR, { recursive: true });
-  }
-  if (!fs.existsSync(PRODUCTS_FILE)) {
-    fs.writeFileSync(PRODUCTS_FILE, JSON.stringify(DEFAULT_PRODUCTS, null, 2), "utf-8");
-  }
-  if (!fs.existsSync(ORDERS_FILE)) {
-    fs.writeFileSync(ORDERS_FILE, JSON.stringify([], null, 2), "utf-8");
-  }
+/** An order as the buyer and the admin see it. `id` is the order number, which both use. */
+function toPublicOrder(o: StoreOrder, opts: { includeContact?: boolean } = {}) {
+  const items = (o.items as unknown as StoreOrderItemSnapshot[]).map((i) => ({ productId: i.productId, name: i.name, quantity: i.quantity, price: i.priceMinor / 100 }));
+  return {
+    id: o.orderNumber,
+    orderNumber: o.orderNumber,
+    customerName: o.customerName,
+    // The buyer already knows their own number; only the admin list gets it in full.
+    phone: opts.includeContact ? o.phone : `•••${o.phone.slice(-3)}`,
+    email: opts.includeContact ? o.email ?? undefined : undefined,
+    county: o.county,
+    deliveryAddress: o.deliveryAddress,
+    items,
+    subtotal: o.subtotalMinor / 100,
+    shippingFee: o.shippingMinor / 100,
+    totalAmount: o.totalMinor / 100,
+    paymentMethod: o.paymentMethod,
+    status: o.status,
+    mpesaReceiptNumber: o.mpesaReceiptNumber ?? undefined,
+    paymentNote: o.paymentNote ?? undefined,
+    /** An M-Pesa prompt is out and not yet answered. */
+    awaitingMpesa: o.status === "PENDING" && o.paymentMethod === "MPESA" && Boolean(o.checkoutRequestId),
+    paidAt: o.paidAt ?? undefined,
+    createdAt: o.createdAt,
+    updatedAt: o.updatedAt,
+  };
 }
 
-function loadProducts(): HardwareProduct[] {
-  try {
-    ensureDataFiles();
-    const raw = fs.readFileSync(PRODUCTS_FILE, "utf-8");
-    return JSON.parse(raw);
-  } catch {
-    return DEFAULT_PRODUCTS;
-  }
-}
-
-function saveProducts(products: HardwareProduct[]) {
-  ensureDataFiles();
-  fs.writeFileSync(PRODUCTS_FILE, JSON.stringify(products, null, 2), "utf-8");
-}
-
-function loadOrders(): HardwareOrder[] {
-  try {
-    ensureDataFiles();
-    const raw = fs.readFileSync(ORDERS_FILE, "utf-8");
-    return JSON.parse(raw);
-  } catch {
-    return [];
-  }
-}
-
-function saveOrders(orders: HardwareOrder[]) {
-  ensureDataFiles();
-  fs.writeFileSync(ORDERS_FILE, JSON.stringify(orders, null, 2), "utf-8");
-}
-
-// Check that caller is SUPER ADMIN (has no tenantId and has platform manage rights).
-// Tenants MUST NOT be able to modify products or change prices.
+// Only platform super admins change the catalogue or orders; tenants never set prices.
 function assertSuperAdmin(request: FastifyRequest) {
-  if (!request.user) {
-    throw new UnauthorizedError();
-  }
+  if (!request.user) throw new UnauthorizedError();
   if (request.user.tenantId) {
-    throw new ForbiddenError(
-      "Tenant accounts cannot modify store product catalog or prices. Only platform Super Administrators can update pricing."
-    );
+    throw new ForbiddenError("Only MashupHost platform admins can change the store catalogue or its orders.");
   }
 }
 
-const updateProductSchema = z.object({
-  name: z.string().min(2).optional(),
-  brand: z.string().optional(),
-  category: z.enum(["routers", "switches", "wireless", "fiber", "solar", "cctv"]).optional(),
-  price: z.number().positive("Price must be greater than 0").optional(),
-  originalPrice: z.number().positive().optional(),
-  stock: z.number().int().nonnegative().optional(),
-  inStock: z.boolean().optional(),
-  badge: z.string().optional(),
-  shortDescription: z.string().optional(),
-  description: z.string().optional(),
-  imageUrl: z.string().url().optional(),
-  specs: z.array(z.string()).optional(),
-  warranty: z.string().optional(),
-  featured: z.boolean().optional(),
-});
-
-const createProductSchema = z.object({
+const productFields = {
   name: z.string().min(2),
-  brand: z.string().default("MashupKGrid"),
-  category: z.enum(["routers", "switches", "wireless", "fiber", "solar", "cctv"]),
+  brand: z.string().min(1),
+  category: z.enum(CATEGORIES),
   price: z.number().positive("Price must be greater than 0"),
-  originalPrice: z.number().positive().optional(),
-  stock: z.number().int().nonnegative().default(10),
-  badge: z.string().optional(),
+  originalPrice: z.number().positive().nullable(),
+  stock: z.number().int().nonnegative(),
+  badge: z.string().nullable(),
   shortDescription: z.string().min(5),
   description: z.string().min(10),
-  imageUrl: z.string().url().default("https://images.unsplash.com/photo-1544197150-b99a580bb7a8?w=800&q=80"),
-  specs: z.array(z.string()).default([]),
-  warranty: z.string().default("1 Year Official Warranty"),
-  featured: z.boolean().default(false),
+  imageUrl: z.string().url(),
+  specs: z.array(z.string()),
+  warranty: z.string().min(1),
+  featured: z.boolean(),
+};
+
+const createProductSchema = z.object({
+  ...productFields,
+  brand: productFields.brand.default("MashupHost"),
+  originalPrice: productFields.originalPrice.optional(),
+  stock: productFields.stock.default(0),
+  badge: productFields.badge.optional(),
+  specs: productFields.specs.default([]),
+  warranty: productFields.warranty.default("1 year"),
+  featured: productFields.featured.default(false),
 });
+const updateProductSchema = z.object(productFields).partial();
+
+function productData(p: Partial<z.infer<typeof updateProductSchema>>) {
+  return {
+    ...(p.name !== undefined ? { name: p.name } : {}),
+    ...(p.brand !== undefined ? { brand: p.brand } : {}),
+    ...(p.category !== undefined ? { category: p.category } : {}),
+    ...(p.price !== undefined ? { priceMinor: Math.round(p.price * 100) } : {}),
+    ...(p.originalPrice !== undefined ? { originalPriceMinor: p.originalPrice === null ? null : Math.round(p.originalPrice * 100) } : {}),
+    ...(p.stock !== undefined ? { stock: p.stock } : {}),
+    ...(p.badge !== undefined ? { badge: p.badge || null } : {}),
+    ...(p.shortDescription !== undefined ? { shortDescription: p.shortDescription } : {}),
+    ...(p.description !== undefined ? { description: p.description } : {}),
+    ...(p.imageUrl !== undefined ? { imageUrl: p.imageUrl } : {}),
+    ...(p.specs !== undefined ? { specs: p.specs } : {}),
+    ...(p.warranty !== undefined ? { warranty: p.warranty } : {}),
+    ...(p.featured !== undefined ? { featured: p.featured } : {}),
+  };
+}
+
+// --- Orders ---------------------------------------------------------------------------------------
 
 const createOrderSchema = z.object({
-  customerName: z.string().min(2),
+  customerName: z.string().trim().min(2),
   phone: z.string().min(9),
-  email: z.string().email().optional(),
+  email: z.string().email().optional().or(z.literal("").transform(() => undefined)),
   county: z.string().min(2),
-  deliveryAddress: z.string().min(5),
-  items: z
-    .array(
-      z.object({
-        productId: z.string(),
-        quantity: z.number().int().positive(),
-      })
-    )
-    .min(1, "Order must contain at least 1 item"),
-  mpesaReceiptNumber: z.string().optional(),
+  deliveryAddress: z.string().trim().min(5),
+  items: z.array(z.object({ productId: z.string(), quantity: z.number().int().positive().max(100) })).min(1, "Your cart is empty."),
+  paymentMethod: z.enum(["MPESA", "PAY_ON_DELIVERY"]),
 });
+
+const buyerQuerySchema = z.object({ phone: z.string().min(9), verify: z.enum(["true", "false"]).optional() });
+const orderParams = z.object({ orderNumber: z.string().min(4).max(20) });
+const statusSchema = z.object({ status: z.enum(["PENDING", "PAID", "PROCESSING", "DISPATCHED", "DELIVERED", "CANCELLED"]) });
 
 export async function productRoutes(app: FastifyInstance): Promise<void> {
   const preHandler = [authenticate, resolveTenant, checkMaintenance];
 
-  // 1. PUBLIC: Get all products with optional category and search filters
+  // PUBLIC: the catalogue, optionally by category or search text.
   app.get("/", async (request, reply) => {
-    const query = request.query as { category?: string; search?: string } | undefined;
-    const products = loadProducts();
-    const category = query?.category;
-    const search = query?.search;
-
-    let filtered = products;
-    if (category && category !== "all") {
-      filtered = filtered.filter((p) => p.category === category);
-    }
-    if (search && search.trim()) {
-      const q = search.toLowerCase().trim();
-      filtered = filtered.filter(
-        (p) =>
-          p.name.toLowerCase().includes(q) ||
-          p.brand.toLowerCase().includes(q) ||
-          p.shortDescription.toLowerCase().includes(q)
-      );
-    }
-
-    return reply.send(successResponse(filtered, request.id));
-  });
-
-  // 2. PUBLIC: Get single product by id or slug
-  app.get("/:id", async (request, reply) => {
-    const { id } = request.params as { id: string };
-    const products = loadProducts();
-    const product = products.find((p) => p.id === id || p.slug === id);
-    if (!product) {
-      return reply.code(404).send({ success: false, error: "Product not found" });
-    }
-    return reply.send(successResponse(product, request.id));
-  });
-
-  // 3. SUPER ADMIN ONLY: Create new product
-  app.post(
-    "/",
-    { preHandler },
-    async (request, reply) => {
-      assertSuperAdmin(request);
-      const parsed = createProductSchema.parse(request.body);
-
-      const products = loadProducts();
-      const slug = parsed.name
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/(^-|-$)/g, "");
-
-      const newProduct: HardwareProduct = {
-        id: `prod_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-        name: parsed.name,
-        slug,
-        brand: parsed.brand,
-        category: parsed.category,
-        price: parsed.price,
-        originalPrice: parsed.originalPrice,
-        stock: parsed.stock,
-        inStock: parsed.stock > 0,
-        rating: 5.0,
-        reviewCount: 0,
-        badge: parsed.badge,
-        shortDescription: parsed.shortDescription,
-        description: parsed.description,
-        imageUrl: parsed.imageUrl,
-        specs: parsed.specs,
-        warranty: parsed.warranty,
-        featured: parsed.featured,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-
-      products.unshift(newProduct);
-      saveProducts(products);
-
-      if (request.user) {
-        await writeAuditLog({
-          tenantId: null,
-          actorUserId: request.user.id,
-          action: "platform.product.created",
-          resourceType: "HardwareProduct",
-          resourceId: newProduct.id,
-          after: newProduct,
-          ipAddress: request.ip,
-          userAgent: request.headers["user-agent"] ?? null,
-        });
-      }
-
-      return reply.code(201).send(successResponse(newProduct, request.id));
-    }
-  );
-
-  // 4. SUPER ADMIN ONLY: Update product details & PRICES
-  app.put(
-    "/:id",
-    { preHandler },
-    async (request, reply) => {
-      assertSuperAdmin(request);
-      const { id } = request.params as { id: string };
-      const parsed = updateProductSchema.parse(request.body);
-      const products = loadProducts();
-
-      const index = products.findIndex((p) => p.id === id);
-      if (index === -1) {
-        return reply.code(404).send({ success: false, error: "Product not found" });
-      }
-
-      const existing = products[index]!;
-      const oldPrice = existing.price;
-
-      const updated: HardwareProduct = {
-        ...existing,
-        ...parsed,
-        inStock: parsed.stock !== undefined ? parsed.stock > 0 : existing.inStock,
-        updatedAt: new Date().toISOString(),
-      };
-
-      products[index] = updated;
-      saveProducts(products);
-
-      if (request.user) {
-        await writeAuditLog({
-          tenantId: null,
-          actorUserId: request.user.id,
-          action: "platform.product.updated",
-          resourceType: "HardwareProduct",
-          resourceId: updated.id,
-          before: { price: oldPrice },
-          after: { price: updated.price },
-          ipAddress: request.ip,
-          userAgent: request.headers["user-agent"] ?? null,
-        });
-      }
-
-      return reply.send(successResponse(updated, request.id));
-    }
-  );
-
-  // 5. SUPER ADMIN ONLY: Delete product
-  app.delete(
-    "/:id",
-    { preHandler },
-    async (request, reply) => {
-      assertSuperAdmin(request);
-      const { id } = request.params as { id: string };
-      const products = loadProducts();
-      const index = products.findIndex((p) => p.id === id);
-      if (index === -1) {
-        return reply.code(404).send({ success: false, error: "Product not found" });
-      }
-
-      const removed = products.splice(index, 1)[0]!;
-      saveProducts(products);
-
-      if (request.user) {
-        await writeAuditLog({
-          tenantId: null,
-          actorUserId: request.user.id,
-          action: "platform.product.deleted",
-          resourceType: "HardwareProduct",
-          resourceId: removed.id,
-          ipAddress: request.ip,
-          userAgent: request.headers["user-agent"] ?? null,
-        });
-      }
-
-      return reply.send(successResponse({ deleted: true, id: removed.id }, request.id));
-    }
-  );
-
-  // 6. PUBLIC: Submit customer hardware order
-  app.post("/orders", async (request, reply) => {
-    const parsed = createOrderSchema.parse(request.body);
-    const products = loadProducts();
-
-    let subtotal = 0;
-    const orderItems: HardwareOrderItem[] = [];
-
-    for (const item of parsed.items) {
-      const product = products.find((p) => p.id === item.productId);
-      if (!product) {
-        return reply.code(400).send({
-          success: false,
-          error: `Product with ID ${item.productId} does not exist in store`,
-        });
-      }
-      const itemSubtotal = product.price * item.quantity;
-      subtotal += itemSubtotal;
-      orderItems.push({
-        productId: product.id,
-        name: product.name,
-        quantity: item.quantity,
-        price: product.price,
-      });
-    }
-
-    const shippingFee = parsed.county.toLowerCase().includes("nairobi") ? 350 : 600;
-    const totalAmount = subtotal + shippingFee;
-
-    const orderId = `ORD-${Math.floor(100000 + Math.random() * 900000)}`;
-    const tempPin = Math.floor(100000 + Math.random() * 900000).toString();
-    const customerNumber = `CUST-${Math.floor(10000 + Math.random() * 90000)}`;
-    const accountNumber = `ACC-${Math.floor(10000 + Math.random() * 90000)}`;
-
-    const newOrder: HardwareOrder = {
-      id: orderId,
-      customerName: parsed.customerName,
-      phone: parsed.phone,
-      email: parsed.email,
-      county: parsed.county,
-      deliveryAddress: parsed.deliveryAddress,
-      items: orderItems,
-      subtotal,
-      shippingFee,
-      totalAmount,
-      mpesaReceiptNumber: parsed.mpesaReceiptNumber,
-      status: parsed.mpesaReceiptNumber ? "PAID" : "PENDING",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      account: {
-        created: true,
-        customerName: parsed.customerName,
-        phone: parsed.phone,
-        customerNumber,
-        accountNumber,
-        tempPin,
-        loginUrl: "/app",
+    await ensureStoreCatalog();
+    const query = z.object({ category: z.string().optional(), search: z.string().optional() }).parse(request.query ?? {});
+    const search = query.search?.trim();
+    const products = await prisma.storeProduct.findMany({
+      where: {
+        ...(query.category && query.category !== "all" ? { category: query.category } : {}),
+        ...(search
+          ? {
+              OR: [
+                { name: { contains: search, mode: "insensitive" } },
+                { brand: { contains: search, mode: "insensitive" } },
+                { shortDescription: { contains: search, mode: "insensitive" } },
+              ],
+            }
+          : {}),
       },
-    };
-
-    const orders = loadOrders();
-    orders.unshift(newOrder);
-    saveOrders(orders);
-
-    return reply.code(201).send(successResponse(newOrder, request.id));
-  });
-
-  // 6b. PUBLIC: Track order by orderId or mpesaReceiptNumber
-  app.get("/orders/track", async (request, reply) => {
-    const { q, phone } = request.query as { q?: string; phone?: string };
-    if (!q) {
-      return reply.code(400).send({ success: false, error: "Tracking query 'q' (Order ID or M-Pesa code) is required" });
-    }
-
-    const orders = loadOrders();
-    const cleanQ = q.trim().toUpperCase();
-    const cleanPhone = phone ? phone.replace(/\s+/g, "").replace(/\+/g, "") : "";
-
-    const order = orders.find((o) => {
-      const idMatch = o.id.toUpperCase() === cleanQ || (o.mpesaReceiptNumber && o.mpesaReceiptNumber.toUpperCase() === cleanQ);
-      if (!idMatch) return false;
-      if (cleanPhone) {
-        const orderPhone = o.phone.replace(/\s+/g, "").replace(/\+/g, "");
-        return orderPhone.endsWith(cleanPhone.slice(-9));
-      }
-      return true;
+      orderBy: [{ featured: "desc" }, { createdAt: "asc" }],
     });
-
-    if (!order) {
-      return reply.code(404).send({ success: false, error: "Order not found. Please verify your Order ID or phone number." });
-    }
-
-    return reply.send(successResponse(order, request.id));
+    reply.send(successResponse(products.map(toPublicProduct), request.id));
   });
 
-  // 7. SUPER ADMIN ONLY: Get all hardware orders
-  app.get(
-    "/orders",
-    { preHandler },
-    async (request, reply) => {
-      assertSuperAdmin(request);
-      const orders = loadOrders();
-      return reply.send(successResponse(orders, request.id));
-    }
-  );
+  // PUBLIC: place an order. For M-Pesa the payment prompt goes out in the same call.
+  app.post("/orders", { preHandler: [checkMaintenance] }, async (request, reply) => {
+    await ensureStoreCatalog();
+    const body = createOrderSchema.parse(request.body);
+    const { order, paymentError } = await createStoreOrder(body);
+    reply.status(201).send(successResponse({ order: toPublicOrder(order), paymentError }, request.id));
+  });
 
-  // 8. SUPER ADMIN ONLY: Update order fulfillment status
-  app.put(
-    "/orders/:id/status",
-    { preHandler },
-    async (request, reply) => {
-      assertSuperAdmin(request);
-      const { id } = request.params as { id: string };
-      const { status } = request.body as {
-        status: "PENDING" | "PAID" | "PROCESSING" | "DISPATCHED" | "DELIVERED" | "CANCELLED";
-      };
-      const orders = loadOrders();
-      const index = orders.findIndex((o) => o.id === id);
-      if (index === -1) {
-        return reply.code(404).send({ success: false, error: "Order not found" });
-      }
+  // PUBLIC: track an order by its number (or M-Pesa receipt) plus the phone it was placed with.
+  app.get("/orders/track", async (request, reply) => {
+    const { q, phone } = z.object({ q: z.string().min(4), phone: z.string().min(9) }).parse(request.query ?? {});
+    const byReceipt = await prisma.storeOrder.findUnique({ where: { mpesaReceiptNumber: q.trim().toUpperCase() }, select: { orderNumber: true } });
+    const order = await findStoreOrderForBuyer(byReceipt?.orderNumber ?? q, phone);
+    reply.send(successResponse(toPublicOrder(order), request.id));
+  });
 
-      orders[index]!.status = status;
-      orders[index]!.updatedAt = new Date().toISOString();
-      saveOrders(orders);
+  // SUPER ADMIN: every order, newest first.
+  app.get("/orders", { preHandler }, async (request, reply) => {
+    assertSuperAdmin(request);
+    const orders = await prisma.storeOrder.findMany({ orderBy: { createdAt: "desc" }, take: 500 });
+    reply.send(successResponse(orders.map((o) => toPublicOrder(o, { includeContact: true })), request.id));
+  });
 
-      return reply.send(successResponse(orders[index], request.id));
-    }
-  );
+  // PUBLIC: the buyer checking on their order; verify=true asks M-Pesa directly ("I've paid").
+  app.get("/orders/:orderNumber", async (request, reply) => {
+    const { orderNumber } = orderParams.parse(request.params);
+    const { phone, verify } = buyerQuerySchema.parse(request.query ?? {});
+    let order = await findStoreOrderForBuyer(orderNumber, phone);
+    if (verify === "true") order = await verifyStoreOrderPayment(order.orderNumber);
+    reply.send(successResponse(toPublicOrder(order), request.id));
+  });
+
+  // PUBLIC: send the M-Pesa prompt again (after a cancel, a timeout or a failed send).
+  app.post("/orders/:orderNumber/pay", { preHandler: [checkMaintenance] }, async (request, reply) => {
+    const { orderNumber } = orderParams.parse(request.params);
+    const { phone } = z.object({ phone: z.string().min(9) }).parse(request.body);
+    const order = await findStoreOrderForBuyer(orderNumber, phone);
+    reply.send(successResponse(toPublicOrder(await startStoreOrderPayment(order.orderNumber)), request.id));
+  });
+
+  // SUPER ADMIN: move an order along. Marking PAID by hand is for money taken on delivery.
+  app.put("/orders/:orderNumber/status", { preHandler }, async (request, reply) => {
+    assertSuperAdmin(request);
+    const { orderNumber } = orderParams.parse(request.params);
+    const { status } = statusSchema.parse(request.body);
+    const existing = await prisma.storeOrder.findUnique({ where: { orderNumber } });
+    if (!existing) throw new NotFoundError("Order");
+    const updated = await prisma.storeOrder.update({
+      where: { orderNumber },
+      data: { status, ...(status === "PAID" && !existing.paidAt ? { paidAt: new Date() } : {}) },
+    });
+    await writeAuditLog({
+      tenantId: null,
+      actorUserId: request.user!.id,
+      action: "platform.store_order.status_changed",
+      resourceType: "StoreOrder",
+      resourceId: updated.id,
+      before: { status: existing.status },
+      after: { status: updated.status },
+      ipAddress: request.ip,
+      userAgent: request.headers["user-agent"] ?? null,
+    });
+    reply.send(successResponse(toPublicOrder(updated, { includeContact: true }), request.id));
+  });
+
+  // PUBLIC: one product, by id or slug.
+  app.get("/:id", async (request, reply) => {
+    await ensureStoreCatalog();
+    const { id } = z.object({ id: z.string() }).parse(request.params);
+    const product = await prisma.storeProduct.findFirst({ where: { OR: [{ id }, { slug: id }] } });
+    if (!product) throw new NotFoundError("Product");
+    reply.send(successResponse(toPublicProduct(product), request.id));
+  });
+
+  // SUPER ADMIN: add a product.
+  app.post("/", { preHandler }, async (request, reply) => {
+    assertSuperAdmin(request);
+    await ensureStoreCatalog();
+    const parsed = createProductSchema.parse(request.body);
+    const base = parsed.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+    const slug = (await prisma.storeProduct.findUnique({ where: { slug: base } })) ? `${base}-${Date.now().toString(36)}` : base;
+    const created = await prisma.storeProduct.create({
+      data: {
+        id: `prod_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        slug,
+        ...(productData(parsed) as Omit<Parameters<typeof prisma.storeProduct.create>[0]["data"], "id" | "slug">),
+      },
+    });
+    await writeAuditLog({
+      tenantId: null,
+      actorUserId: request.user!.id,
+      action: "platform.product.created",
+      resourceType: "StoreProduct",
+      resourceId: created.id,
+      after: toPublicProduct(created),
+      ipAddress: request.ip,
+      userAgent: request.headers["user-agent"] ?? null,
+    });
+    reply.status(201).send(successResponse(toPublicProduct(created), request.id));
+  });
+
+  // SUPER ADMIN: edit a product, including its price.
+  app.put("/:id", { preHandler }, async (request, reply) => {
+    assertSuperAdmin(request);
+    const { id } = z.object({ id: z.string() }).parse(request.params);
+    const parsed = updateProductSchema.parse(request.body);
+    const existing = await prisma.storeProduct.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundError("Product");
+    const updated = await prisma.storeProduct.update({ where: { id }, data: productData(parsed) });
+    await writeAuditLog({
+      tenantId: null,
+      actorUserId: request.user!.id,
+      action: "platform.product.updated",
+      resourceType: "StoreProduct",
+      resourceId: id,
+      before: { price: existing.priceMinor / 100, stock: existing.stock },
+      after: { price: updated.priceMinor / 100, stock: updated.stock },
+      ipAddress: request.ip,
+      userAgent: request.headers["user-agent"] ?? null,
+    });
+    reply.send(successResponse(toPublicProduct(updated), request.id));
+  });
+
+  // SUPER ADMIN: remove a product. Past orders keep their own copy of it.
+  app.delete("/:id", { preHandler }, async (request, reply) => {
+    assertSuperAdmin(request);
+    const { id } = z.object({ id: z.string() }).parse(request.params);
+    const existing = await prisma.storeProduct.findUnique({ where: { id } });
+    if (!existing) throw new NotFoundError("Product");
+    await prisma.storeProduct.delete({ where: { id } });
+    await writeAuditLog({
+      tenantId: null,
+      actorUserId: request.user!.id,
+      action: "platform.product.deleted",
+      resourceType: "StoreProduct",
+      resourceId: id,
+      ipAddress: request.ip,
+      userAgent: request.headers["user-agent"] ?? null,
+    });
+    reply.send(successResponse({ deleted: true, id }, request.id));
+  });
 }

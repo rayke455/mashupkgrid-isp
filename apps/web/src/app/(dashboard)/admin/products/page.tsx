@@ -281,7 +281,6 @@ export default function AdminProductsPage() {
         price: priceNum,
         originalPrice: origPriceNum,
         stock: stockNum,
-        inStock: stockNum > 0,
         badge: newBadge.trim() || undefined,
         shortDescription: newShortDesc.trim() || newName.trim(),
         description: newDesc.trim() || newShortDesc.trim(),

@@ -30,9 +30,15 @@ export async function announcementRoutes(app: FastifyInstance): Promise<void> {
       const announcements = await prisma.platformAnnouncement.findMany({
         orderBy: { createdAt: "desc" },
         take: 100,
-        include: { tenant: { select: { id: true, name: true } } },
+        include: { tenant: { select: { id: true, name: true } }, _count: { select: { dismissals: true } } },
       });
-      reply.send(successResponse(announcements, request.id));
+      // readCount: how many people have opened it, which is what a sender actually wants to know.
+      reply.send(
+        successResponse(
+          announcements.map(({ _count, ...a }) => ({ ...a, readCount: _count.dismissals })),
+          request.id
+        )
+      );
     }
   );
 
@@ -111,6 +117,49 @@ export async function announcementRoutes(app: FastifyInstance): Promise<void> {
       });
 
       reply.send(successResponse(announcements, request.id));
+    }
+  );
+
+  /** The notification centre: everything addressed to this user's tenant (or to every tenant),
+   *  read or not, newest first. Reading is the same record as dismissing a banner. */
+  app.get(
+    "/inbox",
+    { config: { audience: "staff" }, preHandler: [...preHandler] },
+    async (request, reply) => {
+      const tenantId = request.user!.tenantId;
+      const userId = request.user!.id;
+      const now = new Date();
+      const rows = await prisma.platformAnnouncement.findMany({
+        where: {
+          OR: [{ tenantId: null }, { tenantId }],
+          AND: [{ OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] }],
+        },
+        orderBy: { createdAt: "desc" },
+        take: 50,
+        include: { dismissals: { where: { userId }, select: { dismissedAt: true } } },
+      });
+      const items = rows.map(({ dismissals, ...a }) => ({ ...a, readAt: dismissals[0]?.dismissedAt ?? null }));
+      reply.send(successResponse({ items, unreadCount: items.filter((i) => !i.readAt).length }, request.id));
+    }
+  );
+
+  app.post(
+    "/read-all",
+    { config: { audience: "staff" }, preHandler: [...preHandler] },
+    async (request, reply) => {
+      const tenantId = request.user!.tenantId;
+      const userId = request.user!.id;
+      const unread = await prisma.platformAnnouncement.findMany({
+        where: { OR: [{ tenantId: null }, { tenantId }], dismissals: { none: { userId } } },
+        select: { id: true },
+      });
+      if (unread.length > 0) {
+        await prisma.announcementDismissal.createMany({
+          data: unread.map((a) => ({ announcementId: a.id, userId })),
+          skipDuplicates: true,
+        });
+      }
+      reply.send(successResponse({ marked: unread.length }, request.id));
     }
   );
 

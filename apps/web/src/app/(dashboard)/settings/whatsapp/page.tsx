@@ -4,7 +4,6 @@ import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
 import { Button, Card, ErrorText, HintText, Badge, StatusDot, Input } from "@/components/ui";
-import { IconMessage } from "@/components/icons";
 
 type ConnectionStatus = "DISCONNECTED" | "CONNECTING" | "CONNECTED" | "LOGGED_OUT";
 
@@ -133,7 +132,7 @@ function BotTestPanel() {
   return (
     <Card className="flex flex-col overflow-hidden h-[480px]">
       {/* Chat header */}
-      <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-obsidian-800 bg-gradient-to-r from-emerald-500/5 to-transparent">
+      <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-obsidian-800">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-lg">
             🤖
@@ -281,10 +280,7 @@ export default function WhatsappSettingsPage() {
     <div className="max-w-2xl space-y-6">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="flex items-center gap-2.5 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
-              <IconMessage size={18} />
-            </span>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">
             WhatsApp
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
@@ -354,7 +350,7 @@ export default function WhatsappSettingsPage() {
               <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
                 Enter this code on your phone
               </p>
-              <p className="font-mono text-3xl font-black tracking-[0.3em] text-brand-500">
+              <p className="font-mono text-3xl font-semibold tracking-[0.3em] text-white">
                 {connection.pairingCode}
               </p>
               <p className="text-xs text-slate-500">

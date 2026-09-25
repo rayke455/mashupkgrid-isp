@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { AnnouncementConfig } from "@/lib/captive-portal-plugins/types";
 
-export function PortalAnnouncements({ config }: { config: AnnouncementConfig }) {
+export function PortalAnnouncements({ config, light = false }: { config: AnnouncementConfig; light?: boolean }) {
   const [modalDismissed, setModalDismissed] = useState(false);
 
   if (!config.enabled || !config.items || config.items.length === 0) {
@@ -15,14 +15,14 @@ export function PortalAnnouncements({ config }: { config: AnnouncementConfig }) 
 
   if (config.style === "marquee") {
     return (
-      <div className="w-full bg-indigo-950/80 border-b border-indigo-500/30 text-indigo-200 py-1.5 px-4 overflow-hidden relative z-30 text-xs backdrop-blur-md">
+      <div className={`w-full py-1.5 px-4 overflow-hidden relative z-30 text-xs ${light ? "border-y border-slate-200 bg-white text-slate-700" : "bg-indigo-950/80 border-b border-indigo-500/30 text-indigo-200 backdrop-blur-md"}`}>
         <div
           className="flex whitespace-nowrap animate-marquee gap-8 font-medium"
           style={{ animationDuration: `${config.scrollSpeedSec || 15}s` }}
         >
           {activeItems.map((item) => (
             <span key={item.id} className="flex items-center gap-2">
-              <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+              <span className={`inline-block w-2 h-2 rounded-full bg-emerald-500 ${light ? "" : "animate-ping"}`} />
               {item.linkUrl ? (
                 <a href={item.linkUrl} target="_blank" rel="noopener noreferrer" className="hover:underline font-bold">
                   {item.text}
@@ -50,7 +50,7 @@ export function PortalAnnouncements({ config }: { config: AnnouncementConfig }) 
     const item = activeItems[0]!;
     return (
       <div className="w-full flex justify-center pt-2 px-4 relative z-30 pointer-events-auto">
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-slate-900/90 border border-slate-700/80 shadow-lg text-xs text-slate-200 backdrop-blur-md">
+        <div className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs ${light ? "border border-slate-200 bg-white text-slate-700" : "bg-slate-900/90 border border-slate-700/80 shadow-lg text-slate-200 backdrop-blur-md"}`}>
           <span className="px-1.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-brand-500/20 text-brand-400 border border-brand-500/40">
             {item.type}
           </span>

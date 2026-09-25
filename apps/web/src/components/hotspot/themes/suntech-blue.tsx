@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import type { CaptiveThemeProps } from "./types";
+import { appOnlyLabel, type CaptiveThemeProps } from "./types";
 
 function WifiIcon({ className = "w-4 h-4" }: { className?: string }) {
   return (
@@ -365,6 +365,9 @@ export function SuntechBlueTheme({
                         <span className="block text-[11.5px] font-black text-slate-950 tracking-tight leading-tight">
                           {formatDurationTitle(pkg.name, pkg.durationMinutes)}
                         </span>
+                        {appOnlyLabel(pkg.appPolicy) && (
+                          <span className="mt-0.5 block text-[10px] font-extrabold text-blue-700">{appOnlyLabel(pkg.appPolicy)}</span>
+                        )}
 
                         {/* Package Price in Bold Red */}
                         <span className="block font-black text-[15px] text-red-600 tracking-tight leading-none mt-1">

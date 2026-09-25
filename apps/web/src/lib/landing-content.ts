@@ -119,7 +119,7 @@ export const DEFAULT_LANDING_CONTENT: LandingContent = {
       a: "Yes. Setup is a single script you paste into your router's terminal, which configures the hotspot, the captive portal, RADIUS authentication and the payment walled garden in one step. There is no proprietary hardware to buy and nothing to replace.",
     },
     {
-      q: "Does Mashupkgrid ISP work with both MikroTik RouterOS v6 and v7?",
+      q: "Does MashupHost work with both MikroTik RouterOS v6 and v7?",
       a: "Yes. Our native RouterOS client communicates directly with RouterOS v6.48+ LTS through the modern v7.12+ REST and API-TLS protocols. It automatically handles fast routing, active queues, interface address lists, and PPPoE binding without needing any external agents.",
     },
     {
@@ -136,7 +136,7 @@ export const DEFAULT_LANDING_CONTENT: LandingContent = {
     },
     {
       q: "Can I white-label the dashboard with my own ISP logo and custom domain?",
-      a: "Yes! Mashupkgrid ISP features full multi-tenant white-labeling. You can set your own ISP brand name, primary theme colors, custom logo, and host the customer portal on your own domain (e.g., portal.yourisp.co.ke).",
+      a: "Yes! MashupHost features full multi-tenant white-labeling. You can set your own ISP brand name, primary theme colors, custom logo, and host the customer portal on your own domain (e.g., portal.yourisp.co.ke).",
     },
   ],
   footer: {

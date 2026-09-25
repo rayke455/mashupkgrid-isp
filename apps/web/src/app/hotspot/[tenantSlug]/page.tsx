@@ -4,11 +4,12 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
-import { Button, ErrorText, Input, Label } from "@/components/ui";
 import { TawkToWidget } from "@/components/tawk-to-widget";
-import { IconLifeBuoy } from "@/components/icons";
 import {
   getThemeComponent,
+  getThemeMeta,
+  appOnlyNotice,
+  DEFAULT_THEME_ID,
   THEME_CATALOG,
   type HotspotPackage,
   type VoucherLoginResult,
@@ -16,6 +17,7 @@ import {
   type ThemeId,
 } from "@/components/hotspot/themes";
 import { CaptivePortalPluginContainer } from "@/components/hotspot/plugins/CaptivePortalPluginContainer";
+import { PortalSheet, SheetError, sheetInput, sheetLabel, sheetPrimary, sheetSecondary } from "@/components/hotspot/portal-sheet";
 
 interface TenantInfo {
   name: string;
@@ -61,7 +63,7 @@ interface PurchaseStatusResponse {
 
 function formatPriceKsh(priceMinor: number): string {
   const ksh = Math.round(priceMinor / 100);
-  return `KES ${ksh.toLocaleString()}`;
+  return `KSh ${ksh.toLocaleString("en-KE")}`;
 }
 
 /** MikroTik's hotspot drops a client's active session the moment their device disconnects from
@@ -209,12 +211,14 @@ export default function HotspotCaptivePortalPage() {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const searchParams = useSearchParams();
   const linkLoginOnly = searchParams.get("link-login-only");
+  /** This phone's MAC, put in the sign-in link by the router ($(mac) in the login template). */
+  const phoneMac = searchParams.get("mac");
   const queryTheme = searchParams.get("theme") as ThemeId | null;
   const paystackRef = searchParams.get("paystack") || searchParams.get("ref");
   const pesapalRef = searchParams.get("pesapal");
 
   // Active Theme Selection
-  const [activeThemeId, setActiveThemeId] = useState<ThemeId>(queryTheme || "suntech-blue");
+  const [activeThemeId, setActiveThemeId] = useState<ThemeId>(queryTheme || DEFAULT_THEME_ID);
   const [userSelectedTheme, setUserSelectedTheme] = useState<ThemeId | null>(queryTheme || null);
   const [showThemePicker, setShowThemePicker] = useState(false);
 
@@ -473,6 +477,30 @@ export default function HotspotCaptivePortalPage() {
     connectWithVoucher.mutate(rememberedVoucher.code);
   };
 
+  // A phone that has paid before, recognised by its MAC on the server, even when this browser has
+  // no saved code (captive mini-browsers often keep none). The code never comes to the page.
+  const { data: deviceStatus } = useQuery({
+    queryKey: ["hotspot-device", tenantSlug, phoneMac],
+    queryFn: () =>
+      apiFetch<{ canReconnect: boolean; packageName?: string | null; minutesLeft?: number | null; dataLeftMb?: number | null }>(
+        `/api/v1/hotspot/${tenantSlug}/devices/${encodeURIComponent(phoneMac!)}/status`,
+        { skipAuth: true }
+      ),
+    enabled: Boolean(phoneMac && linkLoginOnly),
+    retry: false,
+  });
+
+  const [reconnectDismissed, setReconnectDismissed] = useState(false);
+
+  /** Asks the router to log this phone in by its MAC; the server accepts only this same phone. */
+  const reconnectByMac = () => {
+    if (!phoneMac || !linkLoginOnly) return;
+    setError(null);
+    handOffToRouter(linkLoginOnly, phoneMac, "", () =>
+      setError("This phone couldn't be reconnected automatically. Enter your code, or use “Paid but not connected?”.")
+    );
+  };
+
   /**
    * Recovers a purchase the customer already paid for but never got connected on.
    *
@@ -697,6 +725,16 @@ export default function HotspotCaptivePortalPage() {
     );
   }
 
+  const themeMeta = getThemeMeta(effectiveThemeId);
+  const openRecover = () => {
+    setShowRecover(true);
+    setRecoverError(null);
+  };
+  const openSupport = () => {
+    setSupportSent(false);
+    setShowSupportModal(true);
+  };
+
   return (
     <CaptivePortalPluginContainer
       tenantSlug={tenantSlug}
@@ -704,282 +742,235 @@ export default function HotspotCaptivePortalPage() {
       voucherExpiresAt={voucherResult?.expiresAt || rememberedVoucher?.expiresAt}
       voucherDataCapMb={voucherResult?.dataCapMb}
       isAuthenticating={completingRouterLogin || autoReconnecting}
+      appearance={themeMeta.appearance ?? "dark"}
       onVoucherCodeApplied={(scanned) => {
         setVoucherCode(scanned);
         setShowVoucherModal(true);
       }}
     >
       <div className="relative min-h-screen">
-      {liveChat?.show && <TawkToWidget widgetId={liveChat.widgetId} />}
+        {liveChat?.show && <TawkToWidget widgetId={liveChat.widgetId} />}
 
-      {/* Contact Support — bottom-left, deliberately opposite corner from Tawk.to's own bubble
-          (bottom-right) so the two never overlap when a tenant has both enabled. */}
-      <div className="fixed bottom-3 left-3 z-50">
-        <button
-          type="button"
-          onClick={() => {
-            setSupportSent(false);
-            setShowSupportModal(true);
-          }}
-          className="rounded-full bg-slate-900/80 border border-slate-700 px-3 py-1.5 text-[11px] font-bold text-slate-200 shadow-xl backdrop-blur-md hover:bg-slate-800 transition-all flex items-center gap-1.5"
-        >
-          <IconLifeBuoy size={14} />
-          <span>Contact Support</span>
-        </button>
-      </div>
-
-      {/* Theme Switcher Badge — only visible in development preview with ?themePicker=true */}
-      {searchParams.get("themePicker") === "true" && (
-        <div className="fixed top-2 right-2 z-50">
-          <button
-            type="button"
-            onClick={() => setShowThemePicker((v) => !v)}
-            className="rounded-full bg-slate-900/80 border border-slate-700 px-3 py-1 text-[11px] font-bold text-slate-200 shadow-xl backdrop-blur-md hover:bg-slate-800 transition-all flex items-center gap-1.5"
-          >
-            <span>🎨</span>
-            <span className="capitalize">{activeThemeId.replace("-", " ")}</span>
-          </button>
-
-          {showThemePicker && (
-            <div className="absolute right-0 mt-2 w-56 rounded-2xl bg-slate-900 border border-slate-700 p-2 shadow-2xl backdrop-blur-xl text-xs space-y-1">
-              <div className="px-2 py-1 text-[10px] font-black uppercase tracking-wider text-slate-400">
-                Select Captive Theme
-              </div>
-              {THEME_CATALOG.map((theme) => (
-                <button
-                  key={theme.id}
-                  type="button"
-                  onClick={() => handleSelectTheme(theme.id)}
-                  className={`w-full text-left px-2.5 py-1.5 rounded-xl font-medium flex items-center justify-between transition-colors ${
-                    activeThemeId === theme.id
-                      ? "bg-purple-600 text-white font-bold"
-                      : "text-slate-300 hover:bg-slate-800"
-                  }`}
-                >
-                  <span>{theme.name.split(" ")[0]} {theme.name.split(" ")[1]}</span>
-                  {activeThemeId === theme.id && <span>✓</span>}
-                </button>
-              ))}
-              <div className="pt-1 mt-1 border-t border-slate-800 text-center">
-                <a
-                  href="/themes"
-                  className="text-[10px] text-sky-400 hover:text-sky-300 font-semibold block py-1"
-                >
-                  ⚙️ Save Default in Studio &rarr;
-                </a>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* The browser would not hand off to the router automatically. A centred overlay, not a
-          top bar: the portal already has a language toggle, a QR button and a promo strip pinned
-          to the top, and a banner competing with those is unreadable at the one moment that
-          matters — the customer has paid and is one tap from being online. */}
-      {stalledLoginUrl && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/80 p-6 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-6 text-center shadow-2xl dark:bg-obsidian-900">
-            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-2xl dark:bg-emerald-950/60">
-              ✓
-            </div>
-            <h2 className="text-lg font-bold text-slate-900 dark:text-white">Payment received</h2>
-            <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-              One last tap to get online — your browser needs you to confirm.
-            </p>
-            <a
-              href={stalledLoginUrl}
-              className="mt-4 block w-full rounded-xl bg-emerald-600 px-4 py-3 text-base font-bold text-white shadow-lg active:bg-emerald-700"
-            >
-              Connect me now
-            </a>
+        {/* Theme switcher — development preview only (?themePicker=true). */}
+        {searchParams.get("themePicker") === "true" && (
+          <div className="fixed right-2 top-2 z-50">
             <button
               type="button"
-              onClick={() => setStalledLoginUrl(null)}
-              className="mt-3 text-xs text-slate-400 underline-offset-2 hover:underline"
+              onClick={() => setShowThemePicker((v) => !v)}
+              className="rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-700 shadow"
             >
+              Theme: {effectiveThemeId}
+            </button>
+            {showThemePicker && (
+              <div className="absolute right-0 mt-2 w-60 space-y-0.5 rounded-2xl border border-slate-200 bg-white p-1.5 text-sm shadow-xl">
+                {THEME_CATALOG.map((theme) => (
+                  <button
+                    key={theme.id}
+                    type="button"
+                    onClick={() => handleSelectTheme(theme.id)}
+                    className={`flex w-full items-center justify-between rounded-xl px-2.5 py-1.5 text-left ${
+                      effectiveThemeId === theme.id ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-100"
+                    }`}
+                  >
+                    <span>{theme.name}</span>
+                    {effectiveThemeId === theme.id && <span>✓</span>}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* One tap from online, but the browser wouldn't hand off to the router by itself. */}
+        {stalledLoginUrl && (
+          <PortalSheet title="Payment received" description="One last tap to get online. Your browser needs you to confirm." zIndex="z-[100]">
+            <a href={stalledLoginUrl} className={`${sheetPrimary} block bg-emerald-600 text-center hover:bg-emerald-700`}>
+              Connect me now
+            </a>
+            <button type="button" onClick={() => setStalledLoginUrl(null)} className={`${sheetSecondary} mt-2`}>
               Show my voucher code instead
             </button>
-          </div>
-        </div>
-      )}
+          </PortalSheet>
+        )}
 
-      {/* Always reachable, not only after a failed hand-off: a customer whose page reloaded, whose
-          phone dropped Wi-Fi mid-payment, or who simply closed the tab has no overlay to fall back
-          to and is otherwise stuck with money spent and no way in. */}
-      <button
-        type="button"
-        onClick={() => {
-          setShowRecover(true);
-          setRecoverError(null);
-        }}
-        className="fixed bottom-20 left-1/2 z-40 -translate-x-1/2 rounded-full border border-white/20 bg-slate-900/90 px-4 py-2 text-xs font-semibold text-white shadow-xl backdrop-blur"
-      >
-        Already paid but not connected?
-      </button>
-
-      {showRecover && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/80 p-5 backdrop-blur-sm">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl dark:bg-obsidian-900">
-            <h2 className="text-lg font-bold text-slate-900 dark:text-white">Get connected</h2>
-            <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">
-              Enter the number you paid with, or paste the M-Pesa message. We will find your
-              purchase and connect you.
-            </p>
-
-            <label className="mt-4 block text-xs font-semibold text-slate-700 dark:text-slate-200">
+        {showRecover && (
+          <PortalSheet
+            title="Get connected"
+            description="Enter the number you paid with, or paste the M-Pesa message. We'll find your purchase and connect you."
+            onClose={() => setShowRecover(false)}
+            zIndex="z-[110]"
+          >
+            <label htmlFor="recoverPhone" className={sheetLabel}>
               Phone number you paid with
             </label>
             <input
+              id="recoverPhone"
               inputMode="tel"
               placeholder="07XX XXX XXX"
               value={recoverPhone}
               onChange={(e) => setRecoverPhone(e.target.value)}
-              className="mt-1 w-full rounded-xl border border-slate-300 px-3 py-2.5 text-base text-slate-900 dark:border-obsidian-700 dark:bg-obsidian-950 dark:text-white"
+              className={sheetInput}
             />
-
-            <div className="my-3 flex items-center gap-2 text-[11px] text-slate-400">
-              <span className="h-px flex-1 bg-slate-200 dark:bg-obsidian-800" />
+            <div className="my-3 flex items-center gap-2 text-xs text-slate-400">
+              <span className="h-px flex-1 bg-slate-200" />
               or paste the M-Pesa message
-              <span className="h-px flex-1 bg-slate-200 dark:bg-obsidian-800" />
+              <span className="h-px flex-1 bg-slate-200" />
             </div>
-
             <textarea
               rows={3}
               placeholder="TGH7ABC123 Confirmed. Ksh10.00 sent to…"
               value={recoverMessage}
               onChange={(e) => setRecoverMessage(e.target.value)}
-              className="w-full rounded-xl border border-slate-300 px-3 py-2 text-sm text-slate-900 dark:border-obsidian-700 dark:bg-obsidian-950 dark:text-white"
+              className={`${sheetInput} text-sm`}
             />
-
             {recoverError && (
-              <p className="mt-2 text-xs text-rose-600 dark:text-rose-400">{recoverError}</p>
+              <div className="mt-3">
+                <SheetError>{recoverError}</SheetError>
+              </div>
             )}
-
             <button
               type="button"
               disabled={recoverPurchase.isPending || (!recoverPhone.trim() && !recoverMessage.trim())}
               onClick={() => recoverPurchase.mutate()}
-              className="mt-4 w-full rounded-xl bg-emerald-600 px-4 py-3 text-base font-bold text-white disabled:opacity-50"
+              className={`${sheetPrimary} mt-4`}
             >
               {recoverPurchase.isPending ? "Looking for your payment…" : "Connect me"}
             </button>
-            <button
-              type="button"
-              onClick={() => setShowRecover(false)}
-              className="mt-2 w-full py-2 text-xs text-slate-400"
-            >
+            <button type="button" onClick={() => setShowRecover(false)} className={`${sheetSecondary} mt-2`}>
               Cancel
             </button>
-          </div>
-        </div>
-      )}
+          </PortalSheet>
+        )}
 
-      {/* Force Reconnect — visible whenever we have a still-valid voucher from last time and the
-          router redirected us here again (link-login-only present), so a customer whose device
-          just fell off the WiFi can get back online in one tap instead of re-entering their code. */}
-      {rememberedVoucher && linkLoginOnly && !completingRouterLogin && (
-        <div className="fixed top-2 left-2 z-50">
-          <button
-            type="button"
-            onClick={forceReconnect}
-            disabled={autoReconnecting || connectWithVoucher.isPending}
-            className="rounded-full bg-emerald-600/90 border border-emerald-400 px-3 py-1 text-[11px] font-bold text-white shadow-xl backdrop-blur-md hover:bg-emerald-500 transition-all flex items-center gap-1.5 disabled:opacity-60"
+        {/* Back online in one tap with the still-valid code from last time. */}
+        {rememberedVoucher && linkLoginOnly && !completingRouterLogin && (
+          <div className="fixed left-1/2 top-3 z-50 -translate-x-1/2">
+            <button
+              type="button"
+              onClick={forceReconnect}
+              disabled={autoReconnecting || connectWithVoucher.isPending}
+              className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-lg hover:bg-emerald-700 disabled:opacity-60"
+            >
+              {autoReconnecting || connectWithVoucher.isPending ? "Reconnecting…" : "Reconnect with my code"}
+            </button>
+          </div>
+        )}
+
+        {/* Back online in one tap: this phone has paid before and still has time left. */}
+        {deviceStatus?.canReconnect && !rememberedVoucher && linkLoginOnly && !completingRouterLogin && !reconnectDismissed && (
+          <PortalSheet
+            title="Welcome back"
+            description={
+              [
+                deviceStatus.packageName,
+                deviceStatus.minutesLeft != null
+                  ? `${deviceStatus.minutesLeft >= 120 ? `${Math.floor(deviceStatus.minutesLeft / 60)} h` : `${deviceStatus.minutesLeft} min`} left`
+                  : null,
+                deviceStatus.dataLeftMb != null
+                  ? `${deviceStatus.dataLeftMb >= 1024 ? `${(deviceStatus.dataLeftMb / 1024).toFixed(1)} GB` : `${deviceStatus.dataLeftMb} MB`} of data left`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(" · ") || "Your package is still active on this phone."
+            }
+            onClose={() => setReconnectDismissed(true)}
           >
-            <span>🔄</span>
-            <span>{autoReconnecting || connectWithVoucher.isPending ? "Reconnecting…" : "Force Reconnect"}</span>
-          </button>
-        </div>
-      )}
+            <button type="button" onClick={reconnectByMac} className={sheetPrimary}>
+              Reconnect
+            </button>
+            <button type="button" onClick={() => setReconnectDismissed(true)} className={`${sheetSecondary} mt-2`}>
+              Not now
+            </button>
+          </PortalSheet>
+        )}
 
-      {/* Auto-reconnect in progress, before the theme's own "Authenticating…" handshake overlay
-          takes over (that one needs completingRouterLogin, which only flips true once the login
-          call actually resolves) — without this the normal buy screen would flash first. */}
-      {autoReconnecting && !completingRouterLogin && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/80 backdrop-blur-xs">
-          <div className="rounded-2xl bg-slate-900/95 border border-emerald-500/50 p-6 text-center shadow-2xl">
-            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-emerald-500 border-t-transparent mb-3" />
-            <p className="text-lg font-black text-emerald-400">Reconnecting you automatically…</p>
-            <p className="text-xs text-slate-300 mt-1">Using your active Wi-Fi code from last time.</p>
+        {autoReconnecting && !completingRouterLogin && (
+          <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/60 p-6">
+            <div className="w-full max-w-xs rounded-3xl bg-white p-6 text-center shadow-2xl">
+              <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-[3px] border-emerald-600 border-t-transparent" aria-hidden="true" />
+              <p className="text-base font-semibold text-slate-900">Reconnecting you…</p>
+              <p className="mt-1 text-sm text-slate-500">Using your code from last time.</p>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Render Active Theme Plugin */}
-      <SelectedThemeComponent
-        tenantSlug={tenantSlug}
-        tenantName={tenantDisplayName}
-        contactPhone={contactPhone}
-        supportPhone={supportPhoneToUse}
-        welcomeTitle={welcomeTitleToUse}
-        bannerSubtitle={bannerSubtitleToUse}
-        installationFee={installationFeeToUse}
-        fiberRates={fiberRatesToUse}
-        logoUrl={tenant?.logoUrl}
-        brandColor={tenant?.brandColor}
-        packages={packages}
-        loadingPackages={loadingPackages}
-        onSelectPackage={(pkg) => {
-          setSelectedPkg(pkg);
-          setError(null);
-        }}
-        onOpenVoucherModal={() => {
-          setShowVoucherModal(true);
-          setError(null);
-        }}
-        onOpenAccountModal={() => {
-          setShowAccountModal(true);
-          setError(null);
-        }}
-        onOpenTvModal={() => setShowTvModal(true)}
-        voucherResult={voucherResult}
-        accountResult={accountResult}
-        completingRouterLogin={completingRouterLogin}
-      />
+        <SelectedThemeComponent
+          tenantSlug={tenantSlug}
+          tenantName={tenantDisplayName}
+          contactPhone={contactPhone}
+          supportPhone={supportPhoneToUse}
+          welcomeTitle={welcomeTitleToUse}
+          bannerSubtitle={bannerSubtitleToUse}
+          installationFee={installationFeeToUse}
+          fiberRates={fiberRatesToUse}
+          logoUrl={tenant?.logoUrl}
+          brandColor={tenant?.brandColor}
+          packages={packages}
+          loadingPackages={loadingPackages}
+          onSelectPackage={(pkg) => {
+            setSelectedPkg(pkg);
+            setError(null);
+          }}
+          onOpenVoucherModal={() => {
+            setShowVoucherModal(true);
+            setError(null);
+          }}
+          onOpenAccountModal={() => {
+            setShowAccountModal(true);
+            setError(null);
+          }}
+          onOpenTvModal={() => setShowTvModal(true)}
+          onOpenRecover={openRecover}
+          onOpenSupport={openSupport}
+          voucherResult={voucherResult}
+          accountResult={accountResult}
+          completingRouterLogin={completingRouterLogin}
+        />
 
-      {/* SHARED MODAL 1: M-PESA BUY MODAL */}
-      {selectedPkg && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-sm rounded-3xl bg-slate-900 border border-slate-700 p-6 text-slate-100 shadow-2xl text-center">
+        {/* Themes that don't show help themselves get one slim bar, and room at the bottom so it
+            never covers their packages. */}
+        {!themeMeta.inlineHelp && (
+          <>
+            <div className="h-20" aria-hidden="true" />
+            <div className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-center gap-2 border-t border-slate-200/80 bg-white/95 px-3 py-2.5 shadow-[0_-4px_16px_rgba(15,23,42,0.08)] [color-scheme:light]">
+              <button type="button" onClick={openRecover} className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white">
+                Paid but not connected?
+              </button>
+              <button type="button" onClick={openSupport} className="rounded-full border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700">
+                Help
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* Buy a package */}
+        {selectedPkg && (
+          <PortalSheet onClose={pollingStatus === "PENDING" ? undefined : () => setSelectedPkg(null)}>
             {pollingStatus === "COMPLETED" ? (
-              <div className="space-y-4 py-3">
-                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400 text-3xl font-black">
-                  ✓
-                </div>
-                <div>
-                  <h3 className="text-lg font-black text-emerald-400">Payment Confirmed!</h3>
-                  <p className="text-xs text-slate-300 mt-1">
-                    Your M-Pesa payment was received. Activating your Wi-Fi access now...
-                  </p>
-                </div>
-                <div className="rounded-xl bg-slate-950 p-2.5 text-xs font-mono text-emerald-300 border border-slate-800 flex items-center justify-center gap-2">
-                  <span className="inline-block h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
-                  Connecting to Wi-Fi...
-                </div>
+              <div className="py-2 text-center">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-2xl text-emerald-700">✓</div>
+                <h2 className="mt-3 text-lg font-semibold text-slate-900">Payment confirmed</h2>
+                <p className="mt-1 text-sm text-slate-600">Connecting you to the internet now…</p>
               </div>
             ) : pollingStatus === "PENDING" ? (
-              <div className="space-y-4 py-3">
-                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400 animate-pulse text-3xl font-black">
-                  M
+              <div className="text-center">
+                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-50">
+                  <span className="h-7 w-7 animate-spin rounded-full border-[3px] border-emerald-600 border-t-transparent" aria-hidden="true" />
                 </div>
-                <div>
-                  <h3 className="text-lg font-black text-white">Check Your Phone</h3>
-                  <p className="text-xs text-slate-300 mt-1">
-                    An M-Pesa PIN prompt for <span className="font-bold text-amber-400">{formatPriceKsh(selectedPkg.priceMinor)}</span> was sent to <span className="font-bold text-white">{buyPhone}</span>.
-                  </p>
-                </div>
-                <div className="rounded-xl bg-slate-950 p-2.5 text-xs font-mono text-amber-300 border border-slate-800">
-                  Waiting for PIN confirmation... ({pollCountdown}s)
-                </div>
-                <Button
-                  variant="outline"
-                  className="w-full py-2.5 text-xs font-bold text-emerald-400 border-emerald-500/50 hover:bg-emerald-500/10"
+                <h2 className="mt-3 text-lg font-semibold text-slate-900">Check your phone</h2>
+                <p className="mt-1 text-sm text-slate-600">
+                  Enter your M-Pesa PIN to pay <span className="font-semibold text-slate-900">{formatPriceKsh(selectedPkg.priceMinor)}</span> from{" "}
+                  <span className="font-semibold text-slate-900">{buyPhone}</span>.
+                </p>
+                <p className="mt-2 text-xs text-slate-400">Waiting for confirmation · {pollCountdown}s</p>
+                <button
+                  type="button"
+                  className={`${sheetPrimary} mt-4`}
                   onClick={async () => {
                     try {
-                      const res = await apiFetch<PurchaseStatusResponse>(
-                        `/api/v1/hotspot/${tenantSlug}/purchase/${checkoutRequestId}/status`,
-                        { skipAuth: true }
-                      );
+                      const res = await apiFetch<PurchaseStatusResponse>(`/api/v1/hotspot/${tenantSlug}/purchase/${checkoutRequestId}/status`, {
+                        skipAuth: true,
+                      });
                       if (res.status === "COMPLETED" && res.voucherCode) {
                         setPollingStatus("COMPLETED");
                         connectWithVoucher.mutate(res.voucherCode);
@@ -988,22 +979,22 @@ export default function HotspotCaptivePortalPage() {
                         setError(res.resultDesc || "Payment failed.");
                       }
                     } catch {
-                      // Ignore — polling will continue in background
+                      // Polling continues in the background.
                     }
                   }}
                 >
-                  ✓ I Have Entered My PIN
-                </Button>
-                <Button
-                  variant="outline"
-                  className="px-4 py-1.5 text-xs text-slate-300"
+                  I&apos;ve entered my PIN
+                </button>
+                <button
+                  type="button"
+                  className={`${sheetSecondary} mt-2`}
                   onClick={() => {
                     setCheckoutRequestId(null);
                     setPollingStatus(null);
                   }}
                 >
                   Cancel
-                </Button>
+                </button>
               </div>
             ) : (
               <form
@@ -1012,104 +1003,70 @@ export default function HotspotCaptivePortalPage() {
                   setError(null);
                   initiatePurchase.mutate();
                 }}
-                className="space-y-4 text-left"
               >
-                <div className="text-center pb-2 border-b border-slate-800">
-                  <span className="text-[11px] uppercase tracking-wider text-emerald-400 font-bold block">
-                    Instant Wi-Fi Purchase
-                  </span>
-                  <h3 className="text-xl font-black text-white mt-0.5">{selectedPkg.name}</h3>
-                  <div className="text-2xl font-black text-emerald-400 mt-1">
-                    {formatPriceKsh(selectedPkg.priceMinor)}
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm text-slate-500">You&apos;re buying</p>
+                    <h2 className="text-lg font-semibold text-slate-900">{selectedPkg.name}</h2>
                   </div>
+                  <p className="text-xl font-semibold tabular-nums text-slate-900">{formatPriceKsh(selectedPkg.priceMinor)}</p>
                 </div>
+                {appOnlyNotice(selectedPkg.appPolicy) && (
+                  <p className="mt-3 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2 text-sm font-medium text-amber-900">
+                    {appOnlyNotice(selectedPkg.appPolicy)}
+                  </p>
+                )}
 
-                {/* Gateway Selection Tabs */}
-                {((paymentMethods?.mpesa && paymentMethods?.pesapal) ||
-                  (paymentMethods?.mpesa && paymentMethods?.paystack) ||
-                  (paymentMethods?.pesapal && paymentMethods?.paystack)) && (
-                  <div className="grid grid-cols-3 gap-1 p-1 rounded-2xl bg-slate-950 border border-slate-800">
-                    {paymentMethods?.mpesa && (
-                      <button
-                        type="button"
-                        onClick={() => setSelectedGateway("MPESA")}
-                        className={`py-1.5 px-1.5 rounded-xl text-[11px] font-bold transition-all flex items-center justify-center gap-1 ${
-                          selectedGateway === "MPESA"
-                            ? "bg-emerald-600 text-white shadow-md"
-                            : "text-slate-400 hover:text-white"
-                        }`}
-                      >
-                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <rect x="5" y="2" width="14" height="20" rx="2" ry="2" />
-                          <line x1="12" y1="18" x2="12.01" y2="18" />
-                        </svg>
-                        <span>M-Pesa</span>
-                      </button>
-                    )}
-                    {paymentMethods?.pesapal && (
-                      <button
-                        type="button"
-                        onClick={() => setSelectedGateway("PESAPAL")}
-                        className={`py-1.5 px-1.5 rounded-xl text-[11px] font-bold transition-all flex items-center justify-center gap-1 ${
-                          selectedGateway === "PESAPAL"
-                            ? "bg-blue-600 text-white shadow-md"
-                            : "text-slate-400 hover:text-white"
-                        }`}
-                      >
-                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-                        </svg>
-                        <span>Pesapal</span>
-                      </button>
-                    )}
-                    {paymentMethods?.paystack && (
-                      <button
-                        type="button"
-                        onClick={() => setSelectedGateway("PAYSTACK")}
-                        className={`py-1.5 px-1.5 rounded-xl text-[11px] font-bold transition-all flex items-center justify-center gap-1 ${
-                          selectedGateway === "PAYSTACK"
-                            ? "bg-purple-600 text-white shadow-md"
-                            : "text-slate-400 hover:text-white"
-                        }`}
-                      >
-                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                          <rect x="2" y="5" width="20" height="14" rx="2" />
-                          <line x1="2" y1="10" x2="22" y2="10" />
-                        </svg>
-                        <span>Paystack</span>
-                      </button>
-                    )}
+                {[paymentMethods?.mpesa, paymentMethods?.pesapal, paymentMethods?.paystack].filter(Boolean).length > 1 && (
+                  <div className="mt-4 grid grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1 text-sm" role="group" aria-label="Payment method">
+                    {(
+                      [
+                        ["MPESA", "M-Pesa", paymentMethods?.mpesa],
+                        ["PESAPAL", "Pesapal", paymentMethods?.pesapal],
+                        ["PAYSTACK", "Card", paymentMethods?.paystack],
+                      ] as const
+                    )
+                      .filter(([, , enabled]) => enabled)
+                      .map(([id, label]) => (
+                        <button
+                          key={id}
+                          type="button"
+                          aria-pressed={selectedGateway === id}
+                          onClick={() => setSelectedGateway(id)}
+                          className={`rounded-lg py-2 font-medium ${selectedGateway === id ? "bg-white text-slate-900 shadow-sm" : "text-slate-500"}`}
+                        >
+                          {label}
+                        </button>
+                      ))}
                   </div>
                 )}
 
-                <div>
-                  <label htmlFor="buyPhone" className="block text-xs font-bold text-slate-200 uppercase tracking-wider mb-1.5">
-                    {selectedGateway === "MPESA" ? "M-Pesa Phone Number" : "Mobile Phone Number"}
-                  </label>
-                  <input
-                    id="buyPhone"
-                    autoFocus
-                    type="tel"
-                    placeholder="0712 345 678"
-                    value={buyPhone}
-                    onChange={(e) => setBuyPhone(e.target.value)}
-                    style={{ color: "#ffffff", backgroundColor: "#020617" }}
-                    className="w-full rounded-xl border-2 border-slate-700 bg-slate-950 px-3.5 py-2.5 text-white font-mono text-base outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 placeholder:text-slate-500 shadow-inner"
-                    required
-                  />
-                  <p className="text-[10.5px] text-slate-400 mt-1.5 font-medium">
-                    {selectedGateway === "MPESA"
-                      ? "You will receive an STK Push on this phone to enter your PIN."
-                      : selectedGateway === "PESAPAL"
-                      ? "Pay via M-Pesa, Airtel Money, Visa, or Mastercard on Pesapal."
-                      : "We'll send your voucher code to this number."}
-                  </p>
-                </div>
+                <label htmlFor="buyPhone" className={`${sheetLabel} mt-4`}>
+                  {selectedGateway === "MPESA" ? "M-Pesa number" : "Phone number"}
+                </label>
+                <input
+                  id="buyPhone"
+                  autoFocus
+                  type="tel"
+                  inputMode="tel"
+                  placeholder="0712 345 678"
+                  value={buyPhone}
+                  onChange={(e) => setBuyPhone(e.target.value)}
+                  className={sheetInput}
+                  required
+                />
+                <p className="mt-1.5 text-xs text-slate-500">
+                  {selectedGateway === "MPESA"
+                    ? "You'll get a prompt on this phone to enter your M-Pesa PIN."
+                    : selectedGateway === "PESAPAL"
+                    ? "Pay with M-Pesa, Airtel Money, Visa or Mastercard on Pesapal."
+                    : "We'll send your voucher code to this number."}
+                </p>
 
                 {(selectedGateway === "PAYSTACK" || selectedGateway === "PESAPAL") && (
-                  <div>
-                    <label htmlFor="buyEmail" className="block text-xs font-bold text-slate-200 uppercase tracking-wider mb-1.5">
-                      Email Address (Optional for Pesapal)
+                  <>
+                    <label htmlFor="buyEmail" className={`${sheetLabel} mt-4`}>
+                      Email {selectedGateway === "PESAPAL" && <span className="font-normal text-slate-400">(optional)</span>}
                     </label>
                     <input
                       id="buyEmail"
@@ -1117,300 +1074,197 @@ export default function HotspotCaptivePortalPage() {
                       placeholder="you@example.com"
                       value={buyEmail}
                       onChange={(e) => setBuyEmail(e.target.value)}
-                      style={{ color: "#ffffff", backgroundColor: "#020617" }}
-                      className="w-full rounded-xl border-2 border-slate-700 bg-slate-950 px-3.5 py-2.5 text-white text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20 placeholder:text-slate-500 shadow-inner"
+                      className={sheetInput}
                       required={selectedGateway === "PAYSTACK"}
                     />
-                    <p className="text-[10.5px] text-slate-400 mt-1.5 font-medium">
-                      Used to send your digital receipt and transaction confirmation.
-                    </p>
+                  </>
+                )}
+
+                {error && (
+                  <div className="mt-3">
+                    <SheetError>{error}</SheetError>
                   </div>
                 )}
 
-                {error && <ErrorText>{error}</ErrorText>}
-
-                <div className="flex items-center gap-2 pt-2">
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    className="flex-1 py-2 text-xs"
-                    onClick={() => setSelectedPkg(null)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="submit"
-                    disabled={
-                      initiatePurchase.isPending ||
-                      !buyPhone ||
-                      (selectedGateway === "PAYSTACK" && !buyEmail.trim())
-                    }
-                    className={`flex-1 py-2 text-xs font-black text-white shadow-lg ${
-                      selectedGateway === "PESAPAL"
-                        ? "bg-blue-600 hover:bg-blue-700"
-                        : selectedGateway === "PAYSTACK"
-                        ? "bg-purple-600 hover:bg-purple-700"
-                        : "bg-emerald-600 hover:bg-emerald-700"
-                    }`}
-                  >
-                    {initiatePurchase.isPending
-                      ? "Processing..."
-                      : selectedGateway === "PESAPAL"
-                      ? "Pay via Pesapal"
-                      : selectedGateway === "PAYSTACK"
-                      ? "Pay via Paystack"
-                      : "Pay with M-Pesa"}
-                  </Button>
-                </div>
+                <button
+                  type="submit"
+                  disabled={initiatePurchase.isPending || !buyPhone || (selectedGateway === "PAYSTACK" && !buyEmail.trim())}
+                  className={`${sheetPrimary} mt-5 ${selectedGateway === "MPESA" ? "bg-emerald-600 hover:bg-emerald-700" : ""}`}
+                >
+                  {initiatePurchase.isPending
+                    ? "Sending…"
+                    : selectedGateway === "PESAPAL"
+                    ? "Continue to Pesapal"
+                    : selectedGateway === "PAYSTACK"
+                    ? "Continue to card payment"
+                    : `Pay ${formatPriceKsh(selectedPkg.priceMinor)} with M-Pesa`}
+                </button>
+                <button type="button" className={`${sheetSecondary} mt-2`} onClick={() => setSelectedPkg(null)}>
+                  Cancel
+                </button>
               </form>
             )}
-          </div>
-        </div>
-      )}
+          </PortalSheet>
+        )}
 
-      {/* SHARED MODAL 2: VOUCHER CODE LOGIN */}
-      {showVoucherModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-sm rounded-3xl bg-slate-900 border border-purple-500/40 p-6 text-slate-100 shadow-2xl">
-            <h3 className="text-lg font-black text-white text-center mb-1">Enter Voucher Code</h3>
-            <p className="text-xs text-slate-400 text-center mb-4">
-              Type the code from your printed scratch card or receipt.
-            </p>
-
+        {/* Voucher code */}
+        {showVoucherModal && (
+          <PortalSheet title="Enter your voucher" description="The code on your printed voucher or payment message." onClose={() => setShowVoucherModal(false)}>
             <form
               onSubmit={(e) => {
                 e.preventDefault();
                 setError(null);
                 connectWithVoucher.mutate();
               }}
-              className="space-y-4"
             >
-              <div>
-                <input
-                  autoFocus
-                  placeholder="e.g. 9PMLTXCY"
-                  value={voucherCode}
-                  onChange={(e) => setVoucherCode(e.target.value.toUpperCase())}
-                  style={{ color: "#fef08a", backgroundColor: "#020617" }}
-                  className="w-full rounded-xl border-2 border-purple-500/60 bg-slate-950 px-3.5 py-3 text-center font-mono text-xl font-black tracking-widest uppercase text-amber-300 outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-400/20 placeholder:text-slate-600 shadow-inner"
-                  required
-                />
-              </div>
-
-              {error && <ErrorText>{error}</ErrorText>}
-
-              <div className="flex items-center gap-2 pt-1">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="flex-1 py-2 text-xs"
-                  onClick={() => setShowVoucherModal(false)}
-                >
-                  Close
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={connectWithVoucher.isPending || !voucherCode}
-                  className="flex-1 py-2 text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white"
-                >
-                  {connectWithVoucher.isPending ? "Connecting..." : "Connect"}
-                </Button>
-              </div>
+              <input
+                autoFocus
+                aria-label="Voucher code"
+                placeholder="e.g. 9PMLTXCY"
+                autoCapitalize="characters"
+                autoComplete="off"
+                value={voucherCode}
+                onChange={(e) => setVoucherCode(e.target.value.toUpperCase())}
+                className={`${sheetInput} text-center font-mono text-xl tracking-[0.2em]`}
+                required
+              />
+              {error && (
+                <div className="mt-3">
+                  <SheetError>{error}</SheetError>
+                </div>
+              )}
+              <button type="submit" disabled={connectWithVoucher.isPending || !voucherCode} className={`${sheetPrimary} mt-4`}>
+                {connectWithVoucher.isPending ? "Connecting…" : "Connect"}
+              </button>
+              <button type="button" className={`${sheetSecondary} mt-2`} onClick={() => setShowVoucherModal(false)}>
+                Cancel
+              </button>
             </form>
-          </div>
-        </div>
-      )}
+          </PortalSheet>
+        )}
 
-      {/* SHARED MODAL 3: SUBSCRIBER ACCOUNT LOGIN */}
-      {showAccountModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-sm rounded-3xl bg-slate-900 border border-blue-500/40 p-6 text-slate-100 shadow-2xl">
-            <h3 className="text-lg font-black text-white text-center mb-1">Subscriber Account Login</h3>
-            <p className="text-xs text-slate-400 text-center mb-4">
-              Sign in with your ISP account credentials to access hotspot WiFi.
-            </p>
-
+        {/* Subscriber account */}
+        {showAccountModal && (
+          <PortalSheet title="Account login" description="Sign in with the account your internet provider gave you." onClose={() => setShowAccountModal(false)}>
             <form
               onSubmit={(e) => {
                 e.preventDefault();
                 setError(null);
                 connectWithAccount.mutate();
               }}
-              className="space-y-3"
             >
-              <div>
-                <label htmlFor="accountPhone" className="block text-xs font-bold text-slate-200 uppercase tracking-wider mb-1.5">
-                  Phone Number
-                </label>
-                <input
-                  id="accountPhone"
-                  autoFocus
-                  placeholder="0712 345 678"
-                  value={accountPhone}
-                  onChange={(e) => setAccountPhone(e.target.value)}
-                  style={{ color: "#ffffff", backgroundColor: "#020617" }}
-                  className="w-full rounded-xl border-2 border-slate-700 bg-slate-950 px-3.5 py-2.5 text-white font-mono text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20 placeholder:text-slate-500 shadow-inner"
-                  required
-                />
-              </div>
-
-              <div>
-                <label htmlFor="accountPassword" className="block text-xs font-bold text-slate-200 uppercase tracking-wider mb-1.5">
-                  Password
-                </label>
-                <input
-                  id="accountPassword"
-                  type="password"
-                  placeholder="Your account password"
-                  value={accountPassword}
-                  onChange={(e) => setAccountPassword(e.target.value)}
-                  style={{ color: "#ffffff", backgroundColor: "#020617" }}
-                  className="w-full rounded-xl border-2 border-slate-700 bg-slate-950 px-3.5 py-2.5 text-white text-sm outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-400/20 placeholder:text-slate-500 shadow-inner"
-                  required
-                />
-              </div>
-
-              {error && <ErrorText>{error}</ErrorText>}
-
-              <div className="flex items-center gap-2 pt-2">
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="flex-1 py-2 text-xs"
-                  onClick={() => setShowAccountModal(false)}
-                >
-                  Close
-                </Button>
-                <Button
-                  type="submit"
-                  disabled={connectWithAccount.isPending || !accountPhone || !accountPassword}
-                  className="flex-1 py-2 text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white"
-                >
-                  {connectWithAccount.isPending ? "Signing in..." : "Sign In & Connect"}
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* SHARED MODAL 4: PAY FOR TV / SMART DEVICE */}
-      {showTvModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-sm rounded-3xl bg-slate-900 border border-slate-700 p-6 text-slate-100 shadow-2xl text-center">
-            <div className="text-3xl mb-2">📺</div>
-            <h3 className="text-lg font-black text-white">Connect Smart TV / Console</h3>
-            <p className="text-xs text-slate-300 mt-2 leading-relaxed">
-              To connect a Smart TV or console that cannot open a browser, buy a package on your phone and enter the TV&apos;s MAC address or use your voucher code directly.
-            </p>
-            <div className="mt-4">
-              <Button
-                variant="secondary"
-                className="w-full py-2 text-xs"
-                onClick={() => setShowTvModal(false)}
-              >
-                Close
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* SHARED MODAL 5: CONTACT SUPPORT */}
-      {showSupportModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-xs">
-          <div className="w-full max-w-sm rounded-3xl bg-slate-900 border border-slate-700 p-6 text-slate-100 shadow-2xl">
-            {supportSent ? (
-              <div className="text-center py-3">
-                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500 text-slate-950 text-2xl font-black mb-2">
-                  ✓
+              <label htmlFor="accountPhone" className={sheetLabel}>
+                Phone number
+              </label>
+              <input
+                id="accountPhone"
+                autoFocus
+                inputMode="tel"
+                placeholder="0712 345 678"
+                value={accountPhone}
+                onChange={(e) => setAccountPhone(e.target.value)}
+                className={sheetInput}
+                required
+              />
+              <label htmlFor="accountPassword" className={`${sheetLabel} mt-3`}>
+                Password
+              </label>
+              <input
+                id="accountPassword"
+                type="password"
+                value={accountPassword}
+                onChange={(e) => setAccountPassword(e.target.value)}
+                className={sheetInput}
+                required
+              />
+              {error && (
+                <div className="mt-3">
+                  <SheetError>{error}</SheetError>
                 </div>
-                <h3 className="text-lg font-black text-white">Message Sent</h3>
-                <p className="text-xs text-slate-300 mt-1">
-                  Our support team will get back to you shortly.
-                </p>
-                <Button
-                  variant="secondary"
-                  className="w-full py-2 text-xs mt-4"
-                  onClick={() => setShowSupportModal(false)}
-                >
-                  Close
-                </Button>
-              </div>
+              )}
+              <button type="submit" disabled={connectWithAccount.isPending || !accountPhone || !accountPassword} className={`${sheetPrimary} mt-4`}>
+                {connectWithAccount.isPending ? "Signing in…" : "Sign in and connect"}
+              </button>
+              <button type="button" className={`${sheetSecondary} mt-2`} onClick={() => setShowAccountModal(false)}>
+                Cancel
+              </button>
+            </form>
+          </PortalSheet>
+        )}
+
+        {/* TV / console */}
+        {showTvModal && (
+          <PortalSheet
+            title="Connect a TV or console"
+            description="Devices without a browser can't open this page. Buy a package on your phone, then enter the voucher code on the device, or ask support to add the device."
+            onClose={() => setShowTvModal(false)}
+          >
+            <button type="button" className={sheetPrimary} onClick={() => setShowTvModal(false)}>
+              Got it
+            </button>
+          </PortalSheet>
+        )}
+
+        {/* Contact support */}
+        {showSupportModal && (
+          <PortalSheet
+            title={supportSent ? "Message sent" : "Contact support"}
+            description={supportSent ? "We'll get back to you shortly." : "Tell us what's wrong and we'll follow up."}
+            onClose={() => setShowSupportModal(false)}
+          >
+            {supportSent ? (
+              <button type="button" className={sheetPrimary} onClick={() => setShowSupportModal(false)}>
+                Close
+              </button>
             ) : (
-              <>
-                <h3 className="text-lg font-black text-white text-center mb-1">Contact Support</h3>
-                <p className="text-xs text-slate-400 text-center mb-4">
-                  Having an issue? Tell us what&apos;s wrong and we&apos;ll follow up.
-                </p>
-                <form
-                  onSubmit={(e) => {
-                    e.preventDefault();
-                    setError(null);
-                    submitSupportTicket.mutate();
-                  }}
-                  className="space-y-3"
-                >
-                  <div>
-                    <Label htmlFor="supportName">Your Name</Label>
-                    <Input
-                      id="supportName"
-                      value={supportName}
-                      onChange={(e) => setSupportName(e.target.value)}
-                      style={{ color: "#ffffff", backgroundColor: "#020617" }}
-                      className="w-full rounded-xl border-2 border-slate-700 bg-slate-950 px-3.5 py-2.5 text-white text-sm outline-none focus:border-brand-400"
-                      required
-                    />
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  setError(null);
+                  submitSupportTicket.mutate();
+                }}
+              >
+                <label htmlFor="supportName" className={sheetLabel}>
+                  Your name
+                </label>
+                <input id="supportName" value={supportName} onChange={(e) => setSupportName(e.target.value)} className={sheetInput} required />
+                <label htmlFor="supportPhone" className={`${sheetLabel} mt-3`}>
+                  Phone number <span className="font-normal text-slate-400">(optional)</span>
+                </label>
+                <input
+                  id="supportPhone"
+                  inputMode="tel"
+                  placeholder="0712 345 678"
+                  value={supportPhone}
+                  onChange={(e) => setSupportPhone(e.target.value)}
+                  className={sheetInput}
+                />
+                <label htmlFor="supportMessage" className={`${sheetLabel} mt-3`}>
+                  What&apos;s the problem?
+                </label>
+                <textarea
+                  id="supportMessage"
+                  rows={3}
+                  value={supportMessage}
+                  onChange={(e) => setSupportMessage(e.target.value)}
+                  className={`${sheetInput} text-sm`}
+                  required
+                />
+                {error && (
+                  <div className="mt-3">
+                    <SheetError>{error}</SheetError>
                   </div>
-                  <div>
-                    <Label htmlFor="supportPhone">Phone Number (optional)</Label>
-                    <Input
-                      id="supportPhone"
-                      placeholder="0712 345 678"
-                      value={supportPhone}
-                      onChange={(e) => setSupportPhone(e.target.value)}
-                      style={{ color: "#ffffff", backgroundColor: "#020617" }}
-                      className="w-full rounded-xl border-2 border-slate-700 bg-slate-950 px-3.5 py-2.5 text-white text-sm outline-none focus:border-brand-400"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="supportMessage">What&apos;s the issue?</Label>
-                    <textarea
-                      id="supportMessage"
-                      value={supportMessage}
-                      onChange={(e) => setSupportMessage(e.target.value)}
-                      rows={3}
-                      style={{ color: "#ffffff", backgroundColor: "#020617" }}
-                      className="w-full rounded-xl border-2 border-slate-700 bg-slate-950 px-3.5 py-2.5 text-white text-sm outline-none focus:border-brand-400"
-                      required
-                    />
-                  </div>
-
-                  {error && <ErrorText>{error}</ErrorText>}
-
-                  <div className="flex items-center gap-2 pt-1">
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      className="flex-1 py-2 text-xs"
-                      onClick={() => setShowSupportModal(false)}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="submit"
-                      disabled={submitSupportTicket.isPending}
-                      className="flex-1 py-2 text-xs font-bold"
-                    >
-                      {submitSupportTicket.isPending ? "Sending..." : "Send"}
-                    </Button>
-                  </div>
-                </form>
-              </>
+                )}
+                <button type="submit" disabled={submitSupportTicket.isPending} className={`${sheetPrimary} mt-4`}>
+                  {submitSupportTicket.isPending ? "Sending…" : "Send message"}
+                </button>
+                <button type="button" className={`${sheetSecondary} mt-2`} onClick={() => setShowSupportModal(false)}>
+                  Cancel
+                </button>
+              </form>
             )}
-          </div>
-        </div>
-      )}
+          </PortalSheet>
+        )}
       </div>
     </CaptivePortalPluginContainer>
   );

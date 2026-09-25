@@ -1,4 +1,5 @@
-import { RouterOSClient } from "./routeros-client.js";
+import { RouterOSClient, assertNoTrap } from "./routeros-client.js";
+import { ANTI_TUNNEL_RESULT_VAR, ANTI_TUNNEL_TAG, antiTunnelRules, buildAntiTunnelScript } from "../anti-tunnel.js";
 import type {
   NetworkDeviceAdapter,
   NetworkUserSpec,
@@ -35,7 +36,15 @@ export class MikroTikAdapter implements NetworkDeviceAdapter {
       useTls: this.credentials.useTls,
     });
     await client.connect();
-    await client.login(this.credentials.username, this.credentials.password);
+    try {
+      await client.login(this.credentials.username, this.credentials.password);
+    } catch (err) {
+      // A failed or timed-out login must close its socket. Left open, RouterOS keeps the session
+      // (an "api-login" job) alive; with the health poll retrying, those pile up until a small
+      // router like a hAP lite sits at 100% CPU and stops serving its hotspot.
+      client.disconnect();
+      throw err;
+    }
     this.client = client;
   }
 
@@ -427,199 +436,40 @@ export class MikroTikAdapter implements NetworkDeviceAdapter {
     };
   }
 
-  async enableAntiVpnShield(): Promise<{ success: boolean; message: string }> {
+  /** How many of "Block tunnelling apps"'s rules the router holds. */
+  private async countAntiTunnelRules(): Promise<number> {
     const client = this.requireClient();
+    const filter = await client.print(["/ip/firewall/filter/print", `?comment=${ANTI_TUNNEL_TAG}`]);
+    const nat = await client.print(["/ip/firewall/nat/print", `?comment=${ANTI_TUNNEL_TAG}`]);
+    return filter.length + nat.length;
+  }
 
-    // 1. Remove previous rules commented with MASHUPKGRID ANTI-VPN or MASHUPKGRID ANTI-TUNNEL
-    const oldFilters = await client.print(["/ip/firewall/filter/print"]).catch(() => []);
-    for (const rule of oldFilters) {
-      const comment = (rule["comment"] || "").toLowerCase();
-      if (comment.includes("anti-vpn") || comment.includes("anti-tunnel")) {
-        if (rule[".id"]) {
-          await client.talk(["/ip/firewall/filter/remove", `=.id=${rule[".id"]}`]).catch(() => {});
-        }
-      }
-    }
+  /** Starts turning "Block tunnelling apps" on or off (see anti-tunnel.ts). The router runs the
+   *  change as one background script, all or nothing; on a hAP lite that takes a minute or more,
+   *  so this returns as soon as it has started. Follow it with getAntiTunnelStatus. */
+  async startAntiTunnelShield(enabled: boolean): Promise<{ started: boolean }> {
+    const expected = enabled ? antiTunnelRules().length : 0;
+    // Already exactly as asked: rewriting the firewall again would only cost a small router minutes.
+    if (enabled && (await this.countAntiTunnelRules().catch(() => -1)) === expected) return { started: false };
+    await this.requireClient().talk(["/execute", `=script=${buildAntiTunnelScript(enabled)}`]);
+    return { started: true };
+  }
 
-    const oldNats = await client.print(["/ip/firewall/nat/print"]).catch(() => []);
-    for (const rule of oldNats) {
-      const comment = (rule["comment"] || "").toLowerCase();
-      if (comment.includes("anti-vpn")) {
-        if (rule[".id"]) {
-          await client.talk(["/ip/firewall/nat/remove", `=.id=${rule[".id"]}`]).catch(() => {});
-        }
-      }
-    }
-
-    // 2. Add DNS hijack to router local proxy (kills SlowDNS, iodine, dnscat)
-    await client.talk([
-      "/ip/firewall/nat/add",
-      "=chain=dstnat",
-      "=protocol=udp",
-      "=dst-port=53",
-      "=hotspot=!auth",
-      "=action=redirect",
-      "=to-ports=53",
-      "=comment=MASHUPKGRID ANTI-VPN",
-    ]).catch(() => {});
-
-    await client.talk([
-      "/ip/firewall/nat/add",
-      "=chain=dstnat",
-      "=protocol=tcp",
-      "=dst-port=53",
-      "=hotspot=!auth",
-      "=action=redirect",
-      "=to-ports=53",
-      "=comment=MASHUPKGRID ANTI-VPN",
-    ]).catch(() => {});
-
-    // 3. Drop outbound DNS forwarded to foreign servers
-    await client.talk([
-      "/ip/firewall/filter/add",
-      "=chain=forward",
-      "=protocol=udp",
-      "=dst-port=53",
-      "=hotspot=!auth",
-      "=action=drop",
-      "=comment=MASHUPKGRID ANTI-VPN",
-    ]).catch(() => {});
-
-    await client.talk([
-      "/ip/firewall/filter/add",
-      "=chain=forward",
-      "=protocol=tcp",
-      "=dst-port=53",
-      "=hotspot=!auth",
-      "=action=drop",
-      "=comment=MASHUPKGRID ANTI-VPN",
-    ]).catch(() => {});
-
-    // 4. Drop outbound UDP tunnels from unauthenticated devices (WireGuard, OpenVPN UDP, V2Ray UDP)
-    await client.talk([
-      "/ip/firewall/filter/add",
-      "=chain=forward",
-      "=protocol=udp",
-      "=hotspot=!auth",
-      "=action=drop",
-      "=comment=MASHUPKGRID ANTI-VPN",
-    ]).catch(() => {});
-
-    // 5. Drop common VPN TCP ports from unauthenticated devices
-    await client.talk([
-      "/ip/firewall/filter/add",
-      "=chain=forward",
-      "=protocol=tcp",
-      "=dst-port=22,1194,3128,8080,8443,8888,51820,9000-65535",
-      "=hotspot=!auth",
-      "=action=drop",
-      "=comment=MASHUPKGRID ANTI-VPN",
-    ]).catch(() => {});
-
-    // 6. BLOCK WEBSOCKET TUNNELS (Kills HA Tunnel Plus & HTTP Injector over Cloudflare CDN)
-    await client.talk([
-      "/ip/firewall/filter/add",
-      "=chain=forward",
-      "=protocol=tcp",
-      "=content=websocket",
-      "=hotspot=!auth",
-      "=action=drop",
-      "=comment=MASHUPKGRID ANTI-VPN",
-    ]).catch(() => {});
-
-    await client.talk([
-      "/ip/firewall/filter/add",
-      "=chain=forward",
-      "=protocol=tcp",
-      "=content=Upgrade: websocket",
-      "=hotspot=!auth",
-      "=action=drop",
-      "=comment=MASHUPKGRID ANTI-VPN",
-    ]).catch(() => {});
-
-    await client.talk([
-      "/ip/firewall/filter/add",
-      "=chain=forward",
-      "=protocol=tcp",
-      "=content=Sec-WebSocket",
-      "=hotspot=!auth",
-      "=action=drop",
-      "=comment=MASHUPKGRID ANTI-VPN",
-    ]).catch(() => {});
-
-    // 7. BLOCK SSH TUNNELS (Kills SSH over port 443/80)
-    await client.talk([
-      "/ip/firewall/filter/add",
-      "=chain=forward",
-      "=protocol=tcp",
-      "=content=SSH-",
-      "=hotspot=!auth",
-      "=action=drop",
-      "=comment=MASHUPKGRID ANTI-VPN",
-    ]).catch(() => {});
-
-    // 8. BLOCK HTTP INJECTOR PROXY TUNNELS (Kills HTTP CONNECT proxying)
-    await client.talk([
-      "/ip/firewall/filter/add",
-      "=chain=forward",
-      "=protocol=tcp",
-      "=content=CONNECT ",
-      "=hotspot=!auth",
-      "=action=drop",
-      "=comment=MASHUPKGRID ANTI-VPN",
-    ]).catch(() => {});
-
-    // 9. LIMIT PERSISTENT DATA TRANSFERS (Captive portal never downloads large continuous streams)
-    // Drops any single unauthenticated connection transferring more than 3 Megabytes
-    await client.talk([
-      "/ip/firewall/filter/add",
-      "=chain=forward",
-      "=protocol=tcp",
-      "=connection-bytes=3000000-0",
-      "=hotspot=!auth",
-      "=action=drop",
-      "=comment=MASHUPKGRID ANTI-VPN",
-    ]).catch(() => {});
-
-    // 10. Limit concurrent connections per unauthenticated IP (stops multi-connection flood tunnels)
-    await client.talk([
-      "/ip/firewall/filter/add",
-      "=chain=forward",
-      "=protocol=tcp",
-      "=hotspot=!auth",
-      "=connection-limit=6,32",
-      "=action=drop",
-      "=comment=MASHUPKGRID ANTI-VPN",
-    ]).catch(() => {});
-
-    // 11. Drop ICMP ping tunneling
-    await client.talk([
-      "/ip/firewall/filter/add",
-      "=chain=forward",
-      "=protocol=icmp",
-      "=hotspot=!auth",
-      "=action=drop",
-      "=comment=MASHUPKGRID ANTI-VPN",
-    ]).catch(() => {});
-
-    // 12. Move all newly created filter and NAT rules to top of chains (destination=0)
-    const newFilters = await client.print(["/ip/firewall/filter/print"]).catch(() => []);
-    for (const rule of newFilters) {
-      if ((rule["comment"] || "").includes("MASHUPKGRID ANTI-VPN") && rule[".id"]) {
-        await client.talk(["/ip/firewall/filter/move", `=numbers=${rule[".id"]}`, "=destination=0"]).catch(() => {});
-      }
-    }
-    const newNats = await client.print(["/ip/firewall/nat/print"]).catch(() => []);
-    for (const rule of newNats) {
-      if ((rule["comment"] || "").includes("MASHUPKGRID ANTI-VPN") && rule[".id"]) {
-        await client.talk(["/ip/firewall/nat/move", `=numbers=${rule[".id"]}`, "=destination=0"]).catch(() => {});
-      }
-    }
-
-    return {
-      success: true,
-      message: "Bulletproof Anti-VPN Shield active: Blocked Cloudflare WebSocket tunnels, SSH tunnels, SlowDNS, UDP tunnels, and persistent streaming leaks.",
-    };
+  /** Where the last change got to, from what the router itself recorded. "unknown" when the router
+   *  is too busy to answer right now, which is normal while it rewrites its firewall. */
+  async getAntiTunnelStatus(): Promise<{ state: "applying" | "done" | "failed" | "unknown"; rules: number | null; expected: number }> {
+    const client = this.requireClient();
+    const expected = antiTunnelRules().length;
+    const env = await client.print(["/system/script/environment/print", `?name=${ANTI_TUNNEL_RESULT_VAR}`]).catch(() => null);
+    if (env === null) return { state: "unknown", rules: null, expected };
+    const value = env[0]?.["value"];
+    const rules = await this.countAntiTunnelRules().catch(() => null);
+    if (value === "running") return { state: "applying", rules, expected };
+    if (value === "failed") return { state: "failed", rules, expected };
+    // "done" only from the router's own "ok" plus a rule count we could read. No record at all
+    // means the script never ran (or the router restarted): that is not a finished change.
+    if (value === "ok" && rules !== null) return { state: "done", rules, expected };
+    return { state: "unknown", rules, expected };
   }
 
   async enablePcqFairQueue(): Promise<{ success: boolean; message: string }> {
@@ -684,6 +534,126 @@ export class MikroTikAdapter implements NetworkDeviceAdapter {
       success: true,
       message: "Dynamic Fair-Share (PCQ) Bandwidth Shaper activated across the router!",
     };
+  }
+
+  /**
+   * Makes sure the router still has what its setup script gave it for the hotspot, repairing it
+   * over the API when it doesn't — so a setup that was cut short, or settings changed by hand,
+   * fix themselves without the operator touching the terminal:
+   *  - hotspot/login.html, the page that sends customers to the branded portal (without it the
+   *    router shows MikroTik's stock sign-in page);
+   *  - exactly one platform RADIUS server, at `radiusHost`, with the router's shared secret.
+   * Returns what it changed (empty when nothing needed fixing).
+   */
+  async ensureHotspotProvisioning(opts: {
+    loginTemplateUrl: string;
+    radiusHost: string;
+    radiusSecret: string;
+    /** RADIUS addresses the platform used before (e.g. its old default) — removed when stale. */
+    retiredRadiusHosts?: string[];
+    /** Hosts an unauthenticated customer must reach: the portal the login page redirects to and
+     *  the API it calls. Missing from the walled garden, the redirect lands on a blocked page and
+     *  the customer never sees a sign-in screen. IPs and hostnames both accepted. */
+    walledGardenHosts?: string[];
+    /** The per-app package filter (see app-filter.ts): installed when its rules are missing. */
+    appFilter?: { scriptUrl: string; tag: string; expectedRules: number };
+  }): Promise<string[]> {
+    const client = this.requireClient();
+    const changes: string[] = [];
+
+    // Login by MAC, so a phone that has paid is logged back in when it reconnects. Added to the
+    // RADIUS hotspot profiles of routers set up before this existed.
+    const profiles = await client.print(["/ip/hotspot/profile/print"]).catch(() => []);
+    for (const profile of profiles) {
+      const loginBy = (profile["login-by"] ?? "").split(",").filter(Boolean);
+      if (profile["use-radius"] !== "true" || loginBy.includes("mac") || !profile[".id"]) continue;
+      await client.talk(["/ip/hotspot/profile/set", `=.id=${profile[".id"]}`, `=login-by=${["mac", ...loginBy].join(",")}`]);
+      changes.push(`turned on login by MAC for hotspot profile ${profile["name"] ?? profile[".id"]}`);
+    }
+
+    if (opts.appFilter) {
+      const rules = await client.print(["/ip/firewall/filter/print", `?comment=${opts.appFilter.tag}`]).catch(() => null);
+      if (rules !== null && rules.length < opts.appFilter.expectedRules) {
+        // Download and import both run on the router in the background: on a busy hAP lite the
+        // fetch alone can outlast an API call's timeout, and the import takes ~20 s. A dropped API
+        // session must not cut either short.
+        const script = `:do {/tool fetch url="${opts.appFilter.scriptUrl}" dst-path=mkg-app-filter.rsc check-certificate=no; :delay 2s; /import mkg-app-filter.rsc} on-error={:log warning "MASHUPKGRID per-app filter install failed"}`;
+        await client.talk(["/execute", `=script=${script}`]);
+        changes.push(`installed the per-app package filter (had ${rules.length} of ${opts.appFilter.expectedRules} rules)`);
+      }
+    }
+
+    if (opts.walledGardenHosts?.length) {
+      const ipEntries = await client.print(["/ip/hotspot/walled-garden/ip/print"]);
+      const httpEntries = await client.print(["/ip/hotspot/walled-garden/print"]);
+      for (const host of [...new Set(opts.walledGardenHosts)]) {
+        const isIp = /^\d{1,3}(\.\d{1,3}){3}$/.test(host);
+        if (isIp) {
+          if (!ipEntries.some((e) => e["dst-address"] === host)) {
+            assertNoTrap(await client.talk(["/ip/hotspot/walled-garden/ip/add", `=dst-address=${host}`, "=action=accept", "=comment=MASHUPKGRID"]), "walled-garden ip add");
+            changes.push(`allowed ${host} before login`);
+          }
+          continue;
+        }
+        if (!httpEntries.some((e) => e["dst-host"] === host)) {
+          assertNoTrap(await client.talk(["/ip/hotspot/walled-garden/add", `=dst-host=${host}`, "=action=allow", "=comment=MASHUPKGRID"]), "walled-garden add");
+          changes.push(`allowed ${host} before login`);
+        }
+        if (!host.includes("*") && !ipEntries.some((e) => e["dst-host"] === host)) {
+          assertNoTrap(await client.talk(["/ip/hotspot/walled-garden/ip/add", `=dst-host=${host}`, "=action=accept", "=comment=MASHUPKGRID"]), "walled-garden ip add");
+        }
+      }
+    }
+
+    // Older setup scripts opened the API and WinBox to the whole internet. Once the restricted
+    // management rule exists (current script), those leftovers are pure exposure — remove them.
+    // Never before: without the new rule, removing them could cut the platform off the router.
+    const filters = await client.print(["/ip/firewall/filter/print", "=.proplist=.id,comment"]);
+    if (filters.some((f) => f["comment"] === "MASHUPKGRID MANAGEMENT")) {
+      for (const f of filters) {
+        if ((f["comment"] === "MASHUPKGRID ISP API" || f["comment"] === "MASHUPKGRID WINBOX REMOTE") && f[".id"]) {
+          assertNoTrap(await client.talk(["/ip/firewall/filter/remove", `=.id=${f[".id"]}`]), "/ip/firewall/filter/remove");
+          changes.push(`removed internet-open rule "${f["comment"]}"`);
+        }
+      }
+    }
+
+    const loginPage = await client.print(["/file/print", "?name=hotspot/login.html"]);
+    if (loginPage.length === 0) {
+      assertNoTrap(
+        await client.talk(["/tool/fetch", `=url=${opts.loginTemplateUrl}`, "=dst-path=hotspot/login.html", "=check-certificate=no"]),
+        "/tool/fetch login.html"
+      );
+      changes.push("downloaded hotspot/login.html");
+    }
+
+    const servers = await client.print(["/radius/print"]);
+    const retired = new Set(opts.retiredRadiusHosts ?? []);
+    for (const s of servers) {
+      const ours = s["comment"] === "MASHUPKGRID" || retired.has(s["address"] ?? "");
+      if (ours && s["address"] !== opts.radiusHost && s[".id"]) {
+        assertNoTrap(await client.talk(["/radius/remove", `=.id=${s[".id"]}`]), "/radius/remove");
+        changes.push(`removed stale RADIUS ${s["address"]}`);
+      }
+    }
+    const current = servers.find((s) => s["address"] === opts.radiusHost);
+    if (!current) {
+      assertNoTrap(
+        await client.talk([
+          "/radius/add",
+          "=service=ppp,hotspot",
+          `=address=${opts.radiusHost}`,
+          `=secret=${opts.radiusSecret}`,
+          "=authentication-port=1812",
+          "=accounting-port=1813",
+          "=timeout=3s",
+          "=comment=MASHUPKGRID",
+        ]),
+        "/radius/add"
+      );
+      changes.push(`added RADIUS ${opts.radiusHost}`);
+    }
+    return changes;
   }
 
   async enableSafeFamilyDns(familyMode = true): Promise<{ success: boolean; message: string; servers: string }> {

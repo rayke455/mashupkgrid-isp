@@ -72,9 +72,6 @@ export default function SettingsPage() {
   const [currency, setCurrency] = useState("");
   const [brandColor, setBrandColor] = useState(DEFAULT_BRAND_COLOR);
   const [logoUrl, setLogoUrl] = useState("");
-  const [customDomain, setCustomDomain] = useState("");
-  const [domainVerified, setDomainVerified] = useState(false);
-  const [verifyingDomain, setVerifyingDomain] = useState(false);
   const [renewPhone, setRenewPhone] = useState("");
   const [showRenewModal, setShowRenewModal] = useState(false);
   const [stkSent, setStkSent] = useState(false);
@@ -100,7 +97,7 @@ export default function SettingsPage() {
     enabled: !isSuperAdmin,
   });
 
-  const { data: billing } = useQuery({
+  const { data: billing, isLoading: billingLoading } = useQuery({
     queryKey: ["billing"],
     queryFn: () => apiFetch<BillingData>("/api/v1/billing"),
     enabled: !isSuperAdmin,
@@ -182,16 +179,6 @@ export default function SettingsPage() {
     onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to initiate M-Pesa renewal"),
   });
 
-  const handleVerifyDomain = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!customDomain) return;
-    setVerifyingDomain(true);
-    setTimeout(() => {
-      setVerifyingDomain(false);
-      setDomainVerified(true);
-    }, 1400);
-  };
-
   if (isSuperAdmin) {
     return (
       <div className="max-w-2xl space-y-6">
@@ -217,106 +204,75 @@ export default function SettingsPage() {
 
   const custUsed = billing?.usage?.customers?.used ?? 0;
   const custLimit = billing?.usage?.customers?.limit;
-  const custPercent = custLimit ? Math.min(100, Math.round((custUsed / custLimit) * 100)) : 15;
+  const custPercent = custLimit ? Math.min(100, Math.round((custUsed / custLimit) * 100)) : 0;
 
   const routerUsed = billing?.usage?.routers?.used ?? 0;
   const routerLimit = billing?.usage?.routers?.limit;
-  const routerPercent = routerLimit ? Math.min(100, Math.round((routerUsed / routerLimit) * 100)) : 25;
+  const routerPercent = routerLimit ? Math.min(100, Math.round((routerUsed / routerLimit) * 100)) : 0;
+
+  const plan = billing?.subscription;
+  // Usage bars only where there is a limit to fill; "Unlimited" has nothing to measure against.
+  const usageRows = [
+    { label: "Subscribers", hint: "PPPoE and hotspot accounts", used: custUsed, limit: custLimit, percent: custPercent },
+    { label: "Routers", hint: "MikroTik routers", used: routerUsed, limit: routerLimit, percent: routerPercent },
+  ];
 
   return (
     <div className="max-w-3xl space-y-6">
-      {/* Header */}
       <div>
-        <h2 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-          Organization Settings &amp; Quotas
-        </h2>
-        <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-          Manage your ISP branding, custom domain, and subscription plan limits.
-        </p>
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">Organization</h1>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Your business details, branding, plan and web address.</p>
       </div>
 
-      {/* 1. SUBSCRIPTION & RESOURCE QUOTAS CARD */}
-      <Card className="p-6 space-y-5 border-slate-800 bg-slate-950/80 shadow-xl">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-800">
+      <Card className="space-y-5 p-6">
+        <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
           <div>
-            <div className="flex items-center gap-2">
-              <Badge variant="info">Current Subscription</Badge>
-              <span className="font-mono text-xs text-emerald-400 font-bold">
-                {billing?.subscription?.plan?.name ?? "Starter WISP Tier"}
-              </span>
-            </div>
-            <p className="text-xs text-slate-400 mt-1">
-              Active Billing Cycle: <strong className="text-white">{billing?.subscription?.billingCycle ?? "MONTHLY"}</strong> · Status: <span className="text-emerald-400 font-bold">{billing?.subscription?.status ?? "ACTIVE"}</span>
-            </p>
+            <p className="text-sm text-slate-400">Plan</p>
+            {plan ? (
+              <p className="mt-0.5 text-[15px] font-semibold text-white">
+                {plan.plan?.name ?? "Current plan"}
+                <span className="ml-2 text-sm font-normal text-slate-400">
+                  {[plan.billingCycle?.toLowerCase(), plan.status?.toLowerCase()].filter(Boolean).join(" · ")}
+                </span>
+              </p>
+            ) : (
+              <p className="mt-0.5 text-[15px] font-semibold text-white">{billingLoading ? "Loading…" : "No active plan"}</p>
+            )}
           </div>
-
-          <Button
-            onClick={() => setShowRenewModal(true)}
-            className="text-xs font-bold bg-emerald-600 hover:bg-emerald-500 shadow-glow-emerald gap-1.5 self-start sm:self-auto"
-          >
+          <Button onClick={() => setShowRenewModal(true)} className="gap-1.5 self-start text-sm sm:self-auto">
             <IconMpesa size={14} />
-            <span>Renew / Upgrade via M-Pesa</span>
+            <span>Renew with M-Pesa</span>
           </Button>
         </div>
 
-        {/* Quota Progress Bars */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs font-mono">
-          {/* Customer Quota */}
-          <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2">
-            <div className="flex justify-between text-slate-400">
-              <span>Active Subscribers:</span>
-              <span className="font-bold text-white">
-                {custUsed} / {custLimit ? `${custLimit} limit` : "Unlimited"}
-              </span>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {usageRows.map((row) => (
+            <div key={row.label} className="space-y-2 rounded-lg border border-obsidian-800 bg-obsidian-950 p-4">
+              <div className="flex justify-between text-sm">
+                <span className="text-slate-400">{row.label}</span>
+                <span className="font-medium tabular-nums text-white">
+                  {row.used} {row.limit ? `of ${row.limit}` : "· no limit"}
+                </span>
+              </div>
+              {row.limit ? (
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-obsidian-800">
+                  <div
+                    className={`h-full ${row.percent > 85 ? "bg-rose-500" : row.percent > 60 ? "bg-amber-500" : "bg-brand-500"}`}
+                    style={{ width: `${row.percent}%` }}
+                  />
+                </div>
+              ) : null}
+              <p className="text-xs text-slate-500">{row.hint}</p>
             </div>
-            <div className="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-800">
-              <div
-                className={`h-full transition-all duration-500 ${
-                  custPercent > 85 ? "bg-rose-500" : custPercent > 60 ? "bg-amber-500" : "bg-cyan-500"
-                }`}
-                style={{ width: `${custPercent}%` }}
-              />
-            </div>
-            <div className="text-[10px] text-slate-500 flex justify-between">
-              <span>PPPoE &amp; Hotspot Accounts</span>
-              <span>{custPercent}% Utilized</span>
-            </div>
-          </div>
-
-          {/* Router Quota */}
-          <div className="p-4 rounded-xl bg-slate-900/80 border border-slate-800 space-y-2">
-            <div className="flex justify-between text-slate-400">
-              <span>MikroTik Gateways:</span>
-              <span className="font-bold text-white">
-                {routerUsed} / {routerLimit ? `${routerLimit} limit` : "Unlimited"}
-              </span>
-            </div>
-            <div className="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-800">
-              <div
-                className={`h-full transition-all duration-500 ${
-                  routerPercent > 85 ? "bg-rose-500" : routerPercent > 60 ? "bg-amber-500" : "bg-emerald-500"
-                }`}
-                style={{ width: `${routerPercent}%` }}
-              />
-            </div>
-            <div className="text-[10px] text-slate-500 flex justify-between">
-              <span>RouterOS v7 &amp; v6 Devices</span>
-              <span>{routerPercent}% Utilized</span>
-            </div>
-          </div>
+          ))}
         </div>
       </Card>
 
-      {/* 2. PLATFORM URL & CUSTOM DOMAIN BINDING */}
-      <Card className="p-6 space-y-4 border-slate-800">
-        <div className="space-y-1">
-          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-            Platform Subdomain
-          </p>
-          <div className="flex items-center gap-2">
-            <span className="font-mono text-sm text-cyan-400 truncate">
-              {settings?.platformUrl}
-            </span>
+      <Card className="space-y-4 p-6">
+        <div>
+          <p className="text-sm text-slate-400">Your web address</p>
+          <div className="mt-1 flex items-center gap-2">
+            <span className="truncate font-mono text-sm text-slate-200">{settings?.platformUrl}</span>
             <button
               type="button"
               onClick={() => {
@@ -327,63 +283,19 @@ export default function SettingsPage() {
                 }
               }}
               className="shrink-0 text-slate-400 hover:text-white"
-              title="Copy platform URL"
+              title="Copy web address"
             >
               {urlCopied ? <IconCheck size={14} className="text-emerald-400" /> : <IconCopy size={14} />}
             </button>
           </div>
         </div>
-
-        {/* Custom White-Label Domain Card */}
-        <div className="pt-3 border-t border-slate-800/80 space-y-3 font-sans">
-          <div>
-            <div className="flex items-center gap-2">
-              <Label htmlFor="custom-domain">Custom White-Label Domain</Label>
-              <span className="px-2 py-0.5 rounded bg-purple-950 border border-purple-800 text-purple-300 font-mono text-[10px]">
-                Growth &amp; Enterprise Feature
-              </span>
-            </div>
-            <p className="text-xs text-slate-400 mt-0.5">
-              Host your subscriber portal on your own domain (e.g. <code className="text-brand-400">wifi.yourisp.co.ke</code>).
-            </p>
-          </div>
-
-          <form onSubmit={handleVerifyDomain} className="flex flex-col sm:flex-row items-end gap-2">
-            <div className="flex-1 w-full">
-              <Input
-                id="custom-domain"
-                placeholder="e.g. portal.fastnetkenya.co.ke"
-                value={customDomain}
-                onChange={(e) => setCustomDomain(e.target.value)}
-                className="font-mono text-xs"
-              />
-            </div>
-            <Button
-              type="submit"
-              disabled={verifyingDomain || !customDomain}
-              className="text-xs font-bold px-4 py-2.5 shrink-0 shadow-sm"
-            >
-              {verifyingDomain ? <IconPulse size={13} className="animate-spin" /> : <IconCheck size={13} />}
-              <span>{verifyingDomain ? "Verifying DNS..." : "Verify DNS CNAME"}</span>
-            </Button>
-          </form>
-
-          {domainVerified && (
-            <div className="p-3.5 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-emerald-300 text-xs font-mono space-y-1">
-              <div className="flex items-center gap-1.5 font-bold">
-                <IconCheck size={14} />
-                <span>Domain CNAME Confirmed!</span>
-              </div>
-              <p className="text-[11px] text-slate-300">
-                Point CNAME: <code className="text-cyan-300">{customDomain}</code> &rarr; <code className="text-cyan-300">cname.mashupkgrid.com</code>
-              </p>
-              <div className="text-[10px] text-emerald-400 flex items-center gap-1 pt-1">
-                <IconShield size={12} />
-                <span>Cloudflare SSL Certificate Provisioned (TLS 1.3)</span>
-              </div>
-            </div>
-          )}
-        </div>
+        <p className="border-t border-obsidian-800 pt-4 text-sm text-slate-400">
+          Want your own domain, like wifi.yourisp.co.ke? Set it up in{" "}
+          <a href="/settings/domains" className="text-brand-400 hover:underline">
+            Domain management
+          </a>
+          .
+        </p>
       </Card>
 
       {/* 3. BUSINESS BRANDING FORM */}
@@ -553,7 +465,7 @@ export default function SettingsPage() {
 
       {/* RENEW / UPGRADE M-PESA MODAL */}
       {showRenewModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
           <div className="w-full max-w-md rounded-3xl border border-slate-800 bg-slate-950 p-6 space-y-5 shadow-2xl text-left font-sans">
             <div className="flex items-center justify-between pb-2 border-b border-slate-800">
               <div>
@@ -586,8 +498,8 @@ export default function SettingsPage() {
             </div>
 
             {stkSent && (
-              <div className="p-3 rounded-lg bg-emerald-950 border border-emerald-500/40 text-emerald-300 text-xs font-mono text-center animate-pulse">
-                ✓ STK Push sent! Enter PIN on your phone to complete renewal.
+              <div role="status" className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-200">
+                Check your phone and enter your M-Pesa PIN to complete the renewal.
               </div>
             )}
 
@@ -602,7 +514,7 @@ export default function SettingsPage() {
               <Button
                 onClick={() => renewSubscription.mutate()}
                 disabled={renewSubscription.isPending || !renewPhone.trim() || stkSent}
-                className="text-xs font-bold bg-emerald-600 hover:bg-emerald-500 shadow-glow-emerald gap-1.5"
+                className="text-xs font-medium gap-1.5"
               >
                 {renewSubscription.isPending ? <IconPulse size={14} className="animate-spin" /> : <IconMpesa size={14} />}
                 <span>{renewSubscription.isPending ? "Sending STK..." : "Send M-Pesa STK Push"}</span>

@@ -56,13 +56,15 @@ export interface SmsConfigStatus {
   username: string | null;
   senderId: string | null;
   environment: string;
+  /** Whether hotspot buyers are texted their voucher code after paying. */
+  sendVoucherSms: boolean;
 }
 
 /** Safe-to-display summary — never exposes the decrypted API key. */
 export async function getSmsConfigStatus(tenantId: string): Promise<SmsConfigStatus> {
   const config = await prisma.smsProviderConfig.findUnique({ where: { tenantId } });
   if (!config) {
-    return { configured: false, isActive: false, username: null, senderId: null, environment: "sandbox" };
+    return { configured: false, isActive: false, username: null, senderId: null, environment: "sandbox", sendVoucherSms: true };
   }
   return {
     configured: Boolean(config.apiKeyEncrypted && config.username),
@@ -70,5 +72,13 @@ export async function getSmsConfigStatus(tenantId: string): Promise<SmsConfigSta
     username: config.username,
     senderId: config.senderId,
     environment: config.environment,
+    sendVoucherSms: config.sendVoucherSms,
   };
+}
+
+/** Turns voucher texts on or off. Needs a saved gateway: there is nothing to switch without one. */
+export async function setVoucherSmsEnabled(tenantId: string, enabled: boolean): Promise<SmsProviderConfig> {
+  const config = await prisma.smsProviderConfig.findUnique({ where: { tenantId } });
+  if (!config) throw new NotFoundError("SMS gateway configuration");
+  return prisma.smsProviderConfig.update({ where: { tenantId }, data: { sendVoucherSms: enabled } });
 }

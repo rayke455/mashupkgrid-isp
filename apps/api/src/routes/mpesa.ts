@@ -14,14 +14,18 @@ import {
   tryCompleteOnboardingFeeCallback,
   tryCompleteSubscriptionPaymentCallback,
   tryCompleteDonationCallback,
+  tryCompleteStoreOrderCallback,
   getPlatformMpesaConfigStatus,
   getPlatformB2BStatus,
   setPlatformMpesaConfig,
-  applyPayoutResult,
-  getTenantBalance,
-  listTenantLedger,
-  listTenantsWithBalance,
-  payoutTenantBalance,
+  applySettlementResult,
+  markSettlementTimedOut,
+  handlePlatformC2BConfirmation,
+  logWebhookReceived,
+  finishWebhookEvent,
+  extractStkCheckoutId,
+  extractC2BTransId,
+  extractResultConversationId,
   initiateStkPush,
   queryStkPushStatus,
   getPlatformMpesaCredentials,
@@ -35,6 +39,7 @@ import { authenticate } from "../plugins/authenticate.js";
 import { resolveTenant } from "../plugins/tenant.js";
 import { checkMaintenance } from "../plugins/maintenance.js";
 import { requirePermission } from "../plugins/authorize.js";
+import { settleAfterCollection } from "../lib/settle-after-collection.js";
 import { writeAuditLog } from "../lib/audit.js";
 import { enqueueSendPaymentConfirmationEmail, enqueueSendWhatsappVoucher } from "../lib/queue.js";
 import { emitWebhookEvent } from "../lib/webhooks.js";
@@ -44,6 +49,30 @@ const staffPreHandler = [authenticate, resolveTenant, checkMaintenance] as const
 function requireTenant(tenantId: string | null): string {
   if (tenantId === null) throw new ConflictError("M-Pesa is not available at the platform level");
   return tenantId;
+}
+
+/** Confirmation email + outbound "payment.received" webhook for a matched paybill payment. */
+async function notifyC2BPayment(
+  tenantId: string,
+  transaction: { amountMinor: number; transactionId: string; matchedCustomerId: string | null }
+): Promise<void> {
+  const customer = transaction.matchedCustomerId
+    ? await prisma.customer.findUnique({ where: { id: transaction.matchedCustomerId } })
+    : null;
+  if (customer?.email) {
+    await enqueueSendPaymentConfirmationEmail({
+      email: customer.email,
+      customerName: customer.fullName,
+      amountMinor: transaction.amountMinor,
+      receiptNumber: transaction.transactionId,
+    });
+  }
+  void emitWebhookEvent(tenantId, "payment.received", {
+    method: "MPESA_C2B",
+    amountMinor: transaction.amountMinor,
+    receiptNumber: transaction.transactionId,
+    customerId: transaction.matchedCustomerId,
+  });
 }
 
 /**
@@ -254,246 +283,141 @@ export async function mpesaRoutes(app: FastifyInstance): Promise<void> {
   // entirely (docs/architecture/05-maintenance-and-queues.md §44/45) and carries no auth, since
   // Safaricom cannot send our bearer tokens. -------------------------------------------------
 
-  /**
-   * Daraja's asynchronous result for a B2B payout — the ONLY thing that can say a tenant's money
-   * actually moved. The initiating call returning 0 means Safaricom accepted the instruction, not
-   * that it succeeded, so a payout stays PROCESSING until this lands.
-   *
-   * Always answers 200: Daraja retries anything else, and a retry storm on a payout callback is
-   * how one settlement gets applied repeatedly. Idempotency is handled in applyPayoutResult,
-   * which refuses to re-settle a payout that is already terminal.
-   */
-  /** What this platform currently owes this tenant, and the entries behind it. Derived from the
-   *  ledger, never a cached figure — see getTenantBalance. */
-  app.get(
-    "/settlement",
-    { config: { audience: "staff" }, preHandler: [...staffPreHandler, requirePermission("payments.read")] },
-    async (request, reply) => {
-      const tenantId = requireTenant(request.user!.tenantId);
-      const [balance, entries, payouts, tenant] = await Promise.all([
-        getTenantBalance(tenantId),
-        listTenantLedger(tenantId, 100),
-        prisma.tenantPayout.findMany({
-          where: { tenantId },
-          orderBy: { createdAt: "desc" },
-          take: 50,
-        }),
-        prisma.tenant.findUnique({
-          where: { id: tenantId },
-          select: { collectionMode: true, payoutShortcode: true, payoutShortcodeType: true },
-        }),
-      ]);
-      reply.send(
-        successResponse(
-          {
-            balance,
-            entries,
-            payouts,
-            collectionMode: tenant?.collectionMode ?? "OWN",
-            payoutShortcode: tenant?.payoutShortcode ?? null,
-            payoutShortcodeType: tenant?.payoutShortcodeType ?? "PAYBILL",
-          },
-          request.id
-        )
-      );
-    }
-  );
+  // The tenant-facing settlement endpoints that used to live here (GET /settlement, PATCH
+  // /settlement/destination, and the platform /settlement/owed|payouts|:tenantId/payout) are
+  // replaced by /api/v1/tenant-payments and /api/v1/platform/payments, which add fees, settlement
+  // destinations of every type, approvals, audit trails and an immutable ledger.
 
   /**
-   * A tenant setting where THEIR money is sent.
-   *
-   * Deliberately only the destination — never collectionMode, which decides whose account the
-   * public's payments land in and stays a platform decision. A tenant needs no M-Pesa consumer
-   * key, secret or passkey to be paid: this platform pushes to their number, so the only thing
-   * they have to supply is the number itself.
+   * Daraja's asynchronous result for a B2B or B2C settlement — the ONLY thing that can say a
+   * tenant's money actually moved. Always answers 200 (Daraja retries anything else); idempotency
+   * is enforced in applySettlementResult, which row-locks the settlement and refuses to touch one
+   * that is already final.
    */
-  app.patch(
-    "/settlement/destination",
-    { config: { audience: "staff" }, preHandler: [...staffPreHandler, requirePermission("settings.manage")] },
-    async (request, reply) => {
-      const tenantId = requireTenant(request.user!.tenantId);
-      const body = z
-        .object({
-          payoutShortcode: z
-            .string()
-            .min(1)
-            .max(20)
-            .regex(/^[0-9]+$/, "A paybill or till number is digits only"),
-          payoutShortcodeType: z.enum(["PAYBILL", "TILL"]),
-        })
-        .parse(request.body);
-
-      const before = await prisma.tenant.findUnique({ where: { id: tenantId } });
-      if (!before) throw new ConflictError("Tenant not found");
-
-      const after = await prisma.tenant.update({
-        where: { id: tenantId },
-        data: {
-          payoutShortcode: body.payoutShortcode.trim(),
-          payoutShortcodeType: body.payoutShortcodeType,
-        },
-      });
-
-      // Where a business's money goes is exactly the setting worth being able to prove who
-      // changed, and when.
-      await writeAuditLog({
-        tenantId,
-        actorUserId: request.user!.id,
-        action: "tenant.payout_destination_updated",
-        resourceType: "Tenant",
-        resourceId: tenantId,
-        before: {
-          payoutShortcode: before.payoutShortcode,
-          payoutShortcodeType: before.payoutShortcodeType,
-        },
-        after: {
-          payoutShortcode: after.payoutShortcode,
-          payoutShortcodeType: after.payoutShortcodeType,
-        },
-        ipAddress: request.ip,
-        userAgent: request.headers["user-agent"] ?? null,
-      });
-
-      reply.send(
-        successResponse(
-          { payoutShortcode: after.payoutShortcode, payoutShortcodeType: after.payoutShortcodeType },
-          request.id
-        )
-      );
-    }
-  );
-
-  /** Platform-side: everyone owed money, so an operator can see the total exposure before
-   *  releasing a run. */
-  app.get(
-    "/settlement/owed",
-    { config: { audience: "platform" }, preHandler: [authenticate, checkMaintenance, requirePermission("tenants.read")] },
-    async (request, reply) => {
-      const owed = await listTenantsWithBalance(1);
-      const tenants = await prisma.tenant.findMany({
-        where: { id: { in: owed.map((o) => o.tenantId) } },
-        select: { id: true, name: true, slug: true, payoutShortcode: true, payoutShortcodeType: true },
-      });
-      const byId = new Map(tenants.map((t) => [t.id, t]));
-      reply.send(
-        successResponse(
-          owed.map((balance) => ({ ...balance, tenant: byId.get(balance.tenantId) ?? null })),
-          request.id
-        )
-      );
-    }
-  );
-
-  /** Every payout this platform has made, newest first — the operator's record of money out. */
-  app.get(
-    "/settlement/payouts",
-    { config: { audience: "platform" }, preHandler: [authenticate, checkMaintenance, requirePermission("tenants.read")] },
-    async (request, reply) => {
-      const payouts = await prisma.tenantPayout.findMany({
-        orderBy: { createdAt: "desc" },
-        take: 100,
-        include: { tenant: { select: { name: true, slug: true } } },
-      });
-      reply.send(successResponse(payouts, request.id));
-    }
-  );
-
-  /** Releases one tenant's balance to their paybill/till. Audit-logged: this moves real money. */
-  app.post(
-    "/settlement/:tenantId/payout",
-    { config: { audience: "platform" }, preHandler: [authenticate, checkMaintenance, requirePermission("tenants.update")] },
-    async (request, reply) => {
-      const { tenantId } = z.object({ tenantId: z.string().uuid() }).parse(request.params);
-      const payout = await payoutTenantBalance(tenantId);
-
-      await writeAuditLog({
-        tenantId,
-        actorUserId: request.user!.id,
-        action: "tenant_payout.released",
-        resourceType: "TenantPayout",
-        resourceId: payout.id,
-        after: {
-          amountMinor: payout.amountMinor,
-          destination: payout.destinationShortcode,
-          status: payout.status,
-        },
-        ipAddress: request.ip,
-        userAgent: request.headers["user-agent"] ?? null,
-      });
-
-      reply.send(successResponse(payout, request.id));
-    }
-  );
-
   app.post("/payout/result", { config: { audience: "system-critical" } }, async (request, reply) => {
+    const eventId = await logWebhookReceived({
+      provider: "MPESA",
+      eventType: "SETTLEMENT_RESULT",
+      externalId: extractResultConversationId(request.body),
+      payload: request.body,
+      sourceIp: request.ip,
+    });
     if (!hasValidCallbackToken(request)) {
+      await finishWebhookEvent(eventId, { status: "REJECTED", errorMessage: "Missing or invalid callback token" });
       reply.status(200).send({ ResultCode: 0, ResultDesc: "Accepted" });
       return;
     }
 
-    const body = request.body as {
-      Result?: {
-        ResultCode?: number;
-        ResultDesc?: string;
-        OriginatorConversationID?: string;
-        TransactionID?: string;
-      };
-    };
-    const result = body?.Result;
+    const result = (request.body as {
+      Result?: { ResultCode?: number | string; ResultDesc?: string; OriginatorConversationID?: string; TransactionID?: string };
+    })?.Result;
 
-    if (result?.OriginatorConversationID) {
+    if (!result?.OriginatorConversationID) {
+      await finishWebhookEvent(eventId, { status: "IGNORED", errorMessage: "No OriginatorConversationID" });
+    } else {
       try {
-        await applyPayoutResult({
+        const { outcome, settlement } = await applySettlementResult({
           originatorConversationId: result.OriginatorConversationID,
           resultCode: Number(result.ResultCode ?? -1),
           resultDesc: String(result.ResultDesc ?? ""),
-          transactionId: result.TransactionID,
+          transactionId: result.TransactionID ?? null,
+        });
+        await finishWebhookEvent(eventId, {
+          status: outcome,
+          tenantId: settlement?.tenantId ?? null,
+          transactionReference: settlement?.settlementNumber ?? null,
+          response: { status: settlement?.status ?? null },
         });
       } catch (err) {
         // Logged, never surfaced: an error response makes Daraja retry, and this is money.
-        request.log.error({ err }, "Failed to apply M-Pesa payout result");
+        request.log.error({ err }, "Failed to apply M-Pesa settlement result");
+        await finishWebhookEvent(eventId, { status: "FAILED", errorMessage: err instanceof Error ? err.message : String(err) });
       }
     }
     reply.status(200).send({ ResultCode: 0, ResultDesc: "Accepted" });
   });
 
-  /** Daraja calls this when the request sat in its queue too long. Treated as a failure so the
-   *  tenant's balance is restored rather than left reserved against a payout that never ran. */
+  /**
+   * Daraja's queue-timeout callback. The request sat too long in Safaricom's queue — which does NOT
+   * prove the money didn't move — so the settlement is flagged for review with its balance still
+   * reserved, rather than being failed (which, if it had in fact gone through, would let the same
+   * balance be paid out again).
+   */
   app.post("/payout/timeout", { config: { audience: "system-critical" } }, async (request, reply) => {
+    const eventId = await logWebhookReceived({
+      provider: "MPESA",
+      eventType: "SETTLEMENT_TIMEOUT",
+      externalId: extractResultConversationId(request.body),
+      payload: request.body,
+      sourceIp: request.ip,
+    });
     if (!hasValidCallbackToken(request)) {
+      await finishWebhookEvent(eventId, { status: "REJECTED", errorMessage: "Missing or invalid callback token" });
       reply.status(200).send({ ResultCode: 0, ResultDesc: "Accepted" });
       return;
     }
-    const body = request.body as { Result?: { OriginatorConversationID?: string } };
-    const id = body?.Result?.OriginatorConversationID;
-    if (id) {
+    const id = extractResultConversationId(request.body);
+    if (!id) {
+      await finishWebhookEvent(eventId, { status: "IGNORED", errorMessage: "No OriginatorConversationID" });
+    } else {
       try {
-        await applyPayoutResult({
-          originatorConversationId: id,
-          resultCode: -1,
-          resultDesc: "Timed out in the M-Pesa queue before it was processed",
+        const { outcome, settlement } = await markSettlementTimedOut(id);
+        await finishWebhookEvent(eventId, {
+          status: outcome,
+          tenantId: settlement?.tenantId ?? null,
+          transactionReference: settlement?.settlementNumber ?? null,
         });
       } catch (err) {
-        request.log.error({ err }, "Failed to apply M-Pesa payout timeout");
+        request.log.error({ err }, "Failed to apply M-Pesa settlement timeout");
+        await finishWebhookEvent(eventId, { status: "FAILED", errorMessage: err instanceof Error ? err.message : String(err) });
       }
     }
     reply.status(200).send({ ResultCode: 0, ResultDesc: "Accepted" });
   });
 
   app.post("/callback", { config: { audience: "system-critical" } }, async (request, reply) => {
+    const eventId = await logWebhookReceived({
+      provider: "MPESA",
+      eventType: "STK_CALLBACK",
+      externalId: extractStkCheckoutId(request.body),
+      payload: request.body,
+      sourceIp: request.ip,
+    });
     if (!hasValidCallbackToken(request)) {
       // Ack as if handled — never distinguish "wrong token" from "handled" in the response, and
       // never process a payload that failed this check.
+      await finishWebhookEvent(eventId, { status: "REJECTED", errorMessage: "Missing or invalid callback token" });
       reply.status(200).send({ ResultCode: 0, ResultDesc: "Accepted" });
       return;
     }
-    const outcome = await handleStkCallback(request.body);
+
+    let outcome;
+    try {
+      outcome = await handleStkCallback(request.body);
+    } catch (err) {
+      // Nothing was committed (the whole resolution is one transaction). Answer 200 regardless —
+      // a retry storm helps no one — and leave the request PENDING for the status-query poller to
+      // resolve; the failure is visible in the webhook log.
+      request.log.error({ err }, "Failed to process M-Pesa STK callback");
+      await finishWebhookEvent(eventId, { status: "FAILED", errorMessage: err instanceof Error ? err.message : String(err) });
+      reply.status(200).send({ ResultCode: 0, ResultDesc: "Accepted" });
+      return;
+    }
+
     if (outcome.handled && outcome.checkoutRequestId) {
       const stkRequest = await prisma.mpesaStkRequest.findUnique({
         where: { checkoutRequestId: outcome.checkoutRequestId },
         include: { customer: true, hotspotPackage: true, tenant: true },
       });
-      if (stkRequest?.status === "COMPLETED") {
+      await finishWebhookEvent(eventId, {
+        status: outcome.duplicate ? "DUPLICATE" : "PROCESSED",
+        tenantId: stkRequest?.tenantId ?? null,
+        transactionReference: stkRequest?.mpesaReceiptNumber ?? null,
+        response: { status: stkRequest?.status ?? null },
+      });
+      // Notifications only for the first delivery — a duplicate must not re-send a voucher.
+      if (stkRequest?.status === "COMPLETED" && !outcome.duplicate) {
+        if (stkRequest.collectedBy === "PLATFORM") settleAfterCollection(stkRequest.tenantId, request.log);
         if (stkRequest.customer?.email) {
           await enqueueSendPaymentConfirmationEmail({
             email: stkRequest.customer.email,
@@ -530,12 +454,17 @@ export async function mpesaRoutes(app: FastifyInstance): Promise<void> {
       // could still belong to a tenant's own onboarding fee or a recurring subscription charge
       // (two more separate tables by design, see TenantOnboardingFee/TenantSubscriptionPayment's
       // schema comments), so try each before giving up.
-      if (!(await tryCompleteOnboardingFeeCallback(request.body))) {
-        if (!(await tryCompleteSubscriptionPaymentCallback(request.body))) {
-          // Last resort: could be a donation from the public "Buy Me a Coffee" page.
-          await tryCompleteDonationCallback(request.body);
-        }
-      }
+      const matched =
+        (await tryCompleteOnboardingFeeCallback(request.body)) ||
+        (await tryCompleteSubscriptionPaymentCallback(request.body)) ||
+        // A hardware order from the public store.
+        (await tryCompleteStoreOrderCallback(request.body)) ||
+        // Last resort: could be a donation from the public "Buy Me a Coffee" page.
+        (await tryCompleteDonationCallback(request.body));
+      await finishWebhookEvent(eventId, {
+        status: matched ? "PROCESSED" : "IGNORED",
+        ...(matched ? {} : { errorMessage: "CheckoutRequestID matched no payment this platform initiated" }),
+      });
     }
     // Always ack 200 — Safaricom retries aggressively on non-200, and we've already durably
     // stored everything we could parse (project instruction §13: idempotent, safe response).
@@ -565,14 +494,24 @@ export async function mpesaRoutes(app: FastifyInstance): Promise<void> {
     { config: { audience: "system-critical" } },
     async (request, reply) => {
       const { tenantSlug } = z.object({ tenantSlug: z.string() }).parse(request.params);
+      const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
+      const eventId = await logWebhookReceived({
+        provider: "MPESA",
+        eventType: "C2B_CONFIRMATION",
+        externalId: extractC2BTransId(request.body),
+        tenantId: tenant?.id ?? null,
+        payload: request.body,
+        sourceIp: request.ip,
+      });
       if (!hasValidCallbackToken(request)) {
+        await finishWebhookEvent(eventId, { status: "REJECTED", errorMessage: "Missing or invalid callback token" });
         reply.status(200).send({ ResultCode: "0", ResultDesc: "Accepted" });
         return;
       }
-      const tenant = await prisma.tenant.findUnique({ where: { slug: tenantSlug } });
       if (!tenant) {
         // Nothing we can attribute this to — ack anyway (money already moved on Safaricom's
         // side; rejecting the webhook doesn't undo that) but do not fabricate a tenant.
+        await finishWebhookEvent(eventId, { status: "IGNORED", errorMessage: `Unknown tenant slug "${tenantSlug}"` });
         reply.status(200).send({ ResultCode: "0", ResultDesc: "Accepted" });
         return;
       }
@@ -580,38 +519,75 @@ export async function mpesaRoutes(app: FastifyInstance): Promise<void> {
       // Any rejection here (malformed payload, BusinessShortCode mismatch — see c2b.service.ts)
       // must still ack cleanly rather than surface as an error response: Safaricom retries
       // aggressively on non-200, and a forged/mismatched payload retried forever helps no one.
-      let transaction;
+      let result;
       try {
-        transaction = await handleC2BConfirmation(tenant.id, request.body);
+        result = await handleC2BConfirmation(tenant.id, request.body);
       } catch (err) {
         request.log.warn({ err, tenantSlug }, "C2B confirmation rejected");
+        await finishWebhookEvent(eventId, { status: "REJECTED", errorMessage: err instanceof Error ? err.message : String(err) });
         reply.status(200).send({ ResultCode: "0", ResultDesc: "Accepted" });
         return;
       }
+      const { transaction, duplicate } = result;
+      await finishWebhookEvent(eventId, {
+        status: duplicate ? "DUPLICATE" : "PROCESSED",
+        transactionReference: transaction.transactionId,
+        response: { reconciled: transaction.reconciled },
+      });
 
-      if (transaction.reconciled && transaction.paymentId) {
-        const customer = transaction.matchedCustomerId
-          ? await prisma.customer.findUnique({ where: { id: transaction.matchedCustomerId } })
-          : null;
-        if (customer?.email) {
-          await enqueueSendPaymentConfirmationEmail({
-            email: customer.email,
-            customerName: customer.fullName,
-            amountMinor: transaction.amountMinor,
-            receiptNumber: transaction.transactionId,
-          });
-        }
-        void emitWebhookEvent(tenant.id, "payment.received", {
-          method: "MPESA_C2B",
-          amountMinor: transaction.amountMinor,
-          receiptNumber: transaction.transactionId,
-          customerId: transaction.matchedCustomerId,
-        });
+      if (!duplicate && transaction.reconciled && transaction.paymentId) {
+        await notifyC2BPayment(tenant.id, transaction);
       }
 
       reply.status(200).send({ ResultCode: "0", ResultDesc: "Accepted" });
     }
   );
+
+  // --- The MashupHost Payment Gateway's own paybill. Customers of every tenant on PLATFORM
+  // collection pay here, with a payment reference (MH…) as the account number; the reference is
+  // what decides which tenant the money belongs to. -----------------------------------------------
+
+  app.post("/platform/c2b/validation", { config: { audience: "system-critical" } }, async (request, reply) => {
+    if (!hasValidCallbackToken(request)) {
+      reply.status(200).send({ ResultCode: "C2B00012", ResultDesc: "Rejected" });
+      return;
+    }
+    // Accept everything: an unrecognised reference is still held (and assignable), never bounced
+    // after the customer has typed their PIN.
+    reply.status(200).send(handleC2BValidation(null, request.body));
+  });
+
+  app.post("/platform/c2b/confirmation", { config: { audience: "system-critical" } }, async (request, reply) => {
+    const eventId = await logWebhookReceived({
+      provider: "MPESA",
+      eventType: "PLATFORM_C2B_CONFIRMATION",
+      externalId: extractC2BTransId(request.body),
+      payload: request.body,
+      sourceIp: request.ip,
+    });
+    if (!hasValidCallbackToken(request)) {
+      await finishWebhookEvent(eventId, { status: "REJECTED", errorMessage: "Missing or invalid callback token" });
+      reply.status(200).send({ ResultCode: "0", ResultDesc: "Accepted" });
+      return;
+    }
+    try {
+      const { transaction, duplicate } = await handlePlatformC2BConfirmation(request.body);
+      await finishWebhookEvent(eventId, {
+        status: duplicate ? "DUPLICATE" : "PROCESSED",
+        tenantId: transaction.tenantId,
+        transactionReference: transaction.transactionId,
+        response: { reconciled: transaction.reconciled, assignedToTenant: Boolean(transaction.tenantId) },
+      });
+      if (!duplicate && transaction.tenantId && transaction.reconciled && transaction.paymentId) {
+        await notifyC2BPayment(transaction.tenantId, transaction);
+      }
+      if (!duplicate && transaction.tenantId) settleAfterCollection(transaction.tenantId, request.log);
+    } catch (err) {
+      request.log.warn({ err }, "Platform C2B confirmation rejected");
+      await finishWebhookEvent(eventId, { status: "REJECTED", errorMessage: err instanceof Error ? err.message : String(err) });
+    }
+    reply.status(200).send({ ResultCode: "0", ResultDesc: "Accepted" });
+  });
 
   // --- Platform-level (super admin only) — the platform's OWN Daraja credentials, used to
   // collect the 450 KSH onboarding fee from tenants. Never confuse with the tenant-scoped
@@ -666,6 +642,39 @@ export async function mpesaRoutes(app: FastifyInstance): Promise<void> {
     }
   );
 
+  /** The public supporters wall: the latest completed donations. Names and messages only for
+   *  donors who ticked "show my name"; phone numbers never leave the server. */
+  app.get(
+    "/donate/supporters",
+    { config: { audience: "customer" } },
+    async (request, reply) => {
+      const [recent, supporterCount] = await Promise.all([
+        prisma.donation.findMany({
+          where: { status: "COMPLETED" },
+          orderBy: { createdAt: "desc" },
+          take: 12,
+          select: { id: true, amountMinor: true, donorName: true, donorMessage: true, showPublicly: true, createdAt: true },
+        }),
+        prisma.donation.count({ where: { status: "COMPLETED" } }),
+      ]);
+      reply.send(
+        successResponse(
+          {
+            supporterCount,
+            recent: recent.map((d) => ({
+              id: d.id,
+              amount: Math.round(d.amountMinor / 100),
+              name: d.showPublicly ? d.donorName : null,
+              message: d.showPublicly ? d.donorMessage : null,
+              createdAt: d.createdAt,
+            })),
+          },
+          request.id
+        )
+      );
+    }
+  );
+
   app.post(
     "/donate",
     {
@@ -678,6 +687,8 @@ export async function mpesaRoutes(app: FastifyInstance): Promise<void> {
         amount: z.number().int().positive(), // in KES
         name: z.string().max(100).optional(),
         message: z.string().max(280).optional(),
+        /** The donor chose to show their name and message on the public supporters wall. */
+        showPublicly: z.boolean().optional(),
       });
       const body = donateBodySchema.parse(request.body);
       const normalizedPhone = normalizeKenyanPhone(body.phone);
@@ -708,6 +719,7 @@ export async function mpesaRoutes(app: FastifyInstance): Promise<void> {
             amountMinor,
             donorName: body.name?.trim() || null,
             donorMessage: body.message?.trim() || null,
+            showPublicly: body.showPublicly === true,
             merchantRequestId: response.MerchantRequestID,
             checkoutRequestId: response.CheckoutRequestID,
             status: "PENDING",
@@ -733,21 +745,13 @@ export async function mpesaRoutes(app: FastifyInstance): Promise<void> {
 
         await donationPromise;
       } catch (err: any) {
-        request.log.info({ err: err?.message }, "Platform M-Pesa STK fallback used for donation");
-        reply.status(200).send(
-          successResponse(
-            {
-              merchantRequestId: `DON-${Date.now()}`,
-              checkoutRequestId: `ws_CO_${Date.now()}`,
-              status: "PENDING",
-              phone: normalizedPhone,
-              amount: body.amount,
-              paybill: donateConfig.paybill,
-              account: accountRef,
-              fallbackMessage: `Direct prompt queued. If prompt doesn't appear, use Paybill ${donateConfig.paybill || "(not configured)"} Acc: ${accountRef}`,
-            },
-            request.id
-          )
+        // Never report a prompt that was not sent: the donor would wait for a PIN request that
+        // is never coming. Say so, and give the Paybill route when there is one.
+        request.log.warn({ err: err?.message }, "Donation STK push could not be sent");
+        throw new ConflictError(
+          donateConfig.paybill
+            ? `We couldn't send the M-Pesa prompt right now. You can still pay with Paybill ${donateConfig.paybill}, account ${accountRef}.`
+            : "We couldn't send the M-Pesa prompt right now. Please try again in a minute."
         );
       }
     }

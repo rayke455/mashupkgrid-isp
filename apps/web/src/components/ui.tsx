@@ -13,7 +13,7 @@ export function Card({
 }) {
   return (
     <div
-      className={`rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-6 shadow-subtle transition-all duration-200 dark:border-obsidian-800 dark:bg-obsidian-900 min-w-0 ${
+      className={`rounded-xl border border-slate-200/80 bg-white p-4 sm:p-6 shadow-subtle transition-colors duration-150 dark:border-obsidian-800 dark:bg-obsidian-900 dark:shadow-none min-w-0 ${
         hover ? "hover:border-brand-500/50 hover:shadow-card dark:hover:border-brand-500/40" : ""
       } ${className}`}
     >
@@ -35,9 +35,9 @@ export function Button({
 }) {
   const variants = {
     primary:
-      "bg-gradient-to-b from-brand-600 to-brand-700 text-white shadow-sm hover:from-brand-500 hover:to-brand-600 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 disabled:from-brand-400 disabled:to-brand-400 disabled:opacity-60 disabled:pointer-events-none",
+      "bg-brand-600 text-white shadow-sm hover:bg-brand-700 dark:hover:bg-brand-500 focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-obsidian-950 disabled:opacity-60 disabled:pointer-events-none",
     secondary:
-      "bg-slate-100/90 text-slate-800 hover:bg-slate-200/90 active:scale-[0.98] dark:bg-obsidian-800 dark:text-slate-100 dark:hover:bg-obsidian-700 border border-slate-200/60 dark:border-obsidian-700/60 disabled:opacity-50",
+      "bg-slate-100/90 text-slate-800 hover:bg-slate-200/90 dark:bg-obsidian-800 dark:text-slate-100 dark:hover:bg-obsidian-700 border border-slate-200/60 dark:border-obsidian-700/60 disabled:opacity-50",
     danger:
       "bg-red-600 text-white shadow-sm hover:bg-red-700 active:scale-[0.98] focus-visible:ring-2 focus-visible:ring-red-500 disabled:bg-red-400 disabled:opacity-60",
     outline:
@@ -56,7 +56,7 @@ export function Button({
   return (
     <button
       disabled={disabled}
-      className={`${variants[variant]} ${sizes[size]} inline-flex items-center justify-center rounded-lg font-medium transition-all duration-150 outline-none disabled:cursor-not-allowed ${className}`}
+      className={`${variants[variant]} ${sizes[size]} inline-flex items-center justify-center rounded-lg font-medium transition-colors duration-150 outline-none disabled:cursor-not-allowed ${className}`}
       {...props}
     >
       {children}
@@ -89,7 +89,7 @@ export function Label({
   return (
     <label
       htmlFor={htmlFor}
-      className={`mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-600 dark:text-slate-300 ${className}`}
+      className={`mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300 ${className}`}
     >
       {children}
     </label>
@@ -133,7 +133,7 @@ export function Badge({
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-semibold tracking-wide ${styles[variant]} ${className}`}
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium ${styles[variant]} ${className}`}
     >
       {children}
     </span>
@@ -142,7 +142,7 @@ export function Badge({
 
 export function StatusDot({
   status,
-  pulse = true,
+  pulse = false,
 }: {
   status: "ONLINE" | "WARNING" | "DOWN" | "ACTIVE" | "PAID" | "PENDING" | "UNKNOWN" | string;
   pulse?: boolean;
@@ -186,10 +186,10 @@ export function StatCard({
     <Card className="relative overflow-hidden">
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+          <p className="text-sm text-slate-500 dark:text-slate-400">
             {title}
           </p>
-          <div className="mt-2 text-2xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-3xl font-mono">
+          <div className="mt-1.5 text-2xl font-semibold tabular-nums tracking-tight text-slate-900 dark:text-white">
             {value}
           </div>
           {subtitle && <div className="mt-1.5 text-xs text-slate-500 dark:text-slate-400">{subtitle}</div>}
@@ -204,7 +204,7 @@ export function StatCard({
           )}
         </div>
         {icon && (
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-600 dark:bg-brand-950/60 dark:text-brand-400 border border-brand-100 dark:border-brand-900/50">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-50 text-brand-600 dark:bg-obsidian-800 dark:text-brand-400">
             {icon}
           </div>
         )}

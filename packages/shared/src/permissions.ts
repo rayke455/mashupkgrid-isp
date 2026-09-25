@@ -30,6 +30,15 @@ export const PERMISSIONS = [
   // Phase 3 — M-Pesa and payments (docs/architecture/10-phase3-plan.md)
   "payments.reconcile",
 
+  // Payment gateway & settlement. A tenant may request a settlement of its own balance and choose
+  // where it is sent; everything that touches other tenants' money or the platform's own gateway
+  // is platform-only (excluded from TENANT_SCOPED_PERMISSIONS below).
+  "settlements.request",
+  "settlement_destinations.manage",
+  "platform_payments.read",
+  "platform_payments.manage",
+  "settlements.approve",
+
   "routers.read",
   "routers.manage",
 
@@ -105,6 +114,8 @@ const TENANT_SCOPED_PERMISSIONS = [
   "payments.create",
   "payments.refund",
   "payments.reconcile",
+  "settlements.request",
+  "settlement_destinations.manage",
   "packages.read",
   "packages.manage",
   "customer_services.read",
@@ -144,6 +155,8 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<string, readonly PermissionKey[]> =
     "payments.create",
     "payments.refund",
     "payments.reconcile",
+    "settlements.request",
+    "settlement_destinations.manage",
     "packages.read",
     "packages.manage",
     "customer_services.read",
@@ -174,6 +187,8 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<string, readonly PermissionKey[]> =
     "payments.create",
     "payments.refund",
     "payments.reconcile",
+    // Can ask for the tenant's money to be sent, but not change where it goes.
+    "settlements.request",
     "packages.read",
     "customer_services.read",
     "wallet.read",

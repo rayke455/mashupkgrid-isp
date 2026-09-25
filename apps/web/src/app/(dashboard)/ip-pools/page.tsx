@@ -49,14 +49,11 @@ export default function IpPoolsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2.5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-sky-500/15 text-sky-600 dark:text-sky-400">
-              <IconNetworkPool size={20} />
-            </span>
-            IPAM &amp; Subnet Pools
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">
+            IP pools
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Allocate dual-stack IPv4 address blocks and IPv6 delegated prefixes for PPPoE subscribers.
+            Address ranges handed out to PPPoE subscribers.
           </p>
         </div>
         <Button onClick={() => setShowForm((v) => !v)}>

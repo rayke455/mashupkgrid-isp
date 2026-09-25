@@ -220,6 +220,10 @@ export async function voucherRoutes(app: FastifyInstance): Promise<void> {
         ? await prisma.hotspotVoucher.findMany({ where: { tenantId, code: { in: codes } } })
         : [];
       const voucherByCode = new Map(vouchers.map((v) => [v.code, v]));
+      // The phones (MAC addresses) that have used each voucher, most recent first.
+      const devices = codes.length
+        ? await prisma.hotspotDevice.findMany({ where: { tenantId, voucherCode: { in: codes } }, orderBy: { lastSeenAt: "desc" } })
+        : [];
 
       const rows = combined.map((c) => {
         const voucher = c.voucherCode ? voucherByCode.get(c.voucherCode) : undefined;
@@ -231,6 +235,7 @@ export async function voucherRoutes(app: FastifyInstance): Promise<void> {
           bytesOut: voucher?.bytesOut != null ? Number(voucher.bytesOut) : null,
           usageUpdatedAt: voucher?.usageUpdatedAt ?? null,
           expiresAt: voucher?.expiresAt ?? null,
+          devices: c.voucherCode ? devices.filter((d) => d.voucherCode === c.voucherCode).map((d) => d.macAddress) : [],
         };
       });
 

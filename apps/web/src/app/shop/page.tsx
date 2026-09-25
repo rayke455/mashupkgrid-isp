@@ -1,288 +1,205 @@
 "use client";
 
-import { useState, useEffect } from "react";
 import Link from "next/link";
-import { HardwareProduct, getProducts, useCart } from "@/lib/hardware-store";
-import { HardwareProductCard } from "@/components/store/hardware-product-card";
-import { CartDrawer } from "@/components/store/cart-drawer";
-import { ProductDetailModal } from "@/components/store/product-detail-modal";
+import { useEffect, useState } from "react";
+import { type HardwareProduct, getProducts, useCart } from "@/lib/hardware-store";
 import { useAuth } from "@/lib/auth-context";
+import { SiteHeader } from "@/components/marketing/site-header";
+import { SiteFooter } from "@/components/marketing/site-footer";
+import { HardwareProductCard } from "@/components/store/hardware-product-card";
+import { ProductDetailModal } from "@/components/store/product-detail-modal";
+import { CartDrawer } from "@/components/store/cart-drawer";
 
 const CATEGORIES = [
-  { id: "all", label: "All Hardware", icon: "📦" },
-  { id: "routers", label: "Routers & ONUs", icon: "🔀" },
-  { id: "switches", label: "Switches", icon: "⚡" },
-  { id: "wireless", label: "Wireless & APs", icon: "🌐" },
-  { id: "fiber", label: "Fiber & Cables", icon: "🧵" },
-  { id: "solar", label: "Solar & UPS", icon: "☀️" },
-  { id: "cctv", label: "CCTV & Security", icon: "📹" },
+  { id: "all", label: "All" },
+  { id: "routers", label: "Routers" },
+  { id: "switches", label: "Switches" },
+  { id: "wireless", label: "Wireless & access points" },
+  { id: "fiber", label: "Fibre & cables" },
+  { id: "solar", label: "Solar & UPS" },
+  { id: "cctv", label: "CCTV" },
 ];
 
 export default function ShopPage() {
   const { user } = useAuth();
-  const isSuperAdmin = !!user && !user.tenantId;
-
+  const isSuperAdmin = Boolean(user && !user.tenantId);
   const { itemCount } = useCart();
-  const [isCartOpen, setIsCartOpen] = useState(false);
+
+  const [category, setCategory] = useState("all");
+  const [search, setSearch] = useState("");
+  const [debounced, setDebounced] = useState("");
+  const [brand, setBrand] = useState("all");
   const [products, setProducts] = useState<HardwareProduct[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedCategory, setSelectedCategory] = useState("all");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedBrand, setSelectedBrand] = useState("all");
-  const [selectedProductForModal, setSelectedProductForModal] = useState<HardwareProduct | null>(null);
+  const [loadError, setLoadError] = useState(false);
+  const [detail, setDetail] = useState<HardwareProduct | null>(null);
+  const [cartOpen, setCartOpen] = useState(false);
 
   useEffect(() => {
-    async function load() {
-      setLoading(true);
-      try {
-        const data = await getProducts(selectedCategory, searchQuery);
-        setProducts(data);
-      } finally {
-        setLoading(false);
-      }
-    }
-    load();
-  }, [selectedCategory, searchQuery]);
+    const t = setTimeout(() => setDebounced(search.trim()), 250);
+    return () => clearTimeout(t);
+  }, [search]);
 
-  const brands = ["all", ...Array.from(new Set(products.map((p) => p.brand)))];
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setLoadError(false);
+    getProducts(category, debounced)
+      .then((data) => !cancelled && setProducts(data))
+      .catch(() => !cancelled && setLoadError(true))
+      .finally(() => !cancelled && setLoading(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [category, debounced]);
 
-  const displayedProducts =
-    selectedBrand === "all"
-      ? products
-      : products.filter((p) => p.brand.toLowerCase() === selectedBrand.toLowerCase());
+  const brands = ["all", ...Array.from(new Set(products.map((p) => p.brand))).sort()];
+  const shown = brand === "all" ? products : products.filter((p) => p.brand === brand);
 
   return (
-    <div className="min-h-screen bg-[#060913] text-slate-100 flex flex-col font-sans selection:bg-cyan-500 selection:text-slate-950">
-      {/* Top Notification Banner */}
-      <div className="bg-gradient-to-r from-emerald-600 via-cyan-600 to-blue-600 text-slate-950 text-xs font-black py-2 px-4 text-center tracking-wide flex items-center justify-center gap-3">
-        <span>⚡ KENYA COUNTRYWIDE DISPATCH</span>
-        <span className="hidden sm:inline">•</span>
-        <span className="hidden sm:inline font-semibold">Same-day delivery in Nairobi & 24hr Courier Countrywide via Fargo & G4S</span>
-        <span className="hidden md:inline">• Pay on Delivery with Safaricom M-Pesa</span>
+    <div className="force-light flex min-h-screen flex-col bg-white text-slate-900 antialiased">
+      <SiteHeader />
+
+      <div className="sticky top-0 z-30 border-b border-slate-200 bg-white/95">
+        <div className="mx-auto flex max-w-7xl items-center gap-3 px-4 py-3 sm:px-6 lg:px-8">
+          <p className="hidden shrink-0 text-sm font-semibold text-slate-950 sm:block">Hardware store</p>
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search routers, access points, cables…"
+            aria-label="Search the store"
+            className="min-w-0 flex-1 rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20 sm:max-w-md"
+          />
+          <Link href="/track" className="hidden shrink-0 text-sm font-medium text-slate-600 hover:text-slate-950 md:block">
+            Track an order
+          </Link>
+          {isSuperAdmin && (
+            <Link href="/admin/products" className="hidden shrink-0 text-sm font-medium text-slate-600 hover:text-slate-950 md:block">
+              Edit catalogue
+            </Link>
+          )}
+          <button
+            type="button"
+            onClick={() => setCartOpen(true)}
+            className="relative shrink-0 rounded-lg bg-slate-900 px-3.5 py-2 text-sm font-medium text-white hover:bg-slate-800"
+          >
+            Cart
+            {itemCount > 0 && (
+              <span className="ml-2 inline-flex min-w-[20px] items-center justify-center rounded-full bg-white px-1.5 text-xs font-semibold text-slate-900">
+                {itemCount}
+              </span>
+            )}
+          </button>
+        </div>
       </div>
 
-      {/* Navigation Header */}
-      <header className="sticky top-0 z-40 bg-[#090D16]/90 backdrop-blur-md border-b border-slate-800/80">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-6">
-            <Link href="/" className="flex items-center gap-2.5 group">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-cyan-500 to-emerald-400 p-0.5 shadow-lg shadow-cyan-500/20 group-hover:scale-105 transition-transform">
-                <div className="w-full h-full bg-slate-950 rounded-[10px] flex items-center justify-center text-cyan-400 font-black text-lg">
-                  M
-                </div>
-              </div>
-              <div>
-                <span className="text-lg font-black tracking-tight text-white group-hover:text-cyan-400 transition-colors">
-                  MASHUP<span className="text-cyan-400">STORE</span>
-                </span>
-                <span className="hidden sm:inline-block ml-2 px-1.5 py-0.2 rounded bg-cyan-500/10 border border-cyan-500/30 text-[10px] font-bold text-cyan-400">
-                  Carrier Hardware
-                </span>
-              </div>
-            </Link>
-
-            <nav className="hidden md:flex items-center gap-5 text-xs font-semibold text-slate-400">
-              <Link href="/" className="hover:text-cyan-400 transition-colors">Home</Link>
-              <Link href="/#packages" className="hover:text-cyan-400 transition-colors">Fiber Packages</Link>
-              <Link href="/shop" className="text-cyan-400 transition-colors">Hardware Shop</Link>
-              <Link href="/#workflow" className="hover:text-cyan-400 transition-colors">How It Works</Link>
-            </nav>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {isSuperAdmin && (
-              <Link
-                href="/admin/products"
-                className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-bold hover:bg-rose-500/20 transition-colors"
-                title="Super Admin Price Management"
-              >
-                <span>✎</span> Update Prices
-              </Link>
-            )}
-
-            {/* Cart Trigger */}
-            <button
-              onClick={() => setIsCartOpen(true)}
-              className="relative px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-cyan-500/30 text-white text-xs font-bold transition-all flex items-center gap-2 shadow-lg shadow-cyan-500/10"
-            >
-              <span>🛒</span>
-              <span>Cart</span>
-              {itemCount > 0 && (
-                <span className="px-1.5 py-0.5 rounded-full bg-cyan-500 text-slate-950 text-[10px] font-black">
-                  {itemCount}
-                </span>
-              )}
-            </button>
-
-            <Link
-              href="/login"
-              className="px-3.5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs transition-colors shadow-md shadow-cyan-500/20"
-            >
-              Portal Sign In
-            </Link>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="flex-1 max-w-7xl mx-auto w-full px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-        {/* Hero Section */}
-        <div className="relative rounded-3xl bg-gradient-to-r from-slate-950 via-[#0a1224] to-slate-950 border border-cyan-500/20 p-8 sm:p-12 overflow-hidden shadow-2xl">
-          <div className="absolute top-0 right-0 w-96 h-96 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
-          <div className="absolute bottom-0 left-0 w-96 h-96 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-
-          <div className="relative z-10 max-w-2xl space-y-4">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs font-bold">
-              <span>🇰🇪</span> Kenya Carrier-Grade Telecom & Hardware Marketplace
-            </div>
-            <h1 className="text-3xl sm:text-5xl font-black tracking-tight text-white leading-tight">
-              Genuine MikroTik, Fiber & Solar Hardware.
-            </h1>
-            <p className="text-sm sm:text-base text-slate-300 leading-relaxed">
-              Equip your ISP network, base station POP, or business hotspot with factory-sealed hardware. Pay instantly via Safaricom M-Pesa with automated receipts and same-day dispatch.
-            </p>
-
-            <div className="flex flex-wrap gap-4 pt-2 text-xs text-slate-400 font-medium">
-              <span className="flex items-center gap-1.5 text-slate-300">
-                <span className="text-emerald-400">✓</span> 100% Genuine Hardware
+      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-10 sm:px-6 lg:px-8">
+        <div className="max-w-2xl">
+          <h1 className="text-3xl font-semibold tracking-tight text-slate-950 sm:text-4xl">Hardware for your network</h1>
+          <p className="mt-3 text-base leading-7 text-slate-600">
+            MikroTik routers, access points, fibre, cabling and power for ISPs and hotspots. Pay with M-Pesa at checkout, or when your order
+            arrives.
+          </p>
+          <ul className="mt-4 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-700">
+            <li className="flex items-center gap-2">
+              <span aria-hidden="true" className="text-emerald-600">
+                ✓
               </span>
-              <span className="flex items-center gap-1.5 text-slate-300">
-                <span className="text-emerald-400">✓</span> 1-2 Year Warranty
+              Same-day delivery in Nairobi
+            </li>
+            <li className="flex items-center gap-2">
+              <span aria-hidden="true" className="text-emerald-600">
+                ✓
               </span>
-              <span className="flex items-center gap-1.5 text-slate-300">
-                <span className="text-emerald-400">✓</span> Safaricom STK Push
-              </span>
-              <span className="flex items-center gap-1.5 text-slate-300">
-                <span className="text-emerald-400">✓</span> Pre-configured with RouterOS
-              </span>
-            </div>
-          </div>
+              Pay on delivery available
+            </li>
+          </ul>
         </div>
 
-        {/* Search & Category Filter Bar */}
-        <div className="space-y-4">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
-            {/* Search Input */}
-            <div className="relative w-full sm:max-w-md">
-              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500 text-sm">🔍</span>
-              <input
-                type="text"
-                placeholder="Search routers, switches, fiber cables, SFP, batteries..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 shadow-inner"
-              />
-            </div>
-
-            {/* Brand Pill Filter */}
-            <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
-              <span className="text-xs text-slate-500 mr-1 shrink-0">Brand:</span>
-              {brands.map((b) => (
-                <button
-                  key={b}
-                  onClick={() => setSelectedBrand(b)}
-                  className={`px-3 py-1 rounded-lg text-xs font-bold capitalize transition-colors shrink-0 ${
-                    selectedBrand.toLowerCase() === b.toLowerCase()
-                      ? "bg-cyan-500 text-slate-950"
-                      : "bg-slate-900 hover:bg-slate-800 text-slate-400 border border-slate-800"
-                  }`}
-                >
-                  {b}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Category Tabs */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-2 border-b border-slate-800">
-            {CATEGORIES.map((cat) => (
+        <div className="mt-8 flex flex-col gap-3 border-b border-slate-200 pb-4 lg:flex-row lg:items-center lg:justify-between">
+          <div className="-mx-1 flex gap-1 overflow-x-auto px-1" role="tablist" aria-label="Categories">
+            {CATEGORIES.map((c) => (
               <button
-                key={cat.id}
-                onClick={() => setSelectedCategory(cat.id)}
-                className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 ${
-                  selectedCategory === cat.id
-                    ? "bg-gradient-to-r from-cyan-500 to-emerald-400 text-slate-950 shadow-lg shadow-cyan-500/20"
-                    : "bg-slate-900/80 hover:bg-slate-800 text-slate-400 border border-slate-800"
+                key={c.id}
+                type="button"
+                role="tab"
+                aria-selected={category === c.id}
+                onClick={() => {
+                  setCategory(c.id);
+                  setBrand("all");
+                }}
+                className={`shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors ${
+                  category === c.id ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100 hover:text-slate-950"
                 }`}
               >
-                <span>{cat.icon}</span>
-                <span>{cat.label}</span>
+                {c.label}
               </button>
             ))}
           </div>
+          {brands.length > 2 && (
+            <label className="flex shrink-0 items-center gap-2 text-sm text-slate-600">
+              Brand
+              <select value={brand} onChange={(e) => setBrand(e.target.value)} className="rounded-lg border border-slate-300 px-2.5 py-1.5 text-sm text-slate-900">
+                {brands.map((b) => (
+                  <option key={b} value={b}>
+                    {b === "all" ? "All brands" : b}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
         </div>
 
-        {/* Product Grid */}
-        <div>
+        <div className="mt-6">
           {loading ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 py-12">
-              {[1, 2, 3, 4, 5, 6, 7, 8].map((i) => (
-                <div
-                  key={i}
-                  className="h-80 rounded-2xl bg-slate-950 border border-slate-800 animate-pulse"
-                />
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {Array.from({ length: 8 }, (_, i) => (
+                <div key={i} className="h-80 animate-pulse rounded-2xl bg-slate-100" />
               ))}
             </div>
-          ) : displayedProducts.length === 0 ? (
-            <div className="text-center py-20 bg-slate-950/60 rounded-3xl border border-slate-800 space-y-3">
-              <div className="text-4xl">🔍</div>
-              <p className="text-base font-bold text-white">No products found matching your search</p>
-              <p className="text-xs text-slate-400">
-                Try selecting &quot;All Hardware&quot; or searching for a different keyword.
-              </p>
+          ) : loadError ? (
+            <div className="rounded-2xl border border-slate-200 px-6 py-16 text-center">
+              <p className="font-medium text-slate-900">The store couldn&apos;t load right now</p>
+              <p className="mt-1 text-sm text-slate-500">Check your connection and try again in a moment.</p>
+            </div>
+          ) : shown.length === 0 ? (
+            <div className="rounded-2xl border border-slate-200 px-6 py-16 text-center">
+              <p className="font-medium text-slate-900">Nothing matches that</p>
+              <p className="mt-1 text-sm text-slate-500">Try another search or category.</p>
               <button
+                type="button"
                 onClick={() => {
-                  setSelectedCategory("all");
-                  setSearchQuery("");
-                  setSelectedBrand("all");
+                  setCategory("all");
+                  setSearch("");
+                  setBrand("all");
                 }}
-                className="mt-2 px-4 py-2 rounded-xl bg-cyan-500 text-slate-950 font-bold text-xs"
+                className="mt-4 rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
-                Reset All Filters
+                Show everything
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {displayedProducts.map((product) => (
-                <HardwareProductCard
-                  key={product.id}
-                  product={product}
-                  onViewDetails={(p) => setSelectedProductForModal(p)}
-                  onQuickBuy={() => setIsCartOpen(true)}
-                />
+            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {shown.map((p) => (
+                <HardwareProductCard key={p.id} product={p} onViewDetails={setDetail} onBuyNow={() => setCartOpen(true)} />
               ))}
             </div>
           )}
         </div>
       </main>
 
-      {/* Product Detail Modal */}
+      <SiteFooter />
+
       <ProductDetailModal
-        product={selectedProductForModal}
-        isOpen={!!selectedProductForModal}
-        onClose={() => setSelectedProductForModal(null)}
-        onInstantBuy={() => {
-          setSelectedProductForModal(null);
-          setIsCartOpen(true);
+        product={detail}
+        onClose={() => setDetail(null)}
+        onBuyNow={() => {
+          setDetail(null);
+          setCartOpen(true);
         }}
       />
-
-      {/* Cart Drawer */}
-      <CartDrawer isOpen={isCartOpen} onClose={() => setIsCartOpen(false)} />
-
-      {/* Footer */}
-      <footer className="mt-16 border-t border-slate-800/80 bg-slate-950 py-8 text-xs text-slate-400">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p>© {new Date().getFullYear()} MASHUPKGRID Technologies Ltd. All rights reserved.</p>
-          <div className="flex items-center gap-4">
-            <span>Safaricom M-Pesa Authorized</span>
-            <span>•</span>
-            <span>MikroTik Certified Hardware</span>
-            <span>•</span>
-            <Link href="/" className="hover:text-cyan-400">Back to Main Website</Link>
-          </div>
-        </div>
-      </footer>
+      <CartDrawer isOpen={cartOpen} onClose={() => setCartOpen(false)} />
     </div>
   );
 }

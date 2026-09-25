@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
 import { Button, Card, ErrorText, HintText, Input, Label, Badge, StatusDot } from "@/components/ui";
-import { IconLock } from "@/components/icons";
 
 interface GoogleAuthConfig {
   enabled: boolean;
@@ -57,10 +56,7 @@ export default function PlatformGoogleSignInPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2.5">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-cyan-500/10 text-cyan-600 dark:text-cyan-400">
-              <IconLock size={20} />
-            </span>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">
             Google OAuth &amp; Social Sign-In
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
