@@ -5,7 +5,6 @@ import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
 import { Button, Card, ErrorText, Badge } from "@/components/ui";
-import { IconLifeBuoy } from "@/components/icons";
 
 type TicketStatus = "OPEN" | "IN_PROGRESS" | "RESOLVED" | "CLOSED";
 type TicketPriority = "LOW" | "NORMAL" | "HIGH" | "URGENT";
@@ -88,10 +87,7 @@ export default function TicketDetailPage() {
     <div className="max-w-3xl space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2.5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-500/15 text-brand-600 dark:text-brand-400">
-              <IconLifeBuoy size={20} />
-            </span>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">
             {ticket.subject}
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">

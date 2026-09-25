@@ -110,35 +110,35 @@ export default function PlatformFeesPage() {
               <Field label="Percentage" htmlFor="fee-pct" hint="e.g. 2 for 2%. Up to two decimals.">
                 <div className="relative">
                   <input id="fee-pct" inputMode="decimal" className={`${inputClass} pr-8`} value={percent} onChange={(e) => setPercent(e.target.value)} />
-                  <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-slate-400">%</span>
+                  <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-sm text-slate-500">%</span>
                 </div>
               </Field>
               <Field label="Fixed fee per payment" htmlFor="fee-fixed" hint="In KES. Added to the percentage.">
                 <div className="relative">
-                  <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-slate-400">KES</span>
+                  <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-slate-500">KES</span>
                   <input id="fee-fixed" inputMode="decimal" className={`${inputClass} pl-12`} value={fixed} onChange={(e) => setFixed(e.target.value)} />
                 </div>
               </Field>
             </div>
-            <div className="rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm">
-              <p className="font-medium text-slate-900">Example</p>
+            <div className="rounded-lg border border-obsidian-800 bg-obsidian-950 p-4 text-sm">
+              <p className="font-medium text-slate-100">Example</p>
               <dl className="mt-3 space-y-1.5">
                 <div className="flex justify-between">
-                  <dt className="text-slate-600">Customer pays</dt>
+                  <dt className="text-slate-400">Customer pays</dt>
                   <dd className="tabular-nums">KES 1,000.00</dd>
                 </div>
                 <div className="flex justify-between">
-                  <dt className="text-slate-600">Platform fee</dt>
+                  <dt className="text-slate-400">Platform fee</dt>
                   <dd className="tabular-nums">− <Money minor={invalid ? 0 : example.fee} cents /></dd>
                 </div>
-                <div className="flex justify-between border-t border-slate-200 pt-1.5 font-semibold text-slate-950">
+                <div className="flex justify-between border-t border-obsidian-800 pt-1.5 font-semibold text-white">
                   <dt>ISP receives</dt>
-                  <dd className="tabular-nums text-emerald-700">
+                  <dd className="tabular-nums text-emerald-300">
                     <Money minor={invalid ? 100_000 : example.net} cents />
                   </dd>
                 </div>
               </dl>
-              <p className="mt-3 text-xs text-slate-500">The fee never exceeds the payment itself. Refunds return the matching share of the fee.</p>
+              <p className="mt-3 text-xs text-slate-400">The fee never exceeds the payment itself. Refunds return the matching share of the fee.</p>
             </div>
           </fieldset>
         </Panel>
@@ -183,12 +183,12 @@ export default function PlatformFeesPage() {
             )}
             <Field label="Minimum settlement" htmlFor="set-min" hint="Whole shillings. Smaller balances roll over.">
               <div className="relative">
-                <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-slate-400">KES</span>
+                <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-slate-500">KES</span>
                 <input id="set-min" inputMode="numeric" className={`${inputClass} pl-12`} value={minimum} onChange={(e) => setMinimum(e.target.value)} />
               </div>
             </Field>
           </fieldset>
-          <p className="mt-4 text-xs text-slate-500">
+          <p className="mt-4 text-xs text-slate-400">
             “Instant” settles within minutes of each payment, batched per run so an ISP pays one M-Pesa transfer fee per run rather than one per
             customer payment. Bank settlements are always manual.
           </p>
@@ -199,8 +199,8 @@ export default function PlatformFeesPage() {
             <button type="submit" className={buttonClass("primary")} disabled={invalid || save.isPending}>
               {save.isPending ? "Saving…" : "Save fees & settlement"}
             </button>
-            {invalid && <span className="text-sm text-red-700">Check the values: percentage 0–100, minimum at least KES 1 in whole shillings.</span>}
-            {saved && !save.isPending && <span className="text-sm text-emerald-700">Saved. Applies to new payments from now on.</span>}
+            {invalid && <span className="text-sm text-red-300">Check the values: percentage 0–100, minimum at least KES 1 in whole shillings.</span>}
+            {saved && !save.isPending && <span className="text-sm text-emerald-300">Saved. Applies to new payments from now on.</span>}
           </div>
         )}
         {save.error && <Alert title="Couldn't save">{(save.error as ApiRequestError).message}</Alert>}
@@ -222,15 +222,15 @@ export default function PlatformFeesPage() {
               const custom = t.feePercentBpsOverride !== null || t.feeFixedMinorOverride !== null;
               return (
                 <tr key={t.id}>
-                  <td className={`${td} font-medium text-slate-900`}>{t.name}</td>
+                  <td className={`${td} font-medium text-slate-100`}>{t.name}</td>
                   <td className={td}>
                     {custom ? (
                       <span>
                         {percentFromBps(t.feePercentBpsOverride ?? settings.data?.feePercentBps ?? 0)} + <Money minor={t.feeFixedMinorOverride ?? settings.data?.feeFixedMinor ?? 0} />{" "}
-                        <span className="ml-1 text-xs font-medium text-blue-800">custom</span>
+                        <span className="ml-1 text-xs font-medium text-brand-300">custom</span>
                       </span>
                     ) : (
-                      <span className="text-slate-500">Platform fee</span>
+                      <span className="text-slate-400">Platform fee</span>
                     )}
                   </td>
                   <td className={`${td} text-right`}>

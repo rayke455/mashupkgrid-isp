@@ -300,15 +300,19 @@ suite("payment gateway (real Postgres)", () => {
     expect((await prisma.tenantPayout.findUniqueOrThrow({ where: { id: settlement.id } })).status).toBe("SETTLED");
   });
 
-  it("settles an M-Pesa phone destination through B2C with our own conversation id", async () => {
+  it("settles an M-Pesa phone destination through B2C v1, matched by Safaricom's conversation id", async () => {
     const t = await seedTenant("b2c", { destination: "MPESA_PHONE" });
     await payInvoice(t);
     const { calls } = mockDaraja("accept");
     const settlement = await requestSettlement({ tenantId: t.tenantId, trigger: "TENANT_REQUEST", enforceMinimum: true });
     expect(settlement.provider).toBe("MPESA_B2C");
-    expect(calls[0]!.url).toContain("/mpesa/b2c/v3/paymentrequest");
+    expect(calls[0]!.url).toContain("/mpesa/b2c/v1/paymentrequest");
     expect(calls[0]!.body).toMatchObject({ CommandID: "BusinessPayment", PartyA: "600111", PartyB: "254722000111", Amount: 980 });
-    expect(settlement.originatorConversationId).toBe(`STL-${settlement.id}`);
+    expect(calls[0]!.body).not.toHaveProperty("OriginatorConversationID");
+    // The id Safaricom issued in its acknowledgement is what its result callback will carry.
+    expect(settlement.originatorConversationId).toMatch(/^oc-/);
+    await applySettlementResult({ originatorConversationId: settlement.originatorConversationId!, resultCode: 0, resultDesc: "ok", transactionId: "RBB2CV1" });
+    expect((await prisma.tenantPayout.findUniqueOrThrow({ where: { id: settlement.id } })).status).toBe("SETTLED");
   });
 
   it("11. fails a settlement on a failed provider result and restores the balance with a reversal entry", async () => {
@@ -376,6 +380,24 @@ suite("payment gateway (real Postgres)", () => {
     expect(retried).toMatchObject({ status: "PROCESSING", retryOfId: failed.id, amountMinor: 98_000, trigger: "ADMIN" });
     await expect(retrySettlement(failed.id, "admin-user")).rejects.toBeInstanceOf(ConflictError);
     expect((await getTenantBalance(t.tenantId)).availableMinor).toBe(0);
+  });
+
+  it("pauses automatic settlements after a failure instead of re-sending every run", async () => {
+    const t = await seedTenant("paused");
+    await payInvoice(t);
+    mockDaraja("reject");
+    const failed = await requestSettlement({ tenantId: t.tenantId, trigger: "AUTOMATIC", enforceMinimum: true });
+    expect(failed.status).toBe("FAILED");
+    mockDaraja("accept");
+    await expect(requestSettlement({ tenantId: t.tenantId, trigger: "AUTOMATIC", enforceMinimum: true })).rejects.toThrow(/paused because/);
+    expect(await prisma.tenantPayout.count({ where: { tenantId: t.tenantId } })).toBe(1);
+    // A person acting resumes it: the tenant's own request goes through, and automatic runs follow.
+    const manual = await requestSettlement({ tenantId: t.tenantId, trigger: "TENANT_REQUEST", enforceMinimum: true });
+    expect(manual.status).toBe("PROCESSING");
+    await applySettlementResult({ originatorConversationId: manual.originatorConversationId!, resultCode: 0, resultDesc: "ok", transactionId: "RBRESUME" });
+    await payInvoice(t);
+    const next = await requestSettlement({ tenantId: t.tenantId, trigger: "AUTOMATIC", enforceMinimum: true });
+    expect(next.status).toBe("PROCESSING");
   });
 
   it("19. concurrent settlement requests settle the balance exactly once", async () => {

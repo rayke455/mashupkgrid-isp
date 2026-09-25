@@ -79,7 +79,7 @@ export default function BillingPage() {
   const [phone, setPhone] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, error: loadError } = useQuery({
     queryKey: ["billing"],
     queryFn: () => apiFetch<BillingResponse>("/api/v1/billing"),
     refetchInterval: (query) =>
@@ -92,8 +92,17 @@ export default function BillingPage() {
     onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to start renewal"),
   });
 
-  if (isLoading || !data) {
+  if (isLoading) {
     return <p className="text-sm text-slate-500">Loading subscription...</p>;
+  }
+  if (!data) {
+    // A 404 here means the account simply has no plan yet, which is not an error to the reader.
+    const noPlan = loadError instanceof ApiRequestError && loadError.status === 404;
+    return (
+      <p className="text-sm text-slate-400">
+        {noPlan ? "No plan is set up for this account yet." : `Couldn't load your subscription: ${loadError instanceof Error ? loadError.message : "please try again."}`}
+      </p>
+    );
   }
 
   const { subscription, usage, payments } = data;

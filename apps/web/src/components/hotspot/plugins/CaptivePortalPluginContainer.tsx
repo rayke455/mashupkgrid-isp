@@ -28,6 +28,9 @@ interface CaptivePortalPluginContainerProps {
   isAuthenticating?: boolean;
   onVoucherCodeApplied?: (code: string) => void;
   onDisconnect?: () => void;
+  /** "light" for light portal themes: light bars, no animated background (it's also the
+   *  single heaviest thing a slow phone renders on this page). */
+  appearance?: "light" | "dark";
 }
 
 export function CaptivePortalPluginContainer({
@@ -39,7 +42,9 @@ export function CaptivePortalPluginContainer({
   isAuthenticating = false,
   onVoucherCodeApplied,
   onDisconnect,
+  appearance = "dark",
 }: CaptivePortalPluginContainerProps) {
+  const light = appearance === "light";
   // Synchronous local default for the first paint only — for a real customer this is always the
   // factory defaults (their browser has never held this tenant's config), so it renders something
   // sane immediately without a flash of an empty state while the real, authoritative fetch below
@@ -96,9 +101,9 @@ export function CaptivePortalPluginContainer({
 
   return (
     <div
-      className="min-h-screen relative overflow-x-hidden flex flex-col justify-between"
+      className={`min-h-screen relative overflow-x-hidden flex flex-col justify-between ${light ? "bg-slate-50" : ""}`}
       style={{
-        background: toggles.theme !== false && pluginsState.theme.enabled
+        background: !light && toggles.theme !== false && pluginsState.theme.enabled
           ? pluginsState.theme.backgroundGradient || pluginsState.theme.backgroundColor
           : undefined,
         fontFamily: toggles.theme !== false && pluginsState.theme.enabled
@@ -113,7 +118,7 @@ export function CaptivePortalPluginContainer({
       />
 
       {/* 4. Animated Background (Particles, Waves, Stars, Bubbles) */}
-      {toggles.backgroundFx !== false && (
+      {!light && toggles.backgroundFx !== false && (
         <AnimatedBackground config={pluginsState.backgroundFx} />
       )}
 
@@ -130,11 +135,11 @@ export function CaptivePortalPluginContainer({
       <div className="w-full relative z-30 flex items-center justify-between px-4 py-2 pointer-events-auto">
         <div className="flex items-center gap-2">
           {toggles.language !== false && pluginsState.language.enabled && pluginsState.language.allowUserSwitch && (
-            <div className="flex rounded-full bg-slate-900/80 border border-slate-700/80 p-0.5 text-[11px] font-bold backdrop-blur-md">
+            <div className={`flex rounded-full p-0.5 text-[11px] font-bold ${light ? "border border-slate-200 bg-white" : "bg-slate-900/80 border border-slate-700/80 backdrop-blur-md"}`}>
               <button
                 onClick={() => setCurrentLang("en")}
                 className={`px-2.5 py-1 rounded-full transition-all ${
-                  currentLang === "en" ? "bg-brand-600 text-white" : "text-slate-400 hover:text-white"
+                  currentLang === "en" ? (light ? "bg-slate-900 text-white" : "bg-brand-600 text-white") : light ? "text-slate-500 hover:text-slate-900" : "text-slate-400 hover:text-white"
                 }`}
               >
                 EN
@@ -142,7 +147,7 @@ export function CaptivePortalPluginContainer({
               <button
                 onClick={() => setCurrentLang("sw")}
                 className={`px-2.5 py-1 rounded-full transition-all ${
-                  currentLang === "sw" ? "bg-brand-600 text-white" : "text-slate-400 hover:text-white"
+                  currentLang === "sw" ? (light ? "bg-slate-900 text-white" : "bg-brand-600 text-white") : light ? "text-slate-500 hover:text-slate-900" : "text-slate-400 hover:text-white"
                 }`}
               >
                 SW
@@ -154,7 +159,7 @@ export function CaptivePortalPluginContainer({
         {toggles.qrCode !== false && pluginsState.qrCode.enabled && (
           <button
             onClick={() => setShowQrModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-900/80 border border-cyan-500/40 text-cyan-300 text-xs font-bold shadow-lg backdrop-blur-md hover:bg-slate-800 transition-all"
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all ${light ? "border border-slate-200 bg-white text-slate-700 hover:bg-slate-100" : "bg-slate-900/80 border border-cyan-500/40 text-cyan-300 shadow-lg backdrop-blur-md hover:bg-slate-800"}`}
             title="Scan Wi-Fi QR Code"
           >
             <span>📱</span>
@@ -165,7 +170,7 @@ export function CaptivePortalPluginContainer({
 
       {/* 15. Announcements (Marquee / Pill / Popup) */}
       {toggles.announcements !== false && (
-        <PortalAnnouncements config={pluginsState.announcements} />
+        <PortalAnnouncements config={pluginsState.announcements} light={light} />
       )}
 
       {/* 14. Advertisements */}
@@ -180,7 +185,7 @@ export function CaptivePortalPluginContainer({
 
       {/* 25. Social Media Bar */}
       {toggles.social !== false && (
-        <PortalSocialBar config={pluginsState.social} />
+        <PortalSocialBar config={pluginsState.social} light={light} />
       )}
 
       {/* 16. Audio Sound Effects Controller */}

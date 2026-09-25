@@ -1,173 +1,85 @@
 "use client";
 
 import { useState } from "react";
-import { HardwareProduct, useCart } from "@/lib/hardware-store";
+import { type HardwareProduct, useCart } from "@/lib/hardware-store";
 
-interface HardwareProductCardProps {
-  product: HardwareProduct;
-  onQuickBuy?: (product: HardwareProduct) => void;
-  onViewDetails?: (product: HardwareProduct) => void;
+export const ksh = (n: number) => `KSh ${n.toLocaleString("en-KE")}`;
+
+export function StockLabel({ product }: { product: HardwareProduct }) {
+  if (!product.inStock) return <span className="text-rose-600">Out of stock</span>;
+  if (product.stock <= 5) return <span className="text-amber-700">Only {product.stock} left</span>;
+  return <span className="text-emerald-700">In stock</span>;
 }
 
-export function HardwareProductCard({ product, onQuickBuy, onViewDetails }: HardwareProductCardProps) {
+export function HardwareProductCard({
+  product,
+  onViewDetails,
+  onBuyNow,
+}: {
+  product: HardwareProduct;
+  onViewDetails: (product: HardwareProduct) => void;
+  onBuyNow: () => void;
+}) {
   const { addItem } = useCart();
-  const [showSpecs, setShowSpecs] = useState(false);
-  const [addedAnimation, setAddedAnimation] = useState(false);
-
-  const handleAddToCart = () => {
-    addItem(product, 1);
-    setAddedAnimation(true);
-    setTimeout(() => setAddedAnimation(false), 1200);
-  };
-
-  const handleQuickBuy = () => {
-    addItem(product, 1);
-    if (onQuickBuy) {
-      onQuickBuy(product);
-    }
-  };
-
-  const discountPercent = product.originalPrice
-    ? Math.round(((product.originalPrice - product.price) / product.originalPrice) * 100)
-    : null;
+  const [added, setAdded] = useState(false);
+  const saving = product.originalPrice && product.originalPrice > product.price ? product.originalPrice - product.price : 0;
 
   return (
-    <div className="group relative rounded-2xl bg-gradient-to-b from-slate-900/90 to-slate-950/90 border border-slate-800/80 hover:border-cyan-500/50 transition-all duration-300 flex flex-col overflow-hidden shadow-lg hover:shadow-cyan-500/10">
-      {/* Top badges */}
-      <div className="absolute top-3 left-3 z-10 flex flex-wrap gap-1.5">
-        <span className="px-2 py-0.5 rounded-md bg-slate-950/80 backdrop-blur-md border border-slate-700 text-[10px] font-bold tracking-wider uppercase text-cyan-400">
-          {product.brand}
-        </span>
-        {product.badge && (
-          <span className="px-2 py-0.5 rounded-md bg-gradient-to-r from-emerald-500/20 to-cyan-500/20 border border-emerald-500/40 text-[10px] font-bold text-emerald-300">
-            {product.badge}
-          </span>
-        )}
-      </div>
-
-      {discountPercent && discountPercent > 0 && (
-        <div className="absolute top-3 right-3 z-10 px-2 py-0.5 rounded-md bg-rose-500 text-white font-bold text-[10px] shadow-md">
-          -{discountPercent}%
-        </div>
-      )}
-
-      {/* Image Thumbnail */}
-      <div 
-        onClick={() => onViewDetails?.(product)}
-        className="relative h-48 w-full bg-slate-950 overflow-hidden flex items-center justify-center p-4 cursor-pointer"
-      >
+    <article className="group flex flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white transition-shadow hover:shadow-md">
+      <button type="button" onClick={() => onViewDetails(product)} className="relative flex h-48 items-center justify-center bg-slate-50 p-5" aria-label={`View ${product.name}`}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={product.imageUrl}
-          alt={product.name}
-          className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-transparent to-transparent opacity-60" />
-        
-        {/* Quick View Button overlay on hover */}
-        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-          <span className="px-3 py-1.5 rounded-xl bg-cyan-500 text-slate-950 font-bold text-xs shadow-lg shadow-cyan-500/30 flex items-center gap-1.5 transform translate-y-2 group-hover:translate-y-0 transition-transform">
-            <span>👁️</span> Quick View
-          </span>
-        </div>
-      </div>
+        <img src={product.imageUrl} alt="" className="h-full w-full object-contain transition-transform duration-300 group-hover:scale-[1.03]" />
+        {product.badge && <span className="absolute left-3 top-3 rounded-full bg-white px-2.5 py-0.5 text-xs font-medium text-slate-700 ring-1 ring-slate-200">{product.badge}</span>}
+      </button>
 
-      {/* Card Body */}
-      <div className="p-4 flex-1 flex flex-col justify-between space-y-3">
-        <div>
-          <div className="flex items-center gap-1.5 text-amber-400 text-xs mb-1">
-            <span>★</span>
-            <span className="font-bold text-slate-200">{product.rating.toFixed(1)}</span>
-            <span className="text-slate-500 text-[11px]">({product.reviewCount})</span>
-            <span className="mx-1 text-slate-700">•</span>
-            <span
-              className={`text-[11px] font-medium ${
-                product.inStock ? "text-emerald-400" : "text-rose-400"
-              }`}
-            >
-              {product.inStock ? `In Stock (${product.stock})` : "Out of Stock"}
-            </span>
-          </div>
-
-          <h4 
-            onClick={() => onViewDetails?.(product)}
-            className="font-bold text-sm text-white line-clamp-2 group-hover:text-cyan-400 transition-colors cursor-pointer"
-          >
+      <div className="flex flex-1 flex-col p-4">
+        <p className="text-xs font-medium text-slate-500">{product.brand}</p>
+        <h3 className="mt-0.5 line-clamp-2 text-[15px] font-semibold leading-snug text-slate-950">
+          <button type="button" onClick={() => onViewDetails(product)} className="text-left hover:text-brand-700">
             {product.name}
-          </h4>
-
-          <p className="text-xs text-slate-400 mt-1 line-clamp-2 leading-relaxed">
-            {product.shortDescription}
-          </p>
-        </div>
-
-        {/* Specs Toggle */}
-        <div>
-          <button
-            onClick={() => setShowSpecs(!showSpecs)}
-            className="text-[11px] font-medium text-cyan-400 hover:text-cyan-300 flex items-center gap-1"
-          >
-            <span>{showSpecs ? "Hide Technical Specs ▲" : "View Technical Specs ▼"}</span>
           </button>
+        </h3>
+        <p className="mt-1 line-clamp-2 text-sm leading-6 text-slate-600">{product.shortDescription}</p>
 
-          {showSpecs && (
-            <ul className="mt-2 p-2.5 rounded-lg bg-slate-950/70 border border-slate-800 text-[11px] text-slate-300 space-y-1 animate-in fade-in">
-              {product.specs.map((spec, i) => (
-                <li key={i} className="flex items-start gap-1.5">
-                  <span className="text-cyan-400 font-bold shrink-0">✓</span>
-                  <span>{spec}</span>
-                </li>
-              ))}
-              <li className="pt-1 text-[10px] text-slate-500 border-t border-slate-800 flex items-center gap-1">
-                <span>🛡️</span>
-                <span>{product.warranty}</span>
-              </li>
-            </ul>
-          )}
-        </div>
-
-        {/* Pricing & CTA */}
-        <div className="pt-3 border-t border-slate-800/80">
-          <div className="flex items-baseline justify-between mb-3">
-            <div>
-              <span className="text-xs text-slate-400 block leading-none mb-0.5">Kenya Cash Price</span>
-              <div className="flex items-baseline gap-2">
-                <span className="text-base font-extrabold text-cyan-300">
-                  KES {product.price.toLocaleString()}
-                </span>
-                {product.originalPrice && (
-                  <span className="text-xs text-slate-500 line-through">
-                    KES {product.originalPrice.toLocaleString()}
-                  </span>
-                )}
-              </div>
-            </div>
-            <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 font-medium">
-              Till / Paybill
-            </span>
+        <div className="mt-auto pt-4">
+          <div className="flex items-baseline justify-between gap-2">
+            <p className="text-lg font-semibold tabular-nums text-slate-950">{ksh(product.price)}</p>
+            <p className="text-xs">
+              <StockLabel product={product} />
+            </p>
           </div>
-
-          <div className="grid grid-cols-2 gap-2">
+          {saving > 0 && (
+            <p className="text-xs text-slate-500">
+              <span className="line-through">{ksh(product.originalPrice!)}</span> · save {ksh(saving)}
+            </p>
+          )}
+          <div className="mt-3 grid grid-cols-2 gap-2">
             <button
-              onClick={handleAddToCart}
-              className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all flex items-center justify-center gap-1.5 ${
-                addedAnimation
-                  ? "bg-emerald-500 border-emerald-400 text-slate-950"
-                  : "bg-slate-900 hover:bg-slate-800 border-slate-700 text-slate-200"
-              }`}
+              type="button"
+              disabled={!product.inStock}
+              onClick={() => {
+                addItem(product, 1);
+                setAdded(true);
+                setTimeout(() => setAdded(false), 1200);
+              }}
+              className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              {addedAnimation ? "✓ Added" : "+ Add to Cart"}
+              {added ? "Added" : "Add to cart"}
             </button>
             <button
-              onClick={handleQuickBuy}
-              className="py-2 px-3 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-slate-950 text-xs font-bold transition-all shadow-md shadow-emerald-500/20 flex items-center justify-center gap-1"
+              type="button"
+              disabled={!product.inStock}
+              onClick={() => {
+                addItem(product, 1);
+                onBuyNow();
+              }}
+              className="rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <span>⚡</span>
-              Buy with M-Pesa
+              Buy now
             </button>
           </div>
         </div>
       </div>
-    </div>
+    </article>
   );
 }

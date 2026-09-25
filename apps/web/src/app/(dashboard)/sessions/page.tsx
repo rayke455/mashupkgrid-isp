@@ -2,8 +2,7 @@
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api-client";
-import { Button, Card, Badge, StatusDot } from "@/components/ui";
-import { IconSession } from "@/components/icons";
+import { PageHeader, Panel, Pill, darkButton } from "@/components/dashboard/surface";
 
 interface SessionRow {
   id: string;
@@ -12,6 +11,36 @@ interface SessionRow {
   createdAt: string;
   lastUsedAt: string;
   isCurrent: boolean;
+}
+
+/** "Edge on Windows" from a user-agent string; the raw string is kept as a tooltip. */
+function describeDevice(ua: string | null): string {
+  if (!ua) return "Unknown device";
+  if (/^curl\//i.test(ua)) return "Command line (curl)";
+  const browser = /Edg\//.test(ua)
+    ? "Edge"
+    : /OPR\/|Opera/.test(ua)
+      ? "Opera"
+      : /Firefox\//.test(ua)
+        ? "Firefox"
+        : /Chrome\//.test(ua)
+          ? "Chrome"
+          : /Safari\//.test(ua)
+            ? "Safari"
+            : null;
+  const os = /Windows/.test(ua)
+    ? "Windows"
+    : /Android/.test(ua)
+      ? "Android"
+      : /iPhone|iPad|iOS/.test(ua)
+        ? "iPhone / iPad"
+        : /Mac OS X/.test(ua)
+          ? "Mac"
+          : /Linux/.test(ua)
+            ? "Linux"
+            : null;
+  if (browser && os) return `${browser} on ${os}`;
+  return browser ?? os ?? ua.slice(0, 40);
 }
 
 export default function SessionsPage() {
@@ -28,53 +57,39 @@ export default function SessionsPage() {
 
   return (
     <div className="max-w-3xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2.5">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-500/15 text-brand-600 dark:text-brand-400">
-            <IconSession size={20} />
-          </span>
-          Active Login Sessions
-        </h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          Manage your authenticated devices, IP addresses, and revoke active JWT refresh tokens.
-        </p>
-      </div>
+      <PageHeader title="My sessions" description="Devices signed in to your account. Sign out any you don't recognise." />
 
-      {isLoading && <p className="text-sm text-slate-500">Loading active sessions...</p>}
-
-      <div className="space-y-3">
-        {data?.map((session) => (
-          <Card key={session.id} className="flex items-center justify-between py-4">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2">
-                <p className="font-semibold text-slate-900 dark:text-white text-sm">
-                  {session.userAgent ?? "Web Browser"}
-                </p>
-                {session.isCurrent && (
-                  <Badge variant="success">
-                    <StatusDot status="ONLINE" />
-                    <span>Current Device</span>
-                  </Badge>
+      <Panel padded={false}>
+        {isLoading ? (
+          <p className="px-5 py-8 text-sm text-slate-400">Loading sessions…</p>
+        ) : (
+          <ul className="divide-y divide-obsidian-800">
+            {data?.map((session) => (
+              <li key={session.id} className="flex items-center justify-between gap-4 px-5 py-4">
+                <div className="min-w-0">
+                  <p className="flex flex-wrap items-center gap-2 text-sm font-medium text-white" title={session.userAgent ?? undefined}>
+                    {describeDevice(session.userAgent)}
+                    {session.isCurrent && <Pill tone="good">This device</Pill>}
+                  </p>
+                  <p className="mt-0.5 text-xs text-slate-400">
+                    {session.ipAddress ?? "Unknown IP"} · last active {new Date(session.lastUsedAt).toLocaleString()}
+                  </p>
+                </div>
+                {!session.isCurrent && (
+                  <button
+                    type="button"
+                    className={`${darkButton("secondary", "sm")} shrink-0`}
+                    onClick={() => revoke.mutate(session.id)}
+                    disabled={revoke.isPending}
+                  >
+                    Sign out
+                  </button>
                 )}
-              </div>
-              <p className="font-mono text-xs text-slate-500 dark:text-slate-400">
-                IP: {session.ipAddress ?? "Unknown"} · Last active: {new Date(session.lastUsedAt).toLocaleString()}
-              </p>
-            </div>
-
-            {!session.isCurrent && (
-              <Button
-                variant="danger"
-                className="text-xs py-1.5"
-                onClick={() => revoke.mutate(session.id)}
-                disabled={revoke.isPending}
-              >
-                Revoke Session
-              </Button>
-            )}
-          </Card>
-        ))}
-      </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Panel>
     </div>
   );
 }

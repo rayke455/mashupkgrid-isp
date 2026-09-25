@@ -1,7 +1,7 @@
 import { retryPendingSyncTasks, expireOverdueVouchers } from "@mashupkgrid/radius";
 import { prisma } from "@mashupkgrid/database";
-import { testRouterConnection } from "@mashupkgrid/network";
-import { notifyRouterWentDown } from "./router-alerts.js";
+import { testRouterConnection, reconcileRouterProvisioning } from "@mashupkgrid/network";
+import { notifyRouterRecovered, notifyRouterWentDown, routerAlertFor } from "./router-alerts.js";
 
 export async function handleRetryPendingSyncTasks(): Promise<void> {
   const result = await retryPendingSyncTasks();
@@ -30,28 +30,35 @@ export async function handlePollRouterHealth(): Promise<void> {
   for (const router of routers) {
     try {
       const health = await testRouterConnection(router.tenantId, router.id);
+      const alert = routerAlertFor(router.status, health.reachable);
+      if (alert) {
+        // Best-effort: a router really is down (or back) whether or not SMS/email cooperate, and
+        // a failed notification must not stop the rest of the fleet being polled.
+        try {
+          const sent =
+            alert === "down"
+              ? await notifyRouterWentDown(router.tenantId, router.name, health.error ?? null)
+              : await notifyRouterRecovered(router.tenantId, router.name);
+          if (sent > 0) alerted += 1;
+        } catch (err) {
+          console.error(`[network] could not send the ${alert} alert for router ${router.id}`, err);
+        }
+      }
       if (health.reachable) {
         succeeded += 1;
+        // Self-repair of the hotspot essentials; throttled inside, and never allowed to fail the poll.
+        await reconcileRouterProvisioning(router.id).catch((err) =>
+          console.warn(`[network] could not check hotspot setup on router ${router.id}:`, err instanceof Error ? err.message : err)
+        );
         continue;
       }
       failed += 1;
-
-      if (router.status !== "DOWN") {
-        // Best-effort: a router really is down whether or not the SMS gateway cooperates, and a
-        // failed notification must not stop the rest of the fleet being polled.
-        try {
-          const sent = await notifyRouterWentDown(router.tenantId, router.name, health.error ?? null);
-          if (sent > 0) alerted += 1;
-        } catch (err) {
-          console.error(`[network] could not alert on router ${router.id} going down`, err);
-        }
-      }
     } catch (err) {
       failed += 1;
       console.error(`[network] poll-router-health: router ${router.id} failed`, err);
     }
   }
   console.log(
-    `[network] poll-router-health: reachable=${succeeded} unreachable=${failed} newlyDownAlerts=${alerted}`
+    `[network] poll-router-health: reachable=${succeeded} unreachable=${failed} alerts=${alerted}`
   );
 }

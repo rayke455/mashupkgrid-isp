@@ -14,6 +14,7 @@ import {
   tryCompleteOnboardingFeeCallback,
   tryCompleteSubscriptionPaymentCallback,
   tryCompleteDonationCallback,
+  tryCompleteStoreOrderCallback,
   getPlatformMpesaConfigStatus,
   getPlatformB2BStatus,
   setPlatformMpesaConfig,
@@ -38,6 +39,7 @@ import { authenticate } from "../plugins/authenticate.js";
 import { resolveTenant } from "../plugins/tenant.js";
 import { checkMaintenance } from "../plugins/maintenance.js";
 import { requirePermission } from "../plugins/authorize.js";
+import { settleAfterCollection } from "../lib/settle-after-collection.js";
 import { writeAuditLog } from "../lib/audit.js";
 import { enqueueSendPaymentConfirmationEmail, enqueueSendWhatsappVoucher } from "../lib/queue.js";
 import { emitWebhookEvent } from "../lib/webhooks.js";
@@ -415,6 +417,7 @@ export async function mpesaRoutes(app: FastifyInstance): Promise<void> {
       });
       // Notifications only for the first delivery — a duplicate must not re-send a voucher.
       if (stkRequest?.status === "COMPLETED" && !outcome.duplicate) {
+        if (stkRequest.collectedBy === "PLATFORM") settleAfterCollection(stkRequest.tenantId, request.log);
         if (stkRequest.customer?.email) {
           await enqueueSendPaymentConfirmationEmail({
             email: stkRequest.customer.email,
@@ -454,6 +457,8 @@ export async function mpesaRoutes(app: FastifyInstance): Promise<void> {
       const matched =
         (await tryCompleteOnboardingFeeCallback(request.body)) ||
         (await tryCompleteSubscriptionPaymentCallback(request.body)) ||
+        // A hardware order from the public store.
+        (await tryCompleteStoreOrderCallback(request.body)) ||
         // Last resort: could be a donation from the public "Buy Me a Coffee" page.
         (await tryCompleteDonationCallback(request.body));
       await finishWebhookEvent(eventId, {
@@ -576,6 +581,7 @@ export async function mpesaRoutes(app: FastifyInstance): Promise<void> {
       if (!duplicate && transaction.tenantId && transaction.reconciled && transaction.paymentId) {
         await notifyC2BPayment(transaction.tenantId, transaction);
       }
+      if (!duplicate && transaction.tenantId) settleAfterCollection(transaction.tenantId, request.log);
     } catch (err) {
       request.log.warn({ err }, "Platform C2B confirmation rejected");
       await finishWebhookEvent(eventId, { status: "REJECTED", errorMessage: err instanceof Error ? err.message : String(err) });
@@ -636,6 +642,39 @@ export async function mpesaRoutes(app: FastifyInstance): Promise<void> {
     }
   );
 
+  /** The public supporters wall: the latest completed donations. Names and messages only for
+   *  donors who ticked "show my name"; phone numbers never leave the server. */
+  app.get(
+    "/donate/supporters",
+    { config: { audience: "customer" } },
+    async (request, reply) => {
+      const [recent, supporterCount] = await Promise.all([
+        prisma.donation.findMany({
+          where: { status: "COMPLETED" },
+          orderBy: { createdAt: "desc" },
+          take: 12,
+          select: { id: true, amountMinor: true, donorName: true, donorMessage: true, showPublicly: true, createdAt: true },
+        }),
+        prisma.donation.count({ where: { status: "COMPLETED" } }),
+      ]);
+      reply.send(
+        successResponse(
+          {
+            supporterCount,
+            recent: recent.map((d) => ({
+              id: d.id,
+              amount: Math.round(d.amountMinor / 100),
+              name: d.showPublicly ? d.donorName : null,
+              message: d.showPublicly ? d.donorMessage : null,
+              createdAt: d.createdAt,
+            })),
+          },
+          request.id
+        )
+      );
+    }
+  );
+
   app.post(
     "/donate",
     {
@@ -648,6 +687,8 @@ export async function mpesaRoutes(app: FastifyInstance): Promise<void> {
         amount: z.number().int().positive(), // in KES
         name: z.string().max(100).optional(),
         message: z.string().max(280).optional(),
+        /** The donor chose to show their name and message on the public supporters wall. */
+        showPublicly: z.boolean().optional(),
       });
       const body = donateBodySchema.parse(request.body);
       const normalizedPhone = normalizeKenyanPhone(body.phone);
@@ -678,6 +719,7 @@ export async function mpesaRoutes(app: FastifyInstance): Promise<void> {
             amountMinor,
             donorName: body.name?.trim() || null,
             donorMessage: body.message?.trim() || null,
+            showPublicly: body.showPublicly === true,
             merchantRequestId: response.MerchantRequestID,
             checkoutRequestId: response.CheckoutRequestID,
             status: "PENDING",
@@ -703,21 +745,13 @@ export async function mpesaRoutes(app: FastifyInstance): Promise<void> {
 
         await donationPromise;
       } catch (err: any) {
-        request.log.info({ err: err?.message }, "Platform M-Pesa STK fallback used for donation");
-        reply.status(200).send(
-          successResponse(
-            {
-              merchantRequestId: `DON-${Date.now()}`,
-              checkoutRequestId: `ws_CO_${Date.now()}`,
-              status: "PENDING",
-              phone: normalizedPhone,
-              amount: body.amount,
-              paybill: donateConfig.paybill,
-              account: accountRef,
-              fallbackMessage: `Direct prompt queued. If prompt doesn't appear, use Paybill ${donateConfig.paybill || "(not configured)"} Acc: ${accountRef}`,
-            },
-            request.id
-          )
+        // Never report a prompt that was not sent: the donor would wait for a PIN request that
+        // is never coming. Say so, and give the Paybill route when there is one.
+        request.log.warn({ err: err?.message }, "Donation STK push could not be sent");
+        throw new ConflictError(
+          donateConfig.paybill
+            ? `We couldn't send the M-Pesa prompt right now. You can still pay with Paybill ${donateConfig.paybill}, account ${accountRef}.`
+            : "We couldn't send the M-Pesa prompt right now. Please try again in a minute."
         );
       }
     }

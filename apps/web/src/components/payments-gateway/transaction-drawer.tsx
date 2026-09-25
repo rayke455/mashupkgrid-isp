@@ -67,7 +67,7 @@ export function TransactionDrawer({
         ) : undefined
       }
     >
-      {isLoading && <div className="h-64 animate-pulse rounded-lg bg-slate-100" />}
+      {isLoading && <div className="h-64 animate-pulse rounded-lg bg-obsidian-800" />}
       {error && <Alert title="Couldn't load this transaction">{(error as Error).message}</Alert>}
       {data && (
         <div className="space-y-6">
@@ -77,10 +77,10 @@ export function TransactionDrawer({
             <EnvironmentBadge environment={data.environment} />
           </div>
 
-          <div className="grid grid-cols-3 gap-2 rounded-lg border border-slate-200 p-4 text-center">
+          <div className="grid grid-cols-3 gap-2 rounded-lg border border-obsidian-800 p-4 text-center">
             <Amount label="Customer paid" value={<Money minor={data.grossMinor} />} />
             <Amount label={`Fee (${feeRule(data.feePercentBps, data.feeFixedMinor)})`} value={<Money minor={-data.feeMinor} />} />
-            <Amount label="Tenant receives" value={<Money minor={data.netMinor} className="text-emerald-700" />} />
+            <Amount label="Tenant receives" value={<Money minor={data.netMinor} className="text-emerald-300" />} />
           </div>
 
           <DetailList
@@ -94,7 +94,7 @@ export function TransactionDrawer({
                 label: "M-Pesa receipt",
                 value: data.providerReference.startsWith("PRV-") ? (
                   <span>
-                    {data.providerReference} <span className="text-xs text-amber-700">(provisional — awaiting Safaricom&apos;s receipt)</span>
+                    {data.providerReference} <span className="text-xs text-amber-300">(provisional — awaiting Safaricom&apos;s receipt)</span>
                   </span>
                 ) : (
                   <span className="font-mono">{data.providerReference}</span>
@@ -116,13 +116,13 @@ export function TransactionDrawer({
           />
 
           <div>
-            <h3 className="mb-2 text-sm font-semibold text-slate-900">Ledger entries</h3>
+            <h3 className="mb-2 text-sm font-semibold text-slate-100">Ledger entries</h3>
             <LedgerTable entries={data.ledgerEntries} />
           </div>
 
           {data.refunds.length > 0 && (
             <div>
-              <h3 className="mb-2 text-sm font-semibold text-slate-900">Refunds &amp; reversals</h3>
+              <h3 className="mb-2 text-sm font-semibold text-slate-100">Refunds &amp; reversals</h3>
               <ul className="space-y-2">
                 {data.refunds.map((r) => (
                   <RefundRow key={r.id} refund={r} admin={admin} />
@@ -148,8 +148,8 @@ export function TransactionDrawer({
 function Amount({ label, value }: { label: string; value: ReactNode }) {
   return (
     <div>
-      <p className="text-xs text-slate-500">{label}</p>
-      <p className="mt-1 text-base font-semibold text-slate-950">{value}</p>
+      <p className="text-xs text-slate-400">{label}</p>
+      <p className="mt-1 text-base font-semibold text-white">{value}</p>
     </div>
   );
 }
@@ -173,15 +173,15 @@ function RefundRow({ refund, admin }: { refund: GatewayTransactionDetail["refund
     },
   });
   return (
-    <li className="rounded-lg border border-slate-200 p-3 text-sm">
+    <li className="rounded-lg border border-obsidian-800 p-3 text-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="font-medium text-slate-900">
+        <span className="font-medium text-slate-100">
           {refund.refundNumber} · {refund.kind === "REVERSAL" ? "Reversal" : "Refund"} <Money minor={refund.amountMinor} />
         </span>
         <StatusBadge status={refund.status} />
       </div>
-      <p className="mt-1 text-slate-600">{refund.reason}</p>
-      <p className="mt-1 text-xs text-slate-500">
+      <p className="mt-1 text-slate-400">{refund.reason}</p>
+      <p className="mt-1 text-xs text-slate-400">
         Fee returned to ISP: <Money minor={refund.feeReturnedMinor} />
         {refund.externalReference ? ` · Ref ${refund.externalReference}` : ""} · {formatDateTime(refund.createdAt)}
       </p>
@@ -288,7 +288,7 @@ function RefundDialog({
         <textarea id="refund-reason" rows={2} className={inputClass} value={reason} onChange={(e) => setReason(e.target.value)} />
       </Field>
       {kind === "REVERSAL" && (
-        <label className="flex items-start gap-2 text-sm text-slate-700">
+        <label className="flex items-start gap-2 text-sm text-slate-300">
           <input type="checkbox" className="mt-1" checked={returned} onChange={(e) => setReturned(e.target.checked)} />
           <span>Safaricom has already returned the money to the customer (e.g. an M-Pesa reversal). Leave unticked if someone still has to pay them back.</span>
         </label>

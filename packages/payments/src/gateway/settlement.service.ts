@@ -72,6 +72,22 @@ export async function requestSettlement(input: RequestSettlementInput): Promise<
       throw new ConflictError(`Settlement ${queued.settlementNumber} is already waiting to be sent.`);
     }
 
+    // After a failed payout, automatic runs stop for this tenant until a person acts (an admin retry
+    // or a tenant request). Otherwise a rejected credential is re-sent every scheduler tick, and
+    // Safaricom locks an initiator after repeated failures.
+    if (input.trigger === "AUTOMATIC") {
+      const latest = await tx.tenantPayout.findFirst({
+        where: { tenantId: input.tenantId },
+        orderBy: { createdAt: "desc" },
+        select: { status: true, settlementNumber: true },
+      });
+      if (latest?.status === "FAILED") {
+        throw new ConflictError(
+          `Automatic settlements are paused because ${latest.settlementNumber} failed. Retry it or request a settlement to resume.`
+        );
+      }
+    }
+
     const balance = await getTenantBalance(input.tenantId, tx);
     const amountMinor = balance.settleableMinor;
     if (amountMinor <= 0) throw new ConflictError("There is no available balance to settle.");

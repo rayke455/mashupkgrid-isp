@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api-client";
 import { Card, Input, Badge } from "@/components/ui";
-import { IconSpeed, IconArrowRight, IconRouter } from "@/components/icons";
 
 interface BandwidthByDay {
   date: string;
@@ -58,19 +57,16 @@ export default function ReportsPage() {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="flex items-center gap-2.5 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-sky-500/15 text-sky-600 dark:text-sky-400">
-              <IconSpeed size={20} />
-            </span>
-            Network Bandwidth &amp; Data Usage
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">
+            Bandwidth usage
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-            Real-time subscriber traffic, RADIUS accounting telemetry, and data quota consumption.
+            How much data your subscribers use, from RADIUS accounting.
           </p>
         </div>
 
         {/* Time Period Filter */}
-        <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-obsidian-900 p-1 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-bold font-mono">
+        <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-obsidian-900 p-1 rounded-xl border border-slate-200 dark:border-slate-800 text-xs font-medium">
           <button
             type="button"
             onClick={() => setDays(7)}
@@ -102,33 +98,33 @@ export default function ReportsPage() {
       </div>
 
       {/* 4 KPI SUMMARY CARDS */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5 font-mono">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
         <Card className="p-4 space-y-1 bg-slate-900/60 border-slate-800">
-          <span className="text-[10px] uppercase text-slate-400 font-bold block">Total Data Transferred</span>
-          <div className="text-xl sm:text-2xl font-black text-white">{formatBytes(totalBytes)}</div>
-          <span className="text-[10px] text-brand-400">Combined In + Out</span>
+          <span className="block text-sm text-slate-400">Total data</span>
+          <div className="text-xl font-semibold tabular-nums text-white sm:text-2xl">{formatBytes(totalBytes)}</div>
+          <span className="text-xs text-slate-500">Download and upload</span>
         </Card>
 
         <Card className="p-4 space-y-1 bg-slate-900/60 border-slate-800">
-          <span className="text-[10px] uppercase text-slate-400 font-bold block">Download Traffic (Rx)</span>
-          <div className="text-xl sm:text-2xl font-black text-emerald-400">{formatBytes(totalDownload)}</div>
-          <span className="text-[10px] text-slate-500">
+          <span className="block text-sm text-slate-400">Downloaded</span>
+          <div className="text-xl font-semibold tabular-nums text-white sm:text-2xl">{formatBytes(totalDownload)}</div>
+          <span className="text-xs text-slate-500">
             {totalBytes > 0 ? `${Math.round((totalDownload / totalBytes) * 100)}% of total` : "0%"}
           </span>
         </Card>
 
         <Card className="p-4 space-y-1 bg-slate-900/60 border-slate-800">
-          <span className="text-[10px] uppercase text-slate-400 font-bold block">Upload Traffic (Tx)</span>
-          <div className="text-xl sm:text-2xl font-black text-cyan-400">{formatBytes(totalUpload)}</div>
-          <span className="text-[10px] text-slate-500">
+          <span className="block text-sm text-slate-400">Uploaded</span>
+          <div className="text-xl font-semibold tabular-nums text-white sm:text-2xl">{formatBytes(totalUpload)}</div>
+          <span className="text-xs text-slate-500">
             {totalBytes > 0 ? `${Math.round((totalUpload / totalBytes) * 100)}% of total` : "0%"}
           </span>
         </Card>
 
         <Card className="p-4 space-y-1 bg-slate-900/60 border-slate-800">
-          <span className="text-[10px] uppercase text-slate-400 font-bold block">Active RADIUS Sessions</span>
-          <div className="text-xl sm:text-2xl font-black text-amber-400">{totalSessions.toLocaleString()}</div>
-          <span className="text-[10px] text-slate-500">RadAcct Records</span>
+          <span className="block text-sm text-slate-400">Sessions</span>
+          <div className="text-xl font-semibold tabular-nums text-white sm:text-2xl">{totalSessions.toLocaleString()}</div>
+          <span className="text-xs text-slate-500">Recorded by RADIUS</span>
         </Card>
       </div>
 
@@ -136,14 +132,14 @@ export default function ReportsPage() {
       <Card className="p-6 space-y-4 border-slate-800">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-800">
           <div>
-            <h2 className="font-bold text-base text-slate-900 dark:text-white">
-              Daily Bandwidth Consumption Timeline
+            <h2 className="text-[15px] font-semibold text-slate-900 dark:text-white">
+              Data used per day
             </h2>
             <p className="text-xs text-slate-400">
-              Aggregated daily upload and download throughput across all MikroTik NAS gateways.
+              Download and upload across all your routers.
             </p>
           </div>
-          <span className="text-xs font-mono text-emerald-400 font-bold">
+          <span className="text-xs text-slate-400">
             Average: {formatBytes(totalBytes / (byDay?.length || 1))} / day
           </span>
         </div>
@@ -158,11 +154,11 @@ export default function ReportsPage() {
               const dlPct = total > 0 ? (day.downloadBytes / total) * 100 : 80;
 
               return (
-                <div key={day.date} className="flex items-center gap-3 text-xs font-mono">
+                <div key={day.date} className="flex items-center gap-3 text-xs tabular-nums">
                   <span className="w-24 shrink-0 text-slate-400 text-[11px]">{day.date}</span>
                   <div className="h-4 flex-1 overflow-hidden rounded-md bg-slate-900 border border-slate-800 flex">
                     <div
-                      className="h-full bg-gradient-to-r from-emerald-500 to-teal-400"
+                      className="h-full bg-brand-500"
                       style={{ width: `${widthPct * (dlPct / 100)}%` }}
                       title={`Download: ${formatBytes(day.downloadBytes)}`}
                     />
@@ -172,7 +168,7 @@ export default function ReportsPage() {
                       title={`Upload: ${formatBytes(day.uploadBytes)}`}
                     />
                   </div>
-                  <span className="w-24 shrink-0 text-right text-slate-300 font-bold">
+                  <span className="w-24 shrink-0 text-right text-slate-300">
                     {formatBytes(total)}
                   </span>
                 </div>
@@ -183,7 +179,7 @@ export default function ReportsPage() {
 
         {byDay && byDay.length === 0 && !byDayLoading && (
           <div className="py-8 text-center text-xs text-slate-400 space-y-1">
-            <p className="font-bold text-slate-300">No RADIUS accounting records received yet.</p>
+            <p className="font-medium text-slate-300">No RADIUS accounting records received yet.</p>
             <p>Traffic logs automatically populate as FreeRADIUS processes subscriber session packets.</p>
           </div>
         )}
@@ -193,11 +189,11 @@ export default function ReportsPage() {
       <Card className="p-6 space-y-4 border-slate-800">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-800">
           <div>
-            <h2 className="font-bold text-base text-slate-900 dark:text-white">
-              Top Data Consumers (Last {days} Days)
+            <h2 className="text-[15px] font-semibold text-slate-900 dark:text-white">
+              Top users (last {days} days)
             </h2>
             <p className="text-xs text-slate-400">
-              Subscribers consuming the highest volume of quota across PPPoE and Hotspot interfaces.
+              Subscribers who used the most data, PPPoE and hotspot.
             </p>
           </div>
 
@@ -215,7 +211,7 @@ export default function ReportsPage() {
 
         {filteredConsumers.length > 0 && (
           <div className="overflow-x-auto rounded-xl border border-slate-800">
-            <table className="w-full text-left text-xs font-mono">
+            <table className="w-full text-left text-sm">
               <thead className="bg-slate-900/90 text-slate-400 uppercase text-[10px] tracking-wider">
                 <tr>
                   <th className="px-4 py-3">Subscriber Username</th>
@@ -229,13 +225,13 @@ export default function ReportsPage() {
               <tbody className="divide-y divide-slate-800">
                 {filteredConsumers.map((c) => (
                   <tr key={c.username} className="hover:bg-slate-900/50 transition-colors">
-                    <td className="px-4 py-3 font-bold text-white flex items-center gap-2">
+                    <td className="px-4 py-3 font-medium text-white flex items-center gap-2">
                       <span className="h-2 w-2 rounded-full bg-emerald-400" />
                       <span>{c.username}</span>
                     </td>
                     <td className="px-4 py-3 text-emerald-400">{formatBytes(c.uploadBytes)}</td>
                     <td className="px-4 py-3 text-cyan-400">{formatBytes(c.downloadBytes)}</td>
-                    <td className="px-4 py-3 font-bold text-white">{formatBytes(c.totalBytes)}</td>
+                    <td className="px-4 py-3 font-medium text-white">{formatBytes(c.totalBytes)}</td>
                     <td className="px-4 py-3 text-slate-400">{c.sessionCount}</td>
                     <td className="px-4 py-3">
                       <Badge variant={c.totalBytes > 50 * 1024 * 1024 * 1024 ? "warning" : "success"}>

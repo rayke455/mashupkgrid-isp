@@ -57,10 +57,10 @@ interface Report {
 
 const SEVERITY: Record<Check["severity"], { label: string; cls: string }> = {
   critical: { label: "Critical", cls: "bg-red-600 text-white" },
-  high: { label: "High", cls: "bg-red-50 text-red-800 ring-1 ring-inset ring-red-600/25" },
-  medium: { label: "Medium", cls: "bg-amber-50 text-amber-900 ring-1 ring-inset ring-amber-600/25" },
-  low: { label: "Low", cls: "bg-slate-100 text-slate-700 ring-1 ring-inset ring-slate-500/20" },
-  info: { label: "Info", cls: "bg-blue-50 text-blue-800 ring-1 ring-inset ring-blue-600/20" },
+  high: { label: "High", cls: "bg-red-500/10 text-red-200 ring-1 ring-inset ring-red-500/30" },
+  medium: { label: "Medium", cls: "bg-amber-500/10 text-amber-200 ring-1 ring-inset ring-amber-500/30" },
+  low: { label: "Low", cls: "bg-obsidian-800 text-slate-300 ring-1 ring-inset ring-slate-500/20" },
+  info: { label: "Info", cls: "bg-brand-500/10 text-brand-300 ring-1 ring-inset ring-brand-500/20" },
 };
 
 function isoDay(d: Date) {
@@ -100,23 +100,23 @@ export default function ReconciliationPage() {
         <Field label="To" htmlFor="rec-to">
           <input id="rec-to" type="date" className={inputClass} value={to} onChange={(e) => setTo(e.target.value)} />
         </Field>
-        {data && <p className="pb-2 text-xs text-slate-500">Checked {formatDateTime(data.generatedAt)}</p>}
+        {data && <p className="pb-2 text-xs text-slate-400">Checked {formatDateTime(data.generatedAt)}</p>}
       </div>
 
       {error && <Alert title="Reconciliation failed to run">{(error as Error).message}</Alert>}
 
       <Panel title="Totals for the period" padded={false}>
         {isLoading || !t ? (
-          <div className="m-5 h-24 animate-pulse rounded-md bg-slate-100" />
+          <div className="m-5 h-24 animate-pulse rounded-md bg-obsidian-800" />
         ) : (
-          <div className="grid divide-y divide-slate-100 sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-4 lg:divide-x">
+          <div className="grid divide-y divide-obsidian-800 sm:grid-cols-2 sm:divide-y-0 lg:grid-cols-4 lg:divide-x">
             <Total label="Provider (M-Pesa)" minor={t.providerCollectedMinor} sub={`${t.providerCount} confirmed payments`} />
             <Total label="Gateway transactions" minor={t.transactionsGrossMinor} sub={`${t.transactionsCount} transactions`} mismatch={t.transactionsGrossMinor !== t.providerCollectedMinor} />
             <Total label="Ledger credits" minor={t.ledgerCustomerCreditsMinor} sub={<>Fees <Money minor={t.platformFeesMinor} /></>} mismatch={t.ledgerCustomerCreditsMinor !== t.transactionsGrossMinor} />
             <Total label="Settled" minor={t.settledMinor} sub={<>Pending <Money minor={t.pendingSettlementMinor} /> · Owed now <Money minor={t.totalOwedMinor} /></>} />
           </div>
         )}
-        <p className="border-t border-slate-100 px-5 py-3 text-xs leading-5 text-slate-500">
+        <p className="border-t border-obsidian-800 px-5 py-3 text-xs leading-5 text-slate-400">
           “Provider” is what Safaricom&apos;s callbacks told us — Safaricom has no API to list a paybill&apos;s transactions. A payment M-Pesa took
           but never reported can only be found by comparing with the M-Pesa statement. Totals can differ legitimately across the period boundary
           (a callback just before midnight, its ledger entry just after).
@@ -143,11 +143,11 @@ export default function ReconciliationPage() {
 function Total({ label, minor, sub, mismatch }: { label: string; minor: number; sub: React.ReactNode; mismatch?: boolean }) {
   return (
     <div className="px-5 py-4">
-      <p className="text-sm text-slate-500">{label}</p>
-      <p className={`mt-1 text-xl font-semibold tabular-nums ${mismatch ? "text-amber-700" : "text-slate-950"}`}>
+      <p className="text-sm text-slate-400">{label}</p>
+      <p className={`mt-1 text-xl font-semibold tabular-nums ${mismatch ? "text-amber-300" : "text-white"}`}>
         <Money minor={minor} />
       </p>
-      <p className="mt-0.5 text-xs text-slate-500">{sub}</p>
+      <p className="mt-0.5 text-xs text-slate-400">{sub}</p>
     </div>
   );
 }
@@ -157,10 +157,10 @@ function CheckCard({ check, canAssign, onAssign }: { check: Check; canAssign: bo
   const ok = check.count === 0;
   const sev = SEVERITY[check.severity];
   return (
-    <section className={`rounded-lg border bg-white ${ok ? "border-slate-200" : check.severity === "critical" ? "border-red-300" : "border-slate-200"}`}>
+    <section className={`rounded-lg border bg-obsidian-900 ${ok ? "border-obsidian-800" : check.severity === "critical" ? "border-red-500/30" : "border-obsidian-800"}`}>
       <button
         type="button"
-        className="flex w-full items-start justify-between gap-4 px-5 py-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600"
+        className="flex w-full items-start justify-between gap-4 px-5 py-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-500"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         disabled={ok}
@@ -168,34 +168,34 @@ function CheckCard({ check, canAssign, onAssign }: { check: Check; canAssign: bo
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
             {ok ? (
-              <span className="inline-flex items-center rounded-md bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-800 ring-1 ring-inset ring-emerald-600/20">OK</span>
+              <span className="inline-flex items-center rounded-md bg-emerald-500/10 px-2 py-0.5 text-xs font-medium text-emerald-200 ring-1 ring-inset ring-emerald-500/30">OK</span>
             ) : (
               <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold ${sev.cls}`}>{sev.label}</span>
             )}
-            <h3 className={`text-sm font-semibold ${ok ? "text-slate-600" : "text-slate-950"}`}>{check.title}</h3>
+            <h3 className={`text-sm font-semibold ${ok ? "text-slate-400" : "text-white"}`}>{check.title}</h3>
           </div>
-          {!ok && <p className="mt-1 max-w-3xl text-sm text-slate-600">{check.description}</p>}
+          {!ok && <p className="mt-1 max-w-3xl text-sm text-slate-400">{check.description}</p>}
         </div>
         <div className="shrink-0 text-right">
-          <p className={`text-sm font-semibold tabular-nums ${ok ? "text-slate-400" : "text-slate-950"}`}>{check.count.toLocaleString()}</p>
+          <p className={`text-sm font-semibold tabular-nums ${ok ? "text-slate-500" : "text-white"}`}>{check.count.toLocaleString()}</p>
           {check.amountMinor !== 0 && (
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-slate-400">
               <Money minor={check.amountMinor} />
             </p>
           )}
         </div>
       </button>
       {open && !ok && (
-        <div className="overflow-x-auto border-t border-slate-100">
+        <div className="overflow-x-auto border-t border-obsidian-800">
           <table className="w-full min-w-[640px] text-left text-sm">
             <tbody>
               {check.items.map((i) => (
-                <tr key={i.id} className="border-b border-slate-100 last:border-0">
-                  <td className="whitespace-nowrap px-5 py-2.5 font-mono text-xs text-slate-700">{i.reference ?? i.id.slice(0, 8)}</td>
-                  <td className="px-3 py-2.5 text-slate-700">{i.tenantName ?? <span className="text-slate-400">No ISP</span>}</td>
-                  <td className="px-3 py-2.5 text-slate-600">{i.detail}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums text-slate-900">{i.amountMinor !== null ? <Money minor={i.amountMinor} /> : ""}</td>
-                  <td className="whitespace-nowrap px-3 py-2.5 text-xs text-slate-500">{formatDateTime(i.occurredAt)}</td>
+                <tr key={i.id} className="border-b border-obsidian-800 last:border-0">
+                  <td className="whitespace-nowrap px-5 py-2.5 font-mono text-xs text-slate-300">{i.reference ?? i.id.slice(0, 8)}</td>
+                  <td className="px-3 py-2.5 text-slate-300">{i.tenantName ?? <span className="text-slate-500">No ISP</span>}</td>
+                  <td className="px-3 py-2.5 text-slate-400">{i.detail}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-right tabular-nums text-slate-100">{i.amountMinor !== null ? <Money minor={i.amountMinor} /> : ""}</td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-xs text-slate-400">{formatDateTime(i.occurredAt)}</td>
                   <td className="whitespace-nowrap px-5 py-2.5 text-right">
                     {check.code === "UNMATCHED_PLATFORM_PAYBILL" && canAssign && (
                       <button type="button" className={buttonClass("secondary", "sm")} onClick={() => onAssign(i)}>
@@ -208,7 +208,7 @@ function CheckCard({ check, canAssign, onAssign }: { check: Check; canAssign: bo
             </tbody>
           </table>
           {check.count > check.items.length && (
-            <p className="px-5 py-2 text-xs text-slate-500">Showing the first {check.items.length} of {check.count}.</p>
+            <p className="px-5 py-2 text-xs text-slate-400">Showing the first {check.items.length} of {check.count}.</p>
           )}
         </div>
       )}

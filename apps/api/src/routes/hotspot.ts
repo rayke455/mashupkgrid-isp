@@ -17,6 +17,7 @@ import {
   verifyAndReconcilePesapalTransaction,
 } from "@mashupkgrid/payments";
 import { successResponse, ConflictError, ForbiddenError, NotFoundError, ValidationError } from "@mashupkgrid/shared";
+import { appFilterPortalHosts, buildAppFilterSection, checkMacLogin } from "@mashupkgrid/network";
 import { env } from "@mashupkgrid/config";
 import { authenticate } from "../plugins/authenticate.js";
 import { resolveTenant } from "../plugins/tenant.js";
@@ -104,9 +105,9 @@ const DEFAULT_CAPTIVE_CONFIG: CaptivePortalConfig = {
   phone: "",
   supportPhone: "",
   brandName: "",
-  welcomeTitle: "FAST & SECURE WI-FI",
-  bannerSubtitle: "HIGH SPEED FIBER CONNECTION",
-  activeThemeId: "suntech-blue",
+  welcomeTitle: "Fast, reliable Wi-Fi",
+  bannerSubtitle: "Pay with M-Pesa and connect instantly",
+  activeThemeId: "mashuphost-clean",
   installationFee: "",
   fiberRates: [],
   pluginsConfig: null,
@@ -494,6 +495,40 @@ export async function hotspotRoutes(app: FastifyInstance): Promise<void> {
   );
 
   /**
+   * Can this phone reconnect without its code? The portal asks with the MAC the router put in the
+   * sign-in link, and offers a "Reconnect" button when the answer is yes. Never returns the code:
+   * the button asks the ROUTER to log this phone in by MAC, and the RADIUS server only accepts
+   * that for the phone actually asking (see findMacLogin), so knowing a MAC here gains nothing.
+   */
+  app.get(
+    "/:tenantSlug/devices/:mac/status",
+    { config: { audience: "customer", rateLimit: hotspotLoginRateLimitConfig }, preHandler: [checkMaintenance] },
+    async (request, reply) => {
+      const { tenantSlug, mac } = z.object({ tenantSlug: z.string().min(1), mac: z.string().max(32) }).parse(request.params);
+      const tenant = await resolveTenantBySlug(tenantSlug);
+      const check = await checkMacLogin(tenant.id, mac);
+      if (!check) {
+        reply.send(successResponse({ canReconnect: false }, request.id));
+        return;
+      }
+      const pkg = check.hotspotPackageId
+        ? await prisma.hotspotPackage.findFirst({ where: { id: check.hotspotPackageId, tenantId: tenant.id }, select: { name: true } })
+        : null;
+      reply.send(
+        successResponse(
+          {
+            canReconnect: true,
+            packageName: pkg?.name ?? null,
+            minutesLeft: check.remainingSeconds === null ? null : Math.floor(check.remainingSeconds / 60),
+            dataLeftMb: check.remainingBytes === null ? null : Math.floor(check.remainingBytes / (1024 * 1024)),
+          },
+          request.id
+        )
+      );
+    }
+  );
+
+  /**
    * Initiates an online purchase for a hotspot package (via M-Pesa STK or Paystack).
    */
   app.post(
@@ -700,6 +735,25 @@ export async function hotspotRoutes(app: FastifyInstance): Promise<void> {
    * this route directly, only the router's own hotspot HTTP server does, once, at write time
    * (`/tool fetch`), before ever handing it to a user.
    */
+  /**
+   * Served to a router, not a browser: the per-app package filter, which the platform's
+   * self-repair has a router download and import when it is missing (see ensureHotspotProvisioning).
+   * Nothing tenant-specific or secret in it; the slug only 404s an unknown tenant.
+   */
+  app.get(
+    "/:tenantSlug/mikrotik-app-filter.rsc",
+    { config: { audience: "customer" }, preHandler: [checkMaintenance] },
+    async (request, reply) => {
+      const { tenantSlug } = tenantParamsSchema.parse(request.params);
+      await resolveTenantBySlug(tenantSlug);
+      reply
+        .header("Content-Type", "text/plain; charset=utf-8")
+        .send(`${buildAppFilterSection({ portalHosts: appFilterPortalHosts() })}
+:log info "MASHUPKGRID per-app filter installed"
+`);
+    }
+  );
+
   app.get(
     "/:tenantSlug/mikrotik-login-template",
     { config: { audience: "customer" }, preHandler: [checkMaintenance] },

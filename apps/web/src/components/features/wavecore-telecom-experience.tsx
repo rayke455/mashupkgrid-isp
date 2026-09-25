@@ -165,6 +165,8 @@ export function CarrierTelecomExperience({ onOpenCart }: { onOpenCart: () => voi
       try {
         const data = await getProducts(storeTab);
         setProducts(data.slice(0, 8)); // show top 8 on landing page
+      } catch {
+        setProducts([]);
       } finally {
         setLoadingProducts(false);
       }
@@ -379,7 +381,7 @@ export function CarrierTelecomExperience({ onOpenCart }: { onOpenCart: () => voi
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {products.map((p) => (
-              <HardwareProductCard key={p.id} product={p} onQuickBuy={onOpenCart} />
+              <HardwareProductCard key={p.id} product={p} onViewDetails={() => onOpenCart()} onBuyNow={onOpenCart} />
             ))}
           </div>
         )}

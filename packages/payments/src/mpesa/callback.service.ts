@@ -2,6 +2,7 @@ import { prisma, type MpesaStkRequest, type Prisma } from "@mashupkgrid/database
 import { recordPlatformCollection, upgradeProvisionalReceipt } from "../gateway/collection.service.js";
 import { NotFoundError, generateSecureToken } from "@mashupkgrid/shared";
 import { recordPaymentForInvoiceWithDb, topUpWalletWithDb } from "@mashupkgrid/billing";
+import { sendHotspotVoucherSms } from "@mashupkgrid/sms";
 
 interface StkCallbackMetadata {
   amountMinor?: number;
@@ -102,7 +103,9 @@ export async function completeStkRequest(
   checkoutRequestId: string,
   result: StkResultInput
 ): Promise<MpesaStkRequest> {
-  return prisma.$transaction(async (tx) => {
+  // Set only on the one path that issues a new voucher, so replays never text the buyer twice.
+  const issued: { code?: string; packageName?: string; phone?: string } = {};
+  const outcome = await prisma.$transaction(async (tx) => {
     // Serialise every resolution of this request. Without the lock, a real callback and a status
     // query (or two deliveries of the same callback) arriving together could both read PENDING and
     // both try to record the payment.
@@ -159,6 +162,10 @@ export async function completeStkRequest(
         for (let i = 0; i < 8; i++) {
           code += CODE_ALPHABET[rawToken.charCodeAt(i % rawToken.length) % CODE_ALPHABET.length];
         }
+
+        issued.code = code;
+        issued.packageName = pkg.name;
+        issued.phone = request.phone;
 
         const simUse = Math.max(1, pkg.simultaneousUse || 1);
         await tx.hotspotVoucher.create({
@@ -360,6 +367,18 @@ export async function completeStkRequest(
       data: { status, resultCode: result.resultCode, resultDesc: result.resultDesc, rawCallback },
     });
   });
+
+  // After the commit, never inside it: a slow or failing SMS gateway must not hold the row lock
+  // or roll back a payment Safaricom has already taken.
+  if (issued.code && issued.packageName && issued.phone) {
+    const { code, packageName, phone } = issued;
+    void sendHotspotVoucherSms(tenantId, phone, { code, packageName })
+      .then((r) => {
+        if (!r.delivered) console.warn(`[mpesa] voucher text not sent for ${checkoutRequestId}: ${r.reason}`);
+      })
+      .catch((err) => console.error(`[mpesa] voucher text failed for ${checkoutRequestId}`, err));
+  }
+  return outcome;
 }
 
 // ---------------------------------------------------------------------------

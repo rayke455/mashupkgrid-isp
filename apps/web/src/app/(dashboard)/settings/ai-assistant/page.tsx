@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
 import { Button, Card, ErrorText, HintText, Input, Label, Badge, StatusDot } from "@/components/ui";
-import { IconSparkles } from "@/components/icons";
 
 interface AiAssistantConfigStatus {
   configured: boolean;
@@ -34,11 +33,8 @@ export default function AiAssistantSettingsPage() {
     <div className="max-w-2xl space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="flex items-center gap-2.5 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-violet-500/15 text-violet-600 dark:text-violet-400">
-              <IconSparkles size={18} />
-            </span>
-            AI Assistant
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">
+            AI assistant
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
             Lets you manage hotspot packages by describing changes in plain language, from the Hotspot Vouchers page.

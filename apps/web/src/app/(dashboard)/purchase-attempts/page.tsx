@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api-client";
 import { Badge, Card } from "@/components/ui";
-import { IconPulse } from "@/components/icons";
 
 type AttemptStatus = "PENDING" | "COMPLETED" | "FAILED" | "ABANDONED";
 
@@ -82,11 +81,8 @@ export default function PurchaseAttemptsPage() {
   return (
     <div className="max-w-5xl space-y-6">
       <div>
-        <h1 className="flex items-center gap-2.5 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-500/15 text-brand-600 dark:text-brand-400">
-            <IconPulse size={20} />
-          </span>
-          Purchase Attempts
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">
+          Purchase attempts
         </h1>
         <p className="text-sm text-slate-500 dark:text-slate-400">
           Everyone who started a payment — including the ones that never completed. A customer who

@@ -1,11 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
-import { Button, Card, ErrorText, Input, Label, Badge, StatusDot } from "@/components/ui";
-import { IconCopy, IconCheck, IconTerminal, IconChevronRight } from "@/components/icons";
+import { Button, Card, ErrorText, HintText, Input, Label } from "@/components/ui";
+import { CodeBlock, Notice, PageHeader, Pill } from "@/components/dashboard/surface";
+import { IconCheck, IconChevronRight } from "@/components/icons";
 
 type Step = 1 | 2 | 3;
 
@@ -88,7 +90,6 @@ export default function LinkRouterWizardPage() {
   const [pppoeGatewayIp, setPppoeGatewayIp] = useState("10.10.0.1");
   const [pppoePoolRange, setPppoePoolRange] = useState("10.10.0.2-10.10.255.254");
   const [blockTethering, setBlockTethering] = useState(false);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
   const [oneLiner, setOneLiner] = useState<string>("");
 
   const createPending = useMutation({
@@ -126,11 +127,9 @@ export default function LinkRouterWizardPage() {
       ),
     onSuccess: (result) => {
       setProvisioningScript(result.script);
-      const cmd =
-        result.oneLiner ||
-        result.fetchCommand ||
-        `/tool fetch url="https://api.mashuphost.tech/api/v1/routers/provision/${provisionToken}/setup.rsc" dst-path=setup.rsc; :delay 2s; /import setup.rsc;`;
-      setOneLiner(cmd);
+      // Only ever the API's command: it carries this deployment's public URL. A hard-coded host here
+      // would send the router to the wrong server on any other deployment.
+      setOneLiner(result.oneLiner || result.fetchCommand || "");
     },
     onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to generate provisioning script"),
   });
@@ -197,39 +196,28 @@ export default function LinkRouterWizardPage() {
     onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to link router manually"),
   });
 
-  const handleCopy = (text: string, id: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
-  };
-
-  const statusBadge = created ? (
-    <div className="flex items-center gap-2">
-      <StatusDot status={created.status} pulse={created.status === "ONLINE"} />
-      <Badge variant={created.status === "ONLINE" ? "success" : created.status === "DOWN" ? "danger" : "neutral"}>
-        {created.status}
-      </Badge>
-    </div>
+  const statusPill = created ? (
+    <Pill tone={created.status === "ONLINE" ? "good" : created.status === "DOWN" ? "bad" : created.status === "WARNING" ? "warn" : "neutral"}>
+      {created.status === "ONLINE" ? "Online" : created.status === "DOWN" ? "Offline" : created.status === "WARNING" ? "Degraded" : "Not checked yet"}
+    </Pill>
   ) : null;
 
   return (
     <div className="max-w-2xl space-y-6">
       <div>
-        <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Network — Routers</p>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-          Link a <span className="text-brand-600 dark:text-brand-400">MikroTik</span>
-        </h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          Name it, paste one script — the router links itself. No IP, port, or password to type.
-        </p>
+        <Link href="/routers" className="text-sm text-slate-400 hover:text-white">
+          ← Routers
+        </Link>
+        <div className="mt-2">
+          <PageHeader title="Link a MikroTik" description="Name it and paste one command into the router. It links itself, with no IP, port or password to type." />
+        </div>
       </div>
 
       <StepDots current={step} />
 
       {step === 1 && (
         <Card>
-          <h2 className="mb-1 font-semibold text-slate-900 dark:text-white">Router identity</h2>
-          <p className="mb-4 text-sm text-slate-500">A name to identify this router across the dashboard.</p>
+          <h2 className="mb-4 text-[15px] font-semibold text-slate-900 dark:text-white">Router details</h2>
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -245,6 +233,7 @@ export default function LinkRouterWizardPage() {
               onChange={(e) => setName(e.target.value)}
               required
             />
+            <HintText>How this router is shown across the dashboard.</HintText>
             <div className="mt-5 rounded-xl border border-slate-200 p-4 dark:border-obsidian-800">
               <label className="flex items-center gap-2.5">
                 <input
@@ -336,79 +325,80 @@ export default function LinkRouterWizardPage() {
 
       {step === 2 && created && (
         <Card>
-          <div className="mb-1 flex items-center gap-2">
-            <IconTerminal className="text-brand-600 dark:text-brand-400" />
-            <h2 className="font-semibold text-slate-900 dark:text-white">1-Line Auto Setup</h2>
-          </div>
-          <p className="mb-4 text-sm text-slate-500">
-            Open WinBox → New Terminal on <code className="font-mono text-xs font-bold text-brand-500">{created.name}</code>, paste this single command, and press Enter. This is the only script you need. It configures the API user, RADIUS, the hotspot captive portal server, DNS and NAT, your branded login page, and the walled garden for M-Pesa, Paystack and Pesapal &mdash; then links the router.
+          <h2 className="mb-1 text-[15px] font-semibold text-slate-900 dark:text-white">Run the setup command</h2>
+          <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
+            In WinBox, open <span className="text-slate-300">New Terminal</span> on <span className="font-medium text-slate-200">{created.name}</span>, paste
+            this command and press Enter. It sets up the API user, RADIUS, the hotspot and its login page, DNS and NAT, and the walled garden for M-Pesa,
+            Paystack and Pesapal, then links the router. It&apos;s the only script you need.
           </p>
 
-          {(oneLiner || provisionToken) && (
-            <div className="mb-5 p-3.5 rounded-xl bg-slate-900 border-2 border-brand-500/40 shadow-lg shadow-brand-500/10">
-              <div className="mb-2 flex items-center justify-between">
-                <span className="text-xs font-bold text-brand-400 flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                  1-Line Terminal Command (Recommended)
-                </span>
-                <Button
-                  variant="primary"
-                  className="px-3 py-1 text-xs gap-1 font-bold shadow-md shadow-brand-500/20"
-                  onClick={() =>
-                    handleCopy(
-                      oneLiner ||
-                        `/tool fetch url="https://api.mashuphost.tech/api/v1/routers/provision/${provisionToken}/setup.rsc" dst-path=setup.rsc; :delay 2s; /import setup.rsc;`,
-                      "oneliner"
-                    )
-                  }
-                >
-                  {copiedId === "oneliner" ? <IconCheck size={12} /> : <IconCopy size={12} />}
-                  <span>{copiedId === "oneliner" ? "Copied!" : "Copy 1-Line Command"}</span>
-                </Button>
-              </div>
-              <div className="p-2.5 rounded-lg bg-black font-mono text-xs text-emerald-400 border border-slate-800 break-all select-all leading-relaxed">
-                {oneLiner ||
-                  `/tool fetch url="https://api.mashuphost.tech/api/v1/routers/provision/${provisionToken}/setup.rsc" dst-path=setup.rsc; :delay 2s; /import setup.rsc;`}
-              </div>
-            </div>
-          )}
+          <CodeBlock code={oneLiner || null} label="Setup command (single use)" maxHeight="8rem" />
 
           {provisioningScript && (
-            <details className="mb-4 rounded-lg border border-slate-800 bg-slate-950/60 p-2.5">
-              <summary className="text-xs font-medium text-slate-400 cursor-pointer hover:text-white flex items-center justify-between select-none">
-                <span>View full .rsc configuration script</span>
-                <span className="text-[10px] text-slate-500 uppercase tracking-wider">Expand</span>
+            <details className="mt-3 rounded-lg border border-obsidian-800 p-3">
+              <summary className="cursor-pointer select-none text-sm text-slate-300 hover:text-white">
+                Command fails with &ldquo;Network unreachable&rdquo; or &ldquo;resolving error&rdquo;?
               </summary>
-              <div className="mt-2.5 pt-2.5 border-t border-slate-800">
-                <div className="mb-1.5 flex justify-end">
-                  <Button
-                    variant="secondary"
-                    className="px-2 py-0.5 text-xs gap-1"
-                    onClick={() => handleCopy(provisioningScript, "prov")}
-                  >
-                    {copiedId === "prov" ? <IconCheck size={12} /> : <IconCopy size={12} />}
-                    {copiedId === "prov" ? "Copied!" : "Copy full script"}
-                  </Button>
-                </div>
-                <pre className="max-h-48 overflow-auto rounded bg-black p-2.5 font-mono text-[11px] text-slate-300 border border-slate-900">
-                  {provisioningScript}
-                </pre>
+              <div className="mt-3 space-y-3 text-sm text-slate-400">
+                <p>
+                  The router can&apos;t reach MashupHost yet. First check the cable from your modem or main router goes into the hAP&apos;s{" "}
+                  <span className="text-slate-200">port 1 (ether1)</span> and that port&apos;s light is on. Then set it up from a file instead. The file
+                  also fixes the internet port, and the router links itself once it&apos;s online.
+                </p>
+                <ol className="list-decimal space-y-1 pl-5">
+                  <li>Download the setup file.</li>
+                  <li>
+                    In WinBox, open <span className="text-slate-200">Files</span> and drag <span className="font-mono text-slate-300">setup.rsc</span> into
+                    it.
+                  </li>
+                  <li>
+                    In <span className="text-slate-200">New Terminal</span>, run <span className="font-mono text-slate-300">/import setup.rsc</span>.
+                  </li>
+                </ol>
+                <button
+                  type="button"
+                  className="inline-flex items-center rounded-lg border border-obsidian-700 bg-obsidian-900 px-3 py-1.5 text-sm font-medium text-slate-200 hover:bg-obsidian-800"
+                  onClick={() => {
+                    const url = URL.createObjectURL(new Blob([provisioningScript.replace(/\r?\n/g, "\r\n")], { type: "text/plain" }));
+                    const a = document.createElement("a");
+                    a.href = url;
+                    a.download = "setup.rsc";
+                    a.click();
+                    setTimeout(() => URL.revokeObjectURL(url), 1000);
+                  }}
+                >
+                  Download setup.rsc
+                </button>
               </div>
             </details>
           )}
 
-          <div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm dark:border-obsidian-800 dark:bg-obsidian-950">
-            {created.host ? (
-              <div className="flex items-center justify-between">
-                <p className="text-emerald-600 dark:text-emerald-400">
-                  Linked from <span className="font-mono">{created.host}</span>.
-                </p>
-                {statusBadge}
+          {provisioningScript && (
+            <details className="mt-3">
+              <summary className="cursor-pointer select-none text-sm text-slate-400 hover:text-white">Show the full script it runs</summary>
+              <div className="mt-2">
+                <CodeBlock code={provisioningScript} label="setup.rsc" maxHeight="16rem" />
               </div>
+            </details>
+          )}
+
+          <div className="my-4">
+            {created.host ? (
+              <Notice tone="good">
+                <div className="flex items-center justify-between gap-3">
+                  <span>
+                    Linked from <span className="font-mono">{created.host}</span>.
+                  </span>
+                  {statusPill}
+                </div>
+              </Notice>
             ) : (
-              <p className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
-                <StatusDot status="UNKNOWN" pulse={true} /> Waiting for the router to check in...
-              </p>
+              <Notice tone="warn">
+                <span className="flex items-center gap-2">
+                  <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-amber-300/60 border-t-transparent" aria-hidden="true" />
+                  Waiting for the router to check in…
+                </span>
+              </Notice>
             )}
           </div>
 
@@ -483,7 +473,7 @@ export default function LinkRouterWizardPage() {
             </div>
             <h2 className="mb-1 font-semibold text-slate-900 dark:text-white">{created.name} is linked</h2>
             <p className="mb-6 text-sm text-slate-500 dark:text-slate-400">
-              Next: assign an IP pool and enable PPPoE or Hotspot services from the router&apos;s detail page.
+              Next, set up your hotspot packages, or add PPPoE customers.
             </p>
             <div className="flex justify-center gap-2">
               <Button variant="secondary" onClick={() => router.push("/vouchers")}>

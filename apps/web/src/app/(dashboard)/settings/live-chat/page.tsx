@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
 import { Button, Card, ErrorText, HintText, Input, Label, Badge, StatusDot } from "@/components/ui";
-import { IconChat } from "@/components/icons";
 
 interface LiveChatConfig {
   isActive: boolean;
@@ -53,11 +52,8 @@ export default function LiveChatSettingsPage() {
     <div className="max-w-2xl space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="flex items-center gap-2.5 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
-              <IconChat size={18} />
-            </span>
-            Live Chat
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">
+            Live chat
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
             Embed a Tawk.to chat widget for staff and/or hotspot customers.

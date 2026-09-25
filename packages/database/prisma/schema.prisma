@@ -787,6 +787,9 @@ model SmsProviderConfig {
   senderId        String?
   /// "sandbox" | "production" — selects the Africa's Talking API host.
   environment     String   @default("sandbox")
+  /// Text hotspot buyers their voucher code after an M-Pesa purchase. Each text uses the
+  /// tenant's own SMS credit, so it can be switched off.
+  sendVoucherSms  Boolean  @default(true)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -1340,12 +1343,85 @@ model PlatformMpesaConfig {
 /// Tracks "Buy Me a Coffee" / donation M-Pesa STK pushes. Separate from MpesaStkRequest because
 /// donations have no tenant, no customer, no invoice — they are platform-level tips from the
 /// public. The callback finds and completes these by checkoutRequestId, same as tenant payments.
+/// Hardware sold on the public store (/shop). Prices in cents, like every other amount here.
+model StoreProduct {
+  /// Kept stable (e.g. "prod_mikrotik_hex") so carts and past orders keep pointing at the item.
+  id                 String   @id
+  slug               String   @unique
+  name               String
+  brand              String
+  /// routers | switches | wireless | fiber | solar | cctv
+  category           String
+  priceMinor         Int
+  originalPriceMinor Int?
+  stock              Int      @default(0)
+  badge              String?
+  shortDescription   String
+  description        String
+  imageUrl           String
+  specs              String[]
+  warranty           String
+  featured           Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@map("store_products")
+}
+
+enum StoreOrderStatus {
+  /// Waiting for M-Pesa, or for payment on delivery.
+  PENDING
+  /// M-Pesa confirmed the payment. Never set from anything the buyer's browser sends.
+  PAID
+  PROCESSING
+  DISPATCHED
+  DELIVERED
+  CANCELLED
+}
+
+enum StorePaymentMethod {
+  MPESA
+  PAY_ON_DELIVERY
+}
+
+model StoreOrder {
+  id                 String             @id @default(uuid())
+  /// What the buyer sees and tracks by, e.g. "ORD-482913".
+  orderNumber        String             @unique
+  customerName       String
+  phone              String
+  email              String?
+  county             String
+  deliveryAddress    String
+  /// Snapshot at order time: [{ productId, name, quantity, priceMinor }].
+  items              Json
+  subtotalMinor      Int
+  shippingMinor      Int
+  totalMinor         Int
+  paymentMethod      StorePaymentMethod
+  status             StoreOrderStatus   @default(PENDING)
+  checkoutRequestId  String?            @unique
+  mpesaReceiptNumber String?            @unique
+  /// Why the last M-Pesa attempt didn't complete (cancelled, insufficient funds, …).
+  paymentNote        String?
+  paidAt             DateTime?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  @@index([phone])
+  @@index([createdAt])
+  @@map("store_orders")
+}
+
 model Donation {
   id                 String   @id @default(uuid())
   phone              String
   amountMinor        Int
   donorName          String?
   donorMessage       String?
+  /// The donor chose to show their name and message on the public supporters wall. Off for
+  /// every donation made before donors were asked.
+  showPublicly       Boolean  @default(false)
   merchantRequestId  String
   checkoutRequestId  String   @unique
   status             String   @default("PENDING") // PENDING | COMPLETED | FAILED | CANCELLED
@@ -1814,6 +1890,9 @@ model Router {
   vpnPublicKey         String?
   vpnIp                String?
   vpnConfiguredAt      DateTime?
+  /// Public TCP port on the platform server that the WinBox relay forwards, over this router's
+  /// WireGuard tunnel, to its WinBox service (8291). Assigned once the router has a vpnIp.
+  winboxRelayPort      Int?         @unique
   status               RouterStatus @default(UNKNOWN)
   /// PPPoE server settings, per router because they are a network-design choice that differs by
   /// site: which port or VLAN faces the subscribers, and what addresses they are handed. Left
@@ -2096,6 +2175,27 @@ model HotspotVoucher {
 
   @@unique([tenantId, code])
   @@map("hotspot_vouchers")
+}
+
+/// A customer's phone (by MAC address) and the voucher it last logged in with, per tenant.
+/// Recorded by the RADIUS server on every successful voucher login; used to log the same phone
+/// straight back in ("login by MAC") while that voucher still has time and data left.
+model HotspotDevice {
+  id          String   @id @default(uuid())
+  tenantId    String
+  /// AA:BB:CC:DD:EE:FF, as the router reports it (Calling-Station-Id).
+  macAddress  String
+  voucherCode String
+  /// The voucher's recorded usage when this phone was last logged back in by MAC. A new session's
+  /// counters start at zero, so the voucher's usage is this plus the session's own bytes.
+  baselineBytesIn  BigInt @default(0)
+  baselineBytesOut BigInt @default(0)
+  firstSeenAt DateTime @default(now())
+  lastSeenAt  DateTime @default(now())
+
+  @@unique([tenantId, macAddress])
+  @@index([tenantId, voucherCode])
+  @@map("hotspot_devices")
 }
 
 enum SyncTaskStatus {

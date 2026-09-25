@@ -135,7 +135,8 @@ export interface NetworkDeviceAdapter {
 
   applySpeedtestBoost?(): Promise<{ success: boolean; message: string }>;
   enforceStrictTimeout?(): Promise<{ success: boolean; cookiesRemoved: number; message: string }>;
-  enableAntiVpnShield?(): Promise<{ success: boolean; message: string }>;
+  startAntiTunnelShield?(enabled: boolean): Promise<{ started: boolean }>;
+  getAntiTunnelStatus?(): Promise<{ state: "applying" | "done" | "failed" | "unknown"; rules: number | null; expected: number }>;
   enablePcqFairQueue?(): Promise<{ success: boolean; message: string }>;
   enableSafeFamilyDns?(familyMode?: boolean): Promise<{ success: boolean; message: string; servers: string }>;
   checkFirmwareUpdate?(): Promise<{ currentVersion: string; latestVersion: string; status: string; upgradeAvailable: boolean }>;

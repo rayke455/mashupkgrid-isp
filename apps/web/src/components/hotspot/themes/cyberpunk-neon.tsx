@@ -1,6 +1,6 @@
 "use client";
 
-import type { CaptiveThemeProps } from "./types";
+import { appOnlyLabel, type CaptiveThemeProps } from "./types";
 
 function formatDuration(minutes: number): string {
   if (minutes < 60) return `${minutes}M`;
@@ -130,6 +130,9 @@ export function CyberpunkNeonTheme({
                           {formatDuration(pkg.durationMinutes)}
                         </span>
                         <h3 className="font-bold text-sm text-white mt-2 tracking-wide">{pkg.name}</h3>
+                        {appOnlyLabel(pkg.appPolicy) && (
+                          <span className="mt-1 inline-block rounded border border-fuchsia-400/50 px-1.5 py-0.5 text-[10px] font-bold text-fuchsia-300">{appOnlyLabel(pkg.appPolicy)}</span>
+                        )}
                         <p className="text-[10px] text-slate-400 mt-1 font-sans">
                           {pkg.downloadKbps ? `${Math.round(pkg.downloadKbps / 1000)}Mbps Bandwidth` : "Max Bandwidth"}
                         </p>

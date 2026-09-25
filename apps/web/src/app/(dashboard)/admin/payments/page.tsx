@@ -112,13 +112,13 @@ export default function PlatformPaymentsOverviewPage() {
             {tenants.isLoading && (
               <tr>
                 <td colSpan={4} className={td}>
-                  <div className="h-4 w-1/2 animate-pulse rounded bg-slate-100" />
+                  <div className="h-4 w-1/2 animate-pulse rounded bg-obsidian-800" />
                 </td>
               </tr>
             )}
             {!tenants.isLoading && owed.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-10 text-center text-sm text-slate-500">
+                <td colSpan={4} className="px-4 py-10 text-center text-sm text-slate-400">
                   Nothing is owed to any ISP right now.
                 </td>
               </tr>
@@ -126,16 +126,16 @@ export default function PlatformPaymentsOverviewPage() {
             {owed.map((t) => (
               <tr key={t.id}>
                 <td className={td}>
-                  <p className="font-medium text-slate-900">{t.name}</p>
-                  <p className="text-xs text-slate-500">{t.collectionMode === "PLATFORM" ? "On the gateway" : "Own paybill now"}</p>
+                  <p className="font-medium text-slate-100">{t.name}</p>
+                  <p className="text-xs text-slate-400">{t.collectionMode === "PLATFORM" ? "On the gateway" : "Own paybill now"}</p>
                 </td>
-                <td className={`${td} text-right font-medium ${t.balance.availableMinor < 0 ? "text-red-700" : "text-slate-900"}`}>
+                <td className={`${td} text-right font-medium ${t.balance.availableMinor < 0 ? "text-red-300" : "text-slate-100"}`}>
                   <Money minor={t.balance.availableMinor} />
                 </td>
                 <td className={`${td} text-right`}>
                   <Money minor={t.balance.pendingSettlementMinor} />
                 </td>
-                <td className={td}>{t.destination?.label ?? <span className="text-amber-700">None set</span>}</td>
+                <td className={td}>{t.destination?.label ?? <span className="text-amber-300">None set</span>}</td>
               </tr>
             ))}
           </tbody>

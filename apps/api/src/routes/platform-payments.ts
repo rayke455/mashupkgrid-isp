@@ -36,6 +36,7 @@ import { authenticate } from "../plugins/authenticate.js";
 import { checkMaintenance } from "../plugins/maintenance.js";
 import { requirePermission } from "../plugins/authorize.js";
 import { writeAuditLog } from "../lib/audit.js";
+import { settleAfterCollection } from "../lib/settle-after-collection.js";
 
 /**
  * Super Admin → Payments. Platform-wide by design, so every route here needs two things: a
@@ -437,6 +438,26 @@ export async function platformPaymentRoutes(app: FastifyInstance): Promise<void>
     );
   });
 
+  /** Daraja wants the initiator password encrypted with Safaricom's certificate: a long base64 string
+   *  (344 characters for the 2048-bit certificate). Pasting the plain password is the usual mistake,
+   *  and Safaricom only reports it later as "The initiator information is invalid". */
+  function assertSecurityCredential(value: string | undefined, field: string): void {
+    if (!value) return;
+    // Strict base64: whole 4-character groups, so a credential missing characters is caught here
+    // instead of being saved and rejected by Safaricom as "The initiator information is invalid".
+    if (value.length % 4 === 0 && /^[A-Za-z0-9+/]+={0,2}$/.test(value) && Buffer.from(value, "base64").length >= 128) return;
+    throw new ValidationError(
+      `The ${field} security credential looks like the operator's password, not a security credential. Generate the credential on the Daraja portal from the password (Production certificate) and paste the long encrypted string it gives you.`
+    );
+  }
+  // Base64 never contains whitespace or quotes; a credential copied out of a web page or a chat often
+  // picks up line breaks or the quotes it was shown in.
+  const credentialField = z
+    .string()
+    .transform((v) => v.replace(/\s+/g, "").replace(/^["'`]+|["'`]+$/g, ""))
+    .pipe(z.string().max(2048))
+    .optional();
+
   app.put("/gateway", { config: { audience: "platform" }, preHandler: manage }, async (request, reply) => {
     const body = z
       .object({
@@ -448,12 +469,14 @@ export async function platformPaymentRoutes(app: FastifyInstance): Promise<void>
         environment: z.enum(["sandbox", "production"]).optional(),
         isActive: z.boolean().optional(),
         initiatorName: z.string().trim().max(64).optional(),
-        initiatorCredential: z.string().trim().max(2048).optional(),
+        initiatorCredential: credentialField,
         b2cShortcode: z.string().trim().regex(/^(\d{5,10})?$/).optional(),
         b2cInitiatorName: z.string().trim().max(64).optional(),
-        b2cInitiatorCredential: z.string().trim().max(2048).optional(),
+        b2cInitiatorCredential: credentialField,
       })
       .parse(request.body);
+    assertSecurityCredential(body.initiatorCredential, "B2B");
+    assertSecurityCredential(body.b2cInitiatorCredential, "B2C");
 
     const { gatewayEnabled, ...mpesa } = body;
     const [beforeStatus, beforeSettings] = await Promise.all([getPlatformMpesaConfigStatus(), getSettlementSettings()]);
@@ -521,6 +544,7 @@ export async function platformPaymentRoutes(app: FastifyInstance): Promise<void>
         before: { tenantId: null, reconciled: false },
         after: { tenantId: body.tenantId, customerId: body.customerId, invoiceId: body.invoiceId ?? null, transactionId, amountMinor: assigned.amountMinor },
       });
+      settleAfterCollection(body.tenantId, request.log);
       reply.send(successResponse(assigned, request.id));
     }
   );

@@ -90,7 +90,7 @@ export function TransactionsView({
   return (
     <>
       {!compact && (
-        <div className="grid gap-2 border-b border-slate-100 p-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-2 border-b border-obsidian-800 p-4 sm:grid-cols-2 lg:grid-cols-4">
           <input className={inputClass} placeholder="Transaction ID, M-Pesa receipt or reference" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search transactions" />
           <input className={inputClass} placeholder="Customer name or number" value={customer} onChange={(e) => setCustomer(e.target.value)} aria-label="Customer" />
           {admin && tenants && (
@@ -123,7 +123,7 @@ export function TransactionsView({
           </select>
           <div className="flex items-center gap-2">
             <input type="date" className={inputClass} value={from} onChange={(e) => setFrom(e.target.value)} aria-label="From date" />
-            <span className="text-slate-400">–</span>
+            <span className="text-slate-500">–</span>
             <input type="date" className={inputClass} value={to} onChange={(e) => setTo(e.target.value)} aria-label="To date" />
           </div>
         </div>
@@ -153,33 +153,33 @@ export function TransactionsView({
           {data?.items.map((t) => (
             <tr
               key={t.id}
-              className="cursor-pointer transition-colors hover:bg-slate-50 focus-within:bg-slate-50"
+              className="cursor-pointer transition-colors hover:bg-obsidian-950 focus-within:bg-obsidian-950"
               onClick={() => setOpenId(t.id)}
             >
               <td className={td}>
-                <button type="button" className="font-mono text-xs font-medium text-blue-800 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600" onClick={(e) => { e.stopPropagation(); setOpenId(t.id); }}>
+                <button type="button" className="font-mono text-xs font-medium text-brand-300 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500" onClick={(e) => { e.stopPropagation(); setOpenId(t.id); }}>
                   {t.txnNumber}
                 </button>
-                <p className="font-mono text-[11px] text-slate-400">{t.providerReference}</p>
+                <p className="font-mono text-[11px] text-slate-500">{t.providerReference}</p>
               </td>
               {admin && <td className={td}>{t.tenant?.name ?? "—"}</td>}
               <td className={td}>
                 {t.customer ? (
                   <>
-                    <p className="text-slate-900">{t.customer.fullName}</p>
-                    <p className="text-xs text-slate-500">{t.customer.customerNumber}</p>
+                    <p className="text-slate-100">{t.customer.fullName}</p>
+                    <p className="text-xs text-slate-400">{t.customer.customerNumber}</p>
                   </>
                 ) : (
-                  <span className="text-slate-500">Hotspot · {t.payerPhone ?? "walk-in"}</span>
+                  <span className="text-slate-400">Hotspot · {t.payerPhone ?? "walk-in"}</span>
                 )}
               </td>
-              <td className={`${td} text-right font-medium text-slate-900`}>
+              <td className={`${td} text-right font-medium text-slate-100`}>
                 <Money minor={t.grossMinor} />
               </td>
-              <td className={`${td} text-right text-slate-500`}>
+              <td className={`${td} text-right text-slate-400`}>
                 <Money minor={t.feeMinor} />
               </td>
-              <td className={`${td} text-right font-medium text-slate-900`}>
+              <td className={`${td} text-right font-medium text-slate-100`}>
                 <Money minor={t.netMinor} />
               </td>
               <td className={td}>{CHANNEL_LABEL[t.channel] ?? t.channel}</td>
@@ -189,7 +189,7 @@ export function TransactionsView({
                   <StatusBadge status={t.settlementStatus} />
                 </div>
               </td>
-              <td className={`${td} text-slate-500`}>{formatDateTime(t.createdAt)}</td>
+              <td className={`${td} text-slate-400`}>{formatDateTime(t.createdAt)}</td>
             </tr>
           ))}
         </tbody>
@@ -241,7 +241,7 @@ export function SettlementsView({
   return (
     <>
       {!compact && (
-        <div className="grid gap-2 border-b border-slate-100 p-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-2 border-b border-obsidian-800 p-4 sm:grid-cols-2 lg:grid-cols-4">
           <input className={inputClass} placeholder="Settlement ID or provider reference" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search settlements" />
           {admin && tenants && (
             <select className={selectClass} value={tenantId} onChange={(e) => setTenantId(e.target.value)} aria-label="Tenant">
@@ -295,25 +295,25 @@ export function SettlementsView({
             </EmptyRow>
           )}
           {data?.items.map((s) => (
-            <tr key={s.id} className="cursor-pointer transition-colors hover:bg-slate-50" onClick={() => setOpenId(s.id)}>
+            <tr key={s.id} className="cursor-pointer transition-colors hover:bg-obsidian-950" onClick={() => setOpenId(s.id)}>
               <td className={td}>
-                <button type="button" className="font-mono text-xs font-medium text-blue-800 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600" onClick={(e) => { e.stopPropagation(); setOpenId(s.id); }}>
+                <button type="button" className="font-mono text-xs font-medium text-brand-300 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500" onClick={(e) => { e.stopPropagation(); setOpenId(s.id); }}>
                   {s.settlementNumber}
                 </button>
-                {s.transactionId && <p className="font-mono text-[11px] text-slate-400">{s.transactionId}</p>}
+                {s.transactionId && <p className="font-mono text-[11px] text-slate-500">{s.transactionId}</p>}
               </td>
               {admin && <td className={td}>{s.tenant?.name ?? "—"}</td>}
-              <td className={`${td} text-right font-medium text-slate-900`}>
+              <td className={`${td} text-right font-medium text-slate-100`}>
                 <Money minor={s.amountMinor} />
               </td>
               <td className={td}>{s.destinationSnapshot?.label ?? DESTINATION_LABEL[s.destinationType] ?? s.destinationType}</td>
               <td className={td}>{PROVIDER_LABEL[s.provider] ?? s.provider}</td>
               <td className={td}>
                 <StatusBadge status={s.status} />
-                {(s.timedOutAt || (s.status === "PROCESSING" && s.failureReason)) && <p className="mt-1 text-[11px] font-medium text-amber-700">Needs review</p>}
+                {(s.timedOutAt || (s.status === "PROCESSING" && s.failureReason)) && <p className="mt-1 text-[11px] font-medium text-amber-300">Needs review</p>}
               </td>
-              <td className={`${td} text-slate-500`}>{formatDateTime(s.createdAt)}</td>
-              <td className={`${td} text-slate-500`}>{formatDateTime(s.completedAt ?? s.failedAt ?? s.cancelledAt)}</td>
+              <td className={`${td} text-slate-400`}>{formatDateTime(s.createdAt)}</td>
+              <td className={`${td} text-slate-400`}>{formatDateTime(s.completedAt ?? s.failedAt ?? s.cancelledAt)}</td>
             </tr>
           ))}
         </tbody>

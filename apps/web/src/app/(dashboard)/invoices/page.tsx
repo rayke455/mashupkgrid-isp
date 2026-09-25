@@ -31,14 +31,11 @@ export default function InvoicesPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2.5">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-500/15 text-blue-600 dark:text-blue-400">
-              <IconInvoice size={20} />
-            </span>
-            Invoices &amp; Ledger
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">
+            Invoices
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Automated subscription billing, tax calculations, and payment tracking.
+            Bills sent to your subscribers, and whether they&apos;re paid.
           </p>
         </div>
       </div>

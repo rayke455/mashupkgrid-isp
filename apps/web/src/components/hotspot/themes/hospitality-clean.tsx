@@ -1,6 +1,6 @@
 "use client";
 
-import type { CaptiveThemeProps } from "./types";
+import { appOnlyLabel, type CaptiveThemeProps } from "./types";
 
 function formatDuration(minutes: number): string {
   if (minutes < 60) return `${minutes} minutes`;
@@ -104,6 +104,9 @@ export function HospitalityCleanTheme({
                       <div>
                         <div className="flex items-center gap-2">
                           <h3 className="font-semibold text-sm text-white">{pkg.name}</h3>
+                          {appOnlyLabel(pkg.appPolicy) && (
+                            <span className="rounded-full border border-amber-400/40 bg-amber-400/10 px-2 py-0.5 text-[9px] font-bold text-amber-200">{appOnlyLabel(pkg.appPolicy)}</span>
+                          )}
                           {isPop && (
                             <span className="rounded-full bg-emerald-500/20 border border-emerald-500/40 px-2 py-0.5 text-[9px] font-bold text-emerald-300">
                               {pkg.badge || "RECOMMENDED"}

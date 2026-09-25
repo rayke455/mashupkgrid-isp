@@ -78,8 +78,8 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
         },
         {
           href: "/vouchers",
-          label: "Hotspot vouchers",
-          hint: "Captive portal, vouchers",
+          label: "Hotspot",
+          hint: "Packages, vouchers, portal",
           icon: <IconTicket size={16} />,
           show: has("radius.manage"),
         },

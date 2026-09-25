@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
 import { Button, Card, ErrorText, Input, Label, Badge, StatusDot } from "@/components/ui";
-import { IconMaintenance, IconLock, IconCheck, IconCopy, IconPulse } from "@/components/icons";
 import {
   LandingMaintenanceConfig,
   DEFAULT_LANDING_MAINTENANCE,
@@ -12,6 +11,7 @@ import {
   saveLandingMaintenanceConfig,
 } from "@/lib/landing-maintenance";
 import { LandingMaintenanceScreen } from "@/components/landing-maintenance-screen";
+import { IconMaintenance, IconLock, IconCheck, IconCopy, IconPulse } from "@/components/icons";
 
 interface MaintenanceEvent {
   id: string;
@@ -104,10 +104,7 @@ export default function MaintenancePage() {
             </span>
           )}
         </div>
-        <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2.5">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400">
-            <IconMaintenance size={20} />
-          </span>
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">
           System Maintenance &amp; Public Access Control
         </h1>
         <p className="text-sm text-slate-500 dark:text-slate-400">

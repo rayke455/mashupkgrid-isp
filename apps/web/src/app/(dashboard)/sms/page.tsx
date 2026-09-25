@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
 import { Button, Card, ErrorText, HintText, Input, Label, Badge, StatusDot } from "@/components/ui";
-import { IconMessage } from "@/components/icons";
 
 interface SmsConfigStatus {
   configured: boolean;
@@ -12,6 +11,7 @@ interface SmsConfigStatus {
   username: string | null;
   senderId: string | null;
   environment: string;
+  sendVoucherSms: boolean;
 }
 
 export default function SmsGatewayPage() {
@@ -21,6 +21,9 @@ export default function SmsGatewayPage() {
   const [senderId, setSenderId] = useState("");
   const [environment, setEnvironment] = useState<"sandbox" | "production">("sandbox");
   const [error, setError] = useState<string | null>(null);
+  // Read-only until focused: browsers otherwise fill these with the dashboard login, and saving
+  // would store the owner's email and password as SMS credentials.
+  const [unlocked, setUnlocked] = useState({ username: false, apiKey: false });
 
   const [testPhone, setTestPhone] = useState("");
   const [testMessage, setTestMessage] = useState("This is a test message from MASHUPKGRID ISP.");
@@ -44,6 +47,12 @@ export default function SmsGatewayPage() {
     onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to save configuration"),
   });
 
+  const setVoucherTexts = useMutation({
+    mutationFn: (enabled: boolean) =>
+      apiFetch<SmsConfigStatus>("/api/v1/sms/config/voucher-texts", { method: "PUT", body: JSON.stringify({ enabled }) }),
+    onSuccess: (next) => queryClient.setQueryData(["sms-config"], next),
+  });
+
   const sendTest = useMutation({
     mutationFn: () =>
       apiFetch<{ delivered: boolean; reason?: string }>("/api/v1/sms/send-test", {
@@ -62,14 +71,11 @@ export default function SmsGatewayPage() {
     <div className="max-w-2xl space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="flex items-center gap-2.5 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-500/15 text-indigo-600 dark:text-indigo-400">
-              <IconMessage size={18} />
-            </span>
-            SMS Gateway
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">
+            SMS gateway
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Africa&apos;s Talking Bulk SMS — used for payment reminders and overdue notices.
+            Africa&apos;s Talking Bulk SMS — used for payment reminders, overdue notices, hotspot voucher codes and router alerts.
           </p>
         </div>
         {status?.configured && (
@@ -95,12 +101,12 @@ export default function SmsGatewayPage() {
         >
           <div>
             <Label htmlFor="username">Username</Label>
-            <Input id="username" value={username} onChange={(e) => setUsername(e.target.value)} required />
+            <Input id="username" autoComplete="off" data-1p-ignore data-lpignore="true" readOnly={!unlocked.username} onFocus={() => setUnlocked((u) => ({ ...u, username: true }))} value={username} onChange={(e) => setUsername(e.target.value)} required />
             <HintText>Use &quot;sandbox&quot; for the sandbox environment.</HintText>
           </div>
           <div>
             <Label htmlFor="apiKey">API Key</Label>
-            <Input id="apiKey" type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} required />
+            <Input id="apiKey" type="password" autoComplete="new-password" data-1p-ignore data-lpignore="true" readOnly={!unlocked.apiKey} onFocus={() => setUnlocked((u) => ({ ...u, apiKey: true }))} value={apiKey} onChange={(e) => setApiKey(e.target.value)} required />
           </div>
           <div>
             <Label htmlFor="senderId">Sender ID (optional)</Label>
@@ -126,6 +132,31 @@ export default function SmsGatewayPage() {
         </form>
         {error && <ErrorText>{error}</ErrorText>}
       </Card>
+
+      {status?.configured && (
+        <Card>
+          <h2 className="mb-3 font-semibold text-slate-900 dark:text-white">Automatic texts</h2>
+          <label className="flex items-start gap-3">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4"
+              checked={status.sendVoucherSms}
+              disabled={setVoucherTexts.isPending}
+              onChange={(e) => setVoucherTexts.mutate(e.target.checked)}
+            />
+            <span>
+              <span className="block text-sm font-medium text-slate-900 dark:text-white">Text hotspot buyers their voucher code</span>
+              <span className="block text-xs text-slate-500 dark:text-slate-400">
+                Sent after each M-Pesa purchase, so a customer who drops off the Wi-Fi can still log in. Uses one SMS of your credit per sale.
+              </span>
+            </span>
+          </label>
+          {setVoucherTexts.isError && <ErrorText>Couldn&apos;t save. Try again.</ErrorText>}
+          <p className="mt-3 text-xs text-slate-500 dark:text-slate-400">
+            Router down and back-online alerts go to staff who manage routers and have a phone number on their profile.
+          </p>
+        </Card>
+      )}
 
       {status?.configured && (
         <Card>

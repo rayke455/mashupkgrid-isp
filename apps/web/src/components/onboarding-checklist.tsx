@@ -33,9 +33,7 @@ export function OnboardingChecklist() {
   return (
     <Card>
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-sm font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-          Set up your account
-        </h2>
+        <h2 className="text-[15px] font-semibold text-slate-900 dark:text-white">Set up your account</h2>
         <span className="text-xs font-medium text-slate-400">
           {doneCount} of {steps.length} done · {steps.length - doneCount} steps left
         </span>
@@ -48,10 +46,10 @@ export function OnboardingChecklist() {
       {nextStep && (
         <Link
           href={nextStep.href}
-          className="group mb-3 flex items-center justify-between rounded-lg bg-gradient-to-r from-brand-600 to-brand-700 px-4 py-3 text-white shadow-sm transition-transform hover:scale-[1.01]"
+          className="group mb-3 flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 transition-colors hover:border-brand-500/60 dark:border-obsidian-700 dark:bg-obsidian-950 dark:text-white"
         >
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-white/70">Next step</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">Next step</p>
             <p className="text-sm font-semibold">{nextStep.label}</p>
           </div>
           <IconChevronRight size={18} className="shrink-0 transition-transform group-hover:translate-x-0.5" />

@@ -66,24 +66,24 @@ export default function PlatformSettlementsPage() {
             {tenants.isLoading && (
               <tr>
                 <td colSpan={4} className={td}>
-                  <div className="h-4 w-1/2 animate-pulse rounded bg-slate-100" />
+                  <div className="h-4 w-1/2 animate-pulse rounded bg-obsidian-800" />
                 </td>
               </tr>
             )}
             {!tenants.isLoading && owed.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-10 text-center text-sm text-slate-500">
+                <td colSpan={4} className="px-4 py-10 text-center text-sm text-slate-400">
                   No ISP has a balance waiting to be settled.
                 </td>
               </tr>
             )}
             {owed.map((t) => (
               <tr key={t.id}>
-                <td className={`${td} font-medium text-slate-900`}>{t.name}</td>
-                <td className={`${td} text-right font-medium text-slate-900`}>
+                <td className={`${td} font-medium text-slate-100`}>{t.name}</td>
+                <td className={`${td} text-right font-medium text-slate-100`}>
                   <Money minor={t.balance.settleableMinor} />
                 </td>
-                <td className={td}>{t.destination ? `${t.destination.label} · ${t.destination.settlementMethod === "MANUAL" ? "manual" : "automatic"}` : <span className="text-amber-700">None set</span>}</td>
+                <td className={td}>{t.destination ? `${t.destination.label} · ${t.destination.settlementMethod === "MANUAL" ? "manual" : "automatic"}` : <span className="text-amber-300">None set</span>}</td>
                 <td className={`${td} text-right`}>
                   {canApprove && (
                     <button type="button" className={buttonClass("secondary", "sm")} disabled={!t.destination} onClick={() => setConfirm(t)}>
@@ -123,7 +123,7 @@ export default function PlatformSettlementsPage() {
           }
         >
           <p>
-            Sends <strong className="text-slate-900"><Money minor={confirm.balance.settleableMinor} /></strong> to {confirm.destination?.label}. This ignores the
+            Sends <strong className="text-slate-100"><Money minor={confirm.balance.settleableMinor} /></strong> to {confirm.destination?.label}. This ignores the
             minimum settlement amount. In manual mode it waits for approval.
           </p>
           {settle.error && <Alert>{(settle.error as ApiRequestError).message}</Alert>}

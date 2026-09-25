@@ -81,7 +81,7 @@ export default function WebhooksPage() {
       description="Every callback M-Pesa sent us — processed, duplicate, ignored or rejected. Duplicates are expected: Safaricom retries, and a duplicate never moves money twice."
     >
       <Panel padded={false}>
-        <div className="grid gap-2 border-b border-slate-100 p-4 sm:grid-cols-3">
+        <div className="grid gap-2 border-b border-obsidian-800 p-4 sm:grid-cols-3">
           <input className={inputClass} placeholder="Checkout ID, M-Pesa ID or reference" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search webhooks" />
           <select className={inputClass} value={eventType} onChange={(e) => setEventType(e.target.value)} aria-label="Event type">
             <option value="">All event types</option>
@@ -117,20 +117,20 @@ export default function WebhooksPage() {
             {error && <ErrorRow cols={7} error={error} onRetry={() => void refetch()} />}
             {data && data.items.length === 0 && <EmptyRow cols={7} title="No callbacks received yet" />}
             {data?.items.map((e) => (
-              <tr key={e.id} className="cursor-pointer hover:bg-slate-50" onClick={() => setOpenId(e.id)}>
-                <td className={`${td} text-slate-500`}>
-                  <button type="button" className="text-left hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600" onClick={(ev) => { ev.stopPropagation(); setOpenId(e.id); }}>
+              <tr key={e.id} className="cursor-pointer hover:bg-obsidian-950" onClick={() => setOpenId(e.id)}>
+                <td className={`${td} text-slate-400`}>
+                  <button type="button" className="text-left hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500" onClick={(ev) => { ev.stopPropagation(); setOpenId(e.id); }}>
                     {formatDateTime(e.receivedAt)}
                   </button>
                 </td>
                 <td className={td}>{EVENT_LABEL[e.eventType] ?? e.eventType}</td>
                 <td className={td}>{e.provider === "MPESA" ? "M-Pesa" : e.provider}</td>
-                <td className={td}>{e.tenant?.name ?? <span className="text-slate-400">—</span>}</td>
+                <td className={td}>{e.tenant?.name ?? <span className="text-slate-500">—</span>}</td>
                 <td className={`${td} font-mono text-xs`}>{e.transactionReference ?? e.externalId ?? "—"}</td>
                 <td className={td}>
                   <StatusBadge status={e.status} />
                 </td>
-                <td className={`${td} max-w-[240px] truncate text-slate-500`} title={e.errorMessage ?? undefined}>
+                <td className={`${td} max-w-[240px] truncate text-slate-400`} title={e.errorMessage ?? undefined}>
                   {e.errorMessage ?? ""}
                 </td>
               </tr>
@@ -141,7 +141,7 @@ export default function WebhooksPage() {
       </Panel>
 
       <Drawer open={Boolean(openId)} onClose={() => setOpenId(null)} title="Webhook event" subtitle={detail.data ? formatDateTime(detail.data.receivedAt) : undefined}>
-        {detail.isLoading && <div className="h-48 animate-pulse rounded-lg bg-slate-100" />}
+        {detail.isLoading && <div className="h-48 animate-pulse rounded-lg bg-obsidian-800" />}
         {detail.error && <Alert>{(detail.error as Error).message}</Alert>}
         {detail.data && (
           <div className="space-y-5">
@@ -156,17 +156,17 @@ export default function WebhooksPage() {
                 { label: "ISP", value: detail.data.tenant?.name ?? "—" },
                 { label: "Processed", value: formatDateTime(detail.data.processedAt) },
                 { label: "Source IP", value: detail.data.sourceIp ?? "—" },
-                ...(detail.data.errorMessage ? [{ label: "Error", value: <span className="text-red-700">{detail.data.errorMessage}</span> }] : []),
+                ...(detail.data.errorMessage ? [{ label: "Error", value: <span className="text-red-300">{detail.data.errorMessage}</span> }] : []),
               ]}
             />
             <div>
-              <h3 className="mb-2 text-sm font-semibold text-slate-900">Payload</h3>
+              <h3 className="mb-2 text-sm font-semibold text-slate-100">Payload</h3>
               <pre className="max-h-80 overflow-auto rounded-lg bg-slate-950 p-3 text-xs leading-5 text-slate-100">{JSON.stringify(detail.data.payload, null, 2)}</pre>
             </div>
             {detail.data.response !== undefined && detail.data.response !== null && (
               <div>
-                <h3 className="mb-2 text-sm font-semibold text-slate-900">Outcome</h3>
-                <pre className="overflow-auto rounded-lg bg-slate-100 p-3 text-xs leading-5 text-slate-800">{JSON.stringify(detail.data.response, null, 2)}</pre>
+                <h3 className="mb-2 text-sm font-semibold text-slate-100">Outcome</h3>
+                <pre className="overflow-auto rounded-lg bg-obsidian-800 p-3 text-xs leading-5 text-slate-200">{JSON.stringify(detail.data.response, null, 2)}</pre>
               </div>
             )}
           </div>

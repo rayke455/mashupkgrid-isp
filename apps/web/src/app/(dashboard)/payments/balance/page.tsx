@@ -52,20 +52,20 @@ export default function PaymentsBalancePage() {
             <Row label="Refunds & reversals" value={-b.refundsMinor} />
             <Row label="Settled to you" value={-b.settledMinor} />
             <Row label="On its way to you" value={-b.pendingSettlementMinor} />
-            <div className="flex items-baseline justify-between border-t border-slate-200 pt-3 sm:col-span-2">
-              <dt className="font-semibold text-slate-950">Available balance</dt>
-              <dd className={`text-xl font-semibold tabular-nums ${b.availableMinor < 0 ? "text-red-700" : "text-slate-950"}`}>
+            <div className="flex items-baseline justify-between border-t border-obsidian-800 pt-3 sm:col-span-2">
+              <dt className="font-semibold text-white">Available balance</dt>
+              <dd className={`text-xl font-semibold tabular-nums ${b.availableMinor < 0 ? "text-red-300" : "text-white"}`}>
                 <Money minor={b.availableMinor} cents />
               </dd>
             </div>
             {b.availableMinor < 0 && (
-              <p className="text-xs text-red-700 sm:col-span-2">
+              <p className="text-xs text-red-300 sm:col-span-2">
                 A refund of money already sent to you has left your balance below zero. It is recovered from your next collections.
               </p>
             )}
           </dl>
         ) : (
-          <div className="h-40 animate-pulse rounded-md bg-slate-100" />
+          <div className="h-40 animate-pulse rounded-md bg-obsidian-800" />
         )}
       </Panel>
 
@@ -89,12 +89,12 @@ export default function PaymentsBalancePage() {
             )}
             {entries.map((e) => (
               <tr key={e.id}>
-                <td className={`${td} text-slate-500`}>{formatDateTime(e.createdAt)}</td>
+                <td className={`${td} text-slate-400`}>{formatDateTime(e.createdAt)}</td>
                 <td className={td}>{ENTRY_LABEL[e.entryType] ?? e.entryType}</td>
-                <td className={`${td} max-w-[360px] truncate text-slate-600`} title={e.description}>
+                <td className={`${td} max-w-[360px] truncate text-slate-400`} title={e.description}>
                   {e.description}
                 </td>
-                <td className={`${td} text-right font-medium tabular-nums ${e.direction === "CREDIT" ? "text-emerald-700" : "text-slate-900"}`}>
+                <td className={`${td} text-right font-medium tabular-nums ${e.direction === "CREDIT" ? "text-emerald-300" : "text-slate-100"}`}>
                   {e.direction === "CREDIT" ? "+" : "−"} <Money minor={e.amountMinor} cents />
                 </td>
               </tr>
@@ -102,7 +102,7 @@ export default function PaymentsBalancePage() {
           </tbody>
         </TableShell>
         {ledger.hasNextPage && (
-          <div className="border-t border-slate-100 p-3 text-center">
+          <div className="border-t border-obsidian-800 p-3 text-center">
             <button type="button" className={buttonClass("secondary", "sm")} disabled={ledger.isFetchingNextPage} onClick={() => void ledger.fetchNextPage()}>
               {ledger.isFetchingNextPage ? "Loading…" : "Load older entries"}
             </button>
@@ -116,8 +116,8 @@ export default function PaymentsBalancePage() {
 function Row({ label, value }: { label: string; value: number }) {
   return (
     <div className="flex items-baseline justify-between">
-      <dt className="text-slate-600">{label}</dt>
-      <dd className={`tabular-nums ${value < 0 ? "text-slate-700" : "text-slate-950"}`}>
+      <dt className="text-slate-400">{label}</dt>
+      <dd className={`tabular-nums ${value < 0 ? "text-slate-300" : "text-white"}`}>
         {value < 0 ? "−" : ""}
         <Money minor={Math.abs(value)} cents />
       </dd>

@@ -1,369 +1,224 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { Suspense, useEffect, useState, type FormEvent } from "react";
 import { useSearchParams } from "next/navigation";
-import Link from "next/link";
-import { trackOrder, HardwareOrder, getStoreAccount } from "@/lib/hardware-store";
-import { IconWhatsApp, IconArrowRight, IconPackage, IconCheck, IconShield, IconUser } from "@/components/icons";
+import { ApiRequestError } from "@/lib/api-client";
+import { recentOrders, trackOrder, type HardwareOrder, type RecentOrderRef } from "@/lib/hardware-store";
+import { SiteHeader } from "@/components/marketing/site-header";
+import { SiteFooter } from "@/components/marketing/site-footer";
+import { whatsappLink } from "@/components/marketing/brand";
+
+const ksh = (n: number) => `KSh ${n.toLocaleString("en-KE")}`;
+
+const STEPS = [
+  { key: "PAID", label: "Paid" },
+  { key: "PROCESSING", label: "Being prepared" },
+  { key: "DISPATCHED", label: "On the way" },
+  { key: "DELIVERED", label: "Delivered" },
+] as const;
+
+/** How many of the steps above are done. */
+function stepIndex(order: HardwareOrder): number {
+  return ["PENDING", "PAID", "PROCESSING", "DISPATCHED", "DELIVERED"].indexOf(order.status);
+}
+
+function statusLine(order: HardwareOrder): string {
+  switch (order.status) {
+    case "PENDING":
+      return order.paymentMethod === "PAY_ON_DELIVERY"
+        ? `Order received. You'll pay ${ksh(order.totalAmount)} with M-Pesa on delivery; we'll call to confirm.`
+        : order.awaitingMpesa
+          ? "Waiting for your M-Pesa payment."
+          : `Not paid yet${order.paymentNote ? `: ${order.paymentNote}` : "."}`;
+    case "PAID":
+      return "Paid. We're getting your order ready.";
+    case "PROCESSING":
+      return "Your order is being prepared.";
+    case "DISPATCHED":
+      return "Your order is on the way.";
+    case "DELIVERED":
+      return "Delivered.";
+    case "CANCELLED":
+      return "This order was cancelled.";
+  }
+}
 
 function TrackContent() {
-  const searchParams = useSearchParams();
-  const initialOrderId = searchParams.get("orderId") || searchParams.get("q") || "";
-
-  const [query, setQuery] = useState(initialOrderId);
+  const params = useSearchParams();
+  const [query, setQuery] = useState(params.get("orderId") || params.get("q") || "");
   const [phone, setPhone] = useState("");
-  const [loading, setLoading] = useState(false);
   const [order, setOrder] = useState<HardwareOrder | null>(null);
-  const [searched, setSearched] = useState(false);
-  const [error, setError] = useState("");
-  const [recentOrders, setRecentOrders] = useState<HardwareOrder[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [recent, setRecent] = useState<RecentOrderRef[]>([]);
 
-  useEffect(() => {
-    // Load local recent orders if any
-    try {
-      const raw = localStorage.getItem("mkg_store_orders");
-      if (raw) {
-        setRecentOrders(JSON.parse(raw).slice(0, 3));
-      }
-    } catch {
-      // ignore
-    }
+  useEffect(() => setRecent(recentOrders()), []);
 
-    if (initialOrderId) {
-      handleSearch(initialOrderId);
-    }
-  }, [initialOrderId]);
-
-  const handleSearch = async (targetQuery?: string) => {
-    const q = (targetQuery || query).trim();
-    if (!q) {
-      setError("Please enter an Order ID (e.g. ORD-123456) or M-Pesa Receipt code.");
-      return;
-    }
-
+  const lookup = async (q: string, p: string) => {
+    setError(null);
+    if (q.trim().length < 4) return setError("Enter your order number, e.g. ORD-482913, or your M-Pesa receipt.");
+    if (p.replace(/\D/g, "").length < 9) return setError("Enter the phone number you ordered with.");
     setLoading(true);
-    setError("");
-    setSearched(true);
-
     try {
-      const res = await trackOrder(q, phone.trim() || undefined);
-      if (res) {
-        setOrder(res);
-      } else {
-        setOrder(null);
-        setError("No order found matching this tracking code. Please verify the code or contact support on WhatsApp.");
-      }
-    } catch {
+      setOrder(await trackOrder(q, p));
+    } catch (err) {
       setOrder(null);
-      setError("Unable to retrieve order details right now. Please try again or chat with our team.");
+      setError(
+        err instanceof ApiRequestError && err.status === 404
+          ? "We couldn't find an order with that number and phone. Check both and try again."
+          : "Couldn't check right now. Please try again in a moment."
+      );
     } finally {
       setLoading(false);
     }
   };
 
-  const getStepIndex = (status: HardwareOrder["status"]) => {
-    switch (status) {
-      case "PENDING":
-        return 0;
-      case "PAID":
-        return 1;
-      case "PROCESSING":
-        return 2;
-      case "DISPATCHED":
-        return 3;
-      case "DELIVERED":
-        return 4;
-      default:
-        return 1;
-    }
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    void lookup(query, phone);
   };
 
-  const currentStep = order ? getStepIndex(order.status) : 0;
-  const storeAccount = order?.account || getStoreAccount();
+  const current = order ? stepIndex(order) : 0;
 
   return (
-    <div className="min-h-screen bg-[#060A12] text-slate-100 font-sans selection:bg-amber-400 selection:text-slate-950">
-      {/* Header */}
-      <header className="sticky top-0 z-40 backdrop-blur-xl bg-[#060A12]/90 border-b border-slate-800">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-3 group">
-            <div className="h-9 w-9 rounded-xl overflow-hidden border border-amber-500/40 group-hover:scale-105 transition-transform">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/logo.jpg" alt="MashupHost Logo" className="h-full w-full object-cover" />
-            </div>
-            <div>
-              <span className="text-lg font-black tracking-tight text-white group-hover:text-amber-400 transition-colors">
-                MASHUP<span className="text-amber-400">HOST</span>
-              </span>
-            </div>
-          </Link>
+    <div className="force-light flex min-h-screen flex-col bg-white text-slate-900 antialiased">
+      <SiteHeader />
+      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-12 sm:px-6 sm:py-16">
+        <h1 className="text-3xl font-semibold tracking-tight text-slate-950">Track your order</h1>
+        <p className="mt-2 text-base text-slate-600">Enter your order number (or M-Pesa receipt) and the phone number you ordered with.</p>
 
-          <div className="flex items-center gap-3">
-            <Link
-              href="/app"
-              className="px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-700 hover:border-amber-400/50 text-xs font-bold text-slate-200 hover:text-white transition-all flex items-center gap-1.5"
-            >
-              <IconUser size={14} />
-              <span>Customer Portal</span>
-            </Link>
-            <a
-              href="https://wa.me/254703605266?text=Hello%20MashupHost%2C%20I%20need%20help%20tracking%20my%20order"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#25D366]/15 hover:bg-[#25D366]/25 border border-[#25D366]/40 text-emerald-300 text-xs font-bold transition-all"
-            >
-              <IconWhatsApp size={14} className="text-[#25D366]" />
-              <span>NOC WhatsApp</span>
-            </a>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Track Section */}
-      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-8">
-        <div className="text-center space-y-3">
-          <div className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 text-xs font-mono font-bold uppercase">
-            <span>Nationwide Order Tracking</span>
-          </div>
-          <h1 className="text-3xl sm:text-5xl font-black text-white tracking-tight">
-            Track Your Hardware &amp; Fiber Order
-          </h1>
-          <p className="text-sm sm:text-base text-slate-300 max-w-xl mx-auto">
-            Enter your Order ID (e.g. <span className="text-cyan-300 font-mono font-bold">ORD-123456</span>) or M-Pesa Transaction code to check real-time courier dispatch status.
-          </p>
-        </div>
-
-        {/* Search Input Box */}
-        <div className="p-6 rounded-3xl bg-slate-950/90 border border-slate-800 shadow-2xl space-y-4">
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              handleSearch();
-            }}
-            className="space-y-3"
-          >
-            <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
-              <div className="sm:col-span-7">
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
-                  Order ID or M-Pesa Receipt Code *
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. ORD-849201 or QHK7294810"
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white font-mono text-sm focus:border-cyan-400 focus:outline-none uppercase"
-                />
-              </div>
-
-              <div className="sm:col-span-5">
-                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">
-                  Phone Number (Optional Verification)
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. 0712345678"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl bg-slate-900 border border-slate-700 text-white font-mono text-sm focus:border-cyan-400 focus:outline-none"
-                />
-              </div>
-            </div>
-
-            {error && (
-              <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs font-medium">
-                {error}
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-black text-xs uppercase tracking-wider transition-all shadow-lg shadow-cyan-500/20 active:scale-95 flex items-center justify-center gap-2"
-            >
-              {loading ? (
-                <>
-                  <span className="h-4 w-4 rounded-full border-2 border-white/20 border-t-white animate-spin" />
-                  <span>Checking Nationwide Tracking...</span>
-                </>
-              ) : (
-                <>
-                  <span>Track My Parcel</span>
-                  <IconArrowRight size={16} />
-                </>
-              )}
-            </button>
-          </form>
-
-          {/* Recent Orders in this browser */}
-          {recentOrders.length > 0 && !order && (
-            <div className="pt-4 border-t border-slate-800/80 space-y-2">
-              <span className="text-[10px] font-mono uppercase tracking-wider text-slate-400 block">
-                Recent Orders In This Browser:
-              </span>
-              <div className="flex flex-wrap gap-2">
-                {recentOrders.map((rec) => (
+        <form onSubmit={submit} className="mt-8 grid gap-3 rounded-2xl border border-slate-200 p-5 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+          <label className="block">
+            <span className="text-sm font-medium text-slate-900">Order number</span>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="ORD-482913"
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm uppercase outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20"
+            />
+          </label>
+          <label className="block">
+            <span className="text-sm font-medium text-slate-900">Phone number</span>
+            <input
+              type="tel"
+              inputMode="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              placeholder="0712 345 678"
+              className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2.5 text-sm outline-none focus:border-brand-600 focus:ring-2 focus:ring-brand-600/20"
+            />
+          </label>
+          <button type="submit" disabled={loading} className="rounded-lg bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-700 disabled:opacity-60">
+            {loading ? "Checking…" : "Track"}
+          </button>
+          {recent.length > 0 && !order && (
+            <div className="sm:col-span-3">
+              <p className="text-xs text-slate-500">Recent orders on this device</p>
+              <div className="mt-1.5 flex flex-wrap gap-2">
+                {recent.slice(0, 4).map((r) => (
                   <button
-                    key={rec.id}
+                    key={r.orderNumber}
                     type="button"
                     onClick={() => {
-                      setQuery(rec.id);
-                      handleSearch(rec.id);
+                      setQuery(r.orderNumber);
+                      setPhone(r.phone);
+                      void lookup(r.orderNumber, r.phone);
                     }}
-                    className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-cyan-300 text-xs font-mono font-bold flex items-center gap-2 transition-colors"
+                    className="rounded-full border border-slate-300 px-3 py-1 text-sm text-slate-700 hover:bg-slate-50"
                   >
-                    <span>{rec.id}</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">
-                      KES {rec.totalAmount.toLocaleString()}
-                    </span>
+                    {r.orderNumber}
                   </button>
                 ))}
               </div>
             </div>
           )}
-        </div>
+        </form>
 
-        {/* Order Status Display */}
+        {error && (
+          <p role="alert" className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+            {error}
+          </p>
+        )}
+
         {order && (
-          <div className="space-y-6 animate-fade-in-up">
-            {/* Visual Stepper Card */}
-            <div className="p-6 sm:p-8 rounded-3xl bg-slate-950/90 border border-cyan-500/30 shadow-2xl space-y-8">
-              <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-800">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xl sm:text-2xl font-black text-white font-mono">{order.id}</span>
-                    <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-xs font-bold font-mono">
-                      {order.status}
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-400 mt-1">
-                    Placed on {new Date(order.createdAt).toLocaleDateString("en-KE", { dateStyle: "medium" })} &bull; Paid via M-Pesa ({order.mpesaReceiptNumber})
-                  </p>
-                </div>
-
-                <a
-                  href={`https://wa.me/254703605266?text=Hello%20MashupHost%2C%20I%20am%20inquiring%20about%20my%20delivery%20for%20order%20${encodeURIComponent(
-                    order.id
-                  )}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-4 py-2 rounded-xl bg-[#25D366]/15 hover:bg-[#25D366]/25 border border-[#25D366]/40 text-emerald-300 font-bold text-xs flex items-center gap-2 transition-colors"
-                >
-                  <IconWhatsApp size={16} className="text-[#25D366]" />
-                  <span>Chat With Dispatch</span>
-                </a>
+          <section className="mt-8 rounded-2xl border border-slate-200 p-5 sm:p-7">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <p className="text-xl font-semibold text-slate-950">{order.orderNumber}</p>
+                <p className="mt-0.5 text-sm text-slate-500">Placed {new Date(order.createdAt).toLocaleDateString("en-KE", { dateStyle: "medium" })}</p>
               </div>
+              <a
+                href={whatsappLink(`Hello MashupHost, I have a question about order ${order.orderNumber}`)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-lg border border-slate-300 px-3.5 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Ask on WhatsApp
+              </a>
+            </div>
 
-              {/* Progress Stepper */}
-              <div className="grid grid-cols-4 gap-2 sm:gap-4 text-center">
-                {/* Step 1 */}
-                <div className="space-y-2">
-                  <div className={`h-2 rounded-full ${currentStep >= 1 ? "bg-emerald-400" : "bg-slate-800"}`} />
-                  <span className="text-[11px] sm:text-xs font-bold block text-white">1. M-Pesa Paid</span>
-                  <span className="text-[10px] text-slate-400 hidden sm:block">Verified Instantly</span>
-                </div>
+            <p className="mt-4 text-sm font-medium text-slate-900">{statusLine(order)}</p>
 
-                {/* Step 2 */}
-                <div className="space-y-2">
-                  <div className={`h-2 rounded-full ${currentStep >= 2 ? "bg-emerald-400" : "bg-slate-800"}`} />
-                  <span className="text-[11px] sm:text-xs font-bold block text-white">2. Processing</span>
-                  <span className="text-[10px] text-slate-400 hidden sm:block">Nairobi Hub Prep</span>
-                </div>
+            {order.status !== "CANCELLED" && (
+              <ol className="mt-5 grid grid-cols-4 gap-2">
+                {STEPS.map((s, i) => {
+                  const done = current >= i + 1;
+                  return (
+                    <li key={s.key}>
+                      <span className={`block h-1.5 rounded-full ${done ? "bg-emerald-500" : "bg-slate-200"}`} />
+                      <span className={`mt-2 block text-xs ${done ? "font-medium text-slate-900" : "text-slate-500"}`}>{s.label}</span>
+                    </li>
+                  );
+                })}
+              </ol>
+            )}
 
-                {/* Step 3 */}
-                <div className="space-y-2">
-                  <div className={`h-2 rounded-full ${currentStep >= 3 ? "bg-emerald-400" : "bg-slate-800"}`} />
-                  <span className="text-[11px] sm:text-xs font-bold block text-white">3. Dispatched</span>
-                  <span className="text-[10px] text-slate-400 hidden sm:block">With Courier / Rider</span>
-                </div>
-
-                {/* Step 4 */}
-                <div className="space-y-2">
-                  <div className={`h-2 rounded-full ${currentStep >= 4 ? "bg-emerald-400" : "bg-slate-800"}`} />
-                  <span className="text-[11px] sm:text-xs font-bold block text-white">4. Delivered</span>
-                  <span className="text-[10px] text-slate-400 hidden sm:block">Destination Reached</span>
-                </div>
-              </div>
-
-              {/* Auto-Created Store Account Banner */}
-              {storeAccount && (
-                <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-500/10 via-slate-900 to-emerald-500/10 border border-amber-500/40 text-left flex flex-wrap items-center justify-between gap-4">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 rounded-md bg-amber-400 text-slate-950 font-black text-[10px] uppercase">
-                        Linked Store Account
+            <div className="mt-6 grid gap-4 sm:grid-cols-2">
+              <div>
+                <h2 className="text-sm font-medium text-slate-900">Items</h2>
+                <ul className="mt-2 space-y-1.5 text-sm">
+                  {order.items.map((it) => (
+                    <li key={it.productId} className="flex justify-between gap-3">
+                      <span className="text-slate-700">
+                        {it.quantity} × {it.name}
                       </span>
-                      <span className="text-xs font-mono font-bold text-white">{storeAccount.accountNumber}</span>
-                    </div>
-                    <p className="text-xs text-slate-300">
-                      Your store account was created automatically with your phone number ({order.phone}).
-                    </p>
-                  </div>
-
-                  <Link
-                    href="/app"
-                    className="px-4 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs uppercase tracking-wide transition-all shadow-md flex items-center gap-1.5 shrink-0"
-                  >
-                    <span>Open Customer Portal</span>
-                    <IconArrowRight size={14} />
-                  </Link>
-                </div>
-              )}
-
-              {/* Order Items & Shipping Address Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                {/* Items List */}
-                <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-3">
-                  <h4 className="font-bold uppercase tracking-wider text-slate-400 font-mono">
-                    Items In This Parcel ({order.items.length})
-                  </h4>
-                  <div className="space-y-2">
-                    {order.items.map((it, idx) => (
-                      <div key={idx} className="flex justify-between items-center py-1 border-b border-slate-800/60 last:border-0">
-                        <span className="text-white font-medium">
-                          {it.quantity}x {it.name}
-                        </span>
-                        <span className="text-cyan-300 font-mono font-bold">
-                          KES {(it.price * it.quantity).toLocaleString()}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="pt-2 border-t border-slate-800 flex justify-between font-bold text-sm">
-                    <span className="text-slate-300">Total Paid (incl. shipping):</span>
-                    <span className="text-emerald-400 font-mono">KES {order.totalAmount.toLocaleString()}</span>
-                  </div>
-                </div>
-
-                {/* Delivery Destination */}
-                <div className="p-4 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-3">
-                  <h4 className="font-bold uppercase tracking-wider text-slate-400 font-mono">
-                    Delivery Destination &amp; Recipient
-                  </h4>
-                  <div className="space-y-1.5">
-                    <p className="text-white font-bold text-sm">{order.customerName}</p>
-                    <p className="text-slate-300 font-mono">{order.phone}</p>
-                    <p className="text-slate-300">
-                      {order.county} &bull; {order.deliveryAddress}
-                    </p>
-                  </div>
-                  <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-[11px] text-slate-400 space-y-1">
-                    <span className="text-cyan-400 font-bold block">Delivery Dispatch:</span>
-                    <span>Nairobi &amp; Kiambu deliveries completed within 24 hours. Nationwide parcels dispatched via Wells Fargo Express.</span>
-                  </div>
-                </div>
+                      <span className="shrink-0 tabular-nums text-slate-900">{ksh(it.price * it.quantity)}</span>
+                    </li>
+                  ))}
+                  <li className="flex justify-between gap-3 text-slate-500">
+                    <span>Delivery</span>
+                    <span className="tabular-nums">{ksh(order.shippingFee)}</span>
+                  </li>
+                  <li className="flex justify-between gap-3 border-t border-slate-100 pt-1.5 font-semibold text-slate-950">
+                    <span>Total</span>
+                    <span className="tabular-nums">{ksh(order.totalAmount)}</span>
+                  </li>
+                </ul>
+              </div>
+              <div>
+                <h2 className="text-sm font-medium text-slate-900">Delivery</h2>
+                <p className="mt-2 text-sm text-slate-700">{order.customerName}</p>
+                <p className="text-sm text-slate-700">
+                  {order.deliveryAddress}, {order.county}
+                </p>
+                {order.status === "PAID" || order.status === "PROCESSING" || order.status === "DISPATCHED" || order.status === "DELIVERED" ? (
+                  order.mpesaReceiptNumber && !order.mpesaReceiptNumber.startsWith("STK-") ? (
+                    <p className="mt-3 text-sm text-slate-500">M-Pesa receipt {order.mpesaReceiptNumber}</p>
+                  ) : null
+                ) : null}
               </div>
             </div>
-          </div>
+          </section>
         )}
       </main>
+      <SiteFooter />
     </div>
   );
 }
 
 export default function TrackPage() {
   return (
-    <Suspense fallback={<div className="min-h-screen bg-[#060A12] text-white p-10 text-center">Loading tracker...</div>}>
+    <Suspense fallback={null}>
       <TrackContent />
     </Suspense>
   );

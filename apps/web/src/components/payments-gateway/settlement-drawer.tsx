@@ -101,7 +101,7 @@ export function SettlementDrawer({
 
   return (
     <Drawer open={Boolean(id)} onClose={onClose} title={data?.settlementNumber ?? "Settlement"} subtitle={data?.tenant?.name} footer={footer}>
-      {isLoading && <div className="h-64 animate-pulse rounded-lg bg-slate-100" />}
+      {isLoading && <div className="h-64 animate-pulse rounded-lg bg-obsidian-800" />}
       {error && <Alert title="Couldn't load this settlement">{(error as Error).message}</Alert>}
       {act.error && (
         <div className="mb-4">
@@ -114,12 +114,12 @@ export function SettlementDrawer({
             <StatusBadge status={data.status} />
             <EnvironmentBadge environment={data.environment} />
           </div>
-          <div className="rounded-lg border border-slate-200 p-4">
-            <p className="text-sm text-slate-500">Amount</p>
-            <p className="mt-1 text-2xl font-semibold tabular-nums text-slate-950">
+          <div className="rounded-lg border border-obsidian-800 p-4">
+            <p className="text-sm text-slate-400">Amount</p>
+            <p className="mt-1 text-2xl font-semibold tabular-nums text-white">
               <Money minor={data.amountMinor} />
             </p>
-            <p className="mt-1 text-sm text-slate-600">
+            <p className="mt-1 text-sm text-slate-400">
               to {data.destinationSnapshot?.label ?? DESTINATION_LABEL[data.destinationType] ?? data.destinationType}
               {data.destinationSnapshot?.accountName ? ` · ${data.destinationSnapshot.accountName}` : ""}
             </p>
@@ -152,18 +152,18 @@ export function SettlementDrawer({
           />
 
           <div>
-            <h3 className="mb-2 text-sm font-semibold text-slate-900">Ledger entries</h3>
+            <h3 className="mb-2 text-sm font-semibold text-slate-100">Ledger entries</h3>
             <LedgerTable entries={data.ledgerEntries} />
           </div>
 
           {data.gatewayTransactions.length > 0 && (
             <div>
-              <h3 className="mb-2 text-sm font-semibold text-slate-900">Payments covered ({data.gatewayTransactions.length})</h3>
-              <ul className="divide-y divide-slate-100 rounded-lg border border-slate-200 text-sm">
+              <h3 className="mb-2 text-sm font-semibold text-slate-100">Payments covered ({data.gatewayTransactions.length})</h3>
+              <ul className="divide-y divide-obsidian-800 rounded-lg border border-obsidian-800 text-sm">
                 {data.gatewayTransactions.slice(0, 50).map((t) => (
                   <li key={t.id} className="flex items-center justify-between px-3 py-2">
-                    <span className="font-mono text-xs text-slate-600">{t.txnNumber}</span>
-                    <Money minor={t.netMinor} className="text-slate-900" />
+                    <span className="font-mono text-xs text-slate-400">{t.txnNumber}</span>
+                    <Money minor={t.netMinor} className="text-slate-100" />
                   </li>
                 ))}
               </ul>
@@ -234,12 +234,12 @@ function Timeline({ settlement: s }: { settlement: SettlementDetail }) {
           <span
             aria-hidden="true"
             className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${
-              step.state === "done" ? "bg-emerald-500" : step.state === "current" ? "bg-amber-500 ring-4 ring-amber-100" : step.state === "bad" ? "bg-red-500" : "bg-slate-200"
+              step.state === "done" ? "bg-emerald-500" : step.state === "current" ? "bg-amber-500 ring-4 ring-amber-100" : step.state === "bad" ? "bg-red-500" : "bg-obsidian-800"
             }`}
           />
           <div className="text-sm">
-            <p className={step.state === "todo" ? "text-slate-400" : "font-medium text-slate-900"}>{step.label}</p>
-            {step.at && <p className="text-xs text-slate-500">{formatDateTime(step.at)}</p>}
+            <p className={step.state === "todo" ? "text-slate-500" : "font-medium text-slate-100"}>{step.label}</p>
+            {step.at && <p className="text-xs text-slate-400">{formatDateTime(step.at)}</p>}
           </div>
         </li>
       ))}

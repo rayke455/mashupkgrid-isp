@@ -35,14 +35,14 @@ export function CollectionsChart({ series, loading }: { series: DailyPoint[] | u
   const [active, setActive] = useState<number | null>(null);
 
   if (loading || !series) {
-    return <div className="h-56 animate-pulse rounded-md bg-slate-100" aria-label="Loading chart" />;
+    return <div className="h-56 animate-pulse rounded-md bg-obsidian-800" aria-label="Loading chart" />;
   }
   const total = series.reduce((t, p) => t + p.grossMinor, 0);
   if (total === 0) {
     return (
-      <div className="flex h-56 flex-col items-center justify-center rounded-md border border-dashed border-slate-200 text-center">
-        <p className="text-sm font-medium text-slate-800">No collections in the last 30 days</p>
-        <p className="mt-1 text-sm text-slate-500">Payments collected through the MashupHost gateway will show here.</p>
+      <div className="flex h-56 flex-col items-center justify-center rounded-md border border-dashed border-obsidian-800 text-center">
+        <p className="text-sm font-medium text-slate-200">No collections in the last 30 days</p>
+        <p className="mt-1 text-sm text-slate-400">Payments collected through the MashupHost gateway will show here.</p>
       </div>
     );
   }
@@ -55,7 +55,7 @@ export function CollectionsChart({ series, loading }: { series: DailyPoint[] | u
     <div>
       <div className="relative flex h-56 gap-3">
         {/* y-axis */}
-        <div className="flex w-10 shrink-0 flex-col justify-between pb-6 text-right text-[11px] tabular-nums text-slate-400" aria-hidden="true">
+        <div className="flex w-10 shrink-0 flex-col justify-between pb-6 text-right text-[11px] tabular-nums text-slate-500" aria-hidden="true">
           {[...ticks].reverse().map((t) => (
             <span key={t}>{compactKes(t)}</span>
           ))}
@@ -64,7 +64,7 @@ export function CollectionsChart({ series, loading }: { series: DailyPoint[] | u
           {/* grid */}
           <div className="pointer-events-none absolute inset-x-0 top-0 bottom-6 flex flex-col justify-between" aria-hidden="true">
             {ticks.map((t) => (
-              <div key={t} className="border-t border-slate-100" />
+              <div key={t} className="border-t border-obsidian-800" />
             ))}
           </div>
           {/* bars */}
@@ -82,7 +82,7 @@ export function CollectionsChart({ series, loading }: { series: DailyPoint[] | u
                   className="group relative flex h-full min-w-0 flex-1 items-end focus:outline-none"
                 >
                   <span
-                    className={`block w-full rounded-t-[4px] transition-colors ${active === i ? "bg-blue-800" : "bg-blue-600"}`}
+                    className={`block w-full rounded-t-[4px] transition-colors ${active === i ? "bg-brand-500" : "bg-brand-600"}`}
                     style={{ height: `${Math.max(h, p.grossMinor > 0 ? 1.5 : 0)}%` }}
                   />
                 </button>
@@ -90,20 +90,20 @@ export function CollectionsChart({ series, loading }: { series: DailyPoint[] | u
             })}
           </div>
           {/* x-axis labels: first, middle, last */}
-          <div className="absolute inset-x-0 bottom-0 flex justify-between text-[11px] text-slate-400" aria-hidden="true">
+          <div className="absolute inset-x-0 bottom-0 flex justify-between text-[11px] text-slate-500" aria-hidden="true">
             {[0, Math.floor(series.length / 2), series.length - 1].map((i) => (
               <span key={i}>{fmtDay.format(new Date(`${series[i]!.day}T00:00:00Z`))}</span>
             ))}
           </div>
           {point && active !== null && (
             <div
-              className="pointer-events-none absolute -top-2 z-10 -translate-x-1/2 -translate-y-full rounded-md border border-slate-200 bg-white px-3 py-2 text-xs shadow-lg"
+              className="pointer-events-none absolute -top-2 z-10 -translate-x-1/2 -translate-y-full rounded-md border border-obsidian-800 bg-obsidian-900 px-3 py-2 text-xs shadow-lg"
               style={{ left: `${((active + 0.5) / series.length) * 100}%` }}
               role="status"
             >
-              <p className="font-medium text-slate-900">{fmtDay.format(new Date(`${point.day}T00:00:00Z`))}</p>
-              <p className="mt-0.5 tabular-nums text-slate-700">{formatKes(point.grossMinor)} collected</p>
-              <p className="tabular-nums text-slate-500">
+              <p className="font-medium text-slate-100">{fmtDay.format(new Date(`${point.day}T00:00:00Z`))}</p>
+              <p className="mt-0.5 tabular-nums text-slate-300">{formatKes(point.grossMinor)} collected</p>
+              <p className="tabular-nums text-slate-400">
                 {point.count} payment{point.count === 1 ? "" : "s"} · fees {formatKes(point.feeMinor)}
               </p>
             </div>

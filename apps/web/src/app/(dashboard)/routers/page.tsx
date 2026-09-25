@@ -4,8 +4,19 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
-import { Button, Card, ErrorText, Badge, StatusDot } from "@/components/ui";
-import { IconRouter, IconCopy, IconCheck, IconPulse } from "@/components/icons";
+import {
+  CodeBlock,
+  EmptyState,
+  Modal,
+  Notice,
+  PageHeader,
+  Pill,
+  TableShell,
+  darkButton,
+  td,
+  th,
+} from "@/components/dashboard/surface";
+import { IconRouter } from "@/components/icons";
 
 interface RouterRow {
   id: string;
@@ -18,6 +29,7 @@ interface RouterRow {
   lastSeenAt: string | null;
   lastError: string | null;
   cpuLoadPercent: number | null;
+  memoryTotalBytes: number | null;
   uptimeSeconds: number | null;
   updatedAt: string;
   vpnIp: string | null;
@@ -56,13 +68,34 @@ interface WinboxAccessData {
     vpn: string | null;
     cloudHost: string | null;
   };
+  relay?: { enabled: boolean; vpnConnected: boolean; address: string | null };
 }
 
-function formatUptime(seconds: number | null): string {
-  if (seconds === null) return "—";
+interface FirmwareData {
+  currentVersion: string;
+  latestVersion: string;
+  status: string;
+  upgradeAvailable: boolean;
+}
+
+const STATUS: Record<RouterRow["status"], { tone: "good" | "warn" | "bad" | "neutral"; label: string }> = {
+  ONLINE: { tone: "good", label: "Online" },
+  WARNING: { tone: "warn", label: "Degraded" },
+  DOWN: { tone: "bad", label: "Offline" },
+  UNKNOWN: { tone: "neutral", label: "Not checked yet" },
+};
+
+const DETECTED_BY: Record<ConnectedAccessPoint["detectionSource"], string> = {
+  NEIGHBOR: "Neighbour discovery",
+  WIRELESS: "Wireless table",
+  DHCP: "DHCP lease",
+};
+
+function formatUptime(seconds: number | null): string | null {
+  if (seconds === null) return null;
   const days = Math.floor(seconds / 86400);
   const hours = Math.floor((seconds % 86400) / 3600);
-  return days > 0 ? `${days}d ${hours}h` : `${hours}h`;
+  return days > 0 ? `up ${days}d ${hours}h` : `up ${hours}h`;
 }
 
 function formatLastChecked(iso: string | null): string {
@@ -70,11 +103,23 @@ function formatLastChecked(iso: string | null): string {
   const seconds = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
   if (seconds < 5) return "checked just now";
   if (seconds < 60) return `checked ${seconds}s ago`;
-  return `checked ${Math.floor(seconds / 60)}m ago`;
+  if (seconds < 3600) return `checked ${Math.floor(seconds / 60)}m ago`;
+  return `checked ${Math.floor(seconds / 3600)}h ago`;
+}
+
+function vendorOf(ap: ConnectedAccessPoint): string {
+  const name = (ap.identity || "").toLowerCase();
+  const board = (ap.board || ap.platform || "").toLowerCase();
+  if (["ubnt", "nanostation", "litebeam", "unifi", "rocket", "airmax"].some((k) => name.includes(k)) || board.includes("ubnt")) return "Ubiquiti";
+  if (name.includes("tp-link") || name.includes("eap") || board.includes("eap") || board.includes("omada") || name.includes("cpe")) return "TP-Link";
+  if (name.includes("ruijie") || name.includes("reyee") || board.includes("rg-") || board.includes("reyee")) return "Ruijie";
+  if (name.includes("mikrotik") || board.includes("routerboard") || board.includes("cap") || board.includes("wap")) return "MikroTik";
+  return ap.board || ap.platform || "Access point";
 }
 
 export default function RoutersPage() {
   const queryClient = useQueryClient();
+  // Re-render every second so "checked 12s ago" stays true between polls.
   const [, forceTick] = useState(0);
   useEffect(() => {
     const id = setInterval(() => forceTick((n) => n + 1), 1000);
@@ -82,13 +127,19 @@ export default function RoutersPage() {
   }, []);
 
   const [error, setError] = useState<string | null>(null);
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
   const [testingId, setTestingId] = useState<string | null>(null);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [openSessionsFor, setOpenSessionsFor] = useState<string | null>(null);
   const [openAccessPointsFor, setOpenAccessPointsFor] = useState<string | null>(null);
   const [winboxModalFor, setWinboxModalFor] = useState<RouterRow | null>(null);
-  const [powerToolsModalFor, setPowerToolsModalFor] = useState<RouterRow | null>(null);
+  const [toolsModalFor, setToolsModalFor] = useState<RouterRow | null>(null);
   const [toolLoading, setToolLoading] = useState<string | null>(null);
+
+  const flashSuccess = (message: string) => {
+    setActionSuccess(message);
+    setTimeout(() => setActionSuccess(null), 5000);
+  };
 
   const { data: routers, isLoading } = useQuery({
     queryKey: ["routers"],
@@ -107,42 +158,30 @@ export default function RoutersPage() {
     },
   });
 
-  const [deletingId, setDeletingId] = useState<string | null>(null);
   const deleteRouter = useMutation({
     mutationFn: (routerId: string) => {
       setDeletingId(routerId);
       return apiFetch(`/api/v1/routers/${routerId}`, { method: "DELETE" });
     },
     onSuccess: () => {
-      setActionSuccess("🗑️ Router removed successfully.");
-      setTimeout(() => setActionSuccess(null), 5000);
+      flashSuccess("Router removed.");
       queryClient.invalidateQueries({ queryKey: ["routers"] });
     },
-    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to remove router"),
+    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Couldn't remove the router."),
     onSettled: () => setDeletingId(null),
   });
 
   const updateRouterHost = useMutation({
     mutationFn: ({ routerId, host }: { routerId: string; host: string }) =>
-      apiFetch(`/api/v1/routers/${routerId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ host }),
-      }),
+      apiFetch(`/api/v1/routers/${routerId}`, { method: "PATCH", body: JSON.stringify({ host }) }),
     onSuccess: () => {
-      setActionSuccess("✏️ Router IP updated successfully.");
-      setTimeout(() => setActionSuccess(null), 5000);
+      flashSuccess("Router address updated.");
       queryClient.invalidateQueries({ queryKey: ["routers"] });
     },
-    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to update router IP"),
+    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Couldn't update the router address."),
   });
 
-  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
-
-  const {
-    data: liveSessions,
-    isFetching: sessionsLoading,
-    error: sessionsError,
-  } = useQuery({
+  const { data: liveSessions, isFetching: sessionsLoading, error: sessionsError } = useQuery({
     queryKey: ["router-sessions", openSessionsFor],
     queryFn: () => apiFetch<DeviceSession[]>(`/api/v1/routers/${openSessionsFor}/sessions`),
     enabled: openSessionsFor !== null,
@@ -163,929 +202,595 @@ export default function RoutersPage() {
     retry: false,
   });
 
-  const { data: winboxAccessData } = useQuery({
+  const { data: winboxAccessData, isLoading: winboxLoading } = useQuery({
     queryKey: ["router-winbox-access", winboxModalFor?.id],
     queryFn: () => apiFetch<WinboxAccessData>(`/api/v1/routers/${winboxModalFor?.id}/winbox-access`),
     enabled: winboxModalFor !== null,
   });
 
   const { data: firmwareData, isFetching: firmwareLoading, refetch: refetchFirmware } = useQuery({
-    queryKey: ["router-firmware", powerToolsModalFor?.id],
-    queryFn: () =>
-      apiFetch<{ currentVersion: string; latestVersion: string; status: string; upgradeAvailable: boolean }>(
-        `/api/v1/routers/${powerToolsModalFor?.id}/firmware`
-      ),
-    enabled: powerToolsModalFor !== null && Boolean(powerToolsModalFor.host),
+    queryKey: ["router-firmware", toolsModalFor?.id],
+    queryFn: () => apiFetch<FirmwareData>(`/api/v1/routers/${toolsModalFor?.id}/firmware`),
+    enabled: toolsModalFor !== null && Boolean(toolsModalFor.host),
   });
 
-  const triggerPowerTool = async (routerId: string, endpoint: string, body?: unknown, toolName?: string) => {
-    setToolLoading(toolName || endpoint);
+  const runTool = async (routerId: string, endpoint: string, body: unknown, key: string) => {
+    setToolLoading(key);
     setError(null);
     try {
       const res = await apiFetch<{ message?: string }>(`/api/v1/routers/${routerId}/${endpoint}`, {
         method: "POST",
-        ...(body ? { body: JSON.stringify(body) } : {}),
+        body: JSON.stringify(body ?? {}),
       });
-      setActionSuccess(`⚡ ${res?.message || "Optimization applied successfully!"}`);
-      setTimeout(() => setActionSuccess(null), 6000);
+      flashSuccess(res?.message || "Applied to the router.");
       queryClient.invalidateQueries({ queryKey: ["routers"] });
     } catch (err) {
-      setError(err instanceof ApiRequestError ? err.message : "Failed to execute tool");
+      setError(err instanceof ApiRequestError ? err.message : "The router didn't accept the change.");
     } finally {
       setToolLoading(null);
     }
   };
 
-  const handleCopy = (text: string, id: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
+  // "Block tunnelling apps": the router applies it in the background (a minute or more on a small
+  // router), so this starts it and then follows the router's own progress until it's done.
+  const [antiTunnelNote, setAntiTunnelNote] = useState<string | null>(null);
+  const setAntiTunnel = async (routerId: string, enabled: boolean) => {
+    const key = enabled ? "anti-vpn" : "anti-vpn-off";
+    setToolLoading(key);
+    setError(null);
+    setAntiTunnelNote(null);
+    try {
+      const { started } = await apiFetch<{ started: boolean }>(`/api/v1/routers/${routerId}/${enabled ? "enable" : "disable"}-anti-vpn-shield`, {
+        method: "POST",
+        body: "{}",
+      });
+      if (!started) {
+        flashSuccess("Tunnel blocking is already on.");
+        return;
+      }
+      setAntiTunnelNote(enabled ? "Applying on the router. Small routers take a minute or two." : "Removing from the router. This can take a minute.");
+      const deadline = Date.now() + 5 * 60_000;
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, 5000));
+        const status = await apiFetch<{ state: "applying" | "on" | "off" | "failed" | "unknown"; rules: number | null; expected: number }>(
+          `/api/v1/routers/${routerId}/anti-vpn-shield/status`
+        ).catch(() => null);
+        if (!status || status.state === "applying" || status.state === "unknown") continue;
+        if (status.state === "failed") {
+          setError("The router rejected one of the rules, so nothing was changed. Its log has the details.");
+          return;
+        }
+        if (enabled && status.state === "on") {
+          flashSuccess(`Tunnel blocking is on: ${status.rules} of ${status.expected} rules in place. Phones that have logged in aren't affected.`);
+          return;
+        }
+        if (!enabled && status.state === "off") {
+          flashSuccess("Tunnel blocking is off.");
+          return;
+        }
+      }
+      setError("The router hasn't confirmed the change after five minutes. Check it's online, then look at this again.");
+    } catch (err) {
+      setError(err instanceof ApiRequestError ? err.message : "The router didn't accept the change.");
+    } finally {
+      setAntiTunnelNote(null);
+      setToolLoading(null);
+    }
   };
+
+  // Remote WinBox goes through the MashupHost server's relay, over the router's VPN.
+  const relay = winboxAccessData?.relay;
+  const remoteWinbox = relay?.address ?? null;
+  const remoteWinboxProblem = !winboxAccessData
+    ? null
+    : !relay?.enabled
+    ? "Remote WinBox isn't switched on for this server yet (ENABLE_WINBOX_RELAY)."
+    : !relay.vpnConnected
+    ? "This router isn't connected to the MashupHost VPN yet. The VPN needs RouterOS 7: update the router, then run its setup command again."
+    : "The remote port is being assigned. Check again in a minute.";
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-            MikroTik Routers
-          </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            RouterOS API connection, RADIUS authentication, and live telemetry polling.
-          </p>
-        </div>
-        <Link href="/routers/new">
-          <Button>+ Link MikroTik</Button>
-        </Link>
-      </div>
+      <PageHeader
+        title="Routers"
+        description="MikroTik routers linked to your account. Their status is refreshed automatically."
+        actions={
+          <Link href="/routers/new" className={darkButton("primary")}>
+            Link router
+          </Link>
+        }
+      />
 
-      {error && <ErrorText>{error}</ErrorText>}
-      {actionSuccess && (
-        <div className="p-3.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 text-xs font-bold flex items-center justify-between">
-          <span>{actionSuccess}</span>
-          <button onClick={() => setActionSuccess(null)} className="text-slate-400 hover:text-white">✕</button>
-        </div>
+      {error && (
+        <Notice tone="bad">
+          <div className="flex items-start justify-between gap-3">
+            <span>{error}</span>
+            <button type="button" onClick={() => setError(null)} aria-label="Dismiss" className="text-rose-200/70 hover:text-white">
+              ✕
+            </button>
+          </div>
+        </Notice>
       )}
+      {actionSuccess && <Notice tone="good">{actionSuccess}</Notice>}
 
-      {isLoading && (
-        <div className="py-8 text-center text-sm text-slate-500">
-          Loading router telemetry...
+      {isLoading && <p className="py-8 text-center text-sm text-slate-400">Loading routers…</p>}
+
+      {routers && routers.length === 0 && (
+        <div className="rounded-xl border border-dashed border-obsidian-700">
+          <EmptyState
+            title="No routers linked yet"
+            action={
+              <Link href="/routers/new" className={darkButton("primary")}>
+                Link your first MikroTik
+              </Link>
+            }
+          >
+            Linking gives you one command to paste into the router. It sets up RADIUS, the hotspot and the connection back to MashupHost.
+          </EmptyState>
         </div>
       )}
 
       <div className="space-y-4">
         {routers?.map((router) => {
-          const badgeVariant =
-            router.status === "ONLINE"
-              ? "success"
-              : router.status === "WARNING"
-              ? "warning"
-              : router.status === "DOWN"
-              ? "danger"
-              : "neutral";
-
+          const status = STATUS[router.status];
+          const uptime = formatUptime(router.uptimeSeconds);
+          const sessionsOpen = openSessionsFor === router.id;
+          const apsOpen = openAccessPointsFor === router.id;
           return (
-            <Card key={router.id} className="transition-all hover:border-slate-300 dark:hover:border-obsidian-700">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-100 dark:bg-obsidian-800 border border-slate-200/60 dark:border-obsidian-700 text-slate-700 dark:text-slate-300">
-                      <IconRouter size={18} />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-slate-900 dark:text-white flex items-center gap-2">
-                        {router.name}
-                        <span className="text-xs font-normal text-slate-500">
-                          ({router.vendor})
-                        </span>
-                      </h3>
-                      <p className="font-mono text-xs text-slate-500 dark:text-slate-400 flex items-center gap-2">
-                        {router.host ? (
-                          <>
-                            <span>
-                              {router.host}:{router.apiPort} {router.useTls ? "(TLS Encrypted)" : ""}
-                            </span>
-                            <button
-                              onClick={() => {
-                                const newHost = window.prompt("Update Router IP / Hostname:", router.host || "");
-                                if (newHost && newHost.trim() !== router.host) {
-                                  updateRouterHost.mutate({ routerId: router.id, host: newHost.trim() });
-                                }
-                              }}
-                              className="text-[11px] text-brand-600 hover:text-brand-500 underline ml-1 cursor-pointer font-sans"
-                              title="Edit IP / Host"
-                            >
-                              Edit IP
-                            </button>
-                          </>
-                        ) : (
-                          <span className="text-amber-600 dark:text-amber-400">Waiting for router to check in...</span>
-                        )}
-                      </p>
-                    </div>
+            <section key={router.id} className="rounded-xl border border-obsidian-800 bg-obsidian-900">
+              <div className="flex flex-col gap-4 p-5 lg:flex-row lg:items-start lg:justify-between">
+                <div className="flex min-w-0 items-start gap-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-obsidian-800 text-slate-300">
+                    <IconRouter size={18} />
                   </div>
-
-                  {router.lastError && (
-                    <p className="mt-2 text-xs font-mono text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 p-2 rounded border border-rose-200 dark:border-rose-900/60">
-                      {router.lastError}
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h2 className="text-[15px] font-semibold text-white">{router.name}</h2>
+                      <Pill tone={status.tone}>{status.label}</Pill>
+                    </div>
+                    <p className="mt-1 flex flex-wrap items-center gap-x-2 text-sm text-slate-400">
+                      {router.host ? (
+                        <>
+                          <span className="font-mono text-[13px]">
+                            {router.host}:{router.apiPort}
+                          </span>
+                          {router.useTls && <span>TLS</span>}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newHost = window.prompt("Router address (IP or hostname):", router.host || "");
+                              if (newHost && newHost.trim() !== router.host) {
+                                updateRouterHost.mutate({ routerId: router.id, host: newHost.trim() });
+                              }
+                            }}
+                            className="text-brand-400 hover:text-brand-300 hover:underline"
+                          >
+                            Change
+                          </button>
+                        </>
+                      ) : (
+                        <span className="text-amber-300">Waiting for the router to check in</span>
+                      )}
                     </p>
-                  )}
+                    <p className="mt-0.5 text-xs text-slate-500">
+                      {[
+                        router.vendor,
+                        router.memoryTotalBytes ? `${Math.round(router.memoryTotalBytes / 1048576)} MB RAM` : null,
+                        router.cpuLoadPercent !== null ? `CPU ${router.cpuLoadPercent}%` : null,
+                        uptime,
+                        formatLastChecked(router.updatedAt),
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
+                    </p>
+                  </div>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-4">
-                  {/* Status & Stats */}
-                  <div className="text-left md:text-right text-xs">
-                    <div className="flex items-center md:justify-end gap-2 mb-1">
-                      <StatusDot status={router.status} pulse={router.status === "ONLINE"} />
-                      <Badge variant={badgeVariant}>{router.status}</Badge>
-                    </div>
-                    <p className="font-mono text-slate-600 dark:text-slate-400">
-                      {router.cpuLoadPercent !== null ? `CPU ${router.cpuLoadPercent}% · ` : ""}
-                      {formatUptime(router.uptimeSeconds)}
-                    </p>
-                    <p className="text-[11px] text-slate-400">
-                      {formatLastChecked(router.updatedAt)}
-                    </p>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      variant="secondary"
-                      className="px-3 py-1.5 text-xs"
-                      onClick={() => testConnection.mutate(router.id)}
-                      disabled={testingId === router.id || !router.host}
-                    >
-                      {testingId === router.id ? "Pinging..." : "Test Connection"}
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      className="px-3 py-1.5 text-xs bg-indigo-500/10 hover:bg-indigo-500/20 text-indigo-600 dark:text-indigo-400 border border-indigo-500/30 font-bold flex items-center gap-1.5 shadow-xs"
-                      onClick={() => setWinboxModalFor(router)}
-                      title="Access MikroTik with WinBox remotely"
-                    >
-                      <span>🖥️</span>
-                      <span>WinBox Remote</span>
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      className="px-3 py-1.5 text-xs"
-                      onClick={() => {
-                        setOpenAccessPointsFor(null);
-                        setOpenSessionsFor(openSessionsFor === router.id ? null : router.id);
-                      }}
-                      disabled={!router.host}
-                    >
-                      {openSessionsFor === router.id ? "Hide Sessions" : "Live Sessions"}
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      className={`px-3 py-1.5 text-xs font-semibold gap-1.5 transition-all ${
-                        openAccessPointsFor === router.id
-                          ? "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/40 shadow-xs"
-                          : "bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30"
-                      }`}
-                      onClick={() => {
-                        setOpenSessionsFor(null);
-                        setOpenAccessPointsFor(openAccessPointsFor === router.id ? null : router.id);
-                      }}
-                      disabled={!router.host}
-                    >
-                      <span>📡</span>
-                      <span>{openAccessPointsFor === router.id ? "Hide APs" : "Connected APs"}</span>
-                    </Button>
-                    <Button
-                      variant="secondary"
-                      className="px-3 py-1.5 text-xs bg-amber-500/10 hover:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 font-bold flex items-center gap-1.5 shadow-xs"
-                      onClick={() => setPowerToolsModalFor(router)}
-                      title="Optimization, Fair-Share PCQ Shaper, Safe DNS, and Firmware tools"
-                      disabled={!router.host}
-                    >
-                      <span>⚡</span>
-                      <span>Power Tools</span>
-                    </Button>
-                    <Button
-                      variant="danger"
-                      className="px-3 py-1.5 text-xs"
-                      onClick={() => {
-                        if (confirm(`Remove router "${router.name}"?`)) deleteRouter.mutate(router.id);
-                      }}
-                      disabled={deletingId === router.id}
-                    >
-                      {deletingId === router.id ? "Removing..." : "Remove"}
-                    </Button>
-                  </div>
+                <div className="flex flex-wrap gap-2 lg:justify-end">
+                  <button
+                    type="button"
+                    className={darkButton("secondary", "sm")}
+                    onClick={() => testConnection.mutate(router.id)}
+                    disabled={testingId === router.id || !router.host}
+                  >
+                    {testingId === router.id ? "Testing…" : "Test connection"}
+                  </button>
+                  <button
+                    type="button"
+                    className={darkButton("secondary", "sm")}
+                    aria-expanded={sessionsOpen}
+                    onClick={() => {
+                      setOpenAccessPointsFor(null);
+                      setOpenSessionsFor(sessionsOpen ? null : router.id);
+                    }}
+                    disabled={!router.host}
+                  >
+                    Sessions
+                  </button>
+                  <button
+                    type="button"
+                    className={darkButton("secondary", "sm")}
+                    aria-expanded={apsOpen}
+                    onClick={() => {
+                      setOpenSessionsFor(null);
+                      setOpenAccessPointsFor(apsOpen ? null : router.id);
+                    }}
+                    disabled={!router.host}
+                  >
+                    Access points
+                  </button>
+                  <button type="button" className={darkButton("secondary", "sm")} onClick={() => setWinboxModalFor(router)}>
+                    WinBox access
+                  </button>
+                  <button type="button" className={darkButton("secondary", "sm")} onClick={() => setToolsModalFor(router)} disabled={!router.host}>
+                    Tools
+                  </button>
+                  <button
+                    type="button"
+                    className={`${darkButton("ghost", "sm")} text-rose-300 hover:bg-rose-500/10 hover:text-rose-200`}
+                    onClick={() => {
+                      if (confirm(`Remove router "${router.name}"? Customers on it will stop being able to log in.`)) deleteRouter.mutate(router.id);
+                    }}
+                    disabled={deletingId === router.id}
+                  >
+                    {deletingId === router.id ? "Removing…" : "Remove"}
+                  </button>
                 </div>
               </div>
 
-              {/* Connected Access Points (APs) Section */}
-              {openAccessPointsFor === router.id && (
-                <div className="mt-5 border-t border-slate-200 pt-4 dark:border-obsidian-800">
-                  <div className="mb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="text-base">📡</span>
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">
-                        Connected Access Points &amp; Antennas
-                      </h4>
-                      {connectedAps && (
-                        <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-bold text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
-                          {connectedAps.length} {connectedAps.length === 1 ? "AP" : "APs"} Discovered
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {apsLoading && (
-                        <span className="text-xs text-slate-400 flex items-center gap-1.5 font-sans">
-                          <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
-                          Scanning neighbors...
-                        </span>
-                      )}
-                      <Button
-                        variant="secondary"
-                        className="px-2.5 py-1 text-xs font-medium"
-                        onClick={() => refetchAps()}
-                        disabled={apsLoading}
-                      >
-                        {apsLoading ? "Scanning..." : "🔄 Rescan APs"}
-                      </Button>
-                    </div>
+              {router.lastError && (
+                <div className="px-5 pb-4">
+                  <Notice tone="bad">
+                    <span className="font-medium">Last error:</span> <span className="break-words font-mono text-xs">{router.lastError}</span>
+                  </Notice>
+                </div>
+              )}
+
+              {/* Access points */}
+              {apsOpen && (
+                <div className="border-t border-obsidian-800 px-5 py-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <h3 className="text-sm font-medium text-white">
+                      Access points
+                      {connectedAps && <span className="ml-2 font-normal text-slate-400">{connectedAps.length} found</span>}
+                    </h3>
+                    <button type="button" className={darkButton("ghost", "sm")} onClick={() => refetchAps()} disabled={apsLoading}>
+                      {apsLoading ? "Scanning…" : "Rescan"}
+                    </button>
                   </div>
 
                   {apsError ? (
-                    <div className="rounded-xl border border-amber-300/80 bg-amber-50/70 p-4 dark:border-amber-900/60 dark:bg-amber-950/30">
-                      <div className="flex items-start gap-3">
-                        <span className="text-xl">⚠️</span>
-                        <div className="flex-1 min-w-0">
-                          <h5 className="font-bold text-xs text-amber-900 dark:text-amber-300">
-                            Cannot Connect to MikroTik API (Port 8728)
-                          </h5>
-                          <p className="mt-1 font-mono text-[11px] text-amber-800 dark:text-amber-400 break-words">
-                            {apsError instanceof ApiRequestError ? apsError.message : "Failed to load connected access points."}
-                          </p>
-                          <div className="mt-3 rounded-lg border border-amber-200 dark:border-amber-900/50 bg-white/80 dark:bg-obsidian-900/80 p-3 text-xs text-slate-700 dark:text-slate-300 space-y-2">
-                            <p className="font-semibold text-[11px] text-slate-900 dark:text-white">
-                              💡 How to fix this in 10 seconds on your MikroTik:
-                            </p>
-                            <p className="text-[11px] text-slate-600 dark:text-slate-400">
-                              By default, MikroTik drops outside connections. Paste this into your <strong>MikroTik Winbox Terminal</strong> to allow the MashupHost cloud server to connect:
-                            </p>
-                            <div className="relative">
-                              <pre className="overflow-x-auto rounded bg-slate-950 p-2.5 font-mono text-[11px] text-emerald-400 border border-slate-800">
-{`/ip service enable api
-/ip service set api port=8728 address=0.0.0.0/0
-/ip firewall filter add chain=input protocol=tcp dst-port=8728 action=accept place-before=0 comment="Allow MashupHost API"`}
-                              </pre>
-                              <Button
-                                variant="secondary"
-                                className="mt-2 text-xs py-1 px-2.5 flex items-center gap-1.5 font-medium"
-                                onClick={() => {
-                                  const cmd = `/ip service set api disabled=no port=8728\n/ip firewall filter add chain=input protocol=tcp dst-port=8728 action=accept place-before=0 comment="Allow MashupHost API"`;
-                                  handleCopy(cmd, "fix-api-8728");
-                                }}
-                              >
-                                {copiedId === "fix-api-8728" ? <IconCheck size={12} /> : <IconCopy size={12} />}
-                                <span>{copiedId === "fix-api-8728" ? "Copied Command!" : "Copy MikroTik Terminal Command"}</span>
-                              </Button>
+                    <Notice tone="warn">
+                      <p className="font-medium">Couldn&apos;t reach the router&apos;s API.</p>
+                      <p className="mt-1 break-words font-mono text-xs opacity-90">
+                        {apsError instanceof ApiRequestError ? apsError.message : "The access point list didn't load."}
+                      </p>
+                      <p className="mt-2 text-amber-200/90">
+                        Check that the router is online and that its setup command finished, since it creates the API user and the connection back to
+                        MashupHost. Don&apos;t open the API port (8728) to the internet to work around this.
+                      </p>
+                    </Notice>
+                  ) : connectedAps && connectedAps.length > 0 ? (
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                      {connectedAps.map((ap, idx) => (
+                        <div key={`${ap.macAddress}-${idx}`} className="rounded-lg border border-obsidian-800 bg-obsidian-950 p-3.5 text-sm">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <p className="truncate font-medium text-white" title={ap.identity}>
+                                {ap.identity || "Unnamed access point"}
+                              </p>
+                              <p className="truncate text-xs text-slate-500">
+                                {vendorOf(ap)}
+                                {ap.version ? ` · ${ap.version}` : ""}
+                              </p>
                             </div>
-
-                            <div className="pt-3 border-t border-amber-200/60 dark:border-amber-900/40 mt-3 space-y-2">
-                              <p className="font-semibold text-xs text-amber-900 dark:text-amber-300 flex items-center gap-1.5">
-                                <span>🚀</span> <strong>Locked Modem / No Port Forwarding? Auto-Sync APs Outbound:</strong>
-                              </p>
-                              <p className="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                                If your home modem doesn&apos;t allow port forwarding, paste this command into Winbox. Your MikroTik will push its connected APs directly to MashupHost via outbound HTTPS every 2 minutes:
-                              </p>
-                              <div className="relative">
-                                <pre className="overflow-x-auto rounded bg-slate-950 p-2.5 font-mono text-[11px] text-emerald-400 border border-slate-800">
-{`/system scheduler remove [find name=mkg-ap-sync]
-/system scheduler add name=mkg-ap-sync interval=2m on-event=":local d \\"\\"; :foreach i in=[/ip neighbor find] do={ :set d (\\$d . [/ip neighbor get \\$i interface] . \\";\\" . [/ip neighbor get \\$i mac-address] . \\";\\" . [/ip neighbor get \\$i identity] . \\";\\" . [/ip neighbor get \\$i address] . \\";\\" . [/ip neighbor get \\$i board] . \\"|\\") }; :do {/tool fetch url=\\"https://api.mashuphost.tech/api/v1/routers/${router.id}/push-aps\\" http-method=post http-header-field=\\"Content-Type: text/plain\\" http-data=\\$d keep-result=no} on-error={}"
-:local d ""; :foreach i in=[/ip neighbor find] do={ :set d ($d . [/ip neighbor get $i interface] . ";" . [/ip neighbor get $i mac-address] . ";" . [/ip neighbor get $i identity] . ";" . [/ip neighbor get $i address] . ";" . [/ip neighbor get $i board] . "|") }; :do {/tool fetch url="https://api.mashuphost.tech/api/v1/routers/${router.id}/push-aps" http-method=post http-header-field="Content-Type: text/plain" http-data=$d keep-result=no} on-error={}`}
-                                </pre>
-                                <div className="mt-2 flex items-center gap-2">
-                                  <Button
-                                    variant="primary"
-                                    className="text-xs py-1 px-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold flex items-center gap-1.5"
-                                    onClick={() => {
-                                      const cmd = `/system scheduler remove [find name=mkg-ap-sync]\n/system scheduler add name=mkg-ap-sync interval=2m on-event=":local d \\"\\"; :foreach i in=[/ip neighbor find] do={ :set d (\\$d . [/ip neighbor get \\$i interface] . \\";\\" . [/ip neighbor get \\$i mac-address] . \\";\\" . [/ip neighbor get \\$i identity] . \\";\\" . [/ip neighbor get \\$i address] . \\";\\" . [/ip neighbor get \\$i board] . \\"|\\") }; :do {/tool fetch url=\\"https://api.mashuphost.tech/api/v1/routers/${router.id}/push-aps\\" http-method=post http-header-field=\\"Content-Type: text/plain\\" http-data=\\$d keep-result=no} on-error={}"\n:local d ""; :foreach i in=[/ip neighbor find] do={ :set d ($d . [/ip neighbor get $i interface] . ";" . [/ip neighbor get $i mac-address] . ";" . [/ip neighbor get $i identity] . ";" . [/ip neighbor get $i address] . ";" . [/ip neighbor get $i board] . "|") }; :do {/tool fetch url="https://api.mashuphost.tech/api/v1/routers/${router.id}/push-aps" http-method=post http-header-field="Content-Type: text/plain" http-data=$d keep-result=no} on-error={}`;
-                                      handleCopy(cmd, `apsync-${router.id}`);
-                                      setTimeout(() => refetchAps(), 2500);
-                                    }}
-                                  >
-                                    {copiedId === `apsync-${router.id}` ? <IconCheck size={12} /> : <IconCopy size={12} />}
-                                    <span>{copiedId === `apsync-${router.id}` ? "Copied Auto-Sync Script!" : "📋 Copy Auto-Sync AP Script"}</span>
-                                  </Button>
-                                  <Button
-                                    variant="secondary"
-                                    className="text-xs py-1 px-2.5 font-medium"
-                                    onClick={() => refetchAps()}
-                                  >
-                                    🔄 Refresh AP List
-                                  </Button>
-                                </div>
+                            <span className="shrink-0 rounded border border-obsidian-700 px-1.5 py-0.5 font-mono text-xs text-slate-300">{ap.interface || "LAN"}</span>
+                          </div>
+                          <dl className="mt-3 space-y-1 text-xs">
+                            {ap.ipAddress && (
+                              <div className="flex justify-between gap-2">
+                                <dt className="text-slate-500">IP</dt>
+                                <dd className="font-mono text-slate-300">{ap.ipAddress}</dd>
                               </div>
+                            )}
+                            <div className="flex justify-between gap-2">
+                              <dt className="text-slate-500">MAC</dt>
+                              <dd className="truncate font-mono text-slate-300">{ap.macAddress}</dd>
                             </div>
+                            {ap.uptime && (
+                              <div className="flex justify-between gap-2">
+                                <dt className="text-slate-500">Uptime</dt>
+                                <dd className="text-slate-300">{ap.uptime}</dd>
+                              </div>
+                            )}
+                            {ap.signal && (
+                              <div className="flex justify-between gap-2">
+                                <dt className="text-slate-500">Signal</dt>
+                                <dd className="text-slate-300">{ap.signal}</dd>
+                              </div>
+                            )}
+                          </dl>
+                          <div className="mt-3 flex items-center justify-between border-t border-obsidian-800 pt-2.5 text-xs">
+                            <span className="text-slate-500">{DETECTED_BY[ap.detectionSource]}</span>
+                            {ap.ipAddress && (
+                              <a href={`http://${ap.ipAddress}`} target="_blank" rel="noopener noreferrer" className="text-brand-400 hover:underline">
+                                Open admin page ↗
+                              </a>
+                            )}
                           </div>
                         </div>
-                      </div>
-                    </div>
-                  ) : connectedAps && connectedAps.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                      {connectedAps.map((ap, idx) => {
-                        const nameLower = (ap.identity || "").toLowerCase();
-                        const boardLower = (ap.board || ap.platform || "").toLowerCase();
-
-                        const isUbnt = nameLower.includes("ubnt") || boardLower.includes("ubnt") || nameLower.includes("nanostation") || nameLower.includes("litebeam") || nameLower.includes("unifi") || nameLower.includes("rocket") || nameLower.includes("airmax");
-                        const isTplink = nameLower.includes("tp-link") || nameLower.includes("eap") || boardLower.includes("eap") || boardLower.includes("omada") || nameLower.includes("cpe");
-                        const isRuijie = nameLower.includes("ruijie") || nameLower.includes("reyee") || boardLower.includes("rg-") || boardLower.includes("reyee");
-                        const isMikrotik = nameLower.includes("mikrotik") || boardLower.includes("routerboard") || boardLower.includes("cap") || boardLower.includes("wap");
-
-                        const vendorBadge = isUbnt
-                          ? "Ubiquiti"
-                          : isTplink
-                          ? "TP-Link Omada"
-                          : isRuijie
-                          ? "Ruijie Reyee"
-                          : isMikrotik
-                          ? "MikroTik cAP"
-                          : ap.board || ap.platform || "Access Point";
-
-                        return (
-                          <div
-                            key={`${ap.macAddress}-${idx}`}
-                            className="rounded-xl border border-slate-200/80 dark:border-obsidian-700/80 bg-white dark:bg-obsidian-900/90 p-3.5 shadow-xs transition-all hover:border-emerald-500/40 hover:shadow-md"
-                          >
-                            <div className="flex items-start justify-between gap-2 mb-2">
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="text-sm">📶</span>
-                                  <h5 className="font-bold text-xs text-slate-900 dark:text-white truncate" title={ap.identity}>
-                                    {ap.identity || "Unnamed Access Point"}
-                                  </h5>
-                                </div>
-                                <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500 block truncate mt-0.5">
-                                  {vendorBadge} {ap.version ? `· ${ap.version}` : ""}
-                                </span>
-                              </div>
-                              <div className="shrink-0 text-right">
-                                <span className="inline-flex items-center gap-1 rounded-md border border-cyan-500/30 bg-cyan-500/10 px-2 py-0.5 font-mono text-[11px] font-bold text-cyan-700 dark:text-cyan-300">
-                                  <span>🔌</span>
-                                  <span>{ap.interface || "LAN"}</span>
-                                </span>
-                              </div>
-                            </div>
-
-                            <div className="space-y-1.5 text-[11px] font-mono text-slate-600 dark:text-slate-300 py-2 border-y border-slate-100 dark:border-obsidian-800/80">
-                              <div className="flex items-center justify-between">
-                                <span className="text-slate-400 font-sans">MikroTik Port:</span>
-                                <span className="font-bold text-cyan-600 dark:text-cyan-400 flex items-center gap-1">
-                                  <span>Port {ap.interface}</span>
-                                </span>
-                              </div>
-                              {ap.ipAddress && (
-                                <div className="flex items-center justify-between">
-                                  <span className="text-slate-400 font-sans">IP Address:</span>
-                                  <span className="font-bold text-emerald-600 dark:text-emerald-400">{ap.ipAddress}</span>
-                                </div>
-                              )}
-                              <div className="flex items-center justify-between">
-                                <span className="text-slate-400 font-sans">MAC:</span>
-                                <span className="text-slate-500 dark:text-slate-400 truncate max-w-[150px]">{ap.macAddress}</span>
-                              </div>
-                              {ap.uptime && (
-                                <div className="flex items-center justify-between">
-                                  <span className="text-slate-400 font-sans">Uptime:</span>
-                                  <span>{ap.uptime}</span>
-                                </div>
-                              )}
-                              {ap.signal && (
-                                <div className="flex items-center justify-between">
-                                  <span className="text-slate-400 font-sans">Signal:</span>
-                                  <span className="text-emerald-500 font-bold">{ap.signal}</span>
-                                </div>
-                              )}
-                            </div>
-
-                            <div className="mt-2.5 flex items-center justify-between pt-0.5 text-[11px]">
-                              <span className="text-[10px] text-slate-400">
-                                {ap.detectionSource === "NEIGHBOR"
-                                  ? "MNDP/LLDP Neighbor"
-                                  : ap.detectionSource === "WIRELESS"
-                                  ? "Wireless Table"
-                                  : "DHCP Lease"}
-                              </span>
-                              {ap.ipAddress ? (
-                                <a
-                                  href={`http://${ap.ipAddress}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-flex items-center gap-1 font-bold text-brand-600 hover:text-brand-500 dark:text-brand-400 hover:underline"
-                                >
-                                  <span>Open Admin UI</span>
-                                  <span>↗</span>
-                                </a>
-                              ) : (
-                                <span className="text-[10px] text-slate-400">Bridged L2</span>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
+                      ))}
                     </div>
                   ) : (
-                    <div className="rounded-xl border border-dashed border-slate-200 dark:border-obsidian-800 p-6 text-center bg-slate-50/50 dark:bg-obsidian-900/40">
-                      <span className="text-2xl mb-1 block">📡</span>
-                      <h5 className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                        No Access Points Discovered on this Router
-                      </h5>
-                      <p className="text-[11px] text-slate-500 max-w-md mx-auto mt-1 mb-3">
-                        When APs (Ubiquiti NanoStation/Rocket/UniFi, TP-Link Omada EAP, Ruijie Reyee, MikroTik cAP) are connected to your router&apos;s LAN ports, MikroTik automatically discovers them via MNDP/LLDP discovery and DHCP leases.
-                      </p>
-                      <Button
-                        variant="secondary"
-                        className="text-xs px-3 py-1"
-                        onClick={() => refetchAps()}
-                        disabled={apsLoading}
-                      >
-                        Rescan Neighbors
-                      </Button>
-                    </div>
+                    <p className="py-4 text-center text-sm text-slate-400">
+                      {apsLoading
+                        ? "Scanning…"
+                        : "No access points found. Access points plugged into this router show up here through neighbour discovery and DHCP leases."}
+                    </p>
                   )}
                 </div>
               )}
 
-              {/* Live Active Sessions Section */}
-              {openSessionsFor === router.id && (
-                <div className="mt-5 border-t border-slate-200 pt-4 dark:border-obsidian-800">
-                  <div className="mb-2 flex items-center justify-between">
-                    <p className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
-                      <IconPulse size={14} className="text-emerald-600" />
-                      Active PPPoE sessions
-                    </p>
-                    {sessionsLoading && <span className="text-xs text-slate-400">refreshing...</span>}
+              {/* Sessions */}
+              {sessionsOpen && (
+                <div className="border-t border-obsidian-800">
+                  <div className="flex items-center justify-between px-5 py-3">
+                    <h3 className="text-sm font-medium text-white">Active PPPoE sessions</h3>
+                    {sessionsLoading && <span className="text-xs text-slate-500">Refreshing…</span>}
                   </div>
                   {sessionsError ? (
-                    <p className="rounded-lg border border-rose-200 bg-rose-50 p-2.5 font-mono text-xs text-rose-600 dark:border-rose-900/60 dark:bg-rose-950/40 dark:text-rose-400">
-                      {sessionsError instanceof ApiRequestError
-                        ? sessionsError.message
-                        : "Failed to load active sessions."}
-                    </p>
-                  ) : liveSessions && liveSessions.length > 0 ? (
-                    <div className="overflow-x-auto rounded-lg border border-slate-200 dark:border-obsidian-800">
-                      <table className="w-full text-left text-xs">
-                        <thead className="bg-slate-50 text-slate-500 dark:bg-obsidian-900 dark:text-slate-400">
-                          <tr>
-                            <th className="px-3 py-2 font-medium">Username</th>
-                            <th className="px-3 py-2 font-medium">IP Address</th>
-                            <th className="px-3 py-2 font-medium">Uptime</th>
-                            <th className="px-3 py-2 font-medium">Caller ID</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100 dark:divide-obsidian-800">
-                          {liveSessions.map((session, i) => (
-                            <tr key={`${session.username}-${i}`}>
-                              <td className="px-3 py-2 font-mono">{session.username}</td>
-                              <td className="px-3 py-2 font-mono">{session.address ?? "—"}</td>
-                              <td className="px-3 py-2 font-mono">{session.uptime ?? "—"}</td>
-                              <td className="px-3 py-2 font-mono">{session.callerId ?? "—"}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                    <div className="px-5 pb-4">
+                      <Notice tone="bad">{sessionsError instanceof ApiRequestError ? sessionsError.message : "Sessions didn't load."}</Notice>
                     </div>
+                  ) : liveSessions && liveSessions.length > 0 ? (
+                    <TableShell minWidth={520}>
+                      <thead>
+                        <tr>
+                          <th className={th}>Username</th>
+                          <th className={th}>IP address</th>
+                          <th className={th}>Uptime</th>
+                          <th className={th}>Caller ID</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {liveSessions.map((session, i) => (
+                          <tr key={`${session.username}-${i}`}>
+                            <td className={`${td} text-white`}>{session.username}</td>
+                            <td className={`${td} font-mono text-[13px]`}>{session.address ?? "—"}</td>
+                            <td className={td}>{session.uptime ?? "—"}</td>
+                            <td className={`${td} font-mono text-[13px]`}>{session.callerId ?? "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </TableShell>
                   ) : (
-                    <p className="text-xs text-slate-500">
-                      {sessionsLoading ? "Loading sessions..." : "No active sessions right now."}
-                    </p>
+                    <p className="px-5 pb-4 text-sm text-slate-400">{sessionsLoading ? "Loading…" : "No active sessions right now."}</p>
                   )}
                 </div>
               )}
-            </Card>
+            </section>
           );
         })}
-
-        {routers && routers.length === 0 && (
-          <div className="rounded-xl border border-dashed border-slate-300 p-8 text-center dark:border-obsidian-800">
-            <IconRouter size={32} className="mx-auto text-slate-400 mb-2" />
-            <h3 className="font-semibold text-slate-700 dark:text-slate-300">No routers linked yet</h3>
-            <p className="text-xs text-slate-500 mt-1 mb-4">Link your first MikroTik router to start automated PPPoE or Hotspot provisioning.</p>
-            <Link href="/routers/new">
-              <Button className="text-sm">Link your first MikroTik</Button>
-            </Link>
-          </div>
-        )}
       </div>
 
-
-
-      {/* Remote WinBox Modal */}
-      {winboxModalFor && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md animate-in fade-in">
-          <div className="relative w-full max-w-2xl rounded-2xl border border-indigo-500/30 bg-slate-950 p-6 shadow-2xl text-white overflow-hidden max-h-[90vh] flex flex-col">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
-              <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/20 border border-indigo-500/40 text-indigo-400 text-xl">
-                  🖥️
+      {/* WinBox access */}
+      <Modal
+        open={winboxModalFor !== null}
+        onClose={() => setWinboxModalFor(null)}
+        title="WinBox access"
+        description={winboxModalFor ? `Connect to ${winboxModalFor.name} with MikroTik's WinBox app.` : undefined}
+        footer={
+          <button type="button" className={darkButton("secondary")} onClick={() => setWinboxModalFor(null)}>
+            Close
+          </button>
+        }
+      >
+        {winboxModalFor && (
+          <>
+            <div className="rounded-lg border border-obsidian-800 bg-obsidian-950 p-4">
+              <p className="text-xs text-slate-400">Remote address, from anywhere</p>
+              {winboxLoading ? (
+                <p className="mt-1 text-sm text-slate-400">Loading…</p>
+              ) : remoteWinbox ? (
+                <div className="mt-1 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <p className="font-mono text-base text-white">{remoteWinbox}</p>
+                  <div className="flex gap-2">
+                    <button type="button" className={darkButton("secondary", "sm")} onClick={() => void navigator.clipboard.writeText(remoteWinbox)}>
+                      Copy
+                    </button>
+                    <a href={`winbox://${remoteWinbox}`} className={darkButton("primary", "sm")}>
+                      Open in WinBox
+                    </a>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                    WinBox Remote Access
-                    <Badge variant={winboxModalFor.status === "ONLINE" ? "success" : "neutral"}>
-                      {winboxModalFor.status}
-                    </Badge>
-                  </h3>
-                  <p className="text-xs text-slate-400">
-                    Connect directly to <strong className="text-indigo-300">{winboxModalFor.name}</strong> from anywhere using WinBox.
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setWinboxModalFor(null)}
-                className="rounded-lg p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
-              >
-                ✕
-              </button>
+              ) : (
+                <p className="mt-1 text-sm text-amber-300">{remoteWinboxProblem}</p>
+              )}
+              <p className="mt-3 text-xs leading-relaxed text-slate-500">
+                WinBox connects to the MashupHost server, which passes the connection to this router over its VPN. It works behind carrier NAT
+                (Safaricom, Airtel and Faiba SIMs) and never opens WinBox on the router to the internet. Log in with the router&apos;s own admin
+                account.
+              </p>
             </div>
 
-            {/* Modal Scrollable Body */}
-            <div className="overflow-y-auto space-y-5 py-4 pr-1">
-              {/* Primary Connect Box */}
-              <div className="rounded-xl bg-gradient-to-br from-indigo-950/60 to-slate-900 border border-indigo-500/40 p-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                  <div>
-                    <span className="text-[10px] font-mono uppercase tracking-wider text-indigo-400 font-bold">
-                      Target Connect Address
-                    </span>
-                    <p className="font-mono text-base font-bold text-white tracking-wide mt-0.5">
-                      {winboxModalFor.host ? `${winboxModalFor.host}:8291` : winboxModalFor.vpnIp ? `${winboxModalFor.vpnIp}:8291` : "Awaiting Router Check-In"}
-                    </p>
-                    {winboxModalFor.vpnIp && (
-                      <p className="text-[11px] font-mono text-emerald-400 mt-1 flex items-center gap-1">
-                        <span>🔒 VPN Tunnel IP:</span>
-                        <strong>{winboxModalFor.vpnIp}:8291</strong>
-                        <span className="text-[10px] text-slate-400 font-sans">(CGNAT Bypass)</span>
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {winboxModalFor.host && (
-                      <>
-                        <Button
-                          variant="secondary"
-                          className="text-xs py-2 px-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold border-indigo-500 flex items-center gap-1.5"
-                          onClick={() => handleCopy(`${winboxModalFor.host}:8291`, `winbox-addr-${winboxModalFor.id}`)}
-                        >
-                          {copiedId === `winbox-addr-${winboxModalFor.id}` ? <IconCheck size={14} /> : <IconCopy size={14} />}
-                          <span>{copiedId === `winbox-addr-${winboxModalFor.id}` ? "Copied!" : "Copy Address"}</span>
-                        </Button>
-                        <a
-                          href={`winbox://${winboxModalFor.host}:8291`}
-                          className="inline-flex items-center gap-1 text-xs py-2 px-3 rounded-lg bg-slate-800 hover:bg-slate-700 text-indigo-300 font-bold border border-slate-700 transition-colors"
-                          title="Open WinBox protocol handler"
-                        >
-                          <span>Launch</span>
-                          <span>↗</span>
-                        </a>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
+            <div className="text-sm text-slate-400">
+              <p className="font-medium text-slate-200">On the same network as the router</p>
+              <p className="mt-1">
+                Connect WinBox to <span className="font-mono text-slate-300">192.168.88.1</span>, or pick the router from WinBox&apos;s Neighbors tab.
+              </p>
+            </div>
 
-              {/* 3 Remote Access Methods */}
-              <div className="space-y-3">
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-                  Choose Connection Mode
-                </h4>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {/* Mode 1: Public WAN IP */}
-                  <div className="rounded-xl bg-slate-900/90 border border-slate-800 p-3 flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-center justify-between text-xs font-bold text-indigo-300 mb-1">
-                        <span>1. Public WAN IP</span>
-                        <span className="text-[10px] text-slate-500">Direct</span>
-                      </div>
-                      <p className="text-[11px] text-slate-400 leading-snug">
-                        Use <span className="font-mono text-slate-300">{winboxModalFor.host || "your WAN IP"}:8291</span>. Requires a public IP or port-forwarding from upstream fiber/ISP.
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Mode 2: MikroTik Cloud DDNS */}
-                  <div className="rounded-xl bg-slate-900/90 border border-slate-800 p-3 flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-center justify-between text-xs font-bold text-cyan-300 mb-1">
-                        <span>2. Cloud DDNS</span>
-                        <span className="text-[10px] text-slate-500">Back-To-Home</span>
-                      </div>
-                      <p className="text-[11px] text-slate-400 leading-snug">
-                        Connect using MikroTik&apos;s free dynamic domain (<span className="font-mono text-[10px] text-slate-300">*.sn.mynetname.net</span>) which auto-updates when WAN IP changes.
-                      </p>
-                    </div>
-                  </div>
-
-                  {/* Mode 3: Private WireGuard Tunnel */}
-                  <div className="rounded-xl bg-slate-900/90 border border-emerald-500/30 p-3 flex flex-col justify-between">
-                    <div>
-                      <div className="flex items-center justify-between text-xs font-bold text-emerald-400 mb-1">
-                        <span>3. WireGuard VPN</span>
-                        <span className="text-[10px] text-emerald-500 font-semibold">Bypass CGNAT</span>
-                      </div>
-                      <p className="text-[11px] text-slate-400 leading-snug">
-                        For routers on Safaricom / Airtel / Faiba SIMs behind carrier NAT where inbound ports are blocked.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Step: 1-Click Terminal Activation Script */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm">⚡</span>
-                    <h4 className="text-xs font-bold text-white">
-                      MikroTik RouterOS WinBox Enable Script
-                    </h4>
-                  </div>
-                  <Button
-                    variant="secondary"
-                    className="text-xs py-1 px-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold gap-1 border-none shadow-xs"
-                    onClick={() => {
-                      const script = winboxAccessData?.script || `/ip service set winbox disabled=no port=8291\n/ip firewall filter remove [find comment="MASHUPKGRID WINBOX REMOTE"]\n/ip firewall filter add chain=input protocol=tcp dst-port=8291 action=accept place-before=0 comment="MASHUPKGRID WINBOX REMOTE"\n:do {/ip firewall filter move [find comment="MASHUPKGRID WINBOX REMOTE"] destination=0} on-error={}\n/ip cloud set ddns-enabled=yes update-time=yes\n:delay 2s\n:put "Remote WinBox & Cloud DDNS Enabled Successfully!"`;
-                      handleCopy(script, `winbox-full-script-${winboxModalFor.id}`);
-                    }}
-                  >
-                    {copiedId === `winbox-full-script-${winboxModalFor.id}` ? <IconCheck size={12} /> : <IconCopy size={12} />}
-                    <span>{copiedId === `winbox-full-script-${winboxModalFor.id}` ? "Copied to Clipboard!" : "Copy Terminal Script"}</span>
-                  </Button>
-                </div>
-                <p className="text-[11px] text-slate-400">
-                  Open your MikroTik Terminal (or WebFig) and paste this script to unblock WinBox port 8291 in firewall and activate MikroTik Cloud DDNS:
+            <details>
+              <summary className="cursor-pointer select-none text-sm text-slate-400 hover:text-white">If remote WinBox won&apos;t connect</summary>
+              <div className="mt-2 space-y-2">
+                <p className="text-sm text-slate-400">
+                  Paste this into the router&apos;s terminal. It allows WinBox only from the MashupHost server, its VPN and the router&apos;s own LAN.
                 </p>
-                <pre className="max-h-36 overflow-x-auto rounded-xl bg-slate-900/90 p-3 font-mono text-[11px] text-indigo-300 border border-slate-800 select-all leading-relaxed whitespace-pre-wrap">
-                  {winboxAccessData?.script || `# Enabling WinBox on port 8291 and MikroTik Cloud DDNS\n/ip service set winbox disabled=no port=8291\n/ip firewall filter remove [find comment="MASHUPKGRID WINBOX REMOTE"]\n/ip firewall filter add chain=input protocol=tcp dst-port=8291 action=accept place-before=0 comment="MASHUPKGRID WINBOX REMOTE"\n:do {/ip firewall filter move [find comment="MASHUPKGRID WINBOX REMOTE"] destination=0} on-error={}\n/ip cloud set ddns-enabled=yes update-time=yes`}
-                </pre>
+                <CodeBlock code={winboxLoading ? null : winboxAccessData?.script ?? null} label="WinBox access" maxHeight="10rem" />
               </div>
+            </details>
 
-              {/* Download WinBox Section */}
-              <div className="rounded-xl bg-slate-900/60 border border-slate-800/80 p-3.5">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div>
-                    <h5 className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-                      <span>📥</span>
-                      <span>Download Official MikroTik WinBox Client</span>
-                    </h5>
-                    <p className="text-[11px] text-slate-400">
-                      Standalone portable utility from MikroTik. No installation required.
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <a
-                      href="https://mt.lv/winbox64"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-2.5 py-1 text-xs rounded-lg bg-slate-800 hover:bg-slate-700 text-white font-semibold border border-slate-700 transition-colors"
-                    >
-                      Windows 64-bit ↗
-                    </a>
-                    <a
-                      href="https://mt.lv/winbox"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-2.5 py-1 text-xs rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold border border-slate-700 transition-colors"
-                    >
-                      Windows 32-bit ↗
-                    </a>
-                    <a
-                      href="https://mikrotik.com/download"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="px-2.5 py-1 text-xs rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 font-semibold border border-slate-700 transition-colors"
-                    >
-                      All Downloads ↗
-                    </a>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <p className="text-sm text-slate-400">
+              WinBox:{" "}
+              <a href="https://mt.lv/winbox64" target="_blank" rel="noopener noreferrer" className="text-brand-400 hover:underline">
+                Windows 64-bit
+              </a>
+              {" · "}
+              <a href="https://mt.lv/winbox" target="_blank" rel="noopener noreferrer" className="text-brand-400 hover:underline">
+                32-bit
+              </a>
+              {" · "}
+              <a href="https://mikrotik.com/download" target="_blank" rel="noopener noreferrer" className="text-brand-400 hover:underline">
+                all downloads
+              </a>
+            </p>
+          </>
+        )}
+      </Modal>
 
-            {/* Modal Footer */}
-            <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
-              <span className="text-[11px] text-slate-500">
-                Default WinBox port is <code className="text-indigo-300 font-mono">8291</code>
-              </span>
-              <Button
-                variant="secondary"
-                className="text-xs px-4 py-1.5"
-                onClick={() => setWinboxModalFor(null)}
+      {/* Router tools */}
+      <Modal
+        open={toolsModalFor !== null}
+        onClose={() => setToolsModalFor(null)}
+        title="Router tools"
+        description={toolsModalFor ? `Changes are applied to ${toolsModalFor.name} straight away.` : undefined}
+        footer={
+          <button type="button" className={darkButton("secondary")} onClick={() => setToolsModalFor(null)}>
+            Close
+          </button>
+        }
+      >
+        {toolsModalFor && (
+          <>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <Tool
+                title="Fair sharing (PCQ)"
+                description="Shares the available bandwidth evenly between active devices, so one heavy download doesn't slow everyone else down."
               >
-                Close
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ISP Power Tools & Optimization Modal */}
-      {powerToolsModalFor && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 overflow-y-auto"
-          onClick={() => setPowerToolsModalFor(null)}
-        >
-          <div
-            className="w-full max-w-2xl bg-slate-900 border border-amber-500/40 rounded-2xl p-6 text-slate-100 shadow-2xl relative space-y-5 animate-in fade-in zoom-in-95 duration-150 my-8"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Modal Header */}
-            <div className="flex items-start justify-between border-b border-slate-800 pb-4">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-xl">⚡</span>
-                  <h3 className="text-lg font-bold text-white tracking-tight">
-                    ISP Power Tools & Optimization
-                  </h3>
-                  <Badge variant={powerToolsModalFor.status === "ONLINE" ? "success" : "neutral"}>
-                    {powerToolsModalFor.status}
-                  </Badge>
-                </div>
-                <p className="text-xs text-slate-400">
-                  Instant network shaping, anti-VPN enforcement, and firmware tools for{" "}
-                  <strong className="text-amber-300">{powerToolsModalFor.name}</strong>.
-                </p>
-              </div>
-              <button
-                onClick={() => setPowerToolsModalFor(null)}
-                className="text-slate-400 hover:text-white rounded-lg p-1 hover:bg-slate-800 transition-colors text-lg"
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Grid of Power Tools */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-              {/* Tool 1: Fair-Share PCQ Bandwidth Shaper */}
-              <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/60 hover:border-amber-500/30 transition-all flex flex-col justify-between space-y-3">
-                <div className="space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base">⚖️</span>
-                    <h4 className="text-xs font-bold text-white">Dynamic Fair-Share (PCQ)</h4>
-                  </div>
-                  <p className="text-[11px] text-slate-400 leading-relaxed">
-                    Automatically distributes link bandwidth equally among all active devices so heavy downloaders don&apos;t cause bufferbloat or gaming lag.
-                  </p>
-                </div>
-                <Button
-                  variant="secondary"
-                  className="w-full text-xs py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 font-semibold"
-                  onClick={() => triggerPowerTool(powerToolsModalFor.id, "enable-pcq-shaper", {}, "PCQ")}
-                  disabled={toolLoading === "PCQ" || !powerToolsModalFor.host}
-                >
-                  {toolLoading === "PCQ" ? "Activating..." : "⚡ Activate Fair-Share Shaper"}
-                </Button>
-              </div>
-
-              {/* Tool 2: Safe Family DNS Filter */}
-              <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/60 hover:border-emerald-500/30 transition-all flex flex-col justify-between space-y-3">
-                <div className="space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base">🛡️</span>
-                    <h4 className="text-xs font-bold text-white">Safe Family DNS Filter</h4>
-                  </div>
-                  <p className="text-[11px] text-slate-400 leading-relaxed">
-                    Enforces Cloudflare Family Protection (<code className="text-emerald-300 font-mono">1.1.1.3</code>) to block adult content & malware network-wide.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="secondary"
-                    className="flex-1 text-xs py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-semibold"
-                    onClick={() => triggerPowerTool(powerToolsModalFor.id, "apply-family-dns", { familyMode: true }, "FamilyDNS")}
-                    disabled={toolLoading === "FamilyDNS" || !powerToolsModalFor.host}
-                  >
-                    {toolLoading === "FamilyDNS" ? "Applying..." : "Enable Safe DNS"}
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    className="text-xs py-1.5 text-slate-400 border border-slate-800 hover:text-white"
-                    onClick={() => triggerPowerTool(powerToolsModalFor.id, "apply-family-dns", { familyMode: false }, "StandardDNS")}
-                    disabled={toolLoading === "StandardDNS" || !powerToolsModalFor.host}
-                    title="Restore Google 8.8.8.8"
-                  >
-                    Standard
-                  </Button>
-                </div>
-              </div>
-
-              {/* Tool 3: Bulletproof Anti-VPN Shield */}
-              <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/60 hover:border-red-500/30 transition-all flex flex-col justify-between space-y-3">
-                <div className="space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base">🚫</span>
-                    <h4 className="text-xs font-bold text-white">10-Layer Anti-VPN Shield</h4>
-                  </div>
-                  <p className="text-[11px] text-slate-400 leading-relaxed">
-                    Kills Cloudflare WebSocket tunnels (HA Tunnel Plus), HTTP Injector, SlowDNS, UDP tunnels, and persistent bypass leaks.
-                  </p>
-                </div>
-                <Button
-                  variant="secondary"
-                  className="w-full text-xs py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 border border-rose-500/30 font-semibold"
-                  onClick={() => triggerPowerTool(powerToolsModalFor.id, "enable-anti-vpn-shield", {}, "AntiVPN")}
-                  disabled={toolLoading === "AntiVPN" || !powerToolsModalFor.host}
-                >
-                  {toolLoading === "AntiVPN" ? "Deploying..." : "🔒 Deploy Anti-VPN Shield"}
-                </Button>
-              </div>
-
-              {/* Tool 4: 100M Speedtest Booster */}
-              <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/60 hover:border-blue-500/30 transition-all flex flex-col justify-between space-y-3">
-                <div className="space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base">🚀</span>
-                    <h4 className="text-xs font-bold text-white">Speedtest 100M Boost</h4>
-                  </div>
-                  <p className="text-[11px] text-slate-400 leading-relaxed">
-                    Prioritizes Ookla and Fast.com test packets at 100 Mbps burst to ensure speedtests reflect line speed accurately.
-                  </p>
-                </div>
-                <Button
-                  variant="secondary"
-                  className="w-full text-xs py-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-300 border border-blue-500/30 font-semibold"
-                  onClick={() => triggerPowerTool(powerToolsModalFor.id, "apply-speedtest-boost", {}, "Speedtest")}
-                  disabled={toolLoading === "Speedtest" || !powerToolsModalFor.host}
-                >
-                  {toolLoading === "Speedtest" ? "Boosting..." : "🚀 Apply Speedtest Boost"}
-                </Button>
-              </div>
-            </div>
-
-            {/* Firmware Check & Remote Upgrade Section */}
-            <div className="p-4 rounded-xl border border-slate-800 bg-slate-950/80 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-base">📦</span>
-                  <h4 className="text-xs font-bold text-white">RouterOS Firmware Management</h4>
-                </div>
                 <button
-                  onClick={() => refetchFirmware()}
-                  className="text-[11px] text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1"
+                  type="button"
+                  className={darkButton("secondary", "sm")}
+                  onClick={() => runTool(toolsModalFor.id, "enable-pcq-shaper", {}, "pcq")}
+                  disabled={toolLoading === "pcq" || !toolsModalFor.host}
                 >
-                  <span>🔄</span>
-                  <span>{firmwareLoading ? "Checking..." : "Check Updates"}</span>
+                  {toolLoading === "pcq" ? "Applying…" : "Enable"}
+                </button>
+              </Tool>
+              <Tool
+                title="Family-safe DNS"
+                description="Points customers at Cloudflare for Families (1.1.1.3), which blocks malware and adult sites. “Standard” switches back to 8.8.8.8."
+              >
+                <button
+                  type="button"
+                  className={darkButton("secondary", "sm")}
+                  onClick={() => runTool(toolsModalFor.id, "apply-family-dns", { familyMode: true }, "dns-family")}
+                  disabled={toolLoading === "dns-family" || !toolsModalFor.host}
+                >
+                  {toolLoading === "dns-family" ? "Applying…" : "Enable"}
+                </button>
+                <button
+                  type="button"
+                  className={darkButton("ghost", "sm")}
+                  onClick={() => runTool(toolsModalFor.id, "apply-family-dns", { familyMode: false }, "dns-standard")}
+                  disabled={toolLoading === "dns-standard" || !toolsModalFor.host}
+                >
+                  Standard
+                </button>
+              </Tool>
+              <Tool
+                title="Block tunnelling apps"
+                note={antiTunnelNote}
+                description="Stops phones that haven't paid from getting online through SlowDNS, VPN and proxy tunnels before they log in. Customers who have logged in aren't affected. Tunnels hidden inside encrypted traffic (like HA Tunnel) can only be limited, not fully blocked."
+              >
+                <button
+                  type="button"
+                  className={darkButton("secondary", "sm")}
+                  onClick={() => void setAntiTunnel(toolsModalFor.id, true)}
+                  disabled={toolLoading === "anti-vpn" || toolLoading === "anti-vpn-off" || !toolsModalFor.host}
+                >
+                  {toolLoading === "anti-vpn" ? "Applying…" : "Turn on"}
+                </button>
+                <button
+                  type="button"
+                  className={darkButton("ghost", "sm")}
+                  onClick={() => void setAntiTunnel(toolsModalFor.id, false)}
+                  disabled={toolLoading === "anti-vpn" || toolLoading === "anti-vpn-off" || !toolsModalFor.host}
+                >
+                  {toolLoading === "anti-vpn-off" ? "Removing…" : "Turn off"}
+                </button>
+              </Tool>
+              <Tool
+                title="Speed-test priority"
+                description="Gives Ookla and Fast.com speed tests priority up to 100 Mbps. Test results can then be higher than everyday browsing speeds."
+              >
+                <button
+                  type="button"
+                  className={darkButton("secondary", "sm")}
+                  onClick={() => runTool(toolsModalFor.id, "apply-speedtest-boost", {}, "speedtest")}
+                  disabled={toolLoading === "speedtest" || !toolsModalFor.host}
+                >
+                  {toolLoading === "speedtest" ? "Applying…" : "Enable"}
+                </button>
+              </Tool>
+            </div>
+
+            <div className="rounded-lg border border-obsidian-800 bg-obsidian-950 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm font-medium text-white">RouterOS version</p>
+                <button type="button" className={darkButton("ghost", "sm")} onClick={() => refetchFirmware()} disabled={firmwareLoading}>
+                  {firmwareLoading ? "Checking…" : "Check for updates"}
                 </button>
               </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[11px] font-mono">
-                <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800">
-                  <span className="text-slate-500 block text-[10px] font-sans">Installed Version</span>
-                  <span className="text-slate-200 font-bold">{firmwareData?.currentVersion || "Unknown"}</span>
+              <dl className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
+                <div>
+                  <dt className="text-xs text-slate-500">Installed</dt>
+                  <dd className="text-slate-200">{firmwareData?.currentVersion || "—"}</dd>
                 </div>
-                <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800">
-                  <span className="text-slate-500 block text-[10px] font-sans">Latest Available</span>
-                  <span className="text-emerald-400 font-bold">{firmwareData?.latestVersion || "Up to date"}</span>
+                <div>
+                  <dt className="text-xs text-slate-500">Latest</dt>
+                  <dd className="text-slate-200">{firmwareData?.latestVersion || "—"}</dd>
                 </div>
-                <div className="col-span-2 sm:col-span-1 p-2.5 rounded-lg bg-slate-900 border border-slate-800 flex items-center justify-between sm:block">
-                  <span className="text-slate-500 block text-[10px] font-sans">Status</span>
-                  <span className="text-slate-300 font-semibold">{firmwareData?.status || "Ready"}</span>
+                <div>
+                  <dt className="text-xs text-slate-500">Status</dt>
+                  <dd className="text-slate-200">{firmwareData?.status || "—"}</dd>
                 </div>
-              </div>
-
+              </dl>
               {firmwareData?.upgradeAvailable ? (
-                <Button
-                  variant="primary"
-                  className="w-full text-xs py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold"
+                <button
+                  type="button"
+                  className={`${darkButton("primary")} mt-4 w-full`}
                   onClick={() => {
-                    if (confirm("The router will download the latest RouterOS package and reboot automatically. Proceed?")) {
-                      triggerPowerTool(powerToolsModalFor.id, "upgrade-firmware", {}, "FirmwareUpgrade");
+                    if (confirm("The router will download the new RouterOS version and reboot. Customers will be offline for a few minutes. Continue?")) {
+                      runTool(toolsModalFor.id, "upgrade-firmware", {}, "firmware");
                     }
                   }}
-                  disabled={toolLoading === "FirmwareUpgrade" || !powerToolsModalFor.host}
+                  disabled={toolLoading === "firmware" || !toolsModalFor.host}
                 >
-                  {toolLoading === "FirmwareUpgrade" ? "Installing & Rebooting..." : `⚡ Upgrade to v${firmwareData.latestVersion} & Reboot`}
-                </Button>
+                  {toolLoading === "firmware" ? "Upgrading…" : `Upgrade to ${firmwareData.latestVersion} and reboot`}
+                </button>
               ) : (
-                <p className="text-[11px] text-slate-500 italic text-center pt-1">
-                  RouterOS is running the latest stable release.
-                </p>
+                firmwareData && <p className="mt-3 text-xs text-slate-500">No newer stable version found.</p>
               )}
             </div>
+          </>
+        )}
+      </Modal>
+    </div>
+  );
+}
 
-            {/* Modal Footer */}
-            <div className="pt-3 border-t border-slate-800 flex items-center justify-between">
-              <span className="text-[11px] text-slate-500">
-                Connected Host: <code className="text-amber-300 font-mono">{powerToolsModalFor.host || powerToolsModalFor.vpnIp || "Awaiting Check-in"}</code>
-              </span>
-              <Button
-                variant="secondary"
-                className="text-xs px-4 py-1.5"
-                onClick={() => setPowerToolsModalFor(null)}
-              >
-                Close
-              </Button>
-            </div>
-          </div>
-        </div>
+function Tool({ title, description, note, children }: { title: string; description: string; note?: string | null; children: React.ReactNode }) {
+  return (
+    <div className="flex flex-col justify-between gap-3 rounded-lg border border-obsidian-800 bg-obsidian-950 p-4">
+      <div>
+        <p className="text-sm font-medium text-white">{title}</p>
+        <p className="mt-1 text-xs leading-relaxed text-slate-400">{description}</p>
+      </div>
+      <div className="flex gap-2">{children}</div>
+      {note && (
+        <p role="status" className="text-xs text-slate-400">
+          {note}
+        </p>
       )}
     </div>
   );

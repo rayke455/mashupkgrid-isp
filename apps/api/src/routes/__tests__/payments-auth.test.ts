@@ -29,6 +29,9 @@ const h = vi.hoisted(() => {
       getGatewayTransactionDetail: vi.fn().mockResolvedValue({ id: "t" }),
       listGatewayTransactions: vi.fn().mockResolvedValue({ items: [], total: 0 }),
       setActiveDestination: vi.fn(),
+      setPlatformMpesaConfig: vi.fn(),
+      getPlatformMpesaConfigStatus: vi.fn().mockResolvedValue({ shortcode: "1201635", environment: "production" }),
+      getSettlementSettings: vi.fn().mockResolvedValue({ gatewayEnabled: true }),
       requestSettlement: vi.fn(),
       handleStkCallback: vi.fn().mockResolvedValue({ handled: false }),
       logWebhookReceived: vi.fn().mockResolvedValue("evt-1"),
@@ -36,6 +39,7 @@ const h = vi.hoisted(() => {
       tryCompleteOnboardingFeeCallback: vi.fn().mockResolvedValue(false),
       tryCompleteSubscriptionPaymentCallback: vi.fn().mockResolvedValue(false),
       tryCompleteDonationCallback: vi.fn().mockResolvedValue(false),
+      tryCompleteStoreOrderCallback: vi.fn().mockResolvedValue(false),
     },
   };
 });
@@ -105,7 +109,7 @@ describe("payment gateway route security", () => {
     );
     h.payments.logWebhookReceived.mockResolvedValue("evt-1");
     h.payments.handleStkCallback.mockResolvedValue({ handled: false });
-    for (const fn of [h.payments.tryCompleteOnboardingFeeCallback, h.payments.tryCompleteSubscriptionPaymentCallback, h.payments.tryCompleteDonationCallback]) {
+    for (const fn of [h.payments.tryCompleteOnboardingFeeCallback, h.payments.tryCompleteSubscriptionPaymentCallback, h.payments.tryCompleteStoreOrderCallback, h.payments.tryCompleteDonationCallback]) {
       fn.mockResolvedValue(false);
     }
     h.payments.getPlatformPaymentsOverview.mockResolvedValue({ ok: true });
@@ -197,6 +201,50 @@ describe("payment gateway route security", () => {
     });
     expect(res.statusCode).toBe(422);
     expect(h.payments.setActiveDestination).not.toHaveBeenCalled();
+  });
+
+  it("refuses a plain password pasted as the B2C security credential", async () => {
+    h.getCachedPermissions.mockResolvedValue(new Set(["platform_payments.manage"]));
+    const res = await app.inject({
+      method: "PUT",
+      url: "/api/v1/platform/payments/gateway",
+      headers: await bearer(platformUser()),
+      payload: { b2cShortcode: "1201635", b2cInitiatorName: "mashupapi", b2cInitiatorCredential: "Str0ngPassw0rd!!" },
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().error.message).toMatch(/B2C security credential looks like the operator.s password/);
+    expect(h.payments.setPlatformMpesaConfig).not.toHaveBeenCalled();
+  });
+
+  it("saves a pasted security credential exactly, minus quotes and line breaks around it", async () => {
+    h.getCachedPermissions.mockResolvedValue(new Set(["platform_payments.manage"]));
+    h.payments.setPlatformMpesaConfig.mockReset();
+    // A real credential is 256 bytes of base64 and contains lowercase "s" like any other letter.
+    const credential = Buffer.alloc(256, "sss-credential-bytes").toString("base64");
+    expect(credential).toMatch(/s/);
+    const pasted = `"${credential.slice(0, 100)}\n${credential.slice(100)}"`;
+    const res = await app.inject({
+      method: "PUT",
+      url: "/api/v1/platform/payments/gateway",
+      headers: await bearer(platformUser()),
+      payload: { b2cInitiatorName: "mash", b2cInitiatorCredential: pasted },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(h.payments.setPlatformMpesaConfig).toHaveBeenCalledWith(expect.objectContaining({ b2cInitiatorCredential: credential }));
+  });
+
+  it("refuses a credential with characters missing (not whole base64 groups)", async () => {
+    h.getCachedPermissions.mockResolvedValue(new Set(["platform_payments.manage"]));
+    h.payments.setPlatformMpesaConfig.mockReset();
+    const credential = Buffer.alloc(256, 7).toString("base64");
+    const res = await app.inject({
+      method: "PUT",
+      url: "/api/v1/platform/payments/gateway",
+      headers: await bearer(platformUser()),
+      payload: { b2cInitiatorCredential: credential.slice(0, -5) + "==" },
+    });
+    expect(res.statusCode).toBe(422);
+    expect(h.payments.setPlatformMpesaConfig).not.toHaveBeenCalled();
   });
 
   it("a platform user cannot act on tenant payment routes (no tenant on the token)", async () => {

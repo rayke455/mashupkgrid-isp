@@ -22,6 +22,7 @@ vi.mock("@mashupkgrid/database", () => ({
     radCheck: { findFirst: async () => null },
     radReply: { findFirst: async () => null, findMany: async () => [] },
     router: { findFirst: async () => null },
+    hotspotDevice: { findUnique: async () => null, findMany: async () => [] },
   },
 }));
 vi.mock("@mashupkgrid/network", () => ({ createAdapterForRouter: () => ({}) }));
@@ -38,6 +39,8 @@ const ATTR = {
   ACCT_TERMINATE_CAUSE: 49,
   CALLING_STATION_ID: 31,
   FRAMED_IP_ADDRESS: 8,
+  NAS_PORT_TYPE: 61,
+  NAS_PORT_ID: 87,
 };
 
 function attr(type: number, value: Buffer): Buffer {
@@ -116,6 +119,24 @@ describe("RADIUS accounting persistence", () => {
     });
     expect(upserts[0]!.create.acctStartTime).toBeInstanceOf(Date);
     expect(upserts[0]!.create).not.toHaveProperty("acctStopTime");
+  });
+
+  it("stores a MikroTik's numeric NAS-Port-Type by name, with no NUL bytes Postgres would reject", async () => {
+    // What a hAP actually sends: NAS-Port-Type 19 (Wireless-802.11) as a 4-byte integer. Read as
+    // text it was "\0\0\0\x13", and every accounting row was refused by the database.
+    const attrs = Buffer.concat([
+      attr(ATTR.USER_NAME, Buffer.from("VOUCHER1")),
+      attr(ATTR.ACCT_STATUS_TYPE, u32(1)),
+      attr(ATTR.ACCT_SESSION_ID, Buffer.from("81a00009")),
+      attr(ATTR.NAS_PORT_TYPE, u32(19)),
+      attr(ATTR.NAS_PORT_ID, Buffer.from("bridge1\0")),
+    ]);
+    await send(buildAccountingRequest(9, attrs));
+    await settle();
+    expect(upserts[0]!.create).toMatchObject({ nasPortType: "Wireless-802.11", nasPortId: "bridge1" });
+    for (const value of Object.values(upserts[0]!.create)) {
+      if (typeof value === "string") expect(value).not.toContain("\0");
+    }
   });
 
   it("updates the SAME row on Interim-Update rather than creating a second session", async () => {

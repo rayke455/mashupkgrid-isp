@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { Card } from "@/components/ui";
-import { IconMpesa } from "@/components/icons";
 import { PlatformPayoutSettings } from "@/components/payments/platform-payout-settings";
 import { MpesaSettings } from "@/components/payments/mpesa-settings";
 import { PaystackSettings } from "@/components/payments/paystack-settings";
@@ -37,10 +36,7 @@ export default function PaymentsSetupPage() {
   return (
     <div className="max-w-3xl space-y-6">
       <div>
-        <h1 className="flex items-center gap-2.5 text-2xl font-bold tracking-tight text-slate-900 dark:text-white">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-500/15 text-brand-600 dark:text-brand-400">
-            <IconMpesa size={20} />
-          </span>
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">
           Getting paid
         </h1>
         <p className="text-sm text-slate-500 dark:text-slate-400">

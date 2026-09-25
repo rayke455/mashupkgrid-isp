@@ -58,15 +58,15 @@ export default function PaymentSettingsPage() {
       {/* Gateway ---------------------------------------------------------------------------- */}
       <Panel title="Payment gateway">
         {isLoading || !data ? (
-          <div className="h-24 animate-pulse rounded-md bg-slate-100" />
+          <div className="h-24 animate-pulse rounded-md bg-obsidian-800" />
         ) : (
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div className="flex items-start gap-4">
-              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-blue-700 text-sm font-bold text-white" aria-hidden="true">
+              <span className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-brand-600 text-sm font-bold text-white" aria-hidden="true">
                 M
               </span>
               <div>
-                <p className="text-base font-semibold text-slate-950">MashupHost Gateway</p>
+                <p className="text-base font-semibold text-white">MashupHost Gateway</p>
                 <div className="mt-1 flex flex-wrap items-center gap-2">
                   {data.gateway.connected ? (
                     <StatusBadge status="SETTLED" label="Connected" />
@@ -75,13 +75,13 @@ export default function PaymentSettingsPage() {
                   )}
                   <EnvironmentBadge environment={data.gateway.environment} />
                 </div>
-                <p className="mt-2 max-w-xl text-sm leading-6 text-slate-600">
+                <p className="mt-2 max-w-xl text-sm leading-6 text-slate-400">
                   {data.gateway.connected
                     ? "Your ISP accepts customer payments through MashupHost's payment gateway. You don't need a paybill of your own."
                     : "Accept M-Pesa payments through MashupHost's gateway — no paybill of your own needed. We collect, deduct the platform fee and settle the rest to you."}
                 </p>
                 {data.gateway.connected && data.gateway.paybill && (
-                  <p className="mt-2 text-sm text-slate-700">
+                  <p className="mt-2 text-sm text-slate-300">
                     Customers pay to paybill <strong className="font-semibold tabular-nums">{data.gateway.paybill}</strong> using their MashupHost
                     account number (shown on each customer and invoice), or by STK push.
                   </p>
@@ -99,9 +99,9 @@ export default function PaymentSettingsPage() {
                   Connect gateway
                 </button>
                 {!data.gateway.enabledByPlatform ? (
-                  <p className="mt-1.5 max-w-[16rem] text-xs text-slate-500">The gateway isn&apos;t accepting new ISPs right now.</p>
+                  <p className="mt-1.5 max-w-[16rem] text-xs text-slate-400">The gateway isn&apos;t accepting new ISPs right now.</p>
                 ) : !destination ? (
-                  <p className="mt-1.5 max-w-[16rem] text-xs text-slate-500">Add a settlement destination below first.</p>
+                  <p className="mt-1.5 max-w-[16rem] text-xs text-slate-400">Add a settlement destination below first.</p>
                 ) : null}
               </div>
             )}
@@ -121,23 +121,23 @@ export default function PaymentSettingsPage() {
           ) : undefined
         }
       >
-        {!canManage && !destination && <p className="text-sm text-slate-500">No destination set. Ask your account owner to add one.</p>}
+        {!canManage && !destination && <p className="text-sm text-slate-400">No destination set. Ask your account owner to add one.</p>}
         {destination && !editing && (
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <p className="text-sm text-slate-500">{DESTINATION_LABEL[destination.type]}</p>
-              <p className="mt-0.5 text-lg font-semibold text-slate-950">{destination.label}</p>
-              <p className="text-sm text-slate-600">{destination.accountName}</p>
-              {destination.bankBranch && <p className="text-sm text-slate-500">{destination.bankBranch} branch</p>}
+              <p className="text-sm text-slate-400">{DESTINATION_LABEL[destination.type]}</p>
+              <p className="mt-0.5 text-lg font-semibold text-white">{destination.label}</p>
+              <p className="text-sm text-slate-400">{destination.accountName}</p>
+              {destination.bankBranch && <p className="text-sm text-slate-400">{destination.bankBranch} branch</p>}
             </div>
             <div className="space-y-1.5 sm:text-right">
               <StatusBadge status={destination.verificationStatus} />
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-slate-400">
                 {destination.verificationStatus === "VERIFIED"
                   ? `Confirmed by a successful settlement on ${formatDate(destination.verifiedAt)}`
                   : "Verified automatically after the first successful settlement"}
               </p>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-slate-400">
                 {destination.settlementMethod === "AUTOMATIC" ? "Sent automatically" : "Sent manually by the MashupHost team"}
               </p>
             </div>
@@ -147,15 +147,15 @@ export default function PaymentSettingsPage() {
           <DestinationForm current={destination} onDone={destination ? () => setEditing(false) : undefined} />
         )}
         {past.length > 0 && !editing && (
-          <details className="mt-5 border-t border-slate-100 pt-4 text-sm">
-            <summary className="cursor-pointer text-slate-600 hover:text-slate-900">Previous destinations ({past.length})</summary>
+          <details className="mt-5 border-t border-obsidian-800 pt-4 text-sm">
+            <summary className="cursor-pointer text-slate-400 hover:text-slate-100">Previous destinations ({past.length})</summary>
             <ul className="mt-3 space-y-1.5">
               {past.map((d) => (
-                <li key={d.id} className="flex justify-between gap-3 text-slate-600">
+                <li key={d.id} className="flex justify-between gap-3 text-slate-400">
                   <span>
                     {d.label} · {d.accountName}
                   </span>
-                  <span className="text-xs text-slate-400">added {formatDate(d.createdAt)}</span>
+                  <span className="text-xs text-slate-500">added {formatDate(d.createdAt)}</span>
                 </li>
               ))}
             </ul>
@@ -182,7 +182,7 @@ export default function PaymentSettingsPage() {
             <Term label="Pending settlement" value={<Money minor={data.balance.pendingSettlementMinor} />} />
           </dl>
         ) : (
-          <div className="h-20 animate-pulse rounded-md bg-slate-100" />
+          <div className="h-20 animate-pulse rounded-md bg-obsidian-800" />
         )}
       </Panel>
 
@@ -212,8 +212,8 @@ export default function PaymentSettingsPage() {
 function Term({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
-      <dt className="text-slate-500">{label}</dt>
-      <dd className="mt-0.5 font-medium text-slate-900">{value}</dd>
+      <dt className="text-slate-400">{label}</dt>
+      <dd className="mt-0.5 font-medium text-slate-100">{value}</dd>
     </div>
   );
 }

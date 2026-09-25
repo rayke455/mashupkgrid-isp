@@ -111,6 +111,10 @@ services:
       # CGNAT dial in, so this is the one direction that can work. Bound to 0.0.0.0 unlike the
       # API port above, and UDP. Must match WIREGUARD_LISTEN_PORT and the host firewall rule.
       - "51820:51820/udp"
+      # Remote WinBox relay (worker, sharing this namespace): one TCP port per VPN-linked router,
+      # forwarded over wg0 to the router's WinBox. Only used when ENABLE_WINBOX_RELAY=true; must
+      # match WINBOX_RELAY_PORT_RANGE and be opened in the host firewall / Azure NSG.
+      - "${WINBOX_RELAY_PORT_RANGE:-20000-20199}:${WINBOX_RELAY_PORT_RANGE:-20000-20199}/tcp"
     # NET_ADMIN lets this container create and configure its own wg0 (see api-entrypoint.sh).
     # This is a real privilege increase for an internet-facing service and is only meaningful
     # when ENABLE_WIREGUARD_REMOTE_ACCESS=true; with the flag off the capability is unused.

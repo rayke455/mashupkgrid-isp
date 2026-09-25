@@ -59,21 +59,21 @@ export function DestinationForm({ current, onDone }: { current: Destination | nu
   return (
     <form onSubmit={submit} className="space-y-5" noValidate>
       <fieldset>
-        <legend className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-500">Where should we send your money?</legend>
+        <legend className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Where should we send your money?</legend>
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           {OPTIONS.map((o) => {
             const selected = o.type === type;
             return (
               <label
                 key={o.type}
-                className={`relative flex cursor-pointer flex-col rounded-lg border p-4 transition-colors focus-within:ring-2 focus-within:ring-blue-600 ${
-                  selected ? "border-blue-700 bg-blue-50/60 shadow-[0_0_0_1px_rgb(29,78,216)]" : "border-slate-200 bg-white hover:border-slate-300"
+                className={`relative flex cursor-pointer flex-col rounded-lg border p-4 transition-colors focus-within:ring-2 focus-within:ring-brand-500 ${
+                  selected ? "border-brand-500 bg-brand-500/10 shadow-[0_0_0_1px_rgb(29,78,216)]" : "border-obsidian-800 bg-obsidian-900 hover:border-obsidian-700"
                 }`}
               >
                 <input type="radio" name="destination-type" value={o.type} checked={selected} onChange={() => setType(o.type)} className="sr-only" />
-                <span className={`text-sm font-semibold ${o.type === "MPESA_PHONE" ? "text-emerald-800" : "text-slate-900"}`}>{o.title}</span>
-                <span className="mt-0.5 text-xs text-slate-600">{o.body}</span>
-                <span className="mt-2 text-[11px] text-slate-500">{o.settles}</span>
+                <span className={`text-sm font-semibold ${o.type === "MPESA_PHONE" ? "text-emerald-200" : "text-slate-100"}`}>{o.title}</span>
+                <span className="mt-0.5 text-xs text-slate-400">{o.body}</span>
+                <span className="mt-2 text-[11px] text-slate-400">{o.settles}</span>
               </label>
             );
           })}
@@ -192,10 +192,10 @@ export function RequestSettlementButton({
         }
       >
         <p>
-          We&apos;ll send <strong className="text-slate-900"><Money minor={amount} /></strong> to <strong className="text-slate-900">{destination?.label}</strong>.
+          We&apos;ll send <strong className="text-slate-100"><Money minor={amount} /></strong> to <strong className="text-slate-100">{destination?.label}</strong>.
         </p>
         {balance && balance.availableMinor !== amount && (
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-slate-400">
             M-Pesa moves whole shillings, so <Money minor={balance.availableMinor - amount} cents /> stays in your balance for next time.
           </p>
         )}

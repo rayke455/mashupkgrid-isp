@@ -1,60 +1,87 @@
 import { prisma } from "@mashupkgrid/database";
 import { sendTenantSms } from "@mashupkgrid/sms";
+import { sendEmail } from "../lib/email.js";
 
 /**
- * Tells someone when a router goes down.
+ * Tells someone when a router goes down, and again when it comes back.
  *
  * Router status became trustworthy when the liveness check stopped refreshing its own timestamp,
  * but an accurate status nobody is looking at is still an outage discovered by angry customers.
  * This closes that loop.
  *
- * Fires only on the ONLINE→DOWN transition, which is what makes a cooldown unnecessary: the
- * status column changes once, so one alert is sent per outage no matter how often the health
- * poll runs (every 20 seconds). A router that genuinely flaps will alert per flap, and the
- * ten-minute liveness window already damps that.
+ * Fires only on transitions (was up → now down, was down → now up), which is what makes a
+ * cooldown unnecessary: the status column changes once, so one alert is sent per outage no
+ * matter how often the health poll runs. A router that was never up (added but not set up yet,
+ * status UNKNOWN) never alerts.
  */
+
+type RouterStatus = "UNKNOWN" | "ONLINE" | "WARNING" | "DOWN";
+
+/** The alert to send for this poll, if any. */
+export function routerAlertFor(previous: RouterStatus, reachableNow: boolean): "down" | "recovered" | null {
+  if (!reachableNow && (previous === "ONLINE" || previous === "WARNING")) return "down";
+  if (reachableNow && previous === "DOWN") return "recovered";
+  return null;
+}
 
 /** Staff who should hear about it: this tenant's active users who can actually act on a router,
  *  rather than everyone with a login. Waking a receptionist at 2am trains people to ignore
  *  alerts, which is worse than not sending them. */
-async function alertRecipients(tenantId: string): Promise<{ id: string; phone: string }[]> {
-  const users = await prisma.user.findMany({
+async function alertRecipients(tenantId: string): Promise<{ id: string; phone: string | null; email: string }[]> {
+  return prisma.user.findMany({
     where: {
       tenantId,
       status: "ACTIVE",
       deletedAt: null,
-      phone: { not: null },
       userRoles: {
         some: { role: { rolePermissions: { some: { permission: { key: "routers.manage" } } } } },
       },
     },
-    select: { id: true, phone: true },
+    select: { id: true, phone: true, email: true },
   });
-  return users.flatMap((user) => (user.phone ? [{ id: user.id, phone: user.phone }] : []));
 }
 
-export async function notifyRouterWentDown(
-  tenantId: string,
-  routerName: string,
-  lastError: string | null
-): Promise<number> {
+/** Sends by SMS where the tenant has a gateway and the user a phone, and by email to everyone
+ *  (when the server has SMTP). Returns how many people were reached by at least one of them. */
+async function notify(tenantId: string, sms: string, subject: string, body: string): Promise<number> {
   const recipients = await alertRecipients(tenantId);
-  if (recipients.length === 0) return 0;
+  let reached = 0;
+  for (const recipient of recipients) {
+    let delivered = false;
+    // Each channel on its own: one unreachable number or mailbox must not stop the others.
+    if (recipient.phone) {
+      try {
+        delivered = (await sendTenantSms(tenantId, recipient.phone, sms)).delivered || delivered;
+      } catch (err) {
+        console.error(`[router-alerts] SMS to ${recipient.id} failed`, err);
+      }
+    }
+    try {
+      delivered = (await sendEmail({ to: recipient.email, subject, text: body, html: `<p>${escapeHtml(body)}</p>` })).delivered || delivered;
+    } catch (err) {
+      console.error(`[router-alerts] email to ${recipient.id} failed`, err);
+    }
+    if (delivered) reached += 1;
+  }
+  return reached;
+}
 
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
+}
+
+export async function notifyRouterWentDown(tenantId: string, routerName: string, lastError: string | null): Promise<number> {
   // Deliberately short and specific: an SMS that names the router and says what to check is
   // actionable from a phone at night; "an error occurred" is not.
   const reason = lastError ? ` (${lastError.slice(0, 60)})` : "";
-  const message = `ALERT: router "${routerName}" is DOWN and has stopped reporting${reason}. Customers on it cannot get online.`;
+  const sms = `ALERT: router "${routerName}" is DOWN and has stopped reporting${reason}. Customers on it cannot get online.`;
+  const body =
+    `Router "${routerName}" stopped responding${reason}. Customers connected through it cannot get online.\n\n` +
+    `Check its power and internet connection. You'll get another message when it's back.`;
+  return notify(tenantId, sms, `Router "${routerName}" is down`, body);
+}
 
-  let sent = 0;
-  for (const recipient of recipients) {
-    try {
-      const result = await sendTenantSms(tenantId, recipient.phone, message);
-      if (result.delivered) sent += 1;
-    } catch (err) {
-      // One unreachable number must not stop the others being told.
-      console.error(`[router-alerts] SMS to ${recipient.id} failed`, err);
-    }
-  }
-  return sent;
+export async function notifyRouterRecovered(tenantId: string, routerName: string): Promise<number> {
+  const sms = `OK: router "${routerName}" is back online.`;
+  return notify(tenantId, sms, `Router "${routerName}" is back online`, `Router "${routerName}" is responding again.`);
 }

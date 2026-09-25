@@ -15,3 +15,4 @@ export * from "./pesapal/index.js";
 export * from "./purchase-attempts.service.js";
 export * from "./ledger.service.js";
 export * from "./gateway/index.js";
+export * from "./store/store-order.service.js";

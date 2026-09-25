@@ -105,6 +105,21 @@ export function getSocialAppMeta(policy?: string | null): SocialAppMeta {
   return SOCIAL_APP_CATALOG[norm] || SOCIAL_APP_CATALOG.ALL;
 }
 
+/** "TikTok only" style label for a package card, or null for full internet. */
+export function appOnlyLabel(policy?: string | null): string | null {
+  const app = getSocialAppMeta(policy);
+  if (app.policy === "ALL") return null;
+  return `${app.icon} ${app.policy === "SOCIAL_BUNDLE" ? "Social apps" : app.shortLabel} only`;
+}
+
+/** Plain warning shown before paying, so nobody buys an app-only package by mistake. */
+export function appOnlyNotice(policy?: string | null): string | null {
+  const app = getSocialAppMeta(policy);
+  if (app.policy === "ALL") return null;
+  if (app.policy === "SOCIAL_BUNDLE") return "This package works for social media apps only. Other websites won't open.";
+  return `This package works for ${app.shortLabel} only. Other apps and websites won't open.`;
+}
+
 export interface VoucherLoginResult {
   status: "UNUSED" | "ACTIVE" | "EXPIRED" | "USED";
   expiresAt: string | null;
@@ -136,12 +151,18 @@ export interface CaptiveThemeProps {
   onOpenVoucherModal: () => void;
   onOpenAccountModal: () => void;
   onOpenTvModal: () => void;
+  /** "Paid but not connected?" recovery. Themes that render it inline set ThemeMeta.inlineHelp so
+   *  the portal page doesn't also float its own button over the content. */
+  onOpenRecover?: () => void;
+  /** Opens the contact-support form. */
+  onOpenSupport?: () => void;
   voucherResult: VoucherLoginResult | null;
   accountResult: AccountLoginResult | null;
   completingRouterLogin: boolean;
 }
 
 export type ThemeId =
+  | "mashuphost-clean"
   | "gold-energy"
   | "suntech-blue"
   | "modern-glass"
@@ -156,4 +177,11 @@ export interface ThemeMeta {
   description: string;
   badgeColor: string;
   accentColor: string;
+  /** The theme shows "Paid but not connected?" and support itself, inline. */
+  inlineHelp?: boolean;
+  /** Light themes get the plugins' light bars and no animated background. */
+  appearance?: "light" | "dark";
 }
+
+/** The design every new portal starts with. */
+export const DEFAULT_THEME_ID: ThemeId = "mashuphost-clean";

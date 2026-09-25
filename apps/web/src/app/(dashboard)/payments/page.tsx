@@ -88,14 +88,14 @@ export default function PaymentsOverviewPage() {
         >
           {data?.destination ? (
             <div className="space-y-1 text-sm">
-              <p className="text-slate-500">Sending to</p>
-              <p className="text-base font-semibold text-slate-950">{data.destination.label}</p>
-              <p className="text-slate-600">{data.destination.accountName}</p>
+              <p className="text-slate-400">Sending to</p>
+              <p className="text-base font-semibold text-white">{data.destination.label}</p>
+              <p className="text-slate-400">{data.destination.accountName}</p>
             </div>
           ) : (
-            <p className="text-sm text-slate-500">No destination set.</p>
+            <p className="text-sm text-slate-400">No destination set.</p>
           )}
-          <p className="mt-4 text-xs text-slate-500">
+          <p className="mt-4 text-xs text-slate-400">
             {data ? `Minimum settlement KES ${(data.settlement.minimumMinor / 100).toLocaleString("en-KE")}. ` : ""}
             Amounts are sent in whole shillings; cents roll over.
           </p>

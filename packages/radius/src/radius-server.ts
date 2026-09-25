@@ -1,7 +1,15 @@
 import { createSocket, type Socket } from "node:dgram";
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { prisma } from "@mashupkgrid/database";
-import { createAdapterForRouter } from "@mashupkgrid/network";
+import {
+  createAdapterForRouter,
+  findMacLogin,
+  normalizeMac,
+  rememberDevice,
+  sessionNamesForVoucher,
+  voucherUsageForSession,
+  type MacLogin,
+} from "@mashupkgrid/network";
 import { timingSafeStringEqual } from "@mashupkgrid/shared";
 
 /**
@@ -312,11 +320,14 @@ function encodeVendorSpecific(vendorId: number, subType: number, value: Buffer):
 /** Translates this username's `radreply` rows into real RADIUS reply attributes for the
  *  Access-Accept — see the module doc comment for exactly which attributes are supported and
  *  which are a known gap. */
-async function buildReplyAttributes(username: string): Promise<RadiusAttribute[]> {
+async function buildReplyAttributes(username: string, remaining?: MacLogin): Promise<RadiusAttribute[]> {
   const replies = await prisma.radReply.findMany({ where: { username } });
   const attributes: RadiusAttribute[] = [];
 
   for (const reply of replies) {
+    // A returning phone (login by MAC) gets the time and data left on its voucher instead.
+    if (remaining && remaining.remainingSeconds !== null && reply.attribute === "Session-Timeout") continue;
+    if (remaining && remaining.remainingBytes !== null && reply.attribute === "Mikrotik-Total-Limit") continue;
     if (reply.attribute === "Session-Timeout") {
       const seconds = Number(reply.value);
       if (Number.isFinite(seconds) && seconds > 0) {
@@ -351,6 +362,12 @@ async function buildReplyAttributes(username: string): Promise<RadiusAttribute[]
       );
     }
   }
+  if (remaining?.remainingSeconds != null) {
+    const buf = Buffer.alloc(4);
+    buf.writeUInt32BE(remaining.remainingSeconds, 0);
+    attributes.push({ type: SESSION_TIMEOUT_TYPE, value: buf });
+  }
+  if (remaining?.remainingBytes != null) attributes.push(...encodeTotalLimitAttributes(remaining.remainingBytes));
   return attributes;
 }
 
@@ -359,8 +376,8 @@ async function buildReplyAttributes(username: string): Promise<RadiusAttribute[]
  *  same `Mikrotik-Total-Limit` radReply row the Access-Accept already sent, and — the moment
  *  usage reaches it — force-disconnects the session on the router directly, rather than trusting
  *  RouterOS to have acted on the attribute itself. */
-async function enforceDataCap(username: string, nasAddress: string, totalBytes: number): Promise<void> {
-  const cap = await prisma.radReply.findFirst({ where: { username, attribute: "Mikrotik-Total-Limit" } });
+async function enforceDataCap(voucherCode: string, username: string, nasAddress: string, totalBytes: number): Promise<void> {
+  const cap = await prisma.radReply.findFirst({ where: { username: voucherCode, attribute: "Mikrotik-Total-Limit" } });
   if (!cap) return;
   const capBytes = Number(cap.value);
   if (!Number.isFinite(capBytes) || capBytes <= 0 || totalBytes < capBytes) return;
@@ -419,8 +436,21 @@ async function recordVoucherUsage(username: string, inputBytes: number, outputBy
 function readStringAttr(packet: RadiusPacket, type: number): string | undefined {
   const buf = findAttr(packet, type);
   if (!buf) return undefined;
-  const value = buf.toString("utf8").replace(/\0+$/, "").trim();
+  // NUL bytes removed wherever they are, not just trailing padding: Postgres refuses text that
+  // contains them, and one such field made every accounting row fail.
+  const value = buf.toString("utf8").replace(/\0/g, "").trim();
   return value.length > 0 ? value : undefined;
+}
+
+const NAS_PORT_TYPE: Record<number, string> = { 0: "Async", 5: "Virtual", 15: "Ethernet", 19: "Wireless-802.11", 20: "Wireless-Other" };
+
+/** NAS-Port-Type is an integer enum (RFC 2865 §5.41), not text. Read as text, its leading zero
+ *  bytes made Postgres reject the whole accounting row. Stored by name; unknown values as numbers. */
+function nasPortTypeName(packet: RadiusPacket): string | undefined {
+  const buf = findAttr(packet, ATTR.NAS_PORT_TYPE);
+  if (!buf || buf.length !== 4) return undefined;
+  const code = buf.readUInt32BE(0);
+  return NAS_PORT_TYPE[code] ?? String(code);
 }
 
 /** Dotted-quad out of a 4-byte address attribute. */
@@ -481,7 +511,7 @@ async function recordAccounting(
     callingStationId: readStringAttr(packet, ATTR.CALLING_STATION_ID),
     calledStationId: readStringAttr(packet, ATTR.CALLED_STATION_ID),
     nasPortId: readStringAttr(packet, ATTR.NAS_PORT_ID),
-    nasPortType: readStringAttr(packet, ATTR.NAS_PORT_TYPE),
+    nasPortType: nasPortTypeName(packet),
   };
 
   const isStop = statusType === ACCT_STATUS_TYPE.STOP;
@@ -542,23 +572,35 @@ export function startRadiusServer(options: { authPort?: number; acctPort?: numbe
         const usernameBuf = findAttr(packet, ATTR.USER_NAME);
         const passwordBuf = findAttr(packet, ATTR.USER_PASSWORD);
         const username = usernameBuf?.toString("utf8") ?? "(missing)";
+        const callingStationId = readStringAttr(packet, ATTR.CALLING_STATION_ID);
         let valid =
           usernameBuf && passwordBuf
             ? await checkCredentials(username, decodePapPassword(passwordBuf, secret, packet.authenticator))
             : false;
 
+        // Login by MAC: the router asks with the phone's MAC as the username. Accepted only when
+        // that phone last logged in with a voucher that still has time and data left, and only
+        // for the phone actually asking (User-Name and Calling-Station-Id must be the same MAC).
+        let macLogin: MacLogin | null = null;
+        const usernameMac = normalizeMac(username);
+        if (!valid && usernameMac && usernameMac === normalizeMac(callingStationId)) {
+          macLogin = await findMacLogin(nas.tenantId, usernameMac);
+          valid = macLogin !== null;
+        }
+        const voucherCode = macLogin?.voucherCode ?? username;
+
         // If credentials are valid, enforce simultaneous active devices limit if configured
         if (valid) {
           const simCheck = await prisma.radCheck.findFirst({
-            where: { username, attribute: "Simultaneous-Use" },
+            where: { username: voucherCode, attribute: "Simultaneous-Use" },
           });
           if (simCheck) {
             const maxDevices = parseInt(simCheck.value, 10);
             if (Number.isFinite(maxDevices) && maxDevices > 0) {
-              const callingStationId = readStringAttr(packet, ATTR.CALLING_STATION_ID);
+              // A voucher's sessions run under its code or under the MACs logged back in with it.
               const otherDevicesActive = await prisma.radAcct.count({
                 where: {
-                  username,
+                  username: { in: await sessionNamesForVoucher(nas.tenantId, voucherCode) },
                   acctStopTime: null,
                   ...(callingStationId ? { NOT: { callingStationId } } : {}),
                 },
@@ -574,10 +616,18 @@ export function startRadiusServer(options: { authPort?: number; acctPort?: numbe
         }
 
         const replyCode = valid ? RADIUS_CODE.ACCESS_ACCEPT : RADIUS_CODE.ACCESS_REJECT;
-        const replyAttributes = valid ? await buildReplyAttributes(username) : [];
+        const replyAttributes = valid ? await buildReplyAttributes(voucherCode, macLogin ?? undefined) : [];
+        // A code login teaches us this phone, so its next reconnect can skip the sign-in page.
+        if (valid && !macLogin) {
+          rememberDevice(nas.tenantId, callingStationId, username).catch((err) =>
+            console.error(`[radius] could not remember the device for "${username}":`, err)
+          );
+        }
         const response = buildResponse(replyCode, packet.identifier, packet.authenticator, secret, replyAttributes);
         authSocket.send(response, rinfo.port, rinfo.address);
-        console.log(`[radius] ${valid ? "Access-Accept" : "Access-Reject"} for "${username}" from ${rinfo.address}`);
+        console.log(
+          `[radius] ${valid ? "Access-Accept" : "Access-Reject"} for "${username}"${macLogin ? ` (returning phone, voucher ${macLogin.voucherCode})` : ""} from ${rinfo.address}`
+        );
       } catch (err) {
         console.error("[radius] error handling Access-Request:", err);
       }
@@ -629,10 +679,13 @@ export function startRadiusServer(options: { authPort?: number; acctPort?: numbe
       // zeroes, and acting on those would reset a voucher's recorded usage to nothing.
       if (statusType !== ACCT_STATUS_TYPE.INTERIM_UPDATE && statusType !== ACCT_STATUS_TYPE.STOP) return;
 
-      enforceDataCap(username, rinfo.address, inputBytes + outputBytes).catch((err) =>
+      // Usage and caps belong to the voucher; its total is the device's starting usage plus this
+      // session's own counters (see hotspot-device.service.ts).
+      const usage = await voucherUsageForSession(nas.tenantId, username, readStringAttr(packet, ATTR.CALLING_STATION_ID), inputBytes, outputBytes);
+      enforceDataCap(usage.voucherCode, username, rinfo.address, usage.bytesIn + usage.bytesOut).catch((err) =>
         console.error(`[radius] error enforcing data cap for "${username}":`, err)
       );
-      recordVoucherUsage(username, inputBytes, outputBytes).catch((err) =>
+      recordVoucherUsage(usage.voucherCode, usage.bytesIn, usage.bytesOut).catch((err) =>
         console.error(`[radius] error recording usage for "${username}":`, err)
       );
     })().catch((err) => console.error("[radius] error handling Accounting-Request:", err));

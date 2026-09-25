@@ -1,4 +1,5 @@
 import type { RadiusNas, Router } from "@mashupkgrid/database";
+import { buildAppFilterSection } from "@mashupkgrid/network";
 
 /** Strips characters that would let a router's (staff-editable) `name` break out of the RouterOS
  *  comment/string it's interpolated into below, or out of the `{ }`-delimited client block in the
@@ -58,15 +59,19 @@ function walledGardenLines(hosts: readonly string[]): string {
     if (!host || seen.has(host)) continue;
     seen.add(host);
 
+    // Every line is wrapped: /import stops at the first command RouterOS rejects, and a stop here
+    // used to skip everything after it — the login page, the heartbeat and the VPN — leaving a
+    // router that linked once and then went silent.
     if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) {
-      lines.push(`/ip hotspot walled-garden ip add dst-address=${host} action=accept comment="MASHUPKGRID"`);
+      lines.push(`:do {/ip hotspot walled-garden ip add dst-address=${host} action=accept comment="MASHUPKGRID"} on-error={}`);
       continue;
     }
-    // Restricted to the two web ports. Every host in this list is an HTTPS service, so anything
-    // reaching them on another port is not a payment — it is someone using an allowed name as a
-    // tunnel endpoint. Narrowing the hole costs nothing legitimate.
-    lines.push(`/ip hotspot walled-garden add dst-host=${host} action=allow comment="MASHUPKGRID"`);
-    lines.push(`/ip hotspot walled-garden ip add dst-host=${host} action=accept comment="MASHUPKGRID"`);
+    lines.push(`:do {/ip hotspot walled-garden add dst-host=${host} action=allow comment="MASHUPKGRID"} on-error={}`);
+    // The IP walled garden resolves dst-host to addresses and does not take wildcards; the HTTP
+    // walled garden above already covers "*." names.
+    if (!host.includes("*")) {
+      lines.push(`:do {/ip hotspot walled-garden ip add dst-host=${host} action=accept comment="MASHUPKGRID"} on-error={}`);
+    }
   }
   return lines.join("\n");
 }
@@ -152,230 +157,14 @@ function buildAntiTetheringSection(enabled: boolean): string {
 :put "Anti-tethering active — one device per voucher enforced at the network level"`;
 }
 
-/** Social media and app-specific voucher firewall rules and destination address lists.
- *  Allows operators to sell TikTok-only, YouTube-only, Facebook-only, Instagram-only,
- *  WhatsApp-only, or All-in-One Social Bundle packages. */
-export function buildSocialAppFirewallSection(): string {
-  return `# 17. Social Media & App-Specific Voucher Isolation
-/ip firewall address-list remove [find comment~"MASHUPKGRID SOCIAL DEST"]
+/** Standalone script to install or refresh the per-app package filter on an existing router. */
+export function buildSocialFirewallOnlyScript(opts: { portalHosts?: string[] } = {}): string {
+  return `# MASHUPKGRID ISP — per-app packages (TikTok only, YouTube only, …)
+# Paste this into your MikroTik terminal:
 
-# Meta / Facebook / WhatsApp / Instagram IP Networks (AS32934)
-/ip firewall address-list add list="mashup-dest-meta" address="157.240.0.0/16" comment="MASHUPKGRID SOCIAL DEST meta"
-/ip firewall address-list add list="mashup-dest-meta" address="31.13.64.0/18" comment="MASHUPKGRID SOCIAL DEST meta"
-/ip firewall address-list add list="mashup-dest-meta" address="31.13.24.0/21" comment="MASHUPKGRID SOCIAL DEST meta"
-/ip firewall address-list add list="mashup-dest-meta" address="31.13.72.0/21" comment="MASHUPKGRID SOCIAL DEST meta"
-/ip firewall address-list add list="mashup-dest-meta" address="31.13.80.0/21" comment="MASHUPKGRID SOCIAL DEST meta"
-/ip firewall address-list add list="mashup-dest-meta" address="31.13.88.0/21" comment="MASHUPKGRID SOCIAL DEST meta"
-/ip firewall address-list add list="mashup-dest-meta" address="31.13.96.0/19" comment="MASHUPKGRID SOCIAL DEST meta"
-/ip firewall address-list add list="mashup-dest-meta" address="69.171.224.0/19" comment="MASHUPKGRID SOCIAL DEST meta"
-/ip firewall address-list add list="mashup-dest-meta" address="69.171.240.0/20" comment="MASHUPKGRID SOCIAL DEST meta"
-/ip firewall address-list add list="mashup-dest-meta" address="69.171.248.0/21" comment="MASHUPKGRID SOCIAL DEST meta"
-/ip firewall address-list add list="mashup-dest-meta" address="69.171.250.0/23" comment="MASHUPKGRID SOCIAL DEST meta"
-/ip firewall address-list add list="mashup-dest-meta" address="69.171.252.0/22" comment="MASHUPKGRID SOCIAL DEST meta"
-/ip firewall address-list add list="mashup-dest-meta" address="179.60.192.0/22" comment="MASHUPKGRID SOCIAL DEST meta"
-/ip firewall address-list add list="mashup-dest-meta" address="185.60.216.0/22" comment="MASHUPKGRID SOCIAL DEST meta"
-/ip firewall address-list add list="mashup-dest-meta" address="204.15.20.0/22" comment="MASHUPKGRID SOCIAL DEST meta"
+${buildAppFilterSection({ portalHosts: opts.portalHosts })}
 
-# TikTok Domains & CDNs
-/ip firewall address-list add list="mashup-dest-tiktok" address="tiktok.com" comment="MASHUPKGRID SOCIAL DEST tiktok"
-/ip firewall address-list add list="mashup-dest-tiktok" address="www.tiktok.com" comment="MASHUPKGRID SOCIAL DEST tiktok"
-/ip firewall address-list add list="mashup-dest-tiktok" address="m.tiktok.com" comment="MASHUPKGRID SOCIAL DEST tiktok"
-/ip firewall address-list add list="mashup-dest-tiktok" address="tiktokcdn.com" comment="MASHUPKGRID SOCIAL DEST tiktok"
-/ip firewall address-list add list="mashup-dest-tiktok" address="v16-webapp.tiktokcdn.com" comment="MASHUPKGRID SOCIAL DEST tiktok"
-/ip firewall address-list add list="mashup-dest-tiktok" address="p16-va.tiktokcdn.com" comment="MASHUPKGRID SOCIAL DEST tiktok"
-/ip firewall address-list add list="mashup-dest-tiktok" address="ib.tiktokv.com" comment="MASHUPKGRID SOCIAL DEST tiktok"
-/ip firewall address-list add list="mashup-dest-tiktok" address="tiktokv.com" comment="MASHUPKGRID SOCIAL DEST tiktok"
-/ip firewall address-list add list="mashup-dest-tiktok" address="byteoversea.com" comment="MASHUPKGRID SOCIAL DEST tiktok"
-/ip firewall address-list add list="mashup-dest-tiktok" address="ibytedtos.com" comment="MASHUPKGRID SOCIAL DEST tiktok"
-/ip firewall address-list add list="mashup-dest-tiktok" address="ibyteimg.com" comment="MASHUPKGRID SOCIAL DEST tiktok"
-/ip firewall address-list add list="mashup-dest-tiktok" address="musical.ly" comment="MASHUPKGRID SOCIAL DEST tiktok"
-/ip firewall address-list add list="mashup-dest-tiktok" address="bytedance.com" comment="MASHUPKGRID SOCIAL DEST tiktok"
-/ip firewall address-list add list="mashup-dest-tiktok" address="tiktokcdn-us.com" comment="MASHUPKGRID SOCIAL DEST tiktok"
-
-# YouTube Domains & CDNs
-/ip firewall address-list add list="mashup-dest-youtube" address="youtube.com" comment="MASHUPKGRID SOCIAL DEST youtube"
-/ip firewall address-list add list="mashup-dest-youtube" address="www.youtube.com" comment="MASHUPKGRID SOCIAL DEST youtube"
-/ip firewall address-list add list="mashup-dest-youtube" address="m.youtube.com" comment="MASHUPKGRID SOCIAL DEST youtube"
-/ip firewall address-list add list="mashup-dest-youtube" address="youtu.be" comment="MASHUPKGRID SOCIAL DEST youtube"
-/ip firewall address-list add list="mashup-dest-youtube" address="googlevideo.com" comment="MASHUPKGRID SOCIAL DEST youtube"
-/ip firewall address-list add list="mashup-dest-youtube" address="ytimg.com" comment="MASHUPKGRID SOCIAL DEST youtube"
-/ip firewall address-list add list="mashup-dest-youtube" address="ggpht.com" comment="MASHUPKGRID SOCIAL DEST youtube"
-/ip firewall address-list add list="mashup-dest-youtube" address="youtubei.googleapis.com" comment="MASHUPKGRID SOCIAL DEST youtube"
-/ip firewall address-list add list="mashup-dest-youtube" address="gvt1.com" comment="MASHUPKGRID SOCIAL DEST youtube"
-/ip firewall address-list add list="mashup-dest-youtube" address="youtube-nocookie.com" comment="MASHUPKGRID SOCIAL DEST youtube"
-
-# Facebook Domains & CDNs
-/ip firewall address-list add list="mashup-dest-facebook" address="facebook.com" comment="MASHUPKGRID SOCIAL DEST facebook"
-/ip firewall address-list add list="mashup-dest-facebook" address="www.facebook.com" comment="MASHUPKGRID SOCIAL DEST facebook"
-/ip firewall address-list add list="mashup-dest-facebook" address="m.facebook.com" comment="MASHUPKGRID SOCIAL DEST facebook"
-/ip firewall address-list add list="mashup-dest-facebook" address="fbcdn.net" comment="MASHUPKGRID SOCIAL DEST facebook"
-/ip firewall address-list add list="mashup-dest-facebook" address="fbsbx.com" comment="MASHUPKGRID SOCIAL DEST facebook"
-/ip firewall address-list add list="mashup-dest-facebook" address="meta.com" comment="MASHUPKGRID SOCIAL DEST facebook"
-/ip firewall address-list add list="mashup-dest-facebook" address="messenger.com" comment="MASHUPKGRID SOCIAL DEST facebook"
-/ip firewall address-list add list="mashup-dest-facebook" address="fb.me" comment="MASHUPKGRID SOCIAL DEST facebook"
-/ip firewall address-list add list="mashup-dest-facebook" address="facebook.net" comment="MASHUPKGRID SOCIAL DEST facebook"
-
-# Instagram Domains & CDNs
-/ip firewall address-list add list="mashup-dest-instagram" address="instagram.com" comment="MASHUPKGRID SOCIAL DEST instagram"
-/ip firewall address-list add list="mashup-dest-instagram" address="www.instagram.com" comment="MASHUPKGRID SOCIAL DEST instagram"
-/ip firewall address-list add list="mashup-dest-instagram" address="cdninstagram.com" comment="MASHUPKGRID SOCIAL DEST instagram"
-/ip firewall address-list add list="mashup-dest-instagram" address="ig.me" comment="MASHUPKGRID SOCIAL DEST instagram"
-/ip firewall address-list add list="mashup-dest-instagram" address="threads.net" comment="MASHUPKGRID SOCIAL DEST instagram"
-
-# WhatsApp Domains & CDNs
-/ip firewall address-list add list="mashup-dest-whatsapp" address="whatsapp.com" comment="MASHUPKGRID SOCIAL DEST whatsapp"
-/ip firewall address-list add list="mashup-dest-whatsapp" address="www.whatsapp.com" comment="MASHUPKGRID SOCIAL DEST whatsapp"
-/ip firewall address-list add list="mashup-dest-whatsapp" address="web.whatsapp.com" comment="MASHUPKGRID SOCIAL DEST whatsapp"
-/ip firewall address-list add list="mashup-dest-whatsapp" address="whatsapp.net" comment="MASHUPKGRID SOCIAL DEST whatsapp"
-/ip firewall address-list add list="mashup-dest-whatsapp" address="g.whatsapp.net" comment="MASHUPKGRID SOCIAL DEST whatsapp"
-/ip firewall address-list add list="mashup-dest-whatsapp" address="v.whatsapp.net" comment="MASHUPKGRID SOCIAL DEST whatsapp"
-/ip firewall address-list add list="mashup-dest-whatsapp" address="chat.whatsapp.com" comment="MASHUPKGRID SOCIAL DEST whatsapp"
-/ip firewall address-list add list="mashup-dest-whatsapp" address="pps.whatsapp.net" comment="MASHUPKGRID SOCIAL DEST whatsapp"
-/ip firewall address-list add list="mashup-dest-whatsapp" address="static.whatsapp.net" comment="MASHUPKGRID SOCIAL DEST whatsapp"
-/ip firewall address-list add list="mashup-dest-whatsapp" address="mmg.whatsapp.net" comment="MASHUPKGRID SOCIAL DEST whatsapp"
-
-# Social Bundle (Twitter / X addition)
-/ip firewall address-list add list="mashup-dest-social" address="x.com" comment="MASHUPKGRID SOCIAL DEST social"
-/ip firewall address-list add list="mashup-dest-social" address="twitter.com" comment="MASHUPKGRID SOCIAL DEST social"
-/ip firewall address-list add list="mashup-dest-social" address="twimg.com" comment="MASHUPKGRID SOCIAL DEST social"
-/ip firewall address-list add list="mashup-dest-social" address="t.co" comment="MASHUPKGRID SOCIAL DEST social"
-/ip firewall address-list add list="mashup-dest-social" address="abs.twimg.com" comment="MASHUPKGRID SOCIAL DEST social"
-/ip firewall address-list add list="mashup-dest-social" address="pbs.twimg.com" comment="MASHUPKGRID SOCIAL DEST social"
-/ip firewall address-list add list="mashup-dest-social" address="video.twimg.com" comment="MASHUPKGRID SOCIAL DEST social"
-/ip firewall address-list add list="mashup-dest-social" address="104.244.42.0/21" comment="MASHUPKGRID SOCIAL DEST social"
-/ip firewall address-list add list="mashup-dest-social" address="199.16.156.0/22" comment="MASHUPKGRID SOCIAL DEST social"
-/ip firewall address-list add list="mashup-dest-social" address="199.59.148.0/22" comment="MASHUPKGRID SOCIAL DEST social"
-/ip firewall address-list add list="mashup-dest-social" address="199.96.56.0/21" comment="MASHUPKGRID SOCIAL DEST social"
-
-# DNS Auto-Populate for RouterOS v7 match-subdomain
-:if ([:pick [/system resource get version] 0 2] = "7.") do={
-  :do {/ip dns static add name="tiktokcdn.com" match-subdomain=yes address-list="mashup-dest-tiktok" comment="MASHUPKGRID SOCIAL DEST"} on-error={}
-  :do {/ip dns static add name="tiktokv.com" match-subdomain=yes address-list="mashup-dest-tiktok" comment="MASHUPKGRID SOCIAL DEST"} on-error={}
-  :do {/ip dns static add name="byteoversea.com" match-subdomain=yes address-list="mashup-dest-tiktok" comment="MASHUPKGRID SOCIAL DEST"} on-error={}
-  :do {/ip dns static add name="ibytedtos.com" match-subdomain=yes address-list="mashup-dest-tiktok" comment="MASHUPKGRID SOCIAL DEST"} on-error={}
-  :do {/ip dns static add name="googlevideo.com" match-subdomain=yes address-list="mashup-dest-youtube" comment="MASHUPKGRID SOCIAL DEST"} on-error={}
-  :do {/ip dns static add name="ytimg.com" match-subdomain=yes address-list="mashup-dest-youtube" comment="MASHUPKGRID SOCIAL DEST"} on-error={}
-  :do {/ip dns static add name="fbcdn.net" match-subdomain=yes address-list="mashup-dest-facebook" comment="MASHUPKGRID SOCIAL DEST"} on-error={}
-  :do {/ip dns static add name="cdninstagram.com" match-subdomain=yes address-list="mashup-dest-instagram" comment="MASHUPKGRID SOCIAL DEST"} on-error={}
-  :do {/ip dns static add name="whatsapp.net" match-subdomain=yes address-list="mashup-dest-whatsapp" comment="MASHUPKGRID SOCIAL DEST"} on-error={}
-  :do {/ip dns static add name="twimg.com" match-subdomain=yes address-list="mashup-dest-social" comment="MASHUPKGRID SOCIAL DEST"} on-error={}
-}
-
-# DNS Redirection (Ensures all client DNS queries go through router cache to capture CDN endpoints)
-/ip firewall nat remove [find comment="MASHUPKGRID SOCIAL DNS REDIRECT"]
-:do {/ip firewall nat add chain=dstnat protocol=udp dst-port=53 action=redirect to-ports=53 comment="MASHUPKGRID SOCIAL DNS REDIRECT"} on-error={}
-:do {/ip firewall nat add chain=dstnat protocol=tcp dst-port=53 action=redirect to-ports=53 comment="MASHUPKGRID SOCIAL DNS REDIRECT"} on-error={}
-
-# Social Forward Firewall Rules
-/ip firewall filter remove [find comment~"MASHUPKGRID SOCIAL FILTER"]
-
-# 1. Allow Essential Protocol Traffic for all social client lists (DNS, NTP, ICMP)
-/ip firewall filter add chain=forward protocol=udp dst-port=53 src-address-list="mashup-client-tiktok" action=accept comment="MASHUPKGRID SOCIAL FILTER DNS"
-/ip firewall filter add chain=forward protocol=tcp dst-port=53 src-address-list="mashup-client-tiktok" action=accept comment="MASHUPKGRID SOCIAL FILTER DNS"
-/ip firewall filter add chain=forward protocol=udp dst-port=53 src-address-list="mashup-client-youtube" action=accept comment="MASHUPKGRID SOCIAL FILTER DNS"
-/ip firewall filter add chain=forward protocol=tcp dst-port=53 src-address-list="mashup-client-youtube" action=accept comment="MASHUPKGRID SOCIAL FILTER DNS"
-/ip firewall filter add chain=forward protocol=udp dst-port=53 src-address-list="mashup-client-facebook" action=accept comment="MASHUPKGRID SOCIAL FILTER DNS"
-/ip firewall filter add chain=forward protocol=tcp dst-port=53 src-address-list="mashup-client-facebook" action=accept comment="MASHUPKGRID SOCIAL FILTER DNS"
-/ip firewall filter add chain=forward protocol=udp dst-port=53 src-address-list="mashup-client-instagram" action=accept comment="MASHUPKGRID SOCIAL FILTER DNS"
-/ip firewall filter add chain=forward protocol=tcp dst-port=53 src-address-list="mashup-client-instagram" action=accept comment="MASHUPKGRID SOCIAL FILTER DNS"
-/ip firewall filter add chain=forward protocol=udp dst-port=53 src-address-list="mashup-client-whatsapp" action=accept comment="MASHUPKGRID SOCIAL FILTER DNS"
-/ip firewall filter add chain=forward protocol=tcp dst-port=53 src-address-list="mashup-client-whatsapp" action=accept comment="MASHUPKGRID SOCIAL FILTER DNS"
-/ip firewall filter add chain=forward protocol=udp dst-port=53 src-address-list="mashup-client-social" action=accept comment="MASHUPKGRID SOCIAL FILTER DNS"
-/ip firewall filter add chain=forward protocol=tcp dst-port=53 src-address-list="mashup-client-social" action=accept comment="MASHUPKGRID SOCIAL FILTER DNS"
-
-# Allow NTP (clock sync) and ICMP (ping connectivity check)
-/ip firewall filter add chain=forward protocol=udp dst-port=123 action=accept comment="MASHUPKGRID SOCIAL FILTER NTP"
-/ip firewall filter add chain=forward protocol=icmp action=accept comment="MASHUPKGRID SOCIAL FILTER ICMP"
-
-# 2. Allow destination app traffic by IP Address Lists
-/ip firewall filter add chain=forward src-address-list="mashup-client-tiktok" dst-address-list="mashup-dest-tiktok" action=accept comment="MASHUPKGRID SOCIAL FILTER ALLOW TIKTOK"
-/ip firewall filter add chain=forward src-address-list="mashup-client-youtube" dst-address-list="mashup-dest-youtube" action=accept comment="MASHUPKGRID SOCIAL FILTER ALLOW YOUTUBE"
-/ip firewall filter add chain=forward src-address-list="mashup-client-facebook" dst-address-list="mashup-dest-facebook" action=accept comment="MASHUPKGRID SOCIAL FILTER ALLOW FACEBOOK"
-/ip firewall filter add chain=forward src-address-list="mashup-client-facebook" dst-address-list="mashup-dest-meta" action=accept comment="MASHUPKGRID SOCIAL FILTER ALLOW FACEBOOK META"
-/ip firewall filter add chain=forward src-address-list="mashup-client-instagram" dst-address-list="mashup-dest-instagram" action=accept comment="MASHUPKGRID SOCIAL FILTER ALLOW INSTAGRAM"
-/ip firewall filter add chain=forward src-address-list="mashup-client-instagram" dst-address-list="mashup-dest-meta" action=accept comment="MASHUPKGRID SOCIAL FILTER ALLOW INSTAGRAM META"
-/ip firewall filter add chain=forward src-address-list="mashup-client-whatsapp" dst-address-list="mashup-dest-whatsapp" action=accept comment="MASHUPKGRID SOCIAL FILTER ALLOW WHATSAPP"
-/ip firewall filter add chain=forward src-address-list="mashup-client-whatsapp" dst-address-list="mashup-dest-meta" action=accept comment="MASHUPKGRID SOCIAL FILTER ALLOW WHATSAPP META"
-
-# WhatsApp voice/video calls (STUN/TURN) & Chat Protocol
-/ip firewall filter add chain=forward protocol=tcp dst-port=5222 src-address-list="mashup-client-whatsapp" action=accept comment="MASHUPKGRID SOCIAL FILTER ALLOW WHATSAPP CHAT"
-/ip firewall filter add chain=forward protocol=udp dst-port=3478,45395 src-address-list="mashup-client-whatsapp" action=accept comment="MASHUPKGRID SOCIAL FILTER ALLOW WHATSAPP CALLS"
-
-# 3. Allow destination app traffic by TLS SNI Host inspection (covers all subdomains/CDNs)
-/ip firewall filter add chain=forward protocol=tcp dst-port=443 src-address-list="mashup-client-tiktok" tls-host="*tiktok*" action=accept comment="MASHUPKGRID SOCIAL FILTER TLS TIKTOK"
-/ip firewall filter add chain=forward protocol=tcp dst-port=443 src-address-list="mashup-client-tiktok" tls-host="*byteoversea*" action=accept comment="MASHUPKGRID SOCIAL FILTER TLS TIKTOK"
-/ip firewall filter add chain=forward protocol=tcp dst-port=443 src-address-list="mashup-client-tiktok" tls-host="*ibytedtos*" action=accept comment="MASHUPKGRID SOCIAL FILTER TLS TIKTOK"
-/ip firewall filter add chain=forward protocol=tcp dst-port=443 src-address-list="mashup-client-tiktok" tls-host="*musical.ly*" action=accept comment="MASHUPKGRID SOCIAL FILTER TLS TIKTOK"
-
-/ip firewall filter add chain=forward protocol=tcp dst-port=443 src-address-list="mashup-client-youtube" tls-host="*youtube*" action=accept comment="MASHUPKGRID SOCIAL FILTER TLS YOUTUBE"
-/ip firewall filter add chain=forward protocol=tcp dst-port=443 src-address-list="mashup-client-youtube" tls-host="*googlevideo*" action=accept comment="MASHUPKGRID SOCIAL FILTER TLS YOUTUBE"
-/ip firewall filter add chain=forward protocol=tcp dst-port=443 src-address-list="mashup-client-youtube" tls-host="*ytimg*" action=accept comment="MASHUPKGRID SOCIAL FILTER TLS YOUTUBE"
-/ip firewall filter add chain=forward protocol=tcp dst-port=443 src-address-list="mashup-client-youtube" tls-host="*ggpht*" action=accept comment="MASHUPKGRID SOCIAL FILTER TLS YOUTUBE"
-
-/ip firewall filter add chain=forward protocol=tcp dst-port=443 src-address-list="mashup-client-facebook" tls-host="*facebook*" action=accept comment="MASHUPKGRID SOCIAL FILTER TLS FACEBOOK"
-/ip firewall filter add chain=forward protocol=tcp dst-port=443 src-address-list="mashup-client-facebook" tls-host="*fbcdn*" action=accept comment="MASHUPKGRID SOCIAL FILTER TLS FACEBOOK"
-/ip firewall filter add chain=forward protocol=tcp dst-port=443 src-address-list="mashup-client-facebook" tls-host="*messenger*" action=accept comment="MASHUPKGRID SOCIAL FILTER TLS FACEBOOK"
-
-/ip firewall filter add chain=forward protocol=tcp dst-port=443 src-address-list="mashup-client-instagram" tls-host="*instagram*" action=accept comment="MASHUPKGRID SOCIAL FILTER TLS INSTAGRAM"
-/ip firewall filter add chain=forward protocol=tcp dst-port=443 src-address-list="mashup-client-instagram" tls-host="*cdninstagram*" action=accept comment="MASHUPKGRID SOCIAL FILTER TLS INSTAGRAM"
-
-/ip firewall filter add chain=forward protocol=tcp dst-port=443 src-address-list="mashup-client-whatsapp" tls-host="*whatsapp*" action=accept comment="MASHUPKGRID SOCIAL FILTER TLS WHATSAPP"
-
-# 4. Social Bundle (All Socials) allows all destinations + Twitter/X
-/ip firewall filter add chain=forward src-address-list="mashup-client-social" dst-address-list="mashup-dest-social" action=accept comment="MASHUPKGRID SOCIAL FILTER ALLOW SOCIAL"
-/ip firewall filter add chain=forward src-address-list="mashup-client-social" dst-address-list="mashup-dest-tiktok" action=accept comment="MASHUPKGRID SOCIAL FILTER ALLOW SOCIAL TIKTOK"
-/ip firewall filter add chain=forward src-address-list="mashup-client-social" dst-address-list="mashup-dest-youtube" action=accept comment="MASHUPKGRID SOCIAL FILTER ALLOW SOCIAL YOUTUBE"
-/ip firewall filter add chain=forward src-address-list="mashup-client-social" dst-address-list="mashup-dest-facebook" action=accept comment="MASHUPKGRID SOCIAL FILTER ALLOW SOCIAL FACEBOOK"
-/ip firewall filter add chain=forward src-address-list="mashup-client-social" dst-address-list="mashup-dest-instagram" action=accept comment="MASHUPKGRID SOCIAL FILTER ALLOW SOCIAL INSTAGRAM"
-/ip firewall filter add chain=forward src-address-list="mashup-client-social" dst-address-list="mashup-dest-whatsapp" action=accept comment="MASHUPKGRID SOCIAL FILTER ALLOW SOCIAL WHATSAPP"
-/ip firewall filter add chain=forward src-address-list="mashup-client-social" dst-address-list="mashup-dest-meta" action=accept comment="MASHUPKGRID SOCIAL FILTER ALLOW SOCIAL META"
-
-/ip firewall filter add chain=forward protocol=tcp dst-port=5222 src-address-list="mashup-client-social" action=accept comment="MASHUPKGRID SOCIAL FILTER ALLOW SOCIAL WHATSAPP CHAT"
-/ip firewall filter add chain=forward protocol=udp dst-port=3478,45395 src-address-list="mashup-client-social" action=accept comment="MASHUPKGRID SOCIAL FILTER ALLOW SOCIAL WHATSAPP CALLS"
-
-/ip firewall filter add chain=forward protocol=tcp dst-port=443 src-address-list="mashup-client-social" tls-host="*tiktok*" action=accept comment="MASHUPKGRID SOCIAL FILTER TLS SOCIAL"
-/ip firewall filter add chain=forward protocol=tcp dst-port=443 src-address-list="mashup-client-social" tls-host="*byteoversea*" action=accept comment="MASHUPKGRID SOCIAL FILTER TLS SOCIAL"
-/ip firewall filter add chain=forward protocol=tcp dst-port=443 src-address-list="mashup-client-social" tls-host="*ibytedtos*" action=accept comment="MASHUPKGRID SOCIAL FILTER TLS SOCIAL"
-/ip firewall filter add chain=forward protocol=tcp dst-port=443 src-address-list="mashup-client-social" tls-host="*youtube*" action=accept comment="MASHUPKGRID SOCIAL FILTER TLS SOCIAL"
-/ip firewall filter add chain=forward protocol=tcp dst-port=443 src-address-list="mashup-client-social" tls-host="*googlevideo*" action=accept comment="MASHUPKGRID SOCIAL FILTER TLS SOCIAL"
-/ip firewall filter add chain=forward protocol=tcp dst-port=443 src-address-list="mashup-client-social" tls-host="*ytimg*" action=accept comment="MASHUPKGRID SOCIAL FILTER TLS SOCIAL"
-/ip firewall filter add chain=forward protocol=tcp dst-port=443 src-address-list="mashup-client-social" tls-host="*facebook*" action=accept comment="MASHUPKGRID SOCIAL FILTER TLS SOCIAL"
-/ip firewall filter add chain=forward protocol=tcp dst-port=443 src-address-list="mashup-client-social" tls-host="*fbcdn*" action=accept comment="MASHUPKGRID SOCIAL FILTER TLS SOCIAL"
-/ip firewall filter add chain=forward protocol=tcp dst-port=443 src-address-list="mashup-client-social" tls-host="*messenger*" action=accept comment="MASHUPKGRID SOCIAL FILTER TLS SOCIAL"
-/ip firewall filter add chain=forward protocol=tcp dst-port=443 src-address-list="mashup-client-social" tls-host="*instagram*" action=accept comment="MASHUPKGRID SOCIAL FILTER TLS SOCIAL"
-/ip firewall filter add chain=forward protocol=tcp dst-port=443 src-address-list="mashup-client-social" tls-host="*cdninstagram*" action=accept comment="MASHUPKGRID SOCIAL FILTER TLS SOCIAL"
-/ip firewall filter add chain=forward protocol=tcp dst-port=443 src-address-list="mashup-client-social" tls-host="*whatsapp*" action=accept comment="MASHUPKGRID SOCIAL FILTER TLS SOCIAL"
-/ip firewall filter add chain=forward protocol=tcp dst-port=443 src-address-list="mashup-client-social" tls-host="*twitter*" action=accept comment="MASHUPKGRID SOCIAL FILTER TLS SOCIAL"
-/ip firewall filter add chain=forward protocol=tcp dst-port=443 src-address-list="mashup-client-social" tls-host="*twimg*" action=accept comment="MASHUPKGRID SOCIAL FILTER TLS SOCIAL"
-/ip firewall filter add chain=forward protocol=tcp dst-port=443 src-address-list="mashup-client-social" tls-host="*x.com*" action=accept comment="MASHUPKGRID SOCIAL FILTER TLS SOCIAL"
-
-# 5. Block all non-app destinations for each social profile
-/ip firewall filter add chain=forward src-address-list="mashup-client-tiktok" action=drop comment="MASHUPKGRID SOCIAL FILTER BLOCK TIKTOK"
-/ip firewall filter add chain=forward src-address-list="mashup-client-youtube" action=drop comment="MASHUPKGRID SOCIAL FILTER BLOCK YOUTUBE"
-/ip firewall filter add chain=forward src-address-list="mashup-client-facebook" action=drop comment="MASHUPKGRID SOCIAL FILTER BLOCK FACEBOOK"
-/ip firewall filter add chain=forward src-address-list="mashup-client-instagram" action=drop comment="MASHUPKGRID SOCIAL FILTER BLOCK INSTAGRAM"
-/ip firewall filter add chain=forward src-address-list="mashup-client-whatsapp" action=drop comment="MASHUPKGRID SOCIAL FILTER BLOCK WHATSAPP"
-/ip firewall filter add chain=forward src-address-list="mashup-client-social" action=drop comment="MASHUPKGRID SOCIAL FILTER BLOCK SOCIAL"
-
-# 6. Crucial: Move rules to top of forward chain (so they take priority over defconf accept rules)
-:foreach i in=[/ip firewall filter find comment~"MASHUPKGRID SOCIAL FILTER"] do={
-  :do {/ip firewall filter move $i destination=0} on-error={}
-}
-
-:put "Social-only & App-specific package firewall filters initialized"`;
-}
-
-/** Standalone script for operators to paste into MikroTik terminal to activate or update social bundle rules on an existing router. */
-export function buildSocialFirewallOnlyScript(): string {
-  return `# MASHUPKGRID ISP — Social Bundles & App-Specific Firewall Isolation
-# Paste this directly into your MikroTik terminal:
-
-${buildSocialAppFirewallSection()}
-
-:put "========================================================="
-:put "  SUCCESS! Social Media Isolation Filters are ACTIVE!     "
-:put "  WhatsApp, TikTok, YouTube, Meta, X/Twitter bundles on! "
-:put "========================================================="
+:put "Per-app package filtering is active."
 `;
 }
 
@@ -434,6 +223,8 @@ export function buildMikrotikProvisioningScript(
     radiusHost?: string;
     radiusSecret?: string;
     managementSource?: string;
+    /** The platform's WireGuard subnet; allowed to reach the API and WinBox (remote WinBox relay). */
+    vpnSubnet?: string;
     serverPublicKey?: string;
     serverHost?: string;
     serverPort?: number;
@@ -460,8 +251,6 @@ export function buildMikrotikProvisioningScript(
     pppoePoolRange?: string | null;
     /** See buildAntiTetheringSection — opt-in because TTL detection has real false positives. */
     blockTethering?: boolean;
-    /** Outbound endpoint URL for pushing discovered neighbor access points */
-    apSyncUrl?: string;
   } = {}
 ): string {
   const apiLine = router.useTls
@@ -478,8 +267,7 @@ export function buildMikrotikProvisioningScript(
   // "Already authorizing, retry later".
   const radiusSecret = options.radiusSecret || credentials.password;
   const managementSource = options.managementSource?.trim();
-  const apiSource = managementSource ? ` address=${managementSource}` : " address=\"\"";
-  const firewallSource = managementSource ? ` src-address=${managementSource}` : "";
+  const vpnSubnet = options.vpnSubnet?.trim() || DEFAULT_VPN_SUBNET;
   const serverHost = options.serverHost || "68.210.187.104";
   const serverPort = options.serverPort || 51820;
   const serverPublicKey = options.serverPublicKey || "";
@@ -499,7 +287,7 @@ export function buildMikrotikProvisioningScript(
   /tool fetch url="${callbackUrl}" http-method=post http-data=$routerPublicKey keep-result=no
   :delay 2s
   /interface wireguard peers remove [find interface=mkg-wg]
-  /interface wireguard peers add interface=mkg-wg public-key="${serverPublicKey}" endpoint-address="${serverHost}" endpoint-port=${serverPort} allowed-address=10.90.0.0/16 persistent-keepalive=25s
+  /interface wireguard peers add interface=mkg-wg public-key="${serverPublicKey}" endpoint-address="${serverHost}" endpoint-port=${serverPort} allowed-address=${vpnSubnet} persistent-keepalive=25s
   } on-error={}
 }
 `
@@ -509,7 +297,6 @@ export function buildMikrotikProvisioningScript(
   // on a factory-reset router; the DHCP-derived fallback in the script covers everything else.
   const addressPool = options.addressPool || "default-dhcp";
   const antiTetheringSection = buildAntiTetheringSection(options.blockTethering === true);
-  const socialAppFirewallSection = buildSocialAppFirewallSection();
   const pppoeSection = buildPppoeSection(
     options.pppoeInterface,
     options.pppoeGatewayIp,
@@ -518,6 +305,8 @@ export function buildMikrotikProvisioningScript(
   const loginTemplateUrl = options.loginTemplateUrl || "https://api.mashuphost.tech/api/v1/hotspot/demo-isp/mikrotik-login-template";
   const apiHost = hostFromUrl(loginTemplateUrl);
   const portalHost = options.portalHost ? hostFromUrl(options.portalHost) : "captive.mashuphost.tech";
+  // App-only customers must still reach the portal (to buy full internet) and the API behind it.
+  const appFilterSection = buildAppFilterSection({ portalHosts: [...new Set([portalHost, apiHost])] });
   // Order matters only for readability of the generated script; walledGardenLines de-dupes.
   // The tenant's own domains come before the gateways so an operator reading the script sees
   // "my portal is reachable" first — that is the entry they most often need to check.
@@ -530,15 +319,25 @@ export function buildMikrotikProvisioningScript(
     ...PAYMENT_GATEWAY_WALLED_GARDEN_HOSTS,
   ];
 
-  const apSyncUrl =
-    options.apSyncUrl ||
-    (callbackUrl.includes("/provision/")
-      ? callbackUrl.replace(/\/provision\/.*$/, `/${router.id}/push-aps`)
-      : `https://${apiHost}/api/v1/routers/${router.id}/push-aps`);
-
   const minimalProvisioningScript = `# MASHUPKGRID ISP - safe baseline setup for "${safeName}"
 # The router must already have WAN internet access for this file to download.
 :do {/tool fetch url="${callbackUrl}" http-method=post keep-result=no} on-error={}
+
+# The platform's management account comes first, before anything that can drop the session
+# running this script — without it the router is linked but can never be managed.
+:do {/user remove [find name=${credentials.username}]} on-error={}
+:do {/user add name=${credentials.username} group=full password="${credentials.password}"} on-error={}
+
+# WAN first: ether1 is the internet port. Re-enable it, take it out of the LAN bridge if an earlier
+# setup put it there (a bridged ether1 leaves its DHCP client "Interface not active"), and make
+# sure its DHCP client is on — otherwise nothing below can reach the platform.
+:do {/interface ethernet set [find default-name=ether1] disabled=no} on-error={}
+:do {/interface bridge port remove [find interface=ether1]} on-error={}
+:do {/ip dhcp-client enable [find interface=ether1]} on-error={}
+# DNS: take the upstream's servers and keep public ones as a fallback. Without working DNS every
+# walled-garden entry below waits on a lookup, the router stalls, and it can't resolve the portal.
+:do {/ip dhcp-client set [find interface=ether1] use-peer-dns=yes} on-error={}
+:do {/ip dns set servers=1.1.1.1,8.8.8.8} on-error={}
 
 # LAN, Wi-Fi and WAN baseline. Existing configurations are preserved when present.
 :do {/interface bridge add name=bridge} on-error={}
@@ -547,7 +346,6 @@ export function buildMikrotikProvisioningScript(
 :do {/interface bridge port add bridge=bridge interface=ether4} on-error={}
 :do {/interface bridge port add bridge=bridge interface=ether5} on-error={}
 :do {/interface bridge port add bridge=bridge interface=wlan1} on-error={}
-:do {/interface wireless set wlan1 disabled=no mode=ap-bridge ssid="MASHUPKGRID"} on-error={}
 :do {/ip dhcp-client add interface=ether1 disabled=no add-default-route=yes use-peer-dns=yes} on-error={}
 :do {/ip address add address=192.168.88.1/24 interface=bridge} on-error={}
 :do {/ip pool add name=default-dhcp ranges=192.168.88.10-192.168.88.254} on-error={}
@@ -558,16 +356,21 @@ export function buildMikrotikProvisioningScript(
 
 # Management API and account.
 :do {${apiLine}} on-error={}
-:do {/ip firewall filter add chain=input protocol=tcp dst-port=${router.apiPort} action=accept place-before=0 comment="MASHUPKGRID ISP API"} on-error={}
-:do {/ip service set winbox disabled=no port=8291} on-error={}
-:do {/user remove [find name=${credentials.username}]} on-error={}
-:do {/user add name=${credentials.username} group=full password="${credentials.password}"} on-error={}
+${buildManagementAccessSection(managementSources({ managementSource, vpnSubnet }), router.apiPort, router.useTls)}
 
 # RADIUS and captive portal.
+# Replace every RADIUS server a previous setup added (tagged), so a router re-linked to another
+# server doesn't keep asking the old one first — each dead entry costs every login its timeout.
+:do {/radius remove [find comment="MASHUPKGRID"]} on-error={}
 :do {/radius remove [find address="${radiusHost}"]} on-error={}
-:do {/radius add service=ppp,hotspot address=${radiusHost} secret="${radiusSecret}" authentication-port=1812 accounting-port=1813 timeout=3s} on-error={}
+:do {/radius add service=ppp,hotspot address=${radiusHost} secret="${radiusSecret}" authentication-port=1812 accounting-port=1813 timeout=3s comment="MASHUPKGRID"} on-error={}
 :do {/ppp aaa set use-radius=yes accounting=yes interim-update=1m} on-error={}
 :do {/ip hotspot profile set [find default=yes] use-radius=yes login-by=http-chap,http-pap radius-accounting=yes radius-interim-update=1m html-directory=hotspot} on-error={}
+# A phone that has paid is logged straight back in by its MAC when it reconnects (the server only
+# accepts a MAC whose voucher still has time and data left). Separate lines: an older RouterOS that
+# rejects one of these must not undo the RADIUS setup above.
+:do {/ip hotspot profile set [find default=yes] login-by=mac,http-chap,http-pap} on-error={}
+:do {/ip hotspot profile set [find default=yes] mac-auth-mode=mac-as-username mac-auth-password=""} on-error={}
 :do {/ip hotspot user profile set [find default=yes] shared-users=1} on-error={}
 :do {/ip hotspot remove [find name=mkg-hotspot]} on-error={}
 :do {/ip hotspot add name=mkg-hotspot interface=bridge address-pool=default-dhcp profile=default disabled=no} on-error={}
@@ -575,6 +378,11 @@ export function buildMikrotikProvisioningScript(
 :do {/ip hotspot walled-garden ip remove [find comment="MASHUPKGRID"]} on-error={}
 ${walledGardenLines(walledGardenHosts)}
 :do {/tool fetch url="${loginTemplateUrl}" dst-path=hotspot/login.html check-certificate=no} on-error={}
+
+# Self-repair for the branded login page: if hotspot/login.html is ever missing (a setup cut short,
+# a reset of the hotspot folder), customers get MikroTik's stock sign-in page instead of the portal.
+:do {/system scheduler remove [find name=mkg-portal-page]} on-error={}
+:do {/system scheduler add name=mkg-portal-page interval=5m on-event=":if ([:len [/file find name=\\"hotspot/login.html\\"]] = 0) do={:do {/tool fetch url=\\"${loginTemplateUrl}\\" dst-path=hotspot/login.html check-certificate=no} on-error={}}"} on-error={}
 
 # Persistent check-in. It survives normal reboots and is safe to re-run.
 :do {/system scheduler remove [find name=mkg-heartbeat]} on-error={}
@@ -590,17 +398,32 @@ ${pppoeSection}
 
 ${antiTetheringSection}
 
-${socialAppFirewallSection}
-
 ${wireguardSection}
+
+# Per-app packages (TikTok only, …). Light enough for a 32 MB hAP lite; see app-filter.ts.
+${appFilterSection}
+
+# Wi-Fi last: renaming the network disconnects anyone configuring the router over it.
+:do {/interface wireless set wlan1 disabled=no mode=ap-bridge ssid="MASHUPKGRID"} on-error={}
 
 :put "========================================================="
 :put "  SUCCESS! Router & Hotspot captive portal are ONLINE!  "
-:put "  All ISP core features & Social Bundles activated!      "
+:put "  All ISP core features and per-app packages activated!  "
 :put "========================================================="
 `;
 
-  return minimalProvisioningScript;
+  return wrapTopLevelCommands(minimalProvisioningScript);
+}
+
+/** /import stops at the first command RouterOS rejects, and everything after it silently never
+ *  runs — a feature a given RouterOS version doesn't support must not cost the router its
+ *  heartbeat or VPN. Wraps every bare top-level command (a line starting with "/") so each one can
+ *  fail on its own; indented lines inside :if / :do blocks are left as they are. */
+export function wrapTopLevelCommands(script: string): string {
+  return script
+    .split("\n")
+    .map((line) => (line.startsWith("/") ? `:do {${line}} on-error={}` : line))
+    .join("\n");
 }
 
 /** Step 1 of remote access: WireGuard is RouterOS v7+ only (there is no v6 equivalent — unlike
@@ -673,34 +496,59 @@ export function buildMikrotikVpnCompleteScript(input: VpnCompleteScriptInput): s
 `;
 }
 
+/** Default router LAN — what the setup script itself configures on the bridge. */
+export const ROUTER_LAN_SUBNET = "192.168.88.0/24";
+export const DEFAULT_VPN_SUBNET = "10.90.0.0/16";
+
+/** The addresses allowed to reach a router's API and WinBox: the platform, its WireGuard VPN
+ *  (the remote-WinBox relay arrives from there) and the router's own LAN. Nothing else — a
+ *  RouterOS API or WinBox login open to the whole internet is brute-forced within days. */
+export function managementSources(options: { managementSource?: string | null; vpnSubnet?: string | null; extra?: string[] }): string[] {
+  const list = [options.managementSource, options.vpnSubnet || DEFAULT_VPN_SUBNET, ROUTER_LAN_SUBNET, ...(options.extra ?? [])]
+    .map((s) => (s ?? "").trim())
+    .filter((s) => /^\d{1,3}(?:\.\d{1,3}){3}(?:\/\d{1,2})?$/.test(s));
+  return [...new Set(list)];
+}
+
+/** RouterOS lines that restrict the API and WinBox to `sources`, replacing any older rule that
+ *  opened them to everyone. Safe to re-run. */
+export function buildManagementAccessSection(sources: string[], apiPort: number, useTls: boolean): string {
+  const addressList = sources.join(",");
+  const apiService = useTls ? "api-ssl" : "api";
+  const unusedApiService = useTls ? "api" : "api-ssl";
+  return `# Management access: only the platform, its VPN and this router's LAN may reach the API and WinBox.
+# Off: the API variant the platform doesn't use (api-ssl with no certificate keeps the router's
+# certificate process busy), and telnet/FTP, plain-text logins open to every hotspot customer.
+:do {/ip service set ${unusedApiService} disabled=yes} on-error={}
+:do {/ip service set telnet disabled=yes} on-error={}
+:do {/ip service set ftp disabled=yes} on-error={}
+:do {/ip firewall address-list remove [find list="mashup-mgmt"]} on-error={}
+${sources.map((s) => `:do {/ip firewall address-list add list="mashup-mgmt" address=${s} comment="MASHUPKGRID MANAGEMENT"} on-error={}`).join("\n")}
+:do {/ip firewall filter remove [find comment="MASHUPKGRID ISP API"]} on-error={}
+:do {/ip firewall filter remove [find comment="MASHUPKGRID WINBOX REMOTE"]} on-error={}
+:do {/ip firewall filter remove [find comment="MASHUPKGRID MANAGEMENT"]} on-error={}
+:do {/ip firewall filter add chain=input protocol=tcp dst-port=${apiPort},8291 src-address-list="mashup-mgmt" action=accept comment="MASHUPKGRID MANAGEMENT"} on-error={}
+:do {/ip firewall filter move [find comment="MASHUPKGRID MANAGEMENT"] destination=0} on-error={}
+:do {/ip service set ${apiService} disabled=no port=${apiPort} address=${addressList}} on-error={}
+:do {/ip service set winbox disabled=no port=8291 address=${addressList}} on-error={}`;
+}
+
 /**
- * Builds a 1-click MikroTik script to enable WinBox Remote Access and Cloud DDNS.
- * Works on any MikroTik RouterOS v6 or v7 device.
+ * WinBox access script. It no longer opens WinBox to the internet: it restricts WinBox to the
+ * platform, its VPN and the LAN, which is exactly what remote WinBox through the platform's
+ * relay needs (the relay reaches the router over the VPN).
  */
-export function buildMikrotikWinboxScript(routerName: string): string {
+export function buildMikrotikWinboxScript(
+  routerName: string,
+  options: { managementSource?: string | null; vpnSubnet?: string | null; apiPort?: number; useTls?: boolean } = {}
+): string {
   const safeName = sanitizeForScript(routerName);
-  return `# MASHUPKGRID ISP — Remote WinBox Access & Cloud DDNS for "${safeName}"
-# Paste this into your MikroTik Terminal:
-
-# 1. Enable WinBox on port 8291
-/ip service set winbox disabled=no port=8291
-
-# 2. Allow WinBox incoming traffic in Firewall (places rule at position 0)
-/ip firewall filter remove [find comment="MASHUPKGRID WINBOX REMOTE"]
-/ip firewall filter add chain=input protocol=tcp dst-port=8291 action=accept place-before=0 comment="MASHUPKGRID WINBOX REMOTE"
-:do {/ip firewall filter move [find comment="MASHUPKGRID WINBOX REMOTE"] destination=0} on-error={}
-
-# 3. Enable MikroTik Cloud Dynamic DNS (free remote hostname for WinBox)
-/ip cloud set ddns-enabled=yes update-time=yes
-:delay 2s
-
-# 4. Show the assigned remote address
-:local dnsName [/ip cloud get dns-name]
-:local pubIp [/ip cloud get public-address]
-:put "========================================================="
-:put "  SUCCESS! Remote WinBox Access is now enabled!        "
-:put ("  Connect in WinBox to: " . $dnsName . " or " . $pubIp . ":8291")
-:put "========================================================="
+  const sources = managementSources(options);
+  return `# MASHUPKGRID ISP - WinBox access for "${safeName}"
+# Allows WinBox (8291) from the MashupHost server, its VPN and this router's LAN only.
+${buildManagementAccessSection(sources, options.apiPort ?? 8728, options.useTls ?? false)}
+:put "WinBox is reachable from: ${sources.join(", ")}"
+:put "Connect remotely through the address shown on the MashupHost Routers page."
 `;
 }
 

@@ -5,6 +5,14 @@ const BASE_URLS: Record<MpesaCredentials["environment"], string> = {
   production: "https://api.safaricom.co.ke",
 };
 
+/** Daraja base URL. MPESA_DARAJA_BASE_URL_OVERRIDE points sandbox calls at a local mock for
+ *  end-to-end testing; it never applies to production credentials or when NODE_ENV=production. */
+function darajaBaseUrl(environment: MpesaCredentials["environment"]): string {
+  const override = process.env["MPESA_DARAJA_BASE_URL_OVERRIDE"];
+  if (override && environment === "sandbox" && process.env["NODE_ENV"] !== "production") return override.replace(/\/+$/, "");
+  return BASE_URLS[environment];
+}
+
 interface CachedToken {
   accessToken: string;
   expiresAt: number;
@@ -20,7 +28,7 @@ async function getAccessToken(credentials: MpesaCredentials): Promise<string> {
   const cached = tokenCache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.accessToken;
 
-  const baseUrl = BASE_URLS[credentials.environment];
+  const baseUrl = darajaBaseUrl(credentials.environment);
   const auth = Buffer.from(`${credentials.consumerKey}:${credentials.consumerSecret}`).toString("base64");
 
   const response = await fetch(`${baseUrl}/oauth/v1/generate?grant_type=client_credentials`, {
@@ -90,7 +98,7 @@ export interface StkPushResponse {
 /** Lipa na M-Pesa Online (STK Push) — https://developer.safaricom.co.ke/APIs/MpesaExpressSimulate */
 export async function initiateStkPush(params: StkPushParams): Promise<StkPushResponse> {
   const { credentials } = params;
-  const baseUrl = BASE_URLS[credentials.environment];
+  const baseUrl = darajaBaseUrl(credentials.environment);
   const accessToken = await getAccessToken(credentials);
   const timestamp = darajaTimestamp();
   const businessShortCode = darajaBusinessShortCode(credentials);
@@ -141,7 +149,7 @@ export async function queryStkPushStatus(
   credentials: MpesaCredentials,
   checkoutRequestId: string
 ): Promise<StkQueryResponse> {
-  const baseUrl = BASE_URLS[credentials.environment];
+  const baseUrl = darajaBaseUrl(credentials.environment);
   const accessToken = await getAccessToken(credentials);
   const timestamp = darajaTimestamp();
   // Must match the push exactly — a query signed with a different shortcode cannot find it.
@@ -205,7 +213,7 @@ export interface B2BPaymentResponse {
  */
 export async function initiateB2BPayment(params: B2BPaymentParams): Promise<B2BPaymentResponse> {
   const { credentials } = params;
-  const baseUrl = BASE_URLS[credentials.environment];
+  const baseUrl = darajaBaseUrl(credentials.environment);
   const accessToken = await getAccessToken(credentials);
 
   const response = await fetch(`${baseUrl}/mpesa/b2b/v1/paymentrequest`, {
@@ -268,15 +276,14 @@ export interface B2CPaymentParams {
  */
 export async function initiateB2CPayment(params: B2CPaymentParams): Promise<B2BPaymentResponse> {
   const { credentials } = params;
-  const baseUrl = BASE_URLS[credentials.environment];
+  const baseUrl = darajaBaseUrl(credentials.environment);
   const accessToken = await getAccessToken(credentials);
 
-  const response = await fetch(`${baseUrl}/mpesa/b2c/v3/paymentrequest`, {
+  const response = await fetch(`${baseUrl}/mpesa/b2c/v1/paymentrequest`, {
     method: "POST",
     headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
     keepalive: true,
     body: JSON.stringify({
-      OriginatorConversationID: params.originatorConversationId,
       InitiatorName: params.initiatorName,
       SecurityCredential: params.securityCredential,
       CommandID: "BusinessPayment",

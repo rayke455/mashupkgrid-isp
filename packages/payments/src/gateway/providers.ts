@@ -206,7 +206,9 @@ export const mpesaB2CProvider: SettlementProvider = {
   validateDestination: validateDestinationShape,
   async initiateSettlement(instruction) {
     const phone = normalizeKenyanPhone(instruction.destination.phone ?? "");
-    // Our id for this request, echoed back by Daraja v3 on the result callback.
+    // B2C v1 (the endpoint Safaricom provisions for production apps): Safaricom issues the
+    // OriginatorConversationID in its acknowledgement and echoes it on the result callback; our own
+    // id is only a fallback for an acknowledgement that omits it.
     const originatorConversationId = `STL-${instruction.settlementId}`;
     let response;
     try {
