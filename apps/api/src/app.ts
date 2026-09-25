@@ -51,6 +51,7 @@ import { tenantPaymentRoutes } from "./routes/tenant-payments.js";
 import { checkoutRoutes } from "./routes/checkout.js";
 import { automationRoutes } from "./routes/automation.js";
 import { platformWalledGardenRoutes } from "./routes/platform-walled-garden.js";
+import { radiusSessionRoutes } from "./routes/radius-sessions.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -108,6 +109,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(vlanRoutes, { prefix: "/api/v1/vlans" });
   await app.register(provisioningRoutes, { prefix: "/api/v1/provisioning" });
   await app.register(radiusUserRoutes, { prefix: "/api/v1/radius/users" });
+  await app.register(radiusSessionRoutes, { prefix: "/api/v1/radius/sessions" });
   await app.register(voucherRoutes, { prefix: "/api/v1/vouchers" });
   await app.register(settingsRoutes, { prefix: "/api/v1/settings" });
   await app.register(meRoutes, { prefix: "/api/v1/me" });

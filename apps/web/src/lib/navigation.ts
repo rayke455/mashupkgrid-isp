@@ -71,6 +71,7 @@ function tenantSections(has: Has): NavSection[] {
       title: "Customers",
       items: [
         ...(has("customers.read") ? [{ href: "/customers", label: "Customers", icon: "users", keywords: "subscribers pppoe" } as NavItem] : []),
+        ...(has("customers.read") ? [{ href: "/online-users", label: "Online now", icon: "pulse", keywords: "sessions active users hotspot pppoe who is connected tracking" } as NavItem] : []),
         ...(has("packages.read") ? [{ href: "/packages", label: "Internet plans", icon: "package", keywords: "packages rate plans speed" } as NavItem] : []),
         ...(has("billing.read") ? [{ href: "/invoices", label: "Invoices", icon: "invoice", keywords: "billing bills" } as NavItem] : []),
         ...(has("tickets.read") ? [{ href: "/tickets", label: "Support tickets", icon: "lifebuoy", keywords: "helpdesk complaints" } as NavItem] : []),
