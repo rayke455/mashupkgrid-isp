@@ -198,9 +198,9 @@ export function extractMessageText(msg: any): string | undefined {
 
 export function isSelfChat(sock: WASocket, remoteJid?: string | null): boolean {
   if (!remoteJid) return false;
-  // Any 1-on-1 LID chat with fromMe is the WhatsApp "Message yourself" chat
-  if (remoteJid.endsWith("@lid")) return true;
-
+  // Only the account's OWN number or LID is the "Message yourself" chat. Many contacts (business
+  // accounts especially) are addressed by a LID too, so "any @lid chat" would make the bot answer
+  // the owner's own messages inside customers' chats.
   const myDigits = (sock.user?.id || (sock.authState?.creds?.me as any)?.id)?.split(":")[0]?.replace(/\D/g, "");
   const remoteDigits = remoteJid.split("@")[0]?.replace(/\D/g, "");
   if (myDigits && remoteDigits && myDigits === remoteDigits) return true;

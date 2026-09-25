@@ -174,15 +174,16 @@ async function handleBuyPick(tenantId: string, phone: string, session: BotSessio
 
 async function handleTicket(
   tenantId: string,
-  phone: string,
+  phone: string | null,
   text: string,
   kind: "outage" | "support"
 ): Promise<string> {
-  const tail = subscriberDigits(phone);
-  const customer = await prisma.customer.findFirst({
-    where: { tenantId, phone: { endsWith: tail }, deletedAt: null },
-    select: { id: true, fullName: true },
-  });
+  const customer = phone
+    ? await prisma.customer.findFirst({
+        where: { tenantId, phone: { endsWith: subscriberDigits(phone) }, deletedAt: null },
+        select: { id: true, fullName: true },
+      })
+    : null;
 
   const ticket = await createTicket(tenantId, {
     customerId: customer?.id ?? null,
@@ -221,7 +222,9 @@ export async function handleIncomingWhatsAppMessage(
   sock: WASocket | null,
   tenantId: string,
   fromJid: string,
-  text: string
+  text: string,
+  /** The sender's `<digits>@s.whatsapp.net`; null when WhatsApp hid their number behind a LID. */
+  senderPhoneJid: string | null = fromJid.endsWith("@s.whatsapp.net") ? fromJid : null
 ): Promise<void> {
   // Groups, channels/newsletters and status broadcasts all arrive on this same event — a bot
   // that answered those would spam every group the paired account belongs to.
@@ -231,10 +234,15 @@ export async function handleIncomingWhatsAppMessage(
     return;
   }
 
-  const isLid = fromJid.endsWith("@lid");
-  const selfDigits = (sock.user?.id || (sock.authState?.creds?.me as any)?.id)?.split(":")[0]?.replace(/\D/g, "");
-  const phone = (isLid && selfDigits) ? `+${selfDigits}` : `+${fromJid.split("@")[0]!.replace(/\D/g, "")}`;
+  // The sender's own number — never the ISP's: it picks whose balance is shown and which phone
+  // gets the M-Pesa prompt. Unknown (a LID WhatsApp wouldn't map) means those steps are refused.
+  const phoneDigits = senderPhoneJid?.split("@")[0]?.replace(/\D/g, "") ?? "";
+  const phone: string | null = phoneDigits ? `+${phoneDigits}` : null;
+  // Conversation state is per chat; a hidden-number sender is keyed by their LID.
+  const sessionId = phone ?? fromJid;
   const replyTarget = fromJid;
+  const noPhoneReply =
+    'Sorry, WhatsApp didn\'t share your phone number with us, so we can\'t look up your account or send an M-Pesa request from here. Please use the Wi-Fi sign-in page, or reply "4" to talk to support.';
   const input = text.trim();
   const lower = input.toLowerCase();
 
@@ -244,7 +252,7 @@ export async function handleIncomingWhatsAppMessage(
     // The tenant is no longer inferred — the message arrived on that ISP's own WhatsApp session,
     // so it is known for certain. This is what removed the old "which internet provider are you
     // with?" prompt, which existed only because one shared line could not tell.
-    const session = await loadSession(tenantId, phone);
+    const session = await loadSession(tenantId, sessionId);
     const isReset = ["menu", "0", "hi", "hello", "hey", "start", "help"].includes(lower);
     if (isReset) session.state = "main";
     session.tenantId = tenantId;
@@ -261,40 +269,40 @@ export async function handleIncomingWhatsAppMessage(
     if (!isReset && session.state === "outage_awaiting_description") {
       const reply = await handleTicket(tenantId, phone, input, "outage");
       session.state = "main";
-      await saveSession(tenantId, phone, session);
+      await saveSession(tenantId, sessionId, session);
       await sendWhatsAppMessage(sock, replyTarget, reply);
       return;
     }
     if (!isReset && session.state === "support_awaiting_message") {
       const reply = await handleTicket(tenantId, phone, input, "support");
       session.state = "main";
-      await saveSession(tenantId, phone, session);
+      await saveSession(tenantId, sessionId, session);
       await sendWhatsAppMessage(sock, replyTarget, reply);
       return;
     }
 
     if (!isReset && session.state === "buy_pick_package" && /^\d+$/.test(input)) {
-      const reply = await handleBuyPick(tenantId, phone, session, Number(input));
-      await saveSession(tenantId, phone, session);
+      const reply = phone ? await handleBuyPick(tenantId, phone, session, Number(input)) : noPhoneReply;
+      await saveSession(tenantId, sessionId, session);
       await sendWhatsAppMessage(sock, replyTarget, reply);
       return;
     }
 
     if (!isReset && input === "1") {
-      const reply = await handleBalance(tenantId, phone);
-      await saveSession(tenantId, phone, session);
+      const reply = phone ? await handleBalance(tenantId, phone) : noPhoneReply;
+      await saveSession(tenantId, sessionId, session);
       await sendWhatsAppMessage(sock, replyTarget, reply);
       return;
     }
     if (!isReset && input === "2") {
       const reply = await handleBuyList(tenantId, session);
-      await saveSession(tenantId, phone, session);
+      await saveSession(tenantId, sessionId, session);
       await sendWhatsAppMessage(sock, replyTarget, reply);
       return;
     }
     if (!isReset && input === "3") {
       session.state = "outage_awaiting_description";
-      await saveSession(tenantId, phone, session);
+      await saveSession(tenantId, sessionId, session);
       await sendWhatsAppMessage(
         sock,
         replyTarget,
@@ -304,7 +312,7 @@ export async function handleIncomingWhatsAppMessage(
     }
     if (!isReset && input === "4") {
       session.state = "support_awaiting_message";
-      await saveSession(tenantId, phone, session);
+      await saveSession(tenantId, sessionId, session);
       await sendWhatsAppMessage(sock, replyTarget, "💬 Please type your message and our support team will get back to you.");
       return;
     }
@@ -318,7 +326,7 @@ export async function handleIncomingWhatsAppMessage(
       : `Sorry, I didn't understand "${input.slice(0, 40)}". Please reply with a number from the menu below.\n\n${menuText}`;
 
     session.state = "main";
-    await saveSession(tenantId, phone, session);
+    await saveSession(tenantId, sessionId, session);
     console.log(`[whatsapp-bot] sending main menu reply to ${replyTarget}`);
     await sendWhatsAppMessage(sock, replyTarget, replyText);
   } catch (err) {

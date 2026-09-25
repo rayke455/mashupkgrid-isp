@@ -35,7 +35,9 @@ export interface SessionManagerEvents {
   /** `reconnecting` is the ordinary transient drop this manager recovers from on its own;
    *  `logged_out` means the phone unlinked the device and the saved keys are now dead. */
   onDisconnected?: (tenantId: string, reason: "reconnecting" | "logged_out") => void;
-  onMessage?: (tenantId: string, fromJid: string, text: string) => void;
+  /** `senderPhoneJid` is the sender's `<digits>@s.whatsapp.net`, or null when WhatsApp addressed
+   *  them by a LID it wouldn't map to a number. */
+  onMessage?: (tenantId: string, fromJid: string, text: string, senderPhoneJid: string | null) => void;
   /** An 8-character code the operator types into WhatsApp under Link with phone number, the
    *  alternative to scanning a QR. Emitted once per pairing attempt. */
   onPairingCode?: (tenantId: string, code: string) => void;
@@ -47,6 +49,32 @@ interface TenantSession {
    *  a dropped connection to reconnect from — otherwise disconnecting from the dashboard would
    *  immediately reconnect itself. */
   stopping: boolean;
+}
+
+const PHONE_JID = /^\d+@s\.whatsapp\.net$/;
+
+/** The sender's phone-number JID. WhatsApp addresses many chats by a LID (a hidden id, not a
+ *  number); the bot needs the real number to look up balances and send M-Pesa prompts, so a LID
+ *  is mapped back through the message itself or Baileys' LID store. */
+async function senderPhoneJid(sock: WASocket, msg: { key: { remoteJidAlt?: string | null } }, from: string, isSelf: boolean): Promise<string | null> {
+  const bare = (jid: string) => `${jid.split("@")[0]!.split(":")[0]}@s.whatsapp.net`;
+  if (from.endsWith("@s.whatsapp.net")) return bare(from);
+  if (isSelf) {
+    const me = sock.user?.id ?? (sock.authState?.creds?.me as { id?: string } | undefined)?.id;
+    return me ? bare(me) : null;
+  }
+  const alt = msg.key.remoteJidAlt;
+  if (alt && alt.endsWith("@s.whatsapp.net")) return bare(alt);
+  try {
+    const pn = await sock.signalRepository.lidMapping.getPNForLID(from);
+    if (pn && pn.includes("@s.whatsapp.net")) {
+      const jid = bare(pn);
+      return PHONE_JID.test(jid) ? jid : null;
+    }
+  } catch {
+    // No mapping stored yet — reported as unknown below.
+  }
+  return null;
 }
 
 /** Baileys wraps disconnect reasons as Boom errors whose HTTP-style status is a DisconnectReason.
@@ -228,7 +256,8 @@ export class WhatsAppSessionManager {
 
         // Allow messages from outside, or messages typed to oneself from the paired device
         if (!fromMe || isSelf) {
-          this.events.onMessage(id, from, text);
+          const onMessage = this.events.onMessage;
+          void senderPhoneJid(sock, msg, from, isSelf).then((phoneJid) => onMessage(id, from, text, phoneJid));
         }
       }
     });

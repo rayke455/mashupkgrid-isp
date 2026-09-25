@@ -152,6 +152,10 @@ const envSchema = z.object({
   SMTP_PASSWORD: z.string().optional().default(""),
   SMTP_FROM: z.string().default("no-reply@mashupkgrid.local"),
 
+  /** Resend API integration for high-deliverability transactional email (resend.com) */
+  RESEND_API_KEY: z.string().optional().default(""),
+  RESEND_FROM: z.string().optional().default(""),
+
   // M-Pesa credentials are configured per-tenant, encrypted, in the PaymentProviderConfig
   // table (docs/architecture/10-phase3-plan.md) — set via the admin UI/API, not here. These
   // env vars are unused by application code; kept only as the seed script's optional default
@@ -216,5 +220,7 @@ export const isProduction = env.NODE_ENV === "production";
 export const isTest = env.NODE_ENV === "test";
 export const isDevelopment = env.NODE_ENV === "development";
 
-/** SMTP is only actually wired if credentials are configured; otherwise emails log to console. */
-export const emailTransportConfigured = Boolean(env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASSWORD);
+/** Email is configured if either Resend API key or full SMTP credentials are present */
+export const emailTransportConfigured = Boolean(
+  env.RESEND_API_KEY || (env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASSWORD)
+);

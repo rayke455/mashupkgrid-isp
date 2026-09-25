@@ -23,26 +23,68 @@ export interface SendEmailParams {
 }
 
 /**
- * Sends a real email via SMTP when credentials are configured. When they are not (e.g. a bare
- * local dev environment), this does NOT pretend the email was sent — it logs the content to
- * the console, clearly labeled, so nothing silently disappears and no one mistakes console
- * output for a delivered email (project instruction §78 — never fake a completed integration).
+ * Sends transactional email via Resend API (priority) or SMTP.
+ *
+ * If RESEND_API_KEY is configured (e.g. re_123...), it uses Resend's REST API for instant,
+ * high-reputation delivery. If SMTP is configured, it falls back to nodemailer.
+ * When neither is configured, logs clearly to console.
  */
-export async function sendEmail(params: SendEmailParams): Promise<{ delivered: boolean }> {
+export async function sendEmail(params: SendEmailParams): Promise<{ delivered: boolean; id?: string }> {
+  // 1. Resend API Priority
+  if (env.RESEND_API_KEY) {
+    try {
+      const from = env.RESEND_FROM || env.SMTP_FROM || "MASHUPKGRID ISP <onboarding@resend.dev>";
+      const res = await fetch("https://api.resend.com/emails", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${env.RESEND_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          from,
+          to: [params.to],
+          subject: params.subject,
+          html: params.html,
+          text: params.text,
+        }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        console.error(`[email] Resend API error (${res.status}):`, data);
+        throw new Error((data as any).message || `Resend API returned status ${res.status}`);
+      }
+
+      console.log(`[email] Resend successfully sent email to ${params.to} (id: ${(data as any).id})`);
+      return { delivered: true, id: (data as any).id };
+    } catch (err) {
+      console.error(`[email] Resend send failed:`, err);
+      // Fall through to SMTP if available
+      if (!env.SMTP_HOST) throw err;
+    }
+  }
+
+  // 2. SMTP Transport
+  if (env.SMTP_HOST && env.SMTP_USER && env.SMTP_PASSWORD) {
+    await getTransporter().sendMail({
+      from: env.SMTP_FROM,
+      to: params.to,
+      subject: params.subject,
+      html: params.html,
+      text: params.text,
+    });
+    console.log(`[email] SMTP sent email to ${params.to}`);
+    return { delivered: true };
+  }
+
+  // 3. Fallback / Dev Warning
   if (!emailTransportConfigured) {
     console.warn(
-      `[email] SMTP is not configured — email NOT sent. To: ${params.to} | Subject: ${params.subject}\n` +
+      `[email] Neither Resend nor SMTP is configured — email NOT sent. To: ${params.to} | Subject: ${params.subject}\n` +
         `${params.text}`
     );
     return { delivered: false };
   }
 
-  await getTransporter().sendMail({
-    from: env.SMTP_FROM,
-    to: params.to,
-    subject: params.subject,
-    html: params.html,
-    text: params.text,
-  });
-  return { delivered: true };
+  return { delivered: false };
 }

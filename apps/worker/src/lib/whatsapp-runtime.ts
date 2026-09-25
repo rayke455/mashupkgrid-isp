@@ -121,7 +121,7 @@ export async function startWhatsAppRuntime(): Promise<WhatsAppSessionManager> {
       );
     },
 
-    onMessage: async (tenantId, fromJid, text) => {
+    onMessage: async (tenantId, fromJid, text, senderPhoneJid) => {
       if (fromJid === "status@broadcast" || fromJid.endsWith("@broadcast") || fromJid.endsWith("@g.us") || fromJid.endsWith("@newsletter")) return;
 
       // If message arrives on the platform session, route to the default/first active ISP tenant
@@ -139,7 +139,8 @@ export async function startWhatsAppRuntime(): Promise<WhatsAppSessionManager> {
               manager?.get(PLATFORM_SESSION_ID) ?? null,
               activeTenant.id,
               fromJid,
-              text
+              text,
+              senderPhoneJid
             ).catch((err) =>
               console.error("[whatsapp] failed to handle platform-routed message:", err)
             );
@@ -159,7 +160,7 @@ export async function startWhatsAppRuntime(): Promise<WhatsAppSessionManager> {
         }
         return;
       }
-      void handleIncomingWhatsAppMessage(manager?.get(tenantId) ?? null, tenantId, fromJid, text);
+      void handleIncomingWhatsAppMessage(manager?.get(tenantId) ?? null, tenantId, fromJid, text, senderPhoneJid);
     },
   });
 
