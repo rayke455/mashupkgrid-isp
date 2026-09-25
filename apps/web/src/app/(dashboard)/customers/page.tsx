@@ -59,12 +59,19 @@ export default function CustomersPage() {
             Customers
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Your broadband subscribers, their PPPoE logins, subscriptions and wallets.
+            Your broadband subscribers, their PPPoE logins, subscriptions, joined dates, and spending.
           </p>
         </div>
-        <Button onClick={() => setShowForm((v) => !v)}>
-          {showForm ? "Cancel" : "+ New Subscriber"}
-        </Button>
+        <div className="flex items-center gap-2">
+          <Link href="/reports">
+            <Button variant="secondary" size="sm" className="gap-1.5 text-xs">
+              <span>📊</span> Spends & Receipts Report
+            </Button>
+          </Link>
+          <Button onClick={() => setShowForm((v) => !v)}>
+            {showForm ? "Cancel" : "+ New Subscriber"}
+          </Button>
+        </div>
       </div>
 
       {showForm && (
@@ -118,7 +125,7 @@ export default function CustomersPage() {
                     </span>
                   </p>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    {customer.phone} {customer.email ? `· ${customer.email}` : ""}
+                    {customer.phone} {customer.email ? `· ${customer.email}` : ""} · Joined {new Date(customer.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
                   </p>
                 </div>
               </div>

@@ -2,7 +2,12 @@ import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { prisma } from "@mashupkgrid/database";
-import { recordPaymentForInvoice, topUpWallet, refundPaymentWithDb } from "@mashupkgrid/billing";
+import {
+  recordPaymentForInvoice,
+  topUpWallet,
+  refundPaymentWithDb,
+  getStampedPaymentReceipt,
+} from "@mashupkgrid/billing";
 import { listPurchaseAttempts, summarisePurchaseAttempts, reverseGatewayTransactionForPayment } from "@mashupkgrid/payments";
 import {
   successResponse,
@@ -201,6 +206,16 @@ export async function paymentRoutes(app: FastifyInstance): Promise<void> {
       });
 
       reply.send(successResponse(payment, request.id));
+    }
+  );
+
+  app.get(
+    "/:paymentId/receipt",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("payments.read")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const { paymentId } = idParamsSchema.parse(request.params);
+      reply.send(successResponse(await getStampedPaymentReceipt(tenantId, paymentId), request.id));
     }
   );
 }
