@@ -403,12 +403,7 @@ ${buildManagementAccessSection(managementSources({ managementSource, vpnSubnet }
 :do {/radius remove [find address="${radiusHost}"]} on-error={}
 :do {/radius add service=ppp,hotspot address=${radiusHost} secret="${radiusSecret}" authentication-port=1812 accounting-port=1813 timeout=3s comment="MASHUPKGRID"} on-error={}
 :do {/ppp aaa set use-radius=yes accounting=yes interim-update=1m} on-error={}
-:do {/ip hotspot profile set [find default=yes] use-radius=yes login-by=http-chap,http-pap radius-accounting=yes radius-interim-update=1m html-directory=hotspot} on-error={}
-# A phone that has paid is logged straight back in by its MAC when it reconnects (the server only
-# accepts a MAC whose voucher still has time and data left). Separate lines: an older RouterOS that
-# rejects one of these must not undo the RADIUS setup above.
-:do {/ip hotspot profile set [find default=yes] login-by=mac,http-chap,http-pap} on-error={}
-:do {/ip hotspot profile set [find default=yes] mac-auth-mode=mac-as-username mac-auth-password=""} on-error={}
+:do {/ip hotspot profile set [find default=yes] use-radius=yes login-by=http-chap,http-pap,cookie trial=no radius-accounting=yes radius-interim-update=1m html-directory=hotspot} on-error={}
 :do {/ip hotspot user profile set [find default=yes] shared-users=1} on-error={}
 :do {/ip hotspot remove [find name=mkg-hotspot]} on-error={}
 :do {/ip hotspot add name=mkg-hotspot interface=bridge address-pool=default-dhcp profile=default disabled=no} on-error={}
