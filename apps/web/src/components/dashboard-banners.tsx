@@ -81,7 +81,7 @@ export function DashboardBanners() {
             </div>
           </div>
           <a
-            href="/packages"
+            href="/settings/billing"
             className="inline-flex shrink-0 items-center justify-center rounded-xl bg-amber-500 hover:bg-amber-600 px-3.5 py-1.5 text-xs font-bold text-white shadow-xs transition-all active:scale-95 text-center"
           >
             Upgrade Plan &rarr;

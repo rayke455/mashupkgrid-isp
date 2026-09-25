@@ -54,6 +54,8 @@ export interface TenantContext {
    *  subscription row (unrestricted, back-compat fallback). requireFeature checks this alongside
    *  disabledFeatures; either can block a feature. */
   planFeatures: string[] | null;
+  subscriptionStatus: string | null;
+  isTrialExpired: boolean;
 }
 
 declare module "fastify" {

@@ -16,8 +16,29 @@ const GRACE_PERIOD_DAYS = 3;
 export async function handleExpireTrials(): Promise<void> {
   const now = new Date();
 
+  // 1. Immediately expire trials that have ended
+  const expiredTrials = await prisma.tenantSubscription.findMany({
+    where: { status: "TRIALING", currentPeriodEnd: { lt: now } },
+    include: { plan: true },
+  });
+  for (const subscription of expiredTrials) {
+    await prisma.tenantSubscription.update({
+      where: { id: subscription.id },
+      data: { status: "EXPIRED" },
+    });
+    await prisma.platformAnnouncement.create({
+      data: {
+        tenantId: subscription.tenantId,
+        title: "Your free trial has ended",
+        body: `Your free trial for plan "${subscription.plan.name}" has expired. All tenant features are paused. Please subscribe under Settings > Billing to reactivate.`,
+        severity: "CRITICAL",
+      },
+    });
+  }
+
+  // 2. Paid active subscriptions whose period ended move to PAST_DUE with grace period
   const dueSubscriptions = await prisma.tenantSubscription.findMany({
-    where: { status: { in: ["TRIALING", "ACTIVE"] }, currentPeriodEnd: { lt: now } },
+    where: { status: "ACTIVE", currentPeriodEnd: { lt: now } },
     include: { plan: true },
   });
   for (const subscription of dueSubscriptions) {
@@ -29,32 +50,33 @@ export async function handleExpireTrials(): Promise<void> {
     await prisma.platformAnnouncement.create({
       data: {
         tenantId: subscription.tenantId,
-        title: subscription.status === "TRIALING" ? "Your trial has ended" : "Your subscription payment is due",
+        title: "Your subscription payment is due",
         body: `Please renew your "${subscription.plan.name}" plan within ${GRACE_PERIOD_DAYS} days to avoid suspension.`,
         severity: "WARNING",
       },
     });
   }
 
+  // 3. Overdue subscriptions past grace period move to EXPIRED
   const overdueSubscriptions = await prisma.tenantSubscription.findMany({
     where: { status: "PAST_DUE", gracePeriodEndsAt: { lt: now } },
   });
   for (const subscription of overdueSubscriptions) {
-    await prisma.$transaction([
-      prisma.tenantSubscription.update({ where: { id: subscription.id }, data: { status: "EXPIRED" } }),
-      prisma.tenant.update({ where: { id: subscription.tenantId }, data: { status: "SUSPENDED" } }),
-    ]);
+    await prisma.tenantSubscription.update({
+      where: { id: subscription.id },
+      data: { status: "EXPIRED" },
+    });
     await prisma.platformAnnouncement.create({
       data: {
         tenantId: subscription.tenantId,
-        title: "Account suspended",
-        body: "Your account has been suspended due to non-payment. Contact support to reactivate.",
+        title: "Subscription expired",
+        body: "Your subscription has expired due to non-payment. Please renew under Settings > Billing to reactivate.",
         severity: "CRITICAL",
       },
     });
   }
 
   console.log(
-    `[billing] expire-trials: past_due=${dueSubscriptions.length} suspended=${overdueSubscriptions.length}`
+    `[billing] expire-trials: expiredTrials=${expiredTrials.length} past_due=${dueSubscriptions.length} overdueExpired=${overdueSubscriptions.length}`
   );
 }

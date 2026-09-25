@@ -66,6 +66,13 @@ export class TenantSuspendedError extends AppError {
   }
 }
 
+export class TenantTrialExpiredError extends AppError {
+  constructor(message = "Your free trial has ended. Please subscribe to a plan to continue using tenant features.") {
+    super("TRIAL_EXPIRED", message, 403);
+    this.name = "TenantTrialExpiredError";
+  }
+}
+
 export class MaintenanceModeError extends AppError {
   constructor(message: string, retryAfter?: string | null) {
     super("MAINTENANCE_MODE", message, 503, { retryAfter });

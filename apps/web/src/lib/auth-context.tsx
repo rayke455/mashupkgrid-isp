@@ -9,6 +9,8 @@ export interface CurrentUser {
   tenantSlug: string | null;
   tenantBrandColor: string | null;
   tenantTrialEndsAt: string | null;
+  tenantSubscriptionStatus: string | null;
+  isTrialExpired: boolean;
   sessionId: string;
   email: string | null;
   /** The user's effective permission set, sourced from the same resolution the API actually
@@ -82,14 +84,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // was a real, if invisible, inconsistency this replaces.
   const hydrateUser = useCallback(async (): Promise<CurrentUser> => {
     const me = await apiFetch<{
-      user: Omit<CurrentUser, "tenantSlug" | "tenantBrandColor" | "tenantTrialEndsAt">;
-      tenant: { slug: string; brandColor: string | null; trialEndsAt: string | null } | null;
+      user: Omit<CurrentUser, "tenantSlug" | "tenantBrandColor" | "tenantTrialEndsAt" | "tenantSubscriptionStatus" | "isTrialExpired">;
+      tenant: {
+        slug: string;
+        brandColor: string | null;
+        trialEndsAt: string | null;
+        subscriptionStatus?: string | null;
+        isTrialExpired?: boolean;
+      } | null;
     }>("/api/v1/auth/me");
+    const trialExpired = Boolean(
+      me.tenant?.isTrialExpired ?? (
+        me.tenant?.trialEndsAt &&
+        new Date(me.tenant.trialEndsAt).getTime() <= Date.now() &&
+        me.tenant?.subscriptionStatus !== "ACTIVE"
+      )
+    );
     const fullUser: CurrentUser = {
       ...me.user,
       tenantSlug: me.tenant?.slug ?? null,
       tenantBrandColor: me.tenant?.brandColor ?? null,
       tenantTrialEndsAt: me.tenant?.trialEndsAt ?? null,
+      tenantSubscriptionStatus: me.tenant?.subscriptionStatus ?? null,
+      isTrialExpired: trialExpired,
     };
     setUser(fullUser);
     return fullUser;

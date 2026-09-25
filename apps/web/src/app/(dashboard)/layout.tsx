@@ -9,6 +9,7 @@ import { apiFetch } from "@/lib/api-client";
 import { TenantThemeStyle } from "@/components/tenant-theme-style";
 import { TawkToWidget } from "@/components/tawk-to-widget";
 import { DashboardBanners } from "@/components/dashboard-banners";
+import { TrialExpiredBlocker } from "@/components/trial-expired-blocker";
 import {
   IconDashboard,
   IconSession,
@@ -352,8 +353,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <div className="flex shrink-0 items-center gap-2">
               {isTenantScoped && <NotificationBell />}
               {user.tenantTrialEndsAt && (
-                <span className="rounded-full border border-amber-500/25 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-300">
-                  Trial
+                <span
+                  className={`rounded-full border px-2 py-0.5 text-xs font-medium ${
+                    user.isTrialExpired
+                      ? "border-rose-500/30 bg-rose-500/10 text-rose-300"
+                      : "border-amber-500/25 bg-amber-500/10 text-amber-300"
+                  }`}
+                >
+                  {user.isTrialExpired ? "Trial Expired" : "Trial"}
                 </span>
               )}
               {isTenantScoped && (
@@ -370,7 +377,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
           <main className="mx-auto w-full min-w-0 max-w-7xl flex-1 overflow-x-hidden p-4 sm:p-6 lg:p-8">
             <DashboardBanners />
-            {children}
+            {user.isTrialExpired &&
+            !pathname.startsWith("/settings/billing") &&
+            !pathname.startsWith("/settings/account") ? (
+              <TrialExpiredBlocker />
+            ) : (
+              children
+            )}
           </main>
         </div>
         {liveChat?.show && <TawkToWidget widgetId={liveChat.widgetId} />}
