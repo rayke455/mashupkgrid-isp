@@ -7,7 +7,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
 import { Button, Card, ErrorText, HintText, Input, Label } from "@/components/ui";
 import { CodeBlock, Notice, PageHeader, Pill } from "@/components/dashboard/surface";
-import { IconCheck, IconChevronRight } from "@/components/icons";
+import { IconCheck, IconChevronRight, IconRouter } from "@/components/icons";
 
 type Step = 1 | 2 | 3;
 
@@ -85,12 +85,45 @@ export default function LinkRouterWizardPage() {
   const [manualUsername, setManualUsername] = useState("");
   const [manualPassword, setManualPassword] = useState("");
 
+  // Port selection state — click to select, no typing needed!
+  const [hotspotPorts, setHotspotPorts] = useState<string[]>(["ether2", "ether3"]);
+  const [lanPort, setLanPort] = useState<string>("ether4");
+
   const [pppoeEnabled, setPppoeEnabled] = useState(false);
-  const [pppoeInterface, setPppoeInterface] = useState("");
+  const [pppoeInterface, setPppoeInterface] = useState("ether5");
   const [pppoeGatewayIp, setPppoeGatewayIp] = useState("10.10.0.1");
   const [pppoePoolRange, setPppoePoolRange] = useState("10.10.0.2-10.10.255.254");
   const [blockTethering, setBlockTethering] = useState(false);
   const [oneLiner, setOneLiner] = useState<string>("");
+
+  const toggleHotspotPort = (port: string) => {
+    setHotspotPorts((prev) => {
+      const exists = prev.includes(port);
+      if (exists) {
+        return prev.filter((p) => p !== port);
+      } else {
+        if (lanPort === port) setLanPort("none");
+        if (pppoeInterface === port) setPppoeInterface("");
+        return [...prev, port];
+      }
+    });
+  };
+
+  const selectLanPort = (port: string) => {
+    setLanPort(port);
+    if (port !== "none") {
+      setHotspotPorts((prev) => prev.filter((p) => p !== port));
+      if (pppoeInterface === port) setPppoeInterface("");
+    }
+  };
+
+  const selectPppoePort = (port: string) => {
+    setPppoeInterface(port);
+    if (port) {
+      setHotspotPorts((prev) => prev.filter((p) => p !== port));
+      if (lanPort === port) setLanPort("none");
+    }
+  };
 
   const createPending = useMutation({
     mutationFn: () =>
@@ -98,8 +131,8 @@ export default function LinkRouterWizardPage() {
         method: "POST",
         body: JSON.stringify({
           name,
-          // Sent only when enabled: an interface is what switches PPPoE on server-side, so
-          // leaving it out is how a hotspot-only router gets no PPPoE section in its script.
+          hotspotPorts,
+          lanPort: lanPort && lanPort !== "none" ? lanPort : null,
           ...(pppoeEnabled && pppoeInterface.trim()
             ? {
                 pppoeInterface: pppoeInterface.trim(),
@@ -234,7 +267,132 @@ export default function LinkRouterWizardPage() {
               required
             />
             <HintText>How this router is shown across the dashboard.</HintText>
-            <div className="mt-5 rounded-xl border border-slate-200 p-4 dark:border-obsidian-800">
+            {/* Interactive Port Selection */}
+            <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50/70 p-4 dark:border-obsidian-800 dark:bg-obsidian-900/50">
+              <div className="flex items-center gap-2">
+                <span className="flex h-6 w-6 items-center justify-center rounded-md bg-blue-100 text-blue-700 dark:bg-blue-950/80 dark:text-blue-400">
+                  <IconRouter size={14} />
+                </span>
+                <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
+                  Port & Interface Roles (Click to Select)
+                </h3>
+              </div>
+              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                Easily designate port roles by clicking — no command line typing required.
+              </p>
+
+              {/* Visual Router Port Status Bar */}
+              <div className="mt-3.5 flex flex-wrap items-center gap-1.5 rounded-lg border border-slate-200/90 bg-white p-2.5 dark:border-obsidian-800 dark:bg-obsidian-950">
+                <span className="flex items-center gap-1 rounded bg-amber-100 px-2 py-1 text-xs font-semibold text-amber-800 dark:bg-amber-950/70 dark:text-amber-300">
+                  ether1 (WAN Uplink)
+                </span>
+                {["ether2", "ether3", "ether4", "ether5", "sfp1", "wlan1"].map((p) => {
+                  const isHotspot = hotspotPorts.includes(p);
+                  const isLan = lanPort === p;
+                  const isPpp = pppoeEnabled && pppoeInterface === p;
+                  return (
+                    <span
+                      key={p}
+                      className={`flex items-center gap-1 rounded px-2 py-1 text-xs font-semibold transition-all ${
+                        isHotspot
+                          ? "bg-blue-600 text-white shadow-xs"
+                          : isLan
+                          ? "bg-emerald-600 text-white shadow-xs"
+                          : isPpp
+                          ? "bg-purple-600 text-white shadow-xs"
+                          : "bg-slate-100 text-slate-500 dark:bg-obsidian-800 dark:text-slate-400"
+                      }`}
+                    >
+                      {p}
+                      {isHotspot ? " (Hotspot)" : isLan ? " (Direct LAN)" : isPpp ? " (PPPoE)" : ""}
+                    </span>
+                  );
+                })}
+              </div>
+
+              {/* 1. Hotspot Ports Selection */}
+              <div className="mt-4">
+                <div className="flex items-center justify-between">
+                  <Label className="mb-0 text-xs font-semibold text-slate-800 dark:text-slate-200">
+                    Hotspot Ports (Captive Portal & Wi-Fi APs)
+                  </Label>
+                  <span className="text-[11px] text-blue-600 dark:text-blue-400 font-medium">
+                    Click to toggle ports
+                  </span>
+                </div>
+                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                  Only devices plugged into these ports will see the voucher login portal.
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {["ether2", "ether3", "ether4", "ether5", "sfp1", "wlan1"].map((p) => {
+                    const selected = hotspotPorts.includes(p);
+                    const disabled = lanPort === p || (pppoeEnabled && pppoeInterface === p);
+                    return (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => toggleHotspotPort(p)}
+                        className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all ${
+                          selected
+                            ? "border-blue-600 bg-blue-50 text-blue-700 shadow-xs dark:border-blue-500 dark:bg-blue-950/70 dark:text-blue-300 font-semibold ring-1 ring-blue-500"
+                            : disabled
+                            ? "border-slate-200 bg-slate-100 text-slate-400 opacity-50 dark:border-obsidian-800 dark:bg-obsidian-800 cursor-not-allowed"
+                            : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50 dark:border-obsidian-700 dark:bg-obsidian-900 dark:text-slate-300"
+                        }`}
+                      >
+                        {selected ? <IconCheck size={13} className="text-blue-600 dark:text-blue-400" /> : null}
+                        {p}
+                        {p === "wlan1" ? " (Built-in Wi-Fi)" : ""}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 2. Direct LAN / Non-Hotspot Port Selection */}
+              <div className="mt-4 pt-3.5 border-t border-slate-200/80 dark:border-obsidian-800">
+                <div className="flex items-center justify-between">
+                  <Label className="mb-0 text-xs font-semibold text-slate-800 dark:text-slate-200">
+                    Direct LAN Port (No Hotspot / No Voucher)
+                  </Label>
+                  <span className="text-[11px] text-emerald-600 dark:text-emerald-400 font-medium">
+                    Bypasses captive portal
+                  </span>
+                </div>
+                <p className="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+                  Dedicated port for Office PC, CCTV cameras, or technician laptop (Subnet 192.168.99.1/24 with direct internet).
+                </p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {[
+                    { id: "none", label: "None (All on Hotspot)" },
+                    { id: "ether4", label: "ether4 (Recommended)" },
+                    { id: "ether5", label: "ether5" },
+                    { id: "ether3", label: "ether3" },
+                    { id: "ether2", label: "ether2" },
+                    { id: "sfp1", label: "sfp1" },
+                  ].map((item) => {
+                    const isSelected = lanPort === item.id || (!lanPort && item.id === "none");
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => selectLanPort(item.id)}
+                        className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all ${
+                          isSelected
+                            ? "border-emerald-600 bg-emerald-50 text-emerald-800 shadow-xs dark:border-emerald-500 dark:bg-emerald-950/70 dark:text-emerald-300 font-semibold ring-1 ring-emerald-500"
+                            : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50 dark:border-obsidian-700 dark:bg-obsidian-900 dark:text-slate-300"
+                        }`}
+                      >
+                        {isSelected && item.id !== "none" ? <IconCheck size={13} className="text-emerald-600 dark:text-emerald-400" /> : null}
+                        {item.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-3 rounded-xl border border-slate-200 p-4 dark:border-obsidian-800">
               <label className="flex items-center gap-2.5">
                 <input
                   type="checkbox"
@@ -273,14 +431,36 @@ export default function LinkRouterWizardPage() {
               {pppoeEnabled && (
                 <div className="mt-4 space-y-3">
                   <div>
-                    <Label htmlFor="pppoeInterface">PPPoE interface</Label>
-                    <Input
-                      id="pppoeInterface"
-                      placeholder="e.g. ether2, vlan100, or bridge"
-                      value={pppoeInterface}
-                      onChange={(e) => setPppoeInterface(e.target.value)}
-                      required
-                    />
+                    <Label htmlFor="pppoeInterface">Click to select PPPoE port or VLAN</Label>
+                    <div className="mt-1 flex flex-wrap gap-2">
+                      {["ether5", "ether4", "ether2", "sfp1", "vlan10", "vlan20", "vlan100"].map((iface) => {
+                        const isSelected = pppoeInterface === iface;
+                        return (
+                          <button
+                            key={iface}
+                            type="button"
+                            onClick={() => selectPppoePort(iface)}
+                            className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-all ${
+                              isSelected
+                                ? "border-purple-600 bg-purple-50 text-purple-800 shadow-xs dark:border-purple-500 dark:bg-purple-950/70 dark:text-purple-300 font-semibold ring-1 ring-purple-500"
+                                : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50 dark:border-obsidian-700 dark:bg-obsidian-900 dark:text-slate-300"
+                            }`}
+                          >
+                            {isSelected ? <IconCheck size={13} className="text-purple-600 dark:text-purple-400" /> : null}
+                            {iface}
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="mt-2">
+                      <Input
+                        id="pppoeInterface"
+                        placeholder="Selected interface (e.g. ether5 or vlan20)"
+                        value={pppoeInterface}
+                        onChange={(e) => selectPppoePort(e.target.value)}
+                        required
+                      />
+                    </div>
                     <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                       The port or VLAN facing your subscribers — not your uplink.
                     </p>

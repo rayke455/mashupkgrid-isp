@@ -251,6 +251,10 @@ export function buildMikrotikProvisioningScript(
     pppoePoolRange?: string | null;
     /** See buildAntiTetheringSection — opt-in because TTL detection has real false positives. */
     blockTethering?: boolean;
+    /** Physical ports running the Hotspot captive portal. Defaults to ["ether2", "ether3", "ether4", "wlan1"]. */
+    hotspotPorts?: string[];
+    /** Dedicated non-hotspot direct LAN port (e.g. "ether4" or "ether5") with no captive portal. */
+    lanPort?: string | null;
   } = {}
 ): string {
   const apiLine = router.useTls
@@ -319,6 +323,43 @@ export function buildMikrotikProvisioningScript(
     ...PAYMENT_GATEWAY_WALLED_GARDEN_HOSTS,
   ];
 
+  const rawHotspotPorts = (options.hotspotPorts && options.hotspotPorts.length > 0)
+    ? options.hotspotPorts
+    : ["ether2", "ether3", "ether4", "wlan1"];
+  const lanPort = options.lanPort?.trim() || null;
+  const pppoeIface = options.pppoeInterface?.trim() || null;
+
+  // Filter out any port explicitly assigned to direct LAN, PPPoE, or WAN (ether1)
+  let activeHotspotPorts = rawHotspotPorts.filter(
+    (p) => p !== lanPort && p !== pppoeIface && p !== "ether1"
+  );
+  if (activeHotspotPorts.length === 0) {
+    activeHotspotPorts = ["ether2", "ether3"];
+  }
+
+  const bridgePortLines = activeHotspotPorts
+    .map((port) => `:do {/interface bridge port add bridge=bridge interface=${port}} on-error={}`)
+    .join("\n");
+
+  const cleanupExcludedPorts = [lanPort, pppoeIface]
+    .filter(Boolean)
+    .map((port) => `:do {/interface bridge port remove [find interface=${port}]} on-error={}`)
+    .join("\n");
+
+  const directLanSection = lanPort
+    ? `
+# Direct LAN / Non-Hotspot port (${lanPort}) — No Captive Portal, No Voucher required
+:do {/ip address remove [find interface=${lanPort} comment="MASHUPKGRID DIRECT LAN"]} on-error={}
+:do {/ip address add address=192.168.99.1/24 interface=${lanPort} comment="MASHUPKGRID DIRECT LAN"} on-error={}
+:do {/ip pool remove [find name=mkg-direct-lan-pool]} on-error={}
+:do {/ip pool add name=mkg-direct-lan-pool ranges=192.168.99.10-192.168.99.254} on-error={}
+:do {/ip dhcp-server remove [find name=mkg-direct-dhcp]} on-error={}
+:do {/ip dhcp-server add name=mkg-direct-dhcp interface=${lanPort} address-pool=mkg-direct-lan-pool disabled=no} on-error={}
+:do {/ip dhcp-server network remove [find comment="MASHUPKGRID DIRECT LAN"]} on-error={}
+:do {/ip dhcp-server network add address=192.168.99.0/24 gateway=192.168.99.1 dns-server=192.168.99.1 comment="MASHUPKGRID DIRECT LAN"} on-error={}
+:put "Direct LAN active on ${lanPort} (192.168.99.1/24) — No Voucher Required"`
+    : "";
+
   const minimalProvisioningScript = `# MASHUPKGRID ISP - safe baseline setup for "${safeName}"
 # The router must already have WAN internet access for this file to download.
 :do {/tool fetch url="${callbackUrl}" http-method=post keep-result=no} on-error={}
@@ -341,11 +382,7 @@ export function buildMikrotikProvisioningScript(
 
 # LAN, Wi-Fi and WAN baseline. Existing configurations are preserved when present.
 :do {/interface bridge add name=bridge} on-error={}
-:do {/interface bridge port add bridge=bridge interface=ether2} on-error={}
-:do {/interface bridge port add bridge=bridge interface=ether3} on-error={}
-:do {/interface bridge port add bridge=bridge interface=ether4} on-error={}
-:do {/interface bridge port add bridge=bridge interface=ether5} on-error={}
-:do {/interface bridge port add bridge=bridge interface=wlan1} on-error={}
+${cleanupExcludedPorts ? `${cleanupExcludedPorts}\n` : ""}${bridgePortLines}
 :do {/ip dhcp-client add interface=ether1 disabled=no add-default-route=yes use-peer-dns=yes} on-error={}
 :do {/ip address add address=192.168.88.1/24 interface=bridge} on-error={}
 :do {/ip pool add name=default-dhcp ranges=192.168.88.10-192.168.88.254} on-error={}
@@ -353,6 +390,7 @@ export function buildMikrotikProvisioningScript(
 :do {/ip dhcp-server network add address=192.168.88.0/24 gateway=192.168.88.1 dns-server=192.168.88.1} on-error={}
 :do {/ip dns set allow-remote-requests=yes} on-error={}
 :do {/ip firewall nat add chain=srcnat out-interface=ether1 action=masquerade comment="MASHUPKGRID"} on-error={}
+${directLanSection ? `${directLanSection}\n` : ""}
 
 # Management API and account.
 :do {${apiLine}} on-error={}

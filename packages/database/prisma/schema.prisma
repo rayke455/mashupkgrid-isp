@@ -1908,6 +1908,11 @@ model Router {
   /// voucher cannot serve a whole room. Off by default because the detection is TTL-based and
   /// therefore imperfect — see buildAntiTetheringSection for exactly who it can wrongly block.
   blockTethering       Boolean      @default(false)
+  /// Physical ports / interfaces running the Hotspot captive portal (e.g. ["ether2", "ether3"]).
+  /// If empty, defaults to standard LAN bridge ports (ether2, ether3, ether4, wlan1).
+  hotspotPorts         String[]     @default([])
+  /// Dedicated direct LAN / non-hotspot port (e.g. "ether4" or "ether5") with no captive portal.
+  lanPort              String?
   lastSeenAt           DateTime?
   lastError            String?
   cpuLoadPercent       Int?
