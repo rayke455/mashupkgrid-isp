@@ -350,9 +350,8 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       const body = whatsappOtpPhoneSchema.parse(request.body);
       const phone = normalizePhoneForOtp(body.phone);
 
-      // Rule 1: This should work only for tenants in system, not strangers.
-      // Look up if this phone belongs to a tenant user or an existing tenant in the system.
-      const authorizedTenant = await prisma.user.findFirst({
+      // Look up if this phone belongs to an existing tenant user (for returning their details).
+      const existingUser = await prisma.user.findFirst({
         where: {
           OR: [
             { phone },
@@ -363,20 +362,14 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
         include: { tenant: true },
       });
 
-      if (!authorizedTenant) {
-        throw new ForbiddenError(
-          "Access Denied: This phone number is not registered as an authorized tenant in the system. Strangers cannot request OTP. Please contact your platform administrator."
-        );
-      }
-
       await requestWhatsappOtp(phone, WHATSAPP_OTP_PURPOSE);
       reply.send(
         successResponse(
           {
             sent: true,
             method: "whatsapp",
-            tenantName: authorizedTenant.tenant?.name,
-            subdomain: authorizedTenant.tenant?.slug,
+            tenantName: existingUser?.tenant?.name,
+            subdomain: existingUser?.tenant?.slug,
           },
           request.id
         )
@@ -437,17 +430,11 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       const body = emailOtpSchema.parse(request.body);
       const email = normalizeEmailForOtp(body.email);
 
-      // Rule 1: This should work only for tenants in system, not strangers.
-      const authorizedTenant = await prisma.user.findFirst({
+      // Look up if this email belongs to an existing tenant user (for returning their details).
+      const existingUser = await prisma.user.findFirst({
         where: { email },
         include: { tenant: true },
       });
-
-      if (!authorizedTenant) {
-        throw new ForbiddenError(
-          "Access Denied: This email address is not registered as an authorized tenant in the system. Strangers cannot request OTP. Please contact your platform administrator."
-        );
-      }
 
       await requestEmailOtp(email, WHATSAPP_OTP_PURPOSE);
       reply.send(
@@ -455,8 +442,8 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
           {
             sent: true,
             method: "email",
-            tenantName: authorizedTenant.tenant?.name,
-            subdomain: authorizedTenant.tenant?.slug,
+            tenantName: existingUser?.tenant?.name,
+            subdomain: existingUser?.tenant?.slug,
           },
           request.id
         )

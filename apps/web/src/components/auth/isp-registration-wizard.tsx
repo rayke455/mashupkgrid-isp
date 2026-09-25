@@ -418,6 +418,9 @@ export function IspRegistrationWizard() {
   };
 
   // Step 5: Final Account Creation
+  const [registrationComplete, setRegistrationComplete] = useState(false);
+  const [registeredTenantName, setRegisteredTenantName] = useState("");
+
   const handleFinalSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
@@ -468,19 +471,10 @@ export function IspRegistrationWizard() {
         }),
       });
 
-      if (res.accessToken) {
-        await refresh();
-        // Send them to their own subdomain, which is the address they will use from now on and
-        // the one the welcome WhatsApp names. It is a different origin, so this is a full
-        // navigation rather than a client-side route change -- the session is restored there
-        // from the refresh cookie, which the API issues for the shared parent domain.
-        const created = res.tenant?.slug ?? slug.trim().toLowerCase();
-        if (PLATFORM_BASE_DOMAIN && created) {
-          window.location.href = `https://${created}.${PLATFORM_BASE_DOMAIN}/dashboard`;
-        } else {
-          router.push("/dashboard");
-        }
-      }
+      // Registration successful — show pending approval page instead of redirecting
+      setRegisteredTenantName(res.tenant?.name ?? companyName.trim());
+      setRegistrationComplete(true);
+      setIsSubmitting(false);
     } catch (err) {
       setIsSubmitting(false);
       setErrorMessage(
@@ -508,6 +502,51 @@ export function IspRegistrationWizard() {
       </header>
 
       <main className="flex flex-1 items-start justify-center px-4 py-10 sm:items-center sm:py-14">
+        {registrationComplete ? (
+          <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-6 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_12px_32px_-16px_rgba(15,23,42,0.18)] sm:p-8 text-center">
+            <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100">
+              <IconCheck className="h-8 w-8 text-emerald-600" />
+            </div>
+            <h2 className="text-xl font-bold text-slate-900 mb-2">Registration Submitted!</h2>
+            <p className="text-sm text-slate-600 mb-4">
+              Your ISP account <span className="font-semibold text-slate-800">&quot;{registeredTenantName}&quot;</span> has been registered successfully.
+            </p>
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 mb-6">
+              <div className="flex items-start gap-2.5">
+                <IconShield className="h-5 w-5 text-amber-600 shrink-0 mt-0.5" />
+                <div className="text-left">
+                  <p className="text-sm font-semibold text-amber-800 mb-1">Pending Approval</p>
+                  <p className="text-xs text-amber-700 leading-relaxed">
+                    Your account is currently pending approval from the platform administrator. You will receive a notification via WhatsApp and Email once your account has been approved.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3.5 mb-6 text-left">
+              <p className="text-xs font-semibold text-slate-700 mb-2">What happens next?</p>
+              <ul className="text-xs text-slate-600 space-y-1.5">
+                <li className="flex items-start gap-2">
+                  <span className="text-emerald-500 mt-0.5">✓</span>
+                  <span>Our team will review your registration</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-emerald-500 mt-0.5">✓</span>
+                  <span>You&apos;ll be notified via WhatsApp &amp; Email once approved</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span className="text-emerald-500 mt-0.5">✓</span>
+                  <span>After approval, log in at your subdomain to get started</span>
+                </li>
+              </ul>
+            </div>
+            <Link
+              href="/login"
+              className="inline-flex items-center justify-center gap-2 rounded-md bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow hover:bg-blue-700 transition-colors"
+            >
+              Go to Login
+            </Link>
+          </div>
+        ) : (
         <div className="w-full max-w-md rounded-lg border border-slate-200 bg-white p-6 shadow-[0_1px_2px_rgba(15,23,42,0.04),0_12px_32px_-16px_rgba(15,23,42,0.18)] sm:p-8">
           {/* 5-step progress */}
           <div className="mb-7">
@@ -607,7 +646,7 @@ export function IspRegistrationWizard() {
                     className="mt-1 bg-white border-slate-300 text-slate-950 focus:border-blue-600"
                   />
                   <p className="text-[10px] text-slate-500 mt-1">
-                    Your authorized tenant email registered in the system.
+                    This email will be used for your account login.
                   </p>
                 </div>
 
@@ -1142,6 +1181,7 @@ export function IspRegistrationWizard() {
             </form>
           )}
         </div>
+        )}
       </main>
 
       {/* Footer */}

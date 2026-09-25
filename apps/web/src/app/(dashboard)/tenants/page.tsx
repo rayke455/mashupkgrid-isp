@@ -25,7 +25,7 @@ interface Tenant {
   id: string;
   name: string;
   slug: string;
-  status: "ACTIVE" | "SUSPENDED" | "CANCELLED";
+  status: "ACTIVE" | "SUSPENDED" | "CANCELLED" | "PENDING_APPROVAL";
   createdAt: string;
   trialEndsAt: string | null;
   disabledFeatures: string[];
@@ -444,7 +444,7 @@ export default function TenantsPage() {
   } | null>(null);
   const [copiedCredentials, setCopiedCredentials] = useState(false);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"ALL" | "ACTIVE" | "TRIAL" | "SUSPENDED" | "ATTENTION">("ALL");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "ACTIVE" | "TRIAL" | "SUSPENDED" | "PENDING" | "ATTENTION">("ALL");
   const [error, setError] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [broadcastTitle, setBroadcastTitle] = useState("");
@@ -527,6 +527,7 @@ export default function TenantsPage() {
   const activeCount = allItems.filter((t) => t.status === "ACTIVE").length;
   const trialCount = allItems.filter((t) => t.trialEndsAt && new Date(t.trialEndsAt) > new Date()).length;
   const suspendedCount = allItems.filter((t) => t.status === "SUSPENDED").length;
+  const pendingCount = allItems.filter((t) => t.status === "PENDING_APPROVAL").length;
   const attentionCount = allItems.filter((t) => tenantRisk(t) !== null).length;
 
   const filteredItems = allItems.filter((tenant) => {
@@ -539,6 +540,7 @@ export default function TenantsPage() {
 
     if (statusFilter === "ACTIVE") return tenant.status === "ACTIVE";
     if (statusFilter === "SUSPENDED") return tenant.status === "SUSPENDED";
+    if (statusFilter === "PENDING") return tenant.status === "PENDING_APPROVAL";
     if (statusFilter === "TRIAL") return Boolean(tenant.trialEndsAt && new Date(tenant.trialEndsAt) > new Date());
     if (statusFilter === "ATTENTION") return tenantRisk(tenant) !== null;
     return true;
@@ -620,6 +622,18 @@ export default function TenantsPage() {
         >
           <span className="text-[11px] font-bold text-rose-600 dark:text-rose-400 uppercase block">Suspended</span>
           <span className="text-2xl font-black text-rose-600 dark:text-rose-400">{suspendedCount}</span>
+        </div>
+
+        <div
+          onClick={() => setStatusFilter("PENDING")}
+          className={`p-3.5 rounded-2xl border transition-all cursor-pointer ${
+            statusFilter === "PENDING"
+              ? "bg-orange-50/50 border-orange-500/50 dark:bg-orange-950/20"
+              : "bg-white dark:bg-slate-900 border-slate-200/80 dark:border-slate-800"
+          }`}
+        >
+          <span className="text-[11px] font-bold text-orange-600 dark:text-orange-400 uppercase block">Pending</span>
+          <span className="text-2xl font-black text-orange-600 dark:text-orange-400">{pendingCount}</span>
         </div>
 
         {/* The card an operator should look at first: administrative status says a tenant is
@@ -959,9 +973,9 @@ export default function TenantsPage() {
                   >
                     ⭐ Upgrade
                   </Button>
-                  <Badge variant={tenant.status === "ACTIVE" ? "success" : "danger"}>
+                  <Badge variant={tenant.status === "ACTIVE" ? "success" : tenant.status === "PENDING_APPROVAL" ? "warning" : "danger"}>
                     <StatusDot status={tenant.status} />
-                    <span>{tenant.status}</span>
+                    <span>{tenant.status === "PENDING_APPROVAL" ? "PENDING" : tenant.status}</span>
                   </Badge>
                   <Button
                     variant="secondary"
@@ -976,7 +990,7 @@ export default function TenantsPage() {
                     onClick={() => toggleSuspend.mutate({ id: tenant.id, suspend: tenant.status === "ACTIVE" })}
                     disabled={toggleSuspend.isPending}
                   >
-                    {tenant.status === "ACTIVE" ? "Suspend" : "Reactivate"}
+                    {tenant.status === "PENDING_APPROVAL" ? "✅ Approve" : tenant.status === "ACTIVE" ? "Suspend" : "Reactivate"}
                   </Button>
                 </div>
               </div>

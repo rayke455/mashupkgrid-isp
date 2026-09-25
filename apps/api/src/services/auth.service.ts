@@ -18,6 +18,7 @@ import {
   ConflictError,
   NotFoundError,
   TenantSuspendedError,
+  TenantPendingApprovalError,
   UnauthorizedError,
   ValidationError,
   hashPassword,
@@ -44,6 +45,7 @@ export async function resolveTenantBySlug(slug: string): Promise<Tenant> {
   if (!tenant || tenant.deletedAt) throw new NotFoundError("Tenant");
   if (tenant.status === "SUSPENDED") throw new TenantSuspendedError();
   if (tenant.status === "CANCELLED") throw new UnauthorizedError("This tenant account has been cancelled");
+  if (tenant.status === "PENDING_APPROVAL") throw new TenantPendingApprovalError();
   return tenant;
 }
 
@@ -138,6 +140,7 @@ export async function login(
 
   if (tenant?.status === "SUSPENDED") throw new TenantSuspendedError();
   if (tenant?.status === "CANCELLED") throw new UnauthorizedError("This tenant account has been cancelled");
+  if (tenant?.status === "PENDING_APPROVAL") throw new TenantPendingApprovalError();
 
   const suspicious = await isSuspiciousLogin(result.user.id, device);
   return { ...result, suspicious };
@@ -219,6 +222,7 @@ export async function loginOrRegisterWithGoogle(
   }
   if (tenant?.status === "SUSPENDED") throw new TenantSuspendedError();
   if (tenant?.status === "CANCELLED") throw new UnauthorizedError("This tenant account has been cancelled");
+  if (tenant?.status === "PENDING_APPROVAL") throw new TenantPendingApprovalError();
 
   const tokens = await createSession(user.id, user.tenantId, device);
   return { user, tokens };
@@ -390,7 +394,7 @@ export async function registerIspTenant(
     data: {
       name: body.company.trim(),
       slug: cleanSlug,
-      status: "ACTIVE",
+      status: "PENDING_APPROVAL",
       timezone: body.timezone?.trim() || "Africa/Nairobi",
       currency: body.currency?.trim() || "KES",
       trialEndsAt,

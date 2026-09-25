@@ -66,6 +66,13 @@ export class TenantSuspendedError extends AppError {
   }
 }
 
+export class TenantPendingApprovalError extends AppError {
+  constructor(message = "Your registration is pending approval. You will be notified once your account is approved by the platform administrator.") {
+    super("TENANT_PENDING_APPROVAL", message, 403);
+    this.name = "TenantPendingApprovalError";
+  }
+}
+
 export class TenantTrialExpiredError extends AppError {
   constructor(message = "Your free trial has ended. Please subscribe to a plan to continue using tenant features.") {
     super("TRIAL_EXPIRED", message, 403);

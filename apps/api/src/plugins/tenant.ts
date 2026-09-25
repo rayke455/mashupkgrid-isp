@@ -1,6 +1,6 @@
 import type { FastifyRequest } from "fastify";
 import { prisma } from "@mashupkgrid/database";
-import { TenantSuspendedError, TenantTrialExpiredError, UnauthorizedError } from "@mashupkgrid/shared";
+import { TenantSuspendedError, TenantPendingApprovalError, TenantTrialExpiredError, UnauthorizedError } from "@mashupkgrid/shared";
 
 /**
  * Tenant resolution preHandler — must run after `authenticate`. Staff/customer accounts are
@@ -31,6 +31,9 @@ export async function resolveTenant(request: FastifyRequest): Promise<void> {
   }
   if (tenant.status === "CANCELLED") {
     throw new UnauthorizedError("This tenant account has been cancelled");
+  }
+  if (tenant.status === "PENDING_APPROVAL") {
+    throw new TenantPendingApprovalError();
   }
 
   const now = new Date();

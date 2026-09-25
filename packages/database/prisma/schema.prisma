@@ -16,6 +16,7 @@ enum TenantStatus {
   ACTIVE
   SUSPENDED
   CANCELLED
+  PENDING_APPROVAL
 }
 
 enum UserStatus {

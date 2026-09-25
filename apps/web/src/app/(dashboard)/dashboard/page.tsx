@@ -87,7 +87,7 @@ interface PaginatedTenants {
     id: string;
     name: string;
     slug: string;
-    status: "ACTIVE" | "SUSPENDED" | "CANCELLED";
+    status: "ACTIVE" | "SUSPENDED" | "CANCELLED" | "PENDING_APPROVAL";
     createdAt: string;
     trialEndsAt: string | null;
     disabledFeatures: string[];
@@ -383,8 +383,8 @@ export default function DashboardHomePage() {
                       <td className={`${td} font-medium text-white`}>{tenant.name}</td>
                       <td className={`${td} text-slate-400`}>{tenant.slug}</td>
                       <td className={td}>
-                        <Pill tone={tenant.status === "ACTIVE" ? "good" : tenant.status === "SUSPENDED" ? "warn" : "neutral"}>
-                          {tenant.status === "ACTIVE" ? "Active" : tenant.status === "SUSPENDED" ? "Suspended" : "Cancelled"}
+                        <Pill tone={tenant.status === "ACTIVE" ? "good" : tenant.status === "SUSPENDED" ? "warn" : tenant.status === "PENDING_APPROVAL" ? "warn" : "neutral"}>
+                          {tenant.status === "ACTIVE" ? "Active" : tenant.status === "SUSPENDED" ? "Suspended" : tenant.status === "PENDING_APPROVAL" ? "Pending" : "Cancelled"}
                         </Pill>
                       </td>
                       <td className={`${td} text-slate-400`}>{tenant.trialEndsAt ? (inTrial ? "Trial" : "Trial ended") : "Paid"}</td>
