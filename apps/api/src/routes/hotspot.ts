@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@mashupkgrid/database";
 import {
   validateVoucherForLogin,
+  activateVoucher,
   authenticateHotspotAccount,
   listHotspotPackages,
 } from "@mashupkgrid/radius";
@@ -17,7 +18,7 @@ import {
   verifyAndReconcilePesapalTransaction,
 } from "@mashupkgrid/payments";
 import { successResponse, ConflictError, ForbiddenError, NotFoundError, ValidationError } from "@mashupkgrid/shared";
-import { appFilterPortalHosts, buildAppFilterSection, checkMacLogin } from "@mashupkgrid/network";
+import { appFilterPortalHosts, buildAppFilterSection, checkMacLogin, rememberDevice } from "@mashupkgrid/network";
 import { env } from "@mashupkgrid/config";
 import { authenticate } from "../plugins/authenticate.js";
 import { resolveTenant } from "../plugins/tenant.js";
@@ -27,7 +28,7 @@ import { hotspotLoginRateLimitConfig } from "../plugins/rate-limit.js";
 import { resolveTenantBySlug } from "../services/auth.service.js";
 
 const tenantParamsSchema = z.object({ tenantSlug: z.string().min(1) });
-const loginBodySchema = z.object({ code: z.string().min(1).max(32) });
+const loginBodySchema = z.object({ code: z.string().min(1).max(32), mac: z.string().max(32).optional() });
 /** Either identifier is accepted: the number they paid from, or the confirmation SMS pasted
  *  whole. Both are things a stranded customer has on their phone right now. */
 const recoverBodySchema = z
@@ -1038,13 +1039,9 @@ export async function hotspotRoutes(app: FastifyInstance): Promise<void> {
     },
     async (request, reply) => {
       const { tenantSlug } = tenantParamsSchema.parse(request.params);
-      const { code } = loginBodySchema.parse(request.body);
+      const { code, mac } = loginBodySchema.parse(request.body);
       const tenant = await resolveTenantBySlug(tenantSlug);
 
-      // Validates WITHOUT starting the clock. The countdown begins when the router actually
-      // authenticates the code (see activateVoucherOnFirstAuth in radius-server.ts), so a
-      // customer whose hand-off to the router then fails does not lose paid time having never
-      // been online — which is precisely what happened while RADIUS was unreachable.
       const voucher = await validateVoucherForLogin(tenant.id, code.trim().toUpperCase());
 
       if (voucher.status === "EXPIRED") {
@@ -1053,16 +1050,26 @@ export async function hotspotRoutes(app: FastifyInstance): Promise<void> {
       if (voucher.status === "USED") {
         throw new ConflictError("This voucher has already been used up");
       }
-      // UNUSED and ACTIVE both mean "good to connect": the first has not been used yet, the
-      // second is a reconnect on a code already running.
+
+      // If MAC is supplied, immediately bind device and activate the voucher!
+      // This enables MikroTik's MAC-auth to automatically accept the phone on the next request!
+      let activeVoucher = voucher;
+      if (mac) {
+        try {
+          await rememberDevice(tenant.id, mac, voucher.code);
+          activeVoucher = await activateVoucher(tenant.id, voucher.code);
+        } catch (err) {
+          request.log.warn({ err, mac, code: voucher.code }, "Failed to bind MAC to voucher during login");
+        }
+      }
 
       reply.send(
         successResponse(
           {
-            status: voucher.status,
-            expiresAt: voucher.expiresAt,
-            durationMinutes: voucher.durationMinutes,
-            dataCapMb: voucher.dataCapMb,
+            status: activeVoucher.status,
+            expiresAt: activeVoucher.expiresAt,
+            durationMinutes: activeVoucher.durationMinutes,
+            dataCapMb: activeVoucher.dataCapMb,
           },
           request.id
         )

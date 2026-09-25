@@ -82,6 +82,8 @@ const CAPTIVE_PREVIEW_PREFIX = "mkg_hotspot_captive_config:";
  *  behind a login wall is the step people abandon at. Stored only in the visitor's own browser
  *  — it never reaches the server and identifies nobody but the device's own owner. */
 const REMEMBERED_PHONE_PREFIX = "mkg-hotspot-phone:";
+const REMEMBERED_LINK_LOGIN_PREFIX = "mkg-hotspot-link-login:";
+const REMEMBERED_MAC_PREFIX = "mkg-hotspot-mac:";
 
 function rememberPhone(tenantSlug: string, phone: string): void {
   try {
@@ -156,35 +158,19 @@ function routerLoginUrl(linkLoginOnly: string, username: string, password: strin
 function submitRouterLogin(linkLoginOnly: string, username: string, password: string): void {
   const loginUrl = routerLoginUrl(linkLoginOnly, username, password);
 
-  // Strategy 1: Hidden iframe — works even when the browser blocks HTTPS→HTTP top-level
-  // navigation (Android's captive-portal mini-browser, Chrome's mixed-content policy). The
-  // router only needs to see the request once to add this MAC to its active sessions; it does
-  // not matter what the iframe renders, only that the GET/POST reaches the router.
+  // Strategy 1: Hidden iframe and background form POST targeted at iframe
+  // This submits the POST credentials directly to RouterOS without being cancelled by window.location
   try {
     const iframe = document.createElement("iframe");
+    iframe.name = "mkg_login_frame";
     iframe.style.display = "none";
-    iframe.setAttribute("sandbox", "allow-forms allow-same-origin");
     document.body.appendChild(iframe);
-    // Navigate the iframe — browsers are generally more permissive about mixed content in
-    // hidden iframes than top-level navigation.
     iframe.src = loginUrl;
-    // Clean up after the router has had more than enough time to process the request.
-    window.setTimeout(() => {
-      try { document.body.removeChild(iframe); } catch {}
-    }, 5000);
-  } catch {}
 
-  // Strategy 2: Background fetch — browsers allow mixed-content fetch in some contexts where
-  // they block navigation. The router only needs the request to arrive; we ignore the response.
-  try {
-    void fetch(loginUrl, { mode: "no-cors", credentials: "omit" }).catch(() => {});
-  } catch {}
-
-  // Strategy 3: Silent background POST form submission (original approach)
-  try {
     const form = document.createElement("form");
     form.method = "POST";
     form.action = linkLoginOnly;
+    form.target = "mkg_login_frame";
     form.style.display = "none";
     const u = document.createElement("input");
     u.type = "hidden";
@@ -198,21 +184,61 @@ function submitRouterLogin(linkLoginOnly: string, username: string, password: st
     form.appendChild(p);
     document.body.appendChild(form);
     form.submit();
+
+    window.setTimeout(() => {
+      try { document.body.removeChild(form); } catch {}
+      try { document.body.removeChild(iframe); } catch {}
+    }, 6000);
   } catch {}
 
-  // Strategy 4: Primary top-level navigation to router login with credentials in query.
-  // Handled by the router's login.html template which executes same-origin local POST.
-  // This is last because if the browser blocks it (HTTPS→HTTP), we've already tried the
-  // silent methods above.
-  window.location.href = loginUrl;
+  // Strategy 2: Background fetch
+  try {
+    void fetch(loginUrl, { mode: "no-cors", credentials: "omit" }).catch(() => {});
+  } catch {}
+
+  // Strategy 3: Top-level navigation to router login with credentials in query
+  // Handled by the router's login.html template which executes local same-origin POST
+  window.setTimeout(() => {
+    try {
+      window.location.href = loginUrl;
+    } catch {}
+  }, 150);
 }
 
 export default function HotspotCaptivePortalPage() {
   const { tenantSlug } = useParams<{ tenantSlug: string }>();
   const searchParams = useSearchParams();
-  const linkLoginOnly = searchParams.get("link-login-only");
+  const paramLinkLoginOnly = searchParams.get("link-login-only");
   /** This phone's MAC, put in the sign-in link by the router ($(mac) in the login template). */
-  const phoneMac = searchParams.get("mac");
+  const paramPhoneMac = searchParams.get("mac");
+
+  const [linkLoginOnly, setLinkLoginOnly] = useState<string | null>(paramLinkLoginOnly);
+  const [phoneMac, setPhoneMac] = useState<string | null>(paramPhoneMac);
+
+  useEffect(() => {
+    if (paramLinkLoginOnly) {
+      setLinkLoginOnly(paramLinkLoginOnly);
+      try { sessionStorage.setItem(REMEMBERED_LINK_LOGIN_PREFIX + tenantSlug, paramLinkLoginOnly); } catch {}
+      try { localStorage.setItem(REMEMBERED_LINK_LOGIN_PREFIX + tenantSlug, paramLinkLoginOnly); } catch {}
+    } else {
+      try {
+        const stored = sessionStorage.getItem(REMEMBERED_LINK_LOGIN_PREFIX + tenantSlug) || localStorage.getItem(REMEMBERED_LINK_LOGIN_PREFIX + tenantSlug);
+        if (stored) setLinkLoginOnly(stored);
+      } catch {}
+    }
+
+    if (paramPhoneMac) {
+      setPhoneMac(paramPhoneMac);
+      try { sessionStorage.setItem(REMEMBERED_MAC_PREFIX + tenantSlug, paramPhoneMac); } catch {}
+      try { localStorage.setItem(REMEMBERED_MAC_PREFIX + tenantSlug, paramPhoneMac); } catch {}
+    } else {
+      try {
+        const stored = sessionStorage.getItem(REMEMBERED_MAC_PREFIX + tenantSlug) || localStorage.getItem(REMEMBERED_MAC_PREFIX + tenantSlug);
+        if (stored) setPhoneMac(stored);
+      } catch {}
+    }
+  }, [paramLinkLoginOnly, paramPhoneMac, tenantSlug]);
+
   const queryTheme = searchParams.get("theme") as ThemeId | null;
   const paystackRef = searchParams.get("paystack") || searchParams.get("ref");
   const pesapalRef = searchParams.get("pesapal");
@@ -411,7 +437,7 @@ export default function HotspotCaptivePortalPage() {
       return apiFetch<VoucherLoginResult>(`/api/v1/hotspot/${tenantSlug}/login`, {
         method: "POST",
         skipAuth: true,
-        body: JSON.stringify({ code: finalCode }),
+        body: JSON.stringify({ code: finalCode, mac: phoneMac || undefined }),
       });
     },
     onSuccess: (data, codeToUse) => {
@@ -575,10 +601,7 @@ export default function HotspotCaptivePortalPage() {
           phone: buyPhone.trim(),
           email: buyEmail.trim() || undefined,
           method: selectedGateway,
-          // Paystack and Pesapal checkouts are full-page redirects away from this URL and back —
-          // without this, the router's link-login-only param (only otherwise living in the address
-          // bar) is gone by the time the customer returns, and auto-connect can't happen.
-          linkLoginOnly: (selectedGateway === "PAYSTACK" || selectedGateway === "PESAPAL") ? linkLoginOnly ?? undefined : undefined,
+          linkLoginOnly: linkLoginOnly ?? undefined,
         }),
       }),
     onSuccess: (data) => {

@@ -11,6 +11,7 @@ import {
   sandboxSettlementsEnabled,
   SettlementOutcomeUnknownError,
 } from "./providers.js";
+import { normalizeKenyanPhone } from "../mpesa/phone.js";
 
 /**
  * Step 3 of the money flow: paying a tenant what the ledger says they are owed.
@@ -57,9 +58,48 @@ export async function requestSettlement(input: RequestSettlementInput): Promise<
     const tenant = await tx.tenant.findFirst({ where: { id: input.tenantId, deletedAt: null } });
     if (!tenant) throw new NotFoundError("Tenant");
 
-    const destination = await tx.settlementDestination.findFirst({
+    let destination = await tx.settlementDestination.findFirst({
       where: { tenantId: input.tenantId, isActive: true },
     });
+    if (!destination) {
+      // Auto-fallback: check if tenant has a payoutShortcode or an owner User with a valid phone
+      if (tenant.payoutShortcode) {
+        const type = tenant.payoutShortcodeType === "TILL" ? "TILL" : "PAYBILL";
+        destination = await tx.settlementDestination.create({
+          data: {
+            tenantId: input.tenantId,
+            type,
+            accountName: tenant.name,
+            tillNumber: type === "TILL" ? tenant.payoutShortcode : null,
+            paybillNumber: type === "PAYBILL" ? tenant.payoutShortcode : null,
+            paybillAccountReference: type === "PAYBILL" ? tenant.slug.slice(0, 20) : null,
+            isActive: true,
+          },
+        });
+      } else {
+        const owner = await tx.user.findFirst({
+          where: { tenantId: input.tenantId, phone: { not: null } },
+          orderBy: { createdAt: "asc" },
+          select: { phone: true },
+        });
+        if (owner?.phone) {
+          try {
+            const cleanPhone = normalizeKenyanPhone(owner.phone);
+            destination = await tx.settlementDestination.create({
+              data: {
+                tenantId: input.tenantId,
+                type: "MPESA_PHONE",
+                accountName: tenant.name,
+                phone: cleanPhone,
+                isActive: true,
+              },
+            });
+          } catch {
+            // ignore phone normalization error
+          }
+        }
+      }
+    }
     if (!destination) {
       throw new ValidationError(`"${tenant.name}" has no settlement destination — add one in Payment Settings.`);
     }

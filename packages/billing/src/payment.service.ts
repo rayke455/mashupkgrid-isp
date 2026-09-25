@@ -9,6 +9,7 @@ import { ConflictError, NotFoundError, ValidationError } from "@mashupkgrid/shar
 import type { Db } from "./db.js";
 import { withRetryOnNumberCollision } from "./sequence.js";
 import { creditWallet, debitWallet } from "./wallet.service.js";
+import { bestEffortRadiusSync } from "./billing-cycle.service.js";
 
 async function createReceipt(db: Db, tenantId: string, paymentId: string): Promise<Receipt> {
   return withRetryOnNumberCollision(
@@ -121,6 +122,34 @@ async function recordPaymentForInvoiceCore(
   });
 
   const receipt = await createReceipt(db, tenantId, payment.id);
+
+  if (newStatus === "PAID") {
+    // If the customer has cleared their unpaid invoices, immediately reactivate any SUSPENDED subscriptions!
+    const unpaidCount = await db.invoice.count({
+      where: {
+        customerId: invoice.customerId,
+        id: { not: invoice.id },
+        status: { in: ["PENDING", "PARTIALLY_PAID", "OVERDUE"] },
+      },
+    });
+    if (unpaidCount === 0) {
+      const suspended = await db.customerService.findMany({
+        where: { tenantId, customerId: invoice.customerId, status: "SUSPENDED" },
+        select: { id: true },
+      });
+      for (const sub of suspended) {
+        await db.customerService.update({
+          where: { id: sub.id },
+          data: { status: "ACTIVE" },
+        });
+        // bestEffortRadiusSync does RADIUS radCheck/radReply update + enqueues MikroTik provisioning job RESTORE
+        void bestEffortRadiusSync(tenantId, sub.id, "reactivate").catch((err) => {
+          // eslint-disable-next-line no-console
+          console.error(`[billing] failed to reactivate router access for subscription ${sub.id}`, err);
+        });
+      }
+    }
+  }
 
   if (excessMinor > 0) {
     await creditWallet(

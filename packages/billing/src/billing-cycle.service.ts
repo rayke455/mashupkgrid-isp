@@ -9,7 +9,7 @@ import { addDays, cycleLengthDays } from "./money.js";
  *  suspend — the billing status change is still the source of truth and must not be rolled back
  *  just because there was no router-side session to touch. Anything else (a real DB error) is
  *  logged, not swallowed, since it means enforcement silently failed. */
-async function bestEffortRadiusSync(tenantId: string, customerServiceId: string, action: "suspend" | "reactivate") {
+export async function bestEffortRadiusSync(tenantId: string, customerServiceId: string, action: "suspend" | "reactivate") {
   try {
     if (action === "suspend") await suspendRadiusUser(tenantId, customerServiceId);
     else await reactivateRadiusUser(tenantId, customerServiceId);
@@ -151,4 +151,26 @@ export async function reactivateClearedSubscriptions(): Promise<JobResult> {
   }
 
   return { processed: suspended.length, affected, errors: 0 };
+}
+
+/** Immediately reactivates any SUSPENDED subscriptions for a customer if they have no unpaid invoices left. */
+export async function reactivateCustomerIfCleared(tenantId: string, customerId: string): Promise<number> {
+  const unpaidCount = await prisma.invoice.count({
+    where: {
+      customerId,
+      status: { in: ["PENDING", "PARTIALLY_PAID", "OVERDUE"] },
+    },
+  });
+  if (unpaidCount > 0) return 0;
+
+  const suspended = await prisma.customerService.findMany({
+    where: { tenantId, customerId, status: "SUSPENDED" },
+  });
+
+  for (const subscription of suspended) {
+    await prisma.customerService.update({ where: { id: subscription.id }, data: { status: "ACTIVE" } });
+    await bestEffortRadiusSync(subscription.tenantId, subscription.id, "reactivate");
+  }
+
+  return suspended.length;
 }

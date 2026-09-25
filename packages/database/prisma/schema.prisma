@@ -1288,7 +1288,7 @@ model PlatformSettlementSettings {
   feePercentBps          Int                 @default(0)
   feeFixedMinor          Int                 @default(0)
   settlementMode         SettlementMode      @default(AUTOMATIC)
-  settlementFrequency    SettlementFrequency @default(DAILY)
+  settlementFrequency    SettlementFrequency @default(INSTANT)
   settlementMinimumMinor Int                 @default(100)
   /// Hour of day (Africa/Nairobi) DAILY/WEEKLY runs happen.
   settlementHourEat      Int                 @default(9)
