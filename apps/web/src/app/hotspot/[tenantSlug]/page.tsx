@@ -84,6 +84,8 @@ const CAPTIVE_PREVIEW_PREFIX = "mkg_hotspot_captive_config:";
 const REMEMBERED_PHONE_PREFIX = "mkg-hotspot-phone:";
 const REMEMBERED_LINK_LOGIN_PREFIX = "mkg-hotspot-link-login:";
 const REMEMBERED_MAC_PREFIX = "mkg-hotspot-mac:";
+const REMEMBERED_LINK_ORIG_PREFIX = "mkg-hotspot-link-orig:";
+const DEFAULT_ROUTER_LOGIN_URL = "http://192.168.88.1/login";
 
 function rememberPhone(tenantSlug: string, phone: string): void {
   try {
@@ -155,54 +157,58 @@ function routerLoginUrl(linkLoginOnly: string, username: string, password: strin
   }
 }
 
-function submitRouterLogin(linkLoginOnly: string, username: string, password: string): void {
-  const loginUrl = routerLoginUrl(linkLoginOnly, username, password);
+function submitRouterLogin(
+  linkLoginOnly: string,
+  username: string,
+  password: string,
+  dstUrl?: string | null
+): void {
+  const effectiveLink = linkLoginOnly || DEFAULT_ROUTER_LOGIN_URL;
+  const loginUrl = routerLoginUrl(effectiveLink, username, password);
 
-  // Strategy 1: Hidden iframe and background form POST targeted at iframe
-  // This submits the POST credentials directly to RouterOS without being cancelled by window.location
+  // Strategy 1: Top-level Form POST to RouterOS /login
+  // Full-page form submissions from HTTPS to HTTP are allowed by browsers and directly
+  // handled by RouterOS Hotspot C binary servlet without requiring custom router templates.
   try {
-    const iframe = document.createElement("iframe");
-    iframe.name = "mkg_login_frame";
-    iframe.style.display = "none";
-    document.body.appendChild(iframe);
-    iframe.src = loginUrl;
-
     const form = document.createElement("form");
     form.method = "POST";
-    form.action = linkLoginOnly;
-    form.target = "mkg_login_frame";
+    form.action = effectiveLink;
+    form.target = "_self";
     form.style.display = "none";
+
     const u = document.createElement("input");
     u.type = "hidden";
     u.name = "username";
     u.value = username;
     form.appendChild(u);
+
     const p = document.createElement("input");
     p.type = "hidden";
     p.name = "password";
     p.value = password;
     form.appendChild(p);
+
+    if (dstUrl) {
+      const dst = document.createElement("input");
+      dst.type = "hidden";
+      dst.name = "dst";
+      dst.value = dstUrl;
+      form.appendChild(dst);
+    }
+
     document.body.appendChild(form);
     form.submit();
+    return;
+  } catch (e) {
+    console.error("Direct form POST failed, attempting navigation:", e);
+  }
 
-    window.setTimeout(() => {
-      try { document.body.removeChild(form); } catch {}
-      try { document.body.removeChild(iframe); } catch {}
-    }, 6000);
-  } catch {}
-
-  // Strategy 2: Background fetch
+  // Fallback Strategy: Top-level navigation with query parameters (in case custom login.html handles query params)
   try {
-    void fetch(loginUrl, { mode: "no-cors", credentials: "omit" }).catch(() => {});
-  } catch {}
-
-  // Strategy 3: Top-level navigation to router login with credentials in query
-  // Handled by the router's login.html template which executes local same-origin POST
-  window.setTimeout(() => {
-    try {
-      window.location.href = loginUrl;
-    } catch {}
-  }, 150);
+    window.location.href = loginUrl;
+  } catch (e) {
+    console.error("Router navigation failed:", e);
+  }
 }
 
 export default function HotspotCaptivePortalPage() {
@@ -211,9 +217,11 @@ export default function HotspotCaptivePortalPage() {
   const paramLinkLoginOnly = searchParams.get("link-login-only");
   /** This phone's MAC, put in the sign-in link by the router ($(mac) in the login template). */
   const paramPhoneMac = searchParams.get("mac");
+  const paramLinkOrig = searchParams.get("link-orig");
 
   const [linkLoginOnly, setLinkLoginOnly] = useState<string | null>(paramLinkLoginOnly);
   const [phoneMac, setPhoneMac] = useState<string | null>(paramPhoneMac);
+  const [linkOrig, setLinkOrig] = useState<string | null>(paramLinkOrig);
 
   useEffect(() => {
     if (paramLinkLoginOnly) {
@@ -237,7 +245,18 @@ export default function HotspotCaptivePortalPage() {
         if (stored) setPhoneMac(stored);
       } catch {}
     }
-  }, [paramLinkLoginOnly, paramPhoneMac, tenantSlug]);
+
+    if (paramLinkOrig) {
+      setLinkOrig(paramLinkOrig);
+      try { sessionStorage.setItem(REMEMBERED_LINK_ORIG_PREFIX + tenantSlug, paramLinkOrig); } catch {}
+      try { localStorage.setItem(REMEMBERED_LINK_ORIG_PREFIX + tenantSlug, paramLinkOrig); } catch {}
+    } else {
+      try {
+        const stored = sessionStorage.getItem(REMEMBERED_LINK_ORIG_PREFIX + tenantSlug) || localStorage.getItem(REMEMBERED_LINK_ORIG_PREFIX + tenantSlug);
+        if (stored) setLinkOrig(stored);
+      } catch {}
+    }
+  }, [paramLinkLoginOnly, paramPhoneMac, paramLinkOrig, tenantSlug]);
 
   const queryTheme = searchParams.get("theme") as ThemeId | null;
   const paystackRef = searchParams.get("paystack") || searchParams.get("ref");
@@ -326,17 +345,12 @@ export default function HotspotCaptivePortalPage() {
   ) => {
     setCompletingRouterLogin(true);
     setStalledLoginUrl(null);
-    submitRouterLogin(link, username, password);
-    // 2.5s, not 8. A successful hand-off replaces this page within a few hundred milliseconds —
-    // if it has not happened by now it is not going to, and the environment where it fails most
-    // is Android's captive-portal mini-browser, which is stricter than a normal browser about
-    // leaving an HTTPS page for a plain-HTTP one. Waiting longer only means the customer, who has
-    // already paid, watches a progress bar creep toward a number it never reaches.
+    submitRouterLogin(link, username, password, linkOrig);
     window.setTimeout(() => {
       setCompletingRouterLogin(false);
       setStalledLoginUrl(routerLoginUrl(link, username, password));
       showResultInstead();
-    }, 2500);
+    }, 4000);
   };
   const autoReconnectAttempted = useRef(false);
 
@@ -448,17 +462,13 @@ export default function HotspotCaptivePortalPage() {
       // ever replays a code the router has actually already accepted once.
       rememberVoucher(tenantSlug, finalCode, data.expiresAt);
       if (data.expiresAt) setRememberedVoucher({ code: finalCode, expiresAt: data.expiresAt });
-      if (linkLoginOnly) {
-        handOffToRouter(linkLoginOnly, finalCode, finalCode, () => {
-          setVoucherResult(data);
-          setShowVoucherModal(false);
-          setSelectedPkg(null);
-        });
-        return;
-      }
-      setVoucherResult(data);
-      setShowVoucherModal(false);
-      setSelectedPkg(null);
+
+      const targetRouterLink = linkLoginOnly || DEFAULT_ROUTER_LOGIN_URL;
+      handOffToRouter(targetRouterLink, finalCode, finalCode, () => {
+        setVoucherResult(data);
+        setShowVoucherModal(false);
+        setSelectedPkg(null);
+      });
     },
     onError: (err) => {
       setVoucherResult(null);
@@ -489,7 +499,7 @@ export default function HotspotCaptivePortalPage() {
     // overwrite anything already typed: this effect also re-runs on tenantSlug changes.
     setBuyPhone((current) => current || loadRememberedPhone(tenantSlug));
     if (autoReconnectAttempted.current) return;
-    if (!linkLoginOnly || !remembered) return;
+    if (!remembered) return;
     autoReconnectAttempted.current = true;
     setAutoReconnecting(true);
     connectWithVoucher.mutate(remembered.code);
@@ -497,7 +507,7 @@ export default function HotspotCaptivePortalPage() {
   }, [tenantSlug, linkLoginOnly]);
 
   const forceReconnect = () => {
-    if (!rememberedVoucher || !linkLoginOnly) return;
+    if (!rememberedVoucher) return;
     setError(null);
     setAutoReconnecting(true);
     connectWithVoucher.mutate(rememberedVoucher.code);
@@ -512,7 +522,7 @@ export default function HotspotCaptivePortalPage() {
         `/api/v1/hotspot/${tenantSlug}/devices/${encodeURIComponent(phoneMac!)}/status`,
         { skipAuth: true }
       ),
-    enabled: Boolean(phoneMac && linkLoginOnly),
+    enabled: Boolean(phoneMac),
     retry: false,
   });
 
@@ -520,9 +530,10 @@ export default function HotspotCaptivePortalPage() {
 
   /** Asks the router to log this phone in by its MAC; the server accepts only this same phone. */
   const reconnectByMac = () => {
-    if (!phoneMac || !linkLoginOnly) return;
+    if (!phoneMac) return;
+    const targetRouterLink = linkLoginOnly || DEFAULT_ROUTER_LOGIN_URL;
     setError(null);
-    handOffToRouter(linkLoginOnly, phoneMac, "", () =>
+    handOffToRouter(targetRouterLink, phoneMac, "", () =>
       setError("This phone couldn't be reconnected automatically. Enter your code, or use “Paid but not connected?”.")
     );
   };
@@ -568,15 +579,11 @@ export default function HotspotCaptivePortalPage() {
       }),
     onSuccess: (data) => {
       setError(null);
-      if (linkLoginOnly) {
-        handOffToRouter(linkLoginOnly, data.username, accountPassword, () => {
-          setAccountResult(data);
-          setShowAccountModal(false);
-        });
-        return;
-      }
-      setAccountResult(data);
-      setShowAccountModal(false);
+      const targetRouterLink = linkLoginOnly || DEFAULT_ROUTER_LOGIN_URL;
+      handOffToRouter(targetRouterLink, data.username, accountPassword, () => {
+        setAccountResult(data);
+        setShowAccountModal(false);
+      });
     },
     onError: (err) => {
       setAccountResult(null);
@@ -866,7 +873,7 @@ export default function HotspotCaptivePortalPage() {
         )}
 
         {/* Back online in one tap with the still-valid code from last time. */}
-        {rememberedVoucher && linkLoginOnly && !completingRouterLogin && (
+        {rememberedVoucher && !completingRouterLogin && (
           <div className="fixed left-1/2 top-3 z-50 -translate-x-1/2">
             <button
               type="button"
@@ -880,7 +887,7 @@ export default function HotspotCaptivePortalPage() {
         )}
 
         {/* Back online in one tap: this phone has paid before and still has time left. */}
-        {deviceStatus?.canReconnect && !rememberedVoucher && linkLoginOnly && !completingRouterLogin && !reconnectDismissed && (
+        {deviceStatus?.canReconnect && !rememberedVoucher && !completingRouterLogin && !reconnectDismissed && (
           <PortalSheet
             title="Welcome back"
             description={
@@ -913,6 +920,23 @@ export default function HotspotCaptivePortalPage() {
               <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-[3px] border-emerald-600 border-t-transparent" aria-hidden="true" />
               <p className="text-base font-semibold text-slate-900">Reconnecting you…</p>
               <p className="mt-1 text-sm text-slate-500">Using your code from last time.</p>
+            </div>
+          </div>
+        )}
+
+        {completingRouterLogin && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-6 backdrop-blur-sm">
+            <div className="w-full max-w-sm rounded-3xl bg-white p-7 text-center shadow-2xl">
+              <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
+                <span className="h-8 w-8 animate-spin rounded-full border-4 border-emerald-600 border-t-transparent" />
+              </div>
+              <p className="text-xl font-bold text-slate-900">Activating Internet…</p>
+              <p className="mt-2 text-sm text-slate-600">
+                Payment received! Connecting your device to the Wi-Fi gateway now…
+              </p>
+              <div className="mt-4 flex items-center justify-center gap-1.5 text-xs text-emerald-700 font-medium bg-emerald-50 py-1.5 px-3 rounded-full">
+                <span>✓ Verified</span> · <span>Automatic login in progress</span>
+              </div>
             </div>
           </div>
         )}
