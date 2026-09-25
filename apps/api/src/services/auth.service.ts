@@ -247,10 +247,32 @@ async function resolveTenantIdForNoOpFlow(slug: string): Promise<string | null> 
   return tenant && !tenant.deletedAt && tenant.status === "ACTIVE" ? tenant.id : null;
 }
 
-export async function resendVerification(tenantSlug: string, email: string): Promise<void> {
-  const tenantId = await resolveTenantIdForNoOpFlow(tenantSlug);
-  if (!tenantId) return;
-  const result = await resendVerificationEmail(tenantId, email);
+export async function resendVerification(tenantSlug: string | null | undefined, email: string): Promise<void> {
+  const normalizedEmail = email.trim().toLowerCase();
+  let tenantId: string | null = null;
+  if (tenantSlug) {
+    tenantId = await resolveTenantIdForNoOpFlow(tenantSlug);
+    if (!tenantId) return;
+  } else {
+    const platformUser = await prisma.user.findFirst({
+      where: { tenantId: null, email: normalizedEmail, deletedAt: null },
+    });
+    if (platformUser) {
+      tenantId = null;
+    } else {
+      const tenantUser = await prisma.user.findFirst({
+        where: { email: normalizedEmail, deletedAt: null, tenantId: { not: null } },
+        include: { tenant: true },
+      });
+      if (tenantUser && tenantUser.tenant && tenantUser.tenant.status === "ACTIVE" && !tenantUser.tenant.deletedAt) {
+        tenantId = tenantUser.tenant.id;
+      } else {
+        return;
+      }
+    }
+  }
+
+  const result = await resendVerificationEmail(tenantId, normalizedEmail);
   if (result) {
     await enqueueSendVerificationEmail({
       userId: result.user.id,
@@ -262,10 +284,32 @@ export async function resendVerification(tenantSlug: string, email: string): Pro
   // existence, same principle attemptLogin already applies.
 }
 
-export async function forgotPassword(tenantSlug: string, email: string): Promise<void> {
-  const tenantId = await resolveTenantIdForNoOpFlow(tenantSlug);
-  if (!tenantId) return;
-  const result = await requestPasswordReset(tenantId, email);
+export async function forgotPassword(tenantSlug: string | null | undefined, email: string): Promise<void> {
+  const normalizedEmail = email.trim().toLowerCase();
+  let tenantId: string | null = null;
+  if (tenantSlug) {
+    tenantId = await resolveTenantIdForNoOpFlow(tenantSlug);
+    if (!tenantId) return;
+  } else {
+    const platformUser = await prisma.user.findFirst({
+      where: { tenantId: null, email: normalizedEmail, deletedAt: null },
+    });
+    if (platformUser) {
+      tenantId = null;
+    } else {
+      const tenantUser = await prisma.user.findFirst({
+        where: { email: normalizedEmail, deletedAt: null, tenantId: { not: null } },
+        include: { tenant: true },
+      });
+      if (tenantUser && tenantUser.tenant && tenantUser.tenant.status === "ACTIVE" && !tenantUser.tenant.deletedAt) {
+        tenantId = tenantUser.tenant.id;
+      } else {
+        return;
+      }
+    }
+  }
+
+  const result = await requestPasswordReset(tenantId, normalizedEmail);
   if (result) {
     await enqueueSendPasswordResetEmail({
       userId: result.user.id,

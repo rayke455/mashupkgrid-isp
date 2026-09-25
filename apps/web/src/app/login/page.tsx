@@ -8,7 +8,7 @@ import { z } from "zod";
 import Link from "next/link";
 import { useAuth } from "@/lib/auth-context";
 import { ApiRequestError } from "@/lib/api-client";
-import { ErrorText, HintText, Input, Label } from "@/components/ui";
+import { ErrorText, Input, Label } from "@/components/ui";
 import { GoogleSignInButton } from "@/components/google-sign-in-button";
 import { IconArrowRight, IconCheck, IconEye, IconEyeOff } from "@/components/icons";
 import { Logo } from "@/components/marketing/brand";
@@ -33,7 +33,6 @@ function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const detectedTenant = searchParams.get("tenant");
-  const [manualOverride, setManualOverride] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [googlePending, setGooglePending] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -49,7 +48,6 @@ function LoginContent() {
   });
 
   const tenantSlug = watch("tenantSlug");
-  const isTenantLocked = Boolean(detectedTenant) && !manualOverride;
 
   const onSubmit = async (values: LoginFormValues) => {
     setServerError(null);
@@ -115,37 +113,7 @@ function LoginContent() {
             </p>
 
             <form onSubmit={handleSubmit(onSubmit)} className="mt-8 space-y-5" noValidate>
-              <div>
-                <div className="mb-1.5 flex items-center justify-between">
-                  <Label htmlFor="tenantSlug" className="mb-0">
-                    Organization
-                  </Label>
-                  {isTenantLocked ? (
-                    <button
-                      type="button"
-                      onClick={() => setManualOverride(true)}
-                      className="rounded text-xs font-medium text-blue-700 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
-                    >
-                      Change
-                    </button>
-                  ) : (
-                    <span className="text-xs text-slate-400">Optional</span>
-                  )}
-                </div>
-                <Input
-                  id="tenantSlug"
-                  placeholder="e.g. demo-isp"
-                  autoComplete="organization"
-                  readOnly={isTenantLocked}
-                  className={`font-mono ${isTenantLocked ? "cursor-default bg-slate-50 text-slate-600" : ""}`}
-                  {...register("tenantSlug")}
-                />
-                <HintText>
-                  {isTenantLocked
-                    ? "Detected from this ISP's address."
-                    : "Your ISP's account name. Leave blank for the platform admin console."}
-                </HintText>
-              </div>
+              <input type="hidden" {...register("tenantSlug")} />
 
               <div>
                 <Label htmlFor="email">Email</Label>

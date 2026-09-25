@@ -11,8 +11,7 @@ import { IconCheck } from "@/components/icons";
 import { AuthShell, Spinner, authPrimaryButton, authSecondaryButton } from "@/components/marketing/auth-shell";
 
 const schema = z.object({
-  tenantSlug: z.string().min(1, "Enter your organization"),
-  email: z.string().email("Invalid email address"),
+  email: z.string().email("Please enter a valid email address"),
 });
 type FormValues = z.infer<typeof schema>;
 
@@ -42,7 +41,7 @@ export default function ForgotPasswordPage() {
   return (
     <AuthShell
       title="Reset your password"
-      description="Enter your organization and email, and we'll send you a link to set a new password."
+      description="Enter your account email, and we'll send you a link to set a new password."
     >
       {sent ? (
         <div className="space-y-5">
@@ -56,12 +55,6 @@ export default function ForgotPasswordPage() {
         </div>
       ) : (
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
-          <div>
-            <Label htmlFor="tenantSlug">Organization</Label>
-            <Input id="tenantSlug" placeholder="e.g. demo-isp or master" autoComplete="organization" className="font-mono" {...register("tenantSlug")} />
-            {errors.tenantSlug && <ErrorText>{errors.tenantSlug.message}</ErrorText>}
-          </div>
-
           <div>
             <Label htmlFor="email">Email</Label>
             <Input id="email" type="email" autoComplete="email" placeholder="you@yourisp.co.ke" {...register("email")} />

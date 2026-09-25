@@ -57,7 +57,7 @@ const loginSchema = z.object({
   password: z.string().min(1),
 });
 
-const emailOnlySchema = z.object({ tenantSlug: z.string().min(1), email: z.string().email() });
+const emailOnlySchema = z.object({ tenantSlug: z.string().min(1).optional().nullable(), email: z.string().email() });
 
 const googleAuthSchema = z.object({ tenantSlug: z.string().optional().default(""), credential: z.string().min(1) });
 
