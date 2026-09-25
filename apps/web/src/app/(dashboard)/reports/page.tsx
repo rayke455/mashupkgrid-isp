@@ -281,7 +281,7 @@ export default function ReportsPage() {
             onClick={() => setActiveTab("revenue")}
             className={`px-3.5 py-2 rounded-lg transition-all flex items-center gap-1.5 ${
               activeTab === "revenue"
-                ? "bg-brand-600 text-white shadow-md shadow-brand-500/20"
+                ? "bg-brand-600 text-white"
                 : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
             }`}
           >
@@ -292,7 +292,7 @@ export default function ReportsPage() {
             onClick={() => setActiveTab("clients")}
             className={`px-3.5 py-2 rounded-lg transition-all flex items-center gap-1.5 ${
               activeTab === "clients"
-                ? "bg-brand-600 text-white shadow-md shadow-brand-500/20"
+                ? "bg-brand-600 text-white"
                 : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
             }`}
           >
@@ -303,7 +303,7 @@ export default function ReportsPage() {
             onClick={() => setActiveTab("bandwidth")}
             className={`px-3.5 py-2 rounded-lg transition-all flex items-center gap-1.5 ${
               activeTab === "bandwidth"
-                ? "bg-brand-600 text-white shadow-md shadow-brand-500/20"
+                ? "bg-brand-600 text-white"
                 : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
             }`}
           >
@@ -442,7 +442,7 @@ export default function ReportsPage() {
 
           {/* 4 Revenue Metric Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card className="p-5 space-y-1 bg-gradient-to-br from-slate-900 to-obsidian-950 border-slate-800 text-white shadow-sm">
+            <Card className="p-5 space-y-1">
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Revenue</span>
               <div className="text-2xl font-bold tabular-nums text-emerald-400 font-mono">
                 {revLoading
@@ -454,7 +454,7 @@ export default function ReportsPage() {
               <span className="text-[11px] text-slate-400">Gross completed payments</span>
             </Card>
 
-            <Card className="p-5 space-y-1 bg-gradient-to-br from-slate-900 to-obsidian-950 border-slate-800 text-white shadow-sm">
+            <Card className="p-5 space-y-1">
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Transactions</span>
               <div className="text-2xl font-bold tabular-nums text-white">
                 {revLoading ? "..." : revData?.summary.paymentCount ?? 0}
@@ -462,7 +462,7 @@ export default function ReportsPage() {
               <span className="text-[11px] text-slate-400">Receipts generated</span>
             </Card>
 
-            <Card className="p-5 space-y-1 bg-gradient-to-br from-slate-900 to-obsidian-950 border-slate-800 text-white shadow-sm">
+            <Card className="p-5 space-y-1">
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Paying Clients</span>
               <div className="text-2xl font-bold tabular-nums text-cyan-400">
                 {revLoading ? "..." : revData?.summary.uniqueClientsCount ?? 0}
@@ -470,7 +470,7 @@ export default function ReportsPage() {
               <span className="text-[11px] text-slate-400">Unique subscribers & guests</span>
             </Card>
 
-            <Card className="p-5 space-y-1 bg-gradient-to-br from-slate-900 to-obsidian-950 border-slate-800 text-white shadow-sm">
+            <Card className="p-5 space-y-1">
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Avg Spend / Client</span>
               <div className="text-2xl font-bold tabular-nums text-amber-400 font-mono">
                 {revLoading
@@ -683,7 +683,7 @@ export default function ReportsPage() {
 
           {/* 4 Clients KPI Summary Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card className="p-5 space-y-1 bg-gradient-to-br from-slate-900 to-obsidian-950 border-slate-800 text-white shadow-sm">
+            <Card className="p-5 space-y-1">
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Clients</span>
               <div className="text-2xl font-bold tabular-nums text-white">
                 {clientsLoading ? "..." : clientsData?.summary.totalClients ?? 0}
@@ -691,7 +691,7 @@ export default function ReportsPage() {
               <span className="text-[11px] text-slate-400">Subscribers in view</span>
             </Card>
 
-            <Card className="p-5 space-y-1 bg-gradient-to-br from-slate-900 to-obsidian-950 border-slate-800 text-white shadow-sm">
+            <Card className="p-5 space-y-1">
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Active Subscribers</span>
               <div className="text-2xl font-bold tabular-nums text-emerald-400">
                 {clientsLoading ? "..." : clientsData?.summary.activeClients ?? 0}
@@ -699,7 +699,7 @@ export default function ReportsPage() {
               <span className="text-[11px] text-slate-400">Active internet access</span>
             </Card>
 
-            <Card className="p-5 space-y-1 bg-gradient-to-br from-slate-900 to-obsidian-950 border-slate-800 text-white shadow-sm">
+            <Card className="p-5 space-y-1">
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Client Spend</span>
               <div className="text-2xl font-bold tabular-nums text-emerald-400 font-mono">
                 {clientsLoading
@@ -711,7 +711,7 @@ export default function ReportsPage() {
               <span className="text-[11px] text-slate-400">Cumulative customer LTV</span>
             </Card>
 
-            <Card className="p-5 space-y-1 bg-gradient-to-br from-slate-900 to-obsidian-950 border-slate-800 text-white shadow-sm">
+            <Card className="p-5 space-y-1">
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Average Spend / User</span>
               <div className="text-2xl font-bold tabular-nums text-amber-400 font-mono">
                 {clientsLoading

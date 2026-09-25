@@ -1,6 +1,6 @@
 import { prisma, type Prisma } from "@mashupkgrid/database";
 import { NotFoundError, generateSecureToken } from "@mashupkgrid/shared";
-import { recordPaymentForInvoiceWithDb, topUpWalletWithDb } from "@mashupkgrid/billing";
+import { recordPaymentForInvoiceWithDb, topUpWalletWithDb, restoreServiceAfterPayment } from "@mashupkgrid/billing";
 import { getPesapalCredentials } from "./config.service.js";
 import { getPesapalTransactionStatus } from "./pesapal-client.js";
 
@@ -64,7 +64,7 @@ export async function completePesapalTransaction(
   reference: string,
   result: PesapalResultInput
 ) {
-  return prisma.$transaction(async (tx) => {
+  const completed = await prisma.$transaction(async (tx) => {
     // Check if matching transaction row exists in paystackTransaction or custom table
     const transaction = await tx.paystackTransaction.findUnique({ where: { reference } });
     if (!transaction || transaction.tenantId !== tenantId) {
@@ -235,4 +235,6 @@ export async function completePesapalTransaction(
 
     return transaction;
   });
+  if (completed?.status === "COMPLETED") await restoreServiceAfterPayment(tenantId, completed.customerId);
+  return completed;
 }

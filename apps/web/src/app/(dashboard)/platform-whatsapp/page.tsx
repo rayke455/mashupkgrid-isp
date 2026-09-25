@@ -140,7 +140,7 @@ export default function PlatformWhatsappPage() {
               <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
                 Connected Master Platform Line
               </p>
-              <p className="mt-1 font-mono text-2xl font-black text-emerald-600 dark:text-emerald-400">
+              <p className="mt-1 font-mono text-2xl font-semibold text-emerald-600 dark:text-emerald-400">
                 {connection?.phoneNumber ?? "—"}
               </p>
               {connection?.lastConnectedAt && (
@@ -216,7 +216,7 @@ export default function PlatformWhatsappPage() {
                   <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
                     Enter this code on your phone
                   </p>
-                  <p className="font-mono text-4xl font-black tracking-[0.3em] text-brand-500">
+                  <p className="font-mono text-4xl font-semibold tracking-[0.3em] text-brand-500">
                     {connection.pairingCode}
                   </p>
                   <p className="max-w-xs text-xs text-slate-500 dark:text-slate-400">

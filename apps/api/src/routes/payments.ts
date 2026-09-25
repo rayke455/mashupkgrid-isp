@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "@mashupkgrid/database";
 import {
   recordPaymentForInvoice,
+  restoreServiceAfterPayment,
   topUpWallet,
   refundPaymentWithDb,
   getStampedPaymentReceipt,
@@ -129,6 +130,10 @@ export async function paymentRoutes(app: FastifyInstance): Promise<void> {
         recordedByUserId: request.user!.id,
         idempotencyKey: body.idempotencyKey ?? randomUUID(),
       });
+
+      // A suspended customer who just paid at the counter should be back online before they
+      // leave it, not on the next scheduled sweep.
+      if (!result.wasAlreadyProcessed) await restoreServiceAfterPayment(tenantId, result.payment.customerId);
 
       if (!result.wasAlreadyProcessed) {
         await writeAuditLog({

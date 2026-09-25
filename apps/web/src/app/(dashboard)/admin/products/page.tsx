@@ -340,7 +340,7 @@ export default function AdminProductsPage() {
             </span>
             <span className="text-xs text-slate-400">• Store Inventory Authority</span>
           </div>
-          <h1 className="text-2xl font-black tracking-tight text-white">
+          <h1 className="text-2xl font-semibold tracking-tight text-white">
             Hardware Products & Catalog Management
           </h1>
           <p className="text-xs text-slate-400 mt-0.5">
@@ -358,7 +358,7 @@ export default function AdminProductsPage() {
           </Link>
           <button
             onClick={() => setShowAddModal(true)}
-            className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-slate-950 font-bold text-xs transition-all shadow-lg shadow-emerald-500/20 flex items-center gap-1.5"
+            className="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-500 text-white font-semibold text-xs transition-colors flex items-center gap-1.5"
           >
             <span>+</span> Add New Product
           </button>
@@ -381,24 +381,24 @@ export default function AdminProductsPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800">
           <div className="text-[11px] font-bold text-slate-400 uppercase">Total Catalog Items</div>
-          <div className="text-2xl font-black text-white mt-1">{stats.totalCount}</div>
+          <div className="text-2xl font-semibold text-white mt-1">{stats.totalCount}</div>
           <div className="text-[10px] text-cyan-400 mt-0.5">Across 6 hardware categories</div>
         </div>
         <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800">
           <div className="text-[11px] font-bold text-slate-400 uppercase">In-Stock Products</div>
-          <div className="text-2xl font-black text-emerald-400 mt-1">{stats.inStockCount}</div>
+          <div className="text-2xl font-semibold text-emerald-400 mt-1">{stats.inStockCount}</div>
           <div className="text-[10px] text-slate-400 mt-0.5">Ready for immediate dispatch</div>
         </div>
         <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800">
           <div className="text-[11px] font-bold text-slate-400 uppercase">Out of Stock</div>
-          <div className={`text-2xl font-black mt-1 ${stats.outOfStockCount > 0 ? "text-rose-400" : "text-slate-400"}`}>
+          <div className={`text-2xl font-semibold mt-1 ${stats.outOfStockCount > 0 ? "text-rose-400" : "text-slate-400"}`}>
             {stats.outOfStockCount}
           </div>
           <div className="text-[10px] text-slate-400 mt-0.5">Requiring restocking</div>
         </div>
         <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800">
           <div className="text-[11px] font-bold text-slate-400 uppercase">Total Warehouse Value</div>
-          <div className="text-2xl font-black text-cyan-300 mt-1">
+          <div className="text-2xl font-semibold text-cyan-300 mt-1">
             KES {stats.totalInventoryValue.toLocaleString()}
           </div>
           <div className="text-[10px] text-slate-400 mt-0.5">Evaluated at current retail prices</div>
@@ -790,7 +790,7 @@ export default function AdminProductsPage() {
                 <button
                   type="submit"
                   disabled={saveLoading}
-                  className="px-5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold shadow-lg shadow-cyan-500/20"
+                  className="px-5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold"
                 >
                   {saveLoading ? "Saving..." : "Update Product"}
                 </button>
@@ -978,7 +978,7 @@ export default function AdminProductsPage() {
                 <button
                   type="submit"
                   disabled={saveLoading}
-                  className="px-5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold shadow-lg shadow-cyan-500/20"
+                  className="px-5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold"
                 >
                   {saveLoading ? "Saving..." : "Create Product"}
                 </button>

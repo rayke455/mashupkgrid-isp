@@ -62,6 +62,22 @@ deployment) and the Phase 1/2/3 implementation plans this codebase follows.
   riskier flow) — the interface has a `refund()` method for a future gateway to implement, but
   M-Pesa's isn't wired up. No card/other gateway ships either.
 
+**Commercial operations:**
+- **Tenant approval.** Self-registration leaves an ISP `PENDING_APPROVAL`; the owner gets a
+  "we received your application" email/WhatsApp. A super admin approves (or rejects, with a
+  reason) from Tenants; approval automatically sends the sign-in details. The captive portal
+  shows a clear "not open yet" screen for a pending ISP.
+- **Reconnect on payment.** A suspended customer is restored the moment any payment for them
+  commits — manual, M-Pesa STK, M-Pesa C2B, Paystack or Pesapal (`restoreServiceAfterPayment`)
+  — with the per-minute `reactivateClearedCustomers` sweep as the safety net.
+- **Walled garden.** Super admins allow hosts platform-wide (`/admin/walled-garden`); new
+  routers get them in their setup script, online routers through the hotspot self-repair pass.
+- **Online users** (`/online-users`): every hotspot and PPPoE session from RADIUS accounting,
+  joined to the customer/voucher, router and last payment; live, searchable.
+- **Housekeeping.** Failed/abandoned purchase attempts and failed payment records can be deleted
+  (never completed ones, never anything linked to a gateway transaction); audit logs can be
+  purged beyond 30 days. Every deletion is itself audited.
+
 **Automation and navigation:**
 - Every scheduled worker job is declared once, in `packages/shared/src/automation.ts`
   (`AUTOMATION_JOBS`): the worker registers its repeatable jobs from that catalog, records each

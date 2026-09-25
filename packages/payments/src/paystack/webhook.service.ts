@@ -1,7 +1,7 @@
 import { createHmac } from "node:crypto";
 import { prisma, type Prisma } from "@mashupkgrid/database";
 import { NotFoundError, timingSafeStringEqual, generateSecureToken } from "@mashupkgrid/shared";
-import { recordPaymentForInvoiceWithDb, topUpWalletWithDb } from "@mashupkgrid/billing";
+import { recordPaymentForInvoiceWithDb, topUpWalletWithDb, restoreServiceAfterPayment } from "@mashupkgrid/billing";
 
 /** Paystack signs every webhook with HMAC-SHA512 of the *raw* request body, keyed by the
  *  tenant's own secret key (docs.paystack.com/docs/webhooks — "Validating webhooks"). This is
@@ -71,7 +71,7 @@ export async function completePaystackTransaction(
   reference: string,
   result: PaystackResultInput
 ) {
-  return prisma.$transaction(async (tx) => {
+  const completed = await prisma.$transaction(async (tx) => {
     const transaction = await tx.paystackTransaction.findUnique({ where: { reference } });
     if (!transaction || transaction.tenantId !== tenantId) throw new NotFoundError("Paystack transaction");
     if (transaction.status !== "PENDING") return transaction;
@@ -233,4 +233,7 @@ export async function completePaystackTransaction(
       data: { status, gatewayResponse: result.gatewayResponse, rawWebhook },
     });
   });
+  // After the commit: a suspended customer whose card payment just cleared goes back online now.
+  if (completed.status === "COMPLETED") await restoreServiceAfterPayment(tenantId, completed.customerId);
+  return completed;
 }

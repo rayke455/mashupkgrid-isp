@@ -1,5 +1,5 @@
 import { prisma, type MpesaC2BTransaction, type Prisma } from "@mashupkgrid/database";
-import { topUpWalletWithDb, recordPaymentForInvoiceWithDb } from "@mashupkgrid/billing";
+import { topUpWalletWithDb, recordPaymentForInvoiceWithDb, restoreServiceAfterPayment } from "@mashupkgrid/billing";
 import { ConflictError, NotFoundError, ValidationError } from "@mashupkgrid/shared";
 import { getMpesaCredentials } from "./config.service.js";
 import { getPlatformMpesaCredentials } from "./platform-config.service.js";
@@ -168,6 +168,8 @@ export async function handleC2BConfirmation(tenantId: string, rawPayload: unknow
       },
     });
   });
+  // An unmatched platform-paybill payment has no tenant yet; nothing to restore until it is assigned.
+  if (transaction.tenantId) await restoreServiceAfterPayment(transaction.tenantId, transaction.matchedCustomerId);
   return { transaction, duplicate: false };
 }
 
@@ -253,6 +255,8 @@ export async function handlePlatformC2BConfirmation(rawPayload: unknown): Promis
       },
     });
   });
+  // An unmatched platform-paybill payment has no tenant yet; nothing to restore until it is assigned.
+  if (transaction.tenantId) await restoreServiceAfterPayment(transaction.tenantId, transaction.matchedCustomerId);
   return { transaction, duplicate: false };
 }
 

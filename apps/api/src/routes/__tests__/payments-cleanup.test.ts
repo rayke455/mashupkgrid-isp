@@ -21,7 +21,13 @@ const h = vi.hoisted(() => ({
 }));
 
 vi.mock("@mashupkgrid/database", () => ({ prisma: h.prisma }));
-vi.mock("@mashupkgrid/billing", () => ({ recordPaymentForInvoice: vi.fn(), topUpWallet: vi.fn(), refundPaymentWithDb: vi.fn(), getStampedPaymentReceipt: vi.fn() }));
+vi.mock("@mashupkgrid/billing", () => ({
+  recordPaymentForInvoice: vi.fn(),
+  restoreServiceAfterPayment: vi.fn(),
+  topUpWallet: vi.fn(),
+  refundPaymentWithDb: vi.fn(),
+  getStampedPaymentReceipt: vi.fn(),
+}));
 vi.mock("@mashupkgrid/payments", () => ({
   listPurchaseAttempts: vi.fn(),
   summarisePurchaseAttempts: vi.fn(),

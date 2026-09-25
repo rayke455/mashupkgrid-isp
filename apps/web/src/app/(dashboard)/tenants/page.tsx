@@ -614,7 +614,7 @@ export default function TenantsPage() {
           }`}
         >
           <span className="text-[11px] font-bold text-slate-500 uppercase block">Total Tenants</span>
-          <span className="text-2xl font-black text-slate-900 dark:text-white">{totalCount}</span>
+          <span className="text-2xl font-semibold text-slate-900 dark:text-white">{totalCount}</span>
         </div>
 
         <div
@@ -626,7 +626,7 @@ export default function TenantsPage() {
           }`}
         >
           <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase block">Active</span>
-          <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{activeCount}</span>
+          <span className="text-2xl font-semibold text-emerald-600 dark:text-emerald-400">{activeCount}</span>
         </div>
 
         <div
@@ -638,7 +638,7 @@ export default function TenantsPage() {
           }`}
         >
           <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 uppercase block">In Trial</span>
-          <span className="text-2xl font-black text-amber-600 dark:text-amber-400">{trialCount}</span>
+          <span className="text-2xl font-semibold text-amber-600 dark:text-amber-400">{trialCount}</span>
         </div>
 
         <div
@@ -650,7 +650,7 @@ export default function TenantsPage() {
           }`}
         >
           <span className="text-[11px] font-bold text-rose-600 dark:text-rose-400 uppercase block">Suspended</span>
-          <span className="text-2xl font-black text-rose-600 dark:text-rose-400">{suspendedCount}</span>
+          <span className="text-2xl font-semibold text-rose-600 dark:text-rose-400">{suspendedCount}</span>
         </div>
 
         <div
@@ -662,7 +662,7 @@ export default function TenantsPage() {
           }`}
         >
           <span className="text-[11px] font-bold text-orange-600 dark:text-orange-400 uppercase block">Pending</span>
-          <span className="text-2xl font-black text-orange-600 dark:text-orange-400">{pendingCount}</span>
+          <span className="text-2xl font-semibold text-orange-600 dark:text-orange-400">{pendingCount}</span>
         </div>
 
         {/* The card an operator should look at first: administrative status says a tenant is
@@ -678,7 +678,7 @@ export default function TenantsPage() {
           <span className="block text-[11px] font-bold uppercase text-amber-600 dark:text-amber-400">
             Needs attention
           </span>
-          <span className="text-2xl font-black text-amber-600 dark:text-amber-400">{attentionCount}</span>
+          <span className="text-2xl font-semibold text-amber-600 dark:text-amber-400">{attentionCount}</span>
         </div>
       </div>
 

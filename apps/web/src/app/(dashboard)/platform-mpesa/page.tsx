@@ -134,7 +134,7 @@ export default function PlatformMpesaPage() {
       {/* ------------------------------------------------------------------- */}
       {/* 1. Donate / Buy Me a Coffee Gateway Configuration                   */}
       {/* ------------------------------------------------------------------- */}
-      <Card className="border-amber-500/20 bg-gradient-to-br from-white via-white to-amber-500/[0.03] dark:from-obsidian-900 dark:via-obsidian-900 dark:to-amber-500/[0.05]">
+      <Card className="border-amber-500/20">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
           <div className="flex items-center gap-3">
             <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 text-xl font-bold">
