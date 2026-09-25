@@ -1,77 +1,36 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
 import { apiFetch } from "@/lib/api-client";
+import { buildNavSections, findCurrentNav, isNavItemActive, type NavItem } from "@/lib/navigation";
 import { TenantThemeStyle } from "@/components/tenant-theme-style";
 import { TawkToWidget } from "@/components/tawk-to-widget";
 import { DashboardBanners } from "@/components/dashboard-banners";
 import { TrialExpiredBlocker } from "@/components/trial-expired-blocker";
-import {
-  IconDashboard,
-  IconSession,
-  IconUsers,
-  IconPackage,
-  IconInvoice,
-  IconMpesa,
-  IconRouter,
-  IconNetworkPool,
-  IconTicket,
-  IconTenants,
-  IconMaintenance,
-  IconLogOut,
-  IconLock,
-  IconLayers,
-  IconSpeed,
-  IconMessage,
-  IconLifeBuoy,
-  IconSparkles,
-  IconMenu,
-  IconClose,
-  IconPulse,
-  IconShield,
-  IconBell,
-} from "@/components/icons";
+import { NavIconGlyph } from "@/components/nav-icon";
+import { CommandPalette, CommandPaletteTrigger, useCommandPalette } from "@/components/command-palette";
+import { IconChevronRight, IconClose, IconLogOut, IconMenu } from "@/components/icons";
 import { NotificationBell } from "@/components/notifications";
 
-interface NavItem {
-  href: string;
-  label: string;
-  icon: ReactNode;
-  show: boolean;
-  /** Active only on this exact path, for section roots like /payments. */
-  exact?: boolean;
-}
-
-interface NavSection {
-  title?: string;
-  items: NavItem[];
-}
-
-function NavLink({
-  href,
-  label,
-  icon,
-  active,
-}: {
-  href: string;
-  label: string;
-  icon: ReactNode;
-  active: boolean;
-}) {
+function NavLink({ item, active }: { item: NavItem; active: boolean }) {
   return (
     <Link
-      href={href}
+      href={item.href}
+      target={item.external ? "_blank" : undefined}
+      rel={item.external ? "noopener" : undefined}
       aria-current={active ? "page" : undefined}
       className={`group flex items-center gap-3 rounded-lg px-3 py-1.5 text-[13px] font-medium transition-colors ${
         active ? "bg-obsidian-800 text-white" : "text-slate-400 hover:bg-obsidian-900 hover:text-slate-100"
       }`}
     >
-      <span className={`shrink-0 ${active ? "text-brand-400" : "text-slate-500 group-hover:text-slate-300"}`}>{icon}</span>
-      <span className="truncate">{label}</span>
+      <span className={`shrink-0 ${active ? "text-brand-400" : "text-slate-500 group-hover:text-slate-300"}`}>
+        <NavIconGlyph name={item.icon} />
+      </span>
+      <span className="truncate">{item.label}</span>
     </Link>
   );
 }
@@ -87,6 +46,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const pathname = usePathname();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const palette = useCommandPalette();
 
   useEffect(() => {
     if (!loading && !user) router.replace("/login");
@@ -121,6 +81,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     staleTime: 5 * 60 * 1000,
   });
 
+  // The sidebar, the palette and the breadcrumb all render from this one catalog
+  // (lib/navigation.ts), so a page is never reachable from one and missing from another.
+  const sections = useMemo(() => (user ? buildNavSections(user) : []), [user]);
+  const current = useMemo(() => findCurrentNav(sections, pathname), [sections, pathname]);
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-obsidian-950">
@@ -135,116 +100,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   const has = (permission: string) => user.permissions.includes(permission);
   const isTenantScoped = user.tenantId !== null;
-
-  // Grouped by the job at hand, in the order an ISP works through a day: customers, hotspot,
-  // network, money, then account housekeeping. Platform admins see their own groups instead.
-  const sections: NavSection[] = [
-    {
-      items: [
-        { href: "/dashboard", label: "Dashboard", icon: <IconDashboard size={18} />, show: true },
-        { href: "/notifications", label: "Notifications", icon: <IconBell size={18} />, show: isTenantScoped },
-      ],
-    },
-    {
-      title: "Customers",
-      items: [
-        { href: "/customers", label: "Customers", icon: <IconUsers size={18} />, show: isTenantScoped && has("customers.read") },
-        { href: "/packages", label: "Internet plans", icon: <IconPackage size={18} />, show: isTenantScoped && has("packages.read") },
-        { href: "/invoices", label: "Invoices", icon: <IconInvoice size={18} />, show: isTenantScoped && has("billing.read") },
-        { href: "/tickets", label: "Support tickets", icon: <IconLifeBuoy size={18} />, show: isTenantScoped && has("tickets.read") },
-      ],
-    },
-    {
-      title: "Hotspot",
-      items: [
-        { href: "/vouchers", label: "Hotspot", icon: <IconTicket size={18} />, show: isTenantScoped && has("radius.manage") },
-        { href: "/purchase-attempts", label: "Purchase attempts", icon: <IconPulse size={18} />, show: isTenantScoped && has("payments.read") },
-      ],
-    },
-    {
-      title: "Network",
-      items: [
-        { href: "/routers", label: "Routers", icon: <IconRouter size={18} />, show: isTenantScoped && has("routers.read") },
-        { href: "/vlans", label: "VLANs", icon: <IconLayers size={18} />, show: isTenantScoped && has("vlans.read") },
-        { href: "/ip-pools", label: "IP pools", icon: <IconNetworkPool size={18} />, show: isTenantScoped && has("routers.read") },
-        { href: "/reports", label: "Bandwidth usage", icon: <IconSpeed size={18} />, show: isTenantScoped && has("reports.read") },
-      ],
-    },
-    {
-      // The MashupHost gateway, collections, balance and settlements: money held on a tenant's
-      // behalf is the platform's largest liability, so it stays one clear group.
-      title: "Money",
-      items: [
-        { href: "/payments", label: "Payments", icon: <IconDashboard size={18} />, show: isTenantScoped && has("payments.read"), exact: true },
-        { href: "/payments/transactions", label: "Transactions", icon: <IconMpesa size={18} />, show: isTenantScoped && has("payments.read") },
-        { href: "/payments/balance", label: "Balance", icon: <IconInvoice size={18} />, show: isTenantScoped && has("payments.read") },
-        { href: "/payments/settlements", label: "Settlements", icon: <IconLayers size={18} />, show: isTenantScoped && has("payments.read") },
-        {
-          // One entry, not four: M-Pesa, Paystack and Pesapal answer one question for an operator.
-          href: "/payments-setup",
-          label: "Getting paid",
-          icon: <IconMpesa size={18} />,
-          show: isTenantScoped && (has("settings.manage") || has("payments.reconcile")),
-        },
-      ],
-    },
-    {
-      title: "Account",
-      items: [
-        { href: "/settings", label: "Settings", icon: <IconMaintenance size={18} />, show: isTenantScoped && has("settings.manage") },
-        { href: "/sms", label: "SMS gateway", icon: <IconMessage size={18} />, show: isTenantScoped && has("settings.manage") },
-        { href: "/app", label: "Customer mobile app", icon: <IconLayers size={18} />, show: isTenantScoped },
-        { href: "/shop", label: "Hardware store", icon: <IconPackage size={18} />, show: isTenantScoped },
-        { href: "/audit-log", label: "Audit log", icon: <IconShield size={18} />, show: isTenantScoped && has("audit_logs.read") },
-        { href: "/sessions", label: "My sessions", icon: <IconSession size={18} />, show: true },
-      ],
-    },
-    {
-      title: "Platform",
-      items: [
-        { href: "/tenants", label: "Tenants", icon: <IconTenants size={18} />, show: !isTenantScoped && has("tenants.read") },
-        { href: "/admin/notifications", label: "Notifications", icon: <IconBell size={18} />, show: !isTenantScoped && has("tenants.update") },
-        { href: "/plans", label: "Subscription plans", icon: <IconLayers size={18} />, show: !isTenantScoped && has("plans.manage") },
-        { href: "/maintenance", label: "Maintenance mode", icon: <IconMaintenance size={18} />, show: !isTenantScoped && has("maintenance.manage") },
-      ],
-    },
-    {
-      title: "Payments",
-      items: [
-        { href: "/admin/payments", label: "Overview", icon: <IconDashboard size={18} />, show: !isTenantScoped && has("platform_payments.read"), exact: true },
-        { href: "/admin/payments/transactions", label: "Transactions", icon: <IconMpesa size={18} />, show: !isTenantScoped && has("platform_payments.read") },
-        { href: "/admin/payments/settlements", label: "Settlements", icon: <IconLayers size={18} />, show: !isTenantScoped && has("platform_payments.read") },
-        { href: "/admin/payments/reconciliation", label: "Reconciliation", icon: <IconShield size={18} />, show: !isTenantScoped && has("platform_payments.read") },
-        { href: "/admin/payments/gateway", label: "Payment gateway", icon: <IconLock size={18} />, show: !isTenantScoped && has("platform_payments.read") },
-        { href: "/admin/payments/fees", label: "Fees", icon: <IconInvoice size={18} />, show: !isTenantScoped && has("platform_payments.read") },
-        { href: "/admin/payments/webhooks", label: "Webhooks", icon: <IconPulse size={18} />, show: !isTenantScoped && has("platform_payments.read") },
-      ],
-    },
-    {
-      title: "Store",
-      items: [
-        { href: "/admin/products", label: "Hardware & pricing", icon: <IconPackage size={18} />, show: !isTenantScoped && has("tenants.read") },
-        { href: "/admin/orders", label: "Hardware orders", icon: <IconInvoice size={18} />, show: !isTenantScoped && has("tenants.read") },
-      ],
-    },
-    {
-      title: "Website",
-      items: [
-        { href: "/landing-editor", label: "Landing page", icon: <IconSparkles size={18} />, show: !isTenantScoped && has("maintenance.manage") },
-        { href: "/testimonials", label: "Testimonials", icon: <IconMessage size={18} />, show: !isTenantScoped && has("maintenance.manage") },
-      ],
-    },
-    {
-      title: "Integrations",
-      items: [
-        { href: "/platform-mpesa", label: "Platform M-Pesa", icon: <IconMpesa size={18} />, show: !isTenantScoped && has("tenants.create") },
-        { href: "/platform-google-signin", label: "Google sign-in", icon: <IconLock size={18} />, show: !isTenantScoped && has("tenants.create") },
-        { href: "/platform-whatsapp", label: "Platform WhatsApp", icon: <IconMessage size={18} />, show: !isTenantScoped && has("tenants.create") },
-      ],
-    },
-  ];
-
-  const isActive = (href: string) => pathname === href || pathname?.startsWith(`${href}/`);
 
   return (
     <TenantThemeStyle brandColor={user.tenantBrandColor}>
@@ -286,25 +141,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
 
           {/* Nav Links */}
-          <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-4 scrollbar-none">
-            {sections.map((section, i) => {
-              const visible = section.items.filter((item) => item.show);
-              if (visible.length === 0) return null;
-              return (
-                <div key={section.title ?? i}>
-                  {section.title && <p className="px-3 pb-1 pt-5 text-xs font-medium text-slate-500">{section.title}</p>}
-                  {visible.map((item) => (
-                    <NavLink
-                      key={item.href}
-                      href={item.href}
-                      label={item.label}
-                      icon={item.icon}
-                      active={item.exact ? pathname === item.href : isActive(item.href)}
-                    />
-                  ))}
-                </div>
-              );
-            })}
+          <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-4 scrollbar-none" aria-label="Main">
+            {sections.map((section, i) => (
+              <div key={section.title ?? i}>
+                {section.title && <p className="px-3 pb-1 pt-5 text-xs font-medium text-slate-500">{section.title}</p>}
+                {section.items.map((item) => (
+                  <NavLink key={item.href} item={item} active={current?.item.href === item.href || (!current && isNavItemActive(item, pathname))} />
+                ))}
+              </div>
+            ))}
           </nav>
 
           {/* User Account Footer Card */}
@@ -347,10 +192,22 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               >
                 <IconMenu size={20} />
               </button>
-              <span className="truncate text-sm font-medium text-slate-300 lg:hidden">MashupHost</span>
+              {/* Where you are: section › page. On phones the section is dropped to leave room. */}
+              <nav aria-label="Breadcrumb" className="flex min-w-0 items-center gap-1.5 text-[13px]">
+                {current?.section.title && (
+                  <>
+                    <span className="hidden truncate text-slate-500 sm:inline">{current.section.title}</span>
+                    <IconChevronRight size={14} className="hidden shrink-0 text-slate-600 sm:inline" />
+                  </>
+                )}
+                <span className="truncate font-medium text-slate-200" aria-current="page">
+                  {current?.item.label ?? "MashupHost"}
+                </span>
+              </nav>
             </div>
 
             <div className="flex shrink-0 items-center gap-2">
+              <CommandPaletteTrigger onOpen={() => palette.setOpen(true)} />
               {isTenantScoped && <NotificationBell />}
               {user.tenantTrialEndsAt && (
                 <span
@@ -362,15 +219,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 >
                   {user.isTrialExpired ? "Trial Expired" : "Trial"}
                 </span>
-              )}
-              {isTenantScoped && (
-                <Link
-                  href="/shop"
-                  target="_blank"
-                  className="hidden items-center rounded-lg px-2.5 py-1.5 text-[13px] font-medium text-slate-400 transition-colors hover:bg-obsidian-800 hover:text-white sm:inline-flex"
-                >
-                  Hardware store
-                </Link>
               )}
             </div>
           </header>
@@ -386,6 +234,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             )}
           </main>
         </div>
+        <CommandPalette open={palette.open} onClose={() => palette.setOpen(false)} />
         {liveChat?.show && <TawkToWidget widgetId={liveChat.widgetId} />}
       </div>
     </TenantThemeStyle>

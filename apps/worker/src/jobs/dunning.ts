@@ -7,6 +7,7 @@ import {
 } from "@mashupkgrid/billing";
 import { sendTenantSms } from "@mashupkgrid/sms";
 import { sendEmail } from "../lib/email.js";
+import type { AutomationSummary } from "@mashupkgrid/shared";
 
 function formatMoney(minorUnits: number, currency: string): string {
   return `${currency} ${(minorUnits / 100).toFixed(2)}`;
@@ -62,7 +63,7 @@ async function processCandidates(
   return { processed: candidates.length, emailSent, smsSent, smsFailed };
 }
 
-export async function handleSendDueSoonReminders(): Promise<void> {
+export async function handleSendDueSoonReminders(): Promise<AutomationSummary> {
   const candidates = await listInvoicesDueSoon();
   const result = await processCandidates(candidates, 1, (invoice) => {
     const amount = formatMoney(balanceDue(invoice), invoice.currency);
@@ -79,9 +80,10 @@ export async function handleSendDueSoonReminders(): Promise<void> {
   console.log(
     `[dunning] due-soon-reminders: processed=${result.processed} emailSent=${result.emailSent} smsSent=${result.smsSent} smsFailed=${result.smsFailed}`
   );
+  return result;
 }
 
-export async function handleSendOverdueNotices(): Promise<void> {
+export async function handleSendOverdueNotices(): Promise<AutomationSummary> {
   const candidates = await listOverdueInvoicesNeedingNotice();
   const result = await processCandidates(candidates, 2, (invoice) => {
     const amount = formatMoney(balanceDue(invoice), invoice.currency);
@@ -98,9 +100,10 @@ export async function handleSendOverdueNotices(): Promise<void> {
   console.log(
     `[dunning] overdue-notices: processed=${result.processed} emailSent=${result.emailSent} smsSent=${result.smsSent} smsFailed=${result.smsFailed}`
   );
+  return result;
 }
 
-export async function handleSendFinalDunningNotices(): Promise<void> {
+export async function handleSendFinalDunningNotices(): Promise<AutomationSummary> {
   const candidates = await listInvoicesNeedingFinalNotice();
   const result = await processCandidates(candidates, 3, (invoice) => {
     const amount = formatMoney(balanceDue(invoice), invoice.currency);
@@ -116,4 +119,5 @@ export async function handleSendFinalDunningNotices(): Promise<void> {
   console.log(
     `[dunning] final-notices: processed=${result.processed} emailSent=${result.emailSent} smsSent=${result.smsSent} smsFailed=${result.smsFailed}`
   );
+  return result;
 }

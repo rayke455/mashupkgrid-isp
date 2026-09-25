@@ -35,6 +35,7 @@ vi.mock("@mashupkgrid/auth", async (importOriginal) => ({
 vi.mock("../../lib/queue.js", () => ({
   enqueueSendVerificationEmail: vi.fn(),
   enqueueSendPasswordResetEmail: vi.fn(),
+  enqueueSendTenantWelcomeEmail: vi.fn().mockResolvedValue(undefined),
   enqueueSendWhatsappTenantWelcome: h.enqueueSendWhatsappTenantWelcome,
 }));
 vi.mock("../../lib/redis.js", () => ({ redis: { get: vi.fn(), set: vi.fn(), del: vi.fn() } }));

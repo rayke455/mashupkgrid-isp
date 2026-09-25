@@ -62,7 +62,17 @@ deployment) and the Phase 1/2/3 implementation plans this codebase follows.
   riskier flow) — the interface has a `refund()` method for a future gateway to implement, but
   M-Pesa's isn't wired up. No card/other gateway ships either.
 
-Tests: **81 automated tests** across the workspace (`pnpm -r test`), all passing.
+**Automation and navigation:**
+- Every scheduled worker job is declared once, in `packages/shared/src/automation.ts`
+  (`AUTOMATION_JOBS`): the worker registers its repeatable jobs from that catalog, records each
+  run's outcome and counters in Redis, and sends a heartbeat; the API serves it at
+  `GET /api/v1/automation/jobs`; the dashboard's **Automation** page shows every job's schedule,
+  last run, next run and health, with run history and "Run now" for platform admins. Tenant
+  staff see health only — counters are platform-wide and would leak other ISPs' activity.
+- The dashboard has a command palette (**Ctrl/⌘ K**) over the same navigation catalog the
+  sidebar renders (`apps/web/src/lib/navigation.ts`), plus a section › page breadcrumb.
+
+Tests: `pnpm -r test` runs the workspace suite.
 
 Everything past Phase 3 (MikroTik/RADIUS, CRM, tickets, inventory, etc.) is designed in
 `docs/architecture/` but **not implemented** — there are no fake dashboard numbers or stubbed

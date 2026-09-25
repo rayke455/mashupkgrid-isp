@@ -50,8 +50,9 @@ export function Panel({
   );
 }
 
-export function MetricGrid({ children, columns = 4 }: { children: ReactNode; columns?: 3 | 4 | 5 }) {
-  const cols = columns === 5 ? "lg:grid-cols-3 xl:grid-cols-5" : columns === 3 ? "lg:grid-cols-3" : "lg:grid-cols-4";
+export function MetricGrid({ children, columns = 4 }: { children: ReactNode; columns?: 3 | 4 | 5 | 6 }) {
+  const cols =
+    columns === 6 ? "lg:grid-cols-3 xl:grid-cols-6" : columns === 5 ? "lg:grid-cols-3 xl:grid-cols-5" : columns === 3 ? "lg:grid-cols-3" : "lg:grid-cols-4";
   return <div className={`grid grid-cols-2 gap-3 ${cols}`}>{children}</div>;
 }
 
