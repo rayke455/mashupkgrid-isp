@@ -46,18 +46,21 @@ function deviceFromRequest(request: FastifyRequest) {
 
 const registerSchema = z.object({
   tenantSlug: z.string().min(1),
-  email: z.string().email(),
+  email: z.string().trim().toLowerCase().email(),
   password: z.string().min(10),
   phone: z.string().optional(),
 });
 
 const loginSchema = z.object({
   tenantSlug: z.string().min(1).nullable().optional(),
-  email: z.string().email(),
+  email: z.string().trim().toLowerCase().email(),
   password: z.string().min(1),
 });
 
-const emailOnlySchema = z.object({ tenantSlug: z.string().min(1).optional().nullable(), email: z.string().email() });
+const emailOnlySchema = z.object({
+  tenantSlug: z.string().min(1).optional().nullable(),
+  email: z.string().trim().toLowerCase().email(),
+});
 
 const googleAuthSchema = z.object({ tenantSlug: z.string().optional().default(""), credential: z.string().min(1) });
 

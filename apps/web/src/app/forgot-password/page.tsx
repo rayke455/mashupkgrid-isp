@@ -11,7 +11,12 @@ import { IconCheck } from "@/components/icons";
 import { AuthShell, Spinner, authPrimaryButton, authSecondaryButton } from "@/components/marketing/auth-shell";
 
 const schema = z.object({
-  email: z.string().email("Please enter a valid email address"),
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .min(1, "Please enter your email address")
+    .email("Please enter a valid email address"),
 });
 type FormValues = z.infer<typeof schema>;
 
@@ -57,7 +62,15 @@ export default function ForgotPasswordPage() {
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-5" noValidate>
           <div>
             <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" autoComplete="email" placeholder="you@yourisp.co.ke" {...register("email")} />
+            <Input
+              id="email"
+              type="email"
+              autoComplete="email"
+              placeholder="you@yourisp.co.ke"
+              {...register("email", {
+                setValueAs: (v) => (typeof v === "string" ? v.trim().toLowerCase() : v),
+              })}
+            />
             {errors.email && <ErrorText>{errors.email.message}</ErrorText>}
           </div>
 

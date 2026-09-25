@@ -16,7 +16,12 @@ import { DashboardOverviewPreview } from "@/components/marketing/dashboard-previ
 
 const loginSchema = z.object({
   tenantSlug: z.string().optional(),
-  email: z.string().email("Please enter a valid email address"),
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .min(1, "Please enter your email address")
+    .email("Please enter a valid email address"),
   password: z.string().min(1, "Password is required"),
 });
 
@@ -123,7 +128,9 @@ function LoginContent() {
                   autoComplete="email"
                   placeholder="you@yourisp.co.ke"
                   aria-invalid={Boolean(errors.email)}
-                  {...register("email")}
+                  {...register("email", {
+                    setValueAs: (v) => (typeof v === "string" ? v.trim().toLowerCase() : v),
+                  })}
                 />
                 {errors.email && <ErrorText>{errors.email.message}</ErrorText>}
               </div>

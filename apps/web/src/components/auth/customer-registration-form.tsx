@@ -22,7 +22,12 @@ import {
 
 const customerRegisterSchema = z
   .object({
-    email: z.string().email("Please enter a valid email address"),
+    email: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .min(1, "Please enter your email address")
+      .email("Please enter a valid email address"),
     phone: z.string().min(8, "Please enter a valid phone number (e.g. 0712345678)"),
     password: z.string().min(10, "Password must be at least 10 characters"),
     confirmPassword: z.string().min(1, "Please confirm your password"),
