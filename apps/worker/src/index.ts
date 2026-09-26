@@ -31,6 +31,7 @@ import {
 } from "./jobs/dunning.js";
 import { handleDeliverWebhook } from "./jobs/deliver-webhook.js";
 import { handlePushLargePayments } from "./jobs/push-large-payments.js";
+import { handleSuggestUpgrades } from "./jobs/suggest-upgrades.js";
 import { handleRunTenantPayouts } from "./jobs/tenant-payouts.js";
 import { handleSendWhatsappOtp } from "./jobs/send-whatsapp-otp.js";
 import {
@@ -128,6 +129,8 @@ async function main() {
           return run(handleRunTenantPayouts);
         case JOB_NAMES.expireTrials:
           return run(handleExpireTrials);
+        case JOB_NAMES.suggestUpgrades:
+          return run(handleSuggestUpgrades);
         default:
           throw new Error(`Unknown job in queue "${QUEUE_NAMES.billing}": ${job.name}`);
       }

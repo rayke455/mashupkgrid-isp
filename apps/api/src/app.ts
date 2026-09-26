@@ -44,6 +44,7 @@ import { domainRoutes } from "./routes/domains.js";
 import { statusRoutes } from "./routes/status.js";
 import { branchRoutes } from "./routes/branches.js";
 import { pushRoutes } from "./routes/push.js";
+import { upgradeRoutes } from "./routes/upgrades.js";
 import { planRoutes } from "./routes/plans.js";
 import { tenantBillingRoutes } from "./routes/tenant-billing.js";
 import { landingContentRoutes } from "./routes/landing-content.js";
@@ -130,6 +131,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(statusRoutes, { prefix: "/api/v1/status" });
   await app.register(branchRoutes, { prefix: "/api/v1/branches" });
   await app.register(pushRoutes, { prefix: "/api/v1/push" });
+  await app.register(upgradeRoutes, { prefix: "/api/v1/upgrades" });
   await app.register(planRoutes, { prefix: "/api/v1/platform/plans" });
   await app.register(tenantBillingRoutes, { prefix: "/api/v1/billing" });
   await app.register(landingContentRoutes, { prefix: "/api/v1/landing-content" });

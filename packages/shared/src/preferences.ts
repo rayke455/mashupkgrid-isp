@@ -55,6 +55,14 @@ export const tenantPreferencesSchema = z.object({
       .max(1_000_000_000)
       .refine((v) => v === 0 || v >= 10_000, "Use at least 100, or 0 to turn payment alerts off"),
   }),
+  /** Suggest a bigger plan to subscribers who keep running into their data cap. */
+  upgrades: z.object({
+    enabled: z.boolean(),
+    /** Text the customer about the suggested plan when it is found. */
+    smsCustomer: z.boolean(),
+    /** Share of the data cap used in the last 30 days that counts as "running into it". */
+    thresholdPercent: z.number().int().min(50).max(100),
+  }),
 });
 
 export type TenantPreferences = z.infer<typeof tenantPreferencesSchema>;
@@ -88,6 +96,7 @@ export const DEFAULT_TENANT_PREFERENCES: TenantPreferences = {
     responseHours: { URGENT: 2, HIGH: 8, NORMAL: 24, LOW: 72 },
   },
   alerts: { routerDown: true, largePaymentMinor: 500_000 },
+  upgrades: { enabled: true, smsCustomer: true, thresholdPercent: 90 },
 };
 
 /** Merges whatever is stored with the defaults, so a partial or old record never breaks a job. */
@@ -96,6 +105,7 @@ export function resolveTenantPreferences(stored: unknown): TenantPreferences {
   const reminders = (raw.reminders && typeof raw.reminders === "object" ? raw.reminders : {}) as Record<string, unknown>;
   const tickets = (raw.tickets && typeof raw.tickets === "object" ? raw.tickets : {}) as Record<string, unknown>;
   const alerts = (raw.alerts && typeof raw.alerts === "object" ? raw.alerts : {}) as Record<string, unknown>;
+  const upgrades = (raw.upgrades && typeof raw.upgrades === "object" ? raw.upgrades : {}) as Record<string, unknown>;
   const merged = {
     reminders: {
       ...DEFAULT_TENANT_PREFERENCES.reminders,
@@ -106,6 +116,7 @@ export function resolveTenantPreferences(stored: unknown): TenantPreferences {
       responseHours: { ...DEFAULT_TENANT_PREFERENCES.tickets.responseHours, ...((tickets.responseHours as object) ?? {}) },
     },
     alerts: { ...DEFAULT_TENANT_PREFERENCES.alerts, ...alerts },
+    upgrades: { ...DEFAULT_TENANT_PREFERENCES.upgrades, ...upgrades },
   };
   const parsed = tenantPreferencesSchema.safeParse(merged);
   return parsed.success ? parsed.data : DEFAULT_TENANT_PREFERENCES;

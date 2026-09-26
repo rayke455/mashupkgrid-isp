@@ -174,6 +174,16 @@ export const AUTOMATION_JOBS: readonly AutomationJobDefinition[] = [
     tenantVisible: true,
   },
   {
+    name: JOB_NAMES.suggestUpgrades,
+    queue: QUEUE_NAMES.billing,
+    category: "billing",
+    label: "Suggest plan upgrades",
+    description: "Finds subscribers running into their data cap and suggests the next plan up, for staff to apply.",
+    everyMs: 6 * HOUR,
+    counters: { tenants: "ISPs checked", found: "Suggestions", texted: "Customers texted", errors: "Errors" },
+    tenantVisible: true,
+  },
+  {
     name: JOB_NAMES.pushLargePayments,
     queue: QUEUE_NAMES.mpesa,
     category: "payments",

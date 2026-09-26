@@ -12,6 +12,7 @@ const LABELS_SW: Record<string, string> = {
   Notifications: "Arifa",
   Customers: "Wateja",
   "Online now": "Walio mtandaoni",
+  "Plan upgrades": "Kuongeza vifurushi",
   "Internet plans": "Vifurushi vya intaneti",
   Invoices: "Ankara",
   "Support tickets": "Tiketi za msaada",

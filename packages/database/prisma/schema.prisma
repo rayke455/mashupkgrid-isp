@@ -28,6 +28,7 @@ enum UserStatus {
 
 model Tenant {
   id                     String                  @id @default(uuid())
+  upgradeSuggestions     UpgradeSuggestion[]
   name                   String
   slug                   String                  @unique
   status                 TenantStatus            @default(ACTIVE)
@@ -419,28 +420,29 @@ enum CustomerStatus {
 }
 
 model Customer {
-  id               String         @id @default(uuid())
-  tenantId         String
-  tenant           Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  branchId         String?
-  branch           Branch?        @relation(fields: [branchId], references: [id], onDelete: SetNull)
-  userId           String?        @unique
-  user             User?          @relation(fields: [userId], references: [id])
-  customerNumber   String
-  fullName         String
-  email            String?
-  phone            String
-  idNumber         String?
-  address          String?
-  gpsLat           Float?
-  gpsLng           Float?
-  connectionType   String?
-  installationDate DateTime?
-  status           CustomerStatus @default(PENDING)
-  notes            String?
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
-  deletedAt        DateTime?
+  id                 String              @id @default(uuid())
+  upgradeSuggestions UpgradeSuggestion[]
+  tenantId           String
+  tenant             Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branchId           String?
+  branch             Branch?             @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  userId             String?             @unique
+  user               User?               @relation(fields: [userId], references: [id])
+  customerNumber     String
+  fullName           String
+  email              String?
+  phone              String
+  idNumber           String?
+  address            String?
+  gpsLat             Float?
+  gpsLng             Float?
+  connectionType     String?
+  installationDate   DateTime?
+  status             CustomerStatus      @default(PENDING)
+  notes              String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  deletedAt          DateTime?
 
   services CustomerService[]
   invoices Invoice[]
@@ -535,6 +537,7 @@ enum CustomerServiceStatus {
 /// thing that gets provisioned on network equipment.
 model CustomerService {
   id                 String                @id @default(uuid())
+  upgradeSuggestions UpgradeSuggestion[]
   tenantId           String
   tenant             Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   customerId         String
@@ -2225,17 +2228,17 @@ model HotspotVoucher {
 /// Recorded by the RADIUS server on every successful voucher login; used to log the same phone
 /// straight back in ("login by MAC") while that voucher still has time and data left.
 model HotspotDevice {
-  id          String   @id @default(uuid())
-  tenantId    String
+  id               String   @id @default(uuid())
+  tenantId         String
   /// AA:BB:CC:DD:EE:FF, as the router reports it (Calling-Station-Id).
-  macAddress  String
-  voucherCode String
+  macAddress       String
+  voucherCode      String
   /// The voucher's recorded usage when this phone was last logged back in by MAC. A new session's
   /// counters start at zero, so the voucher's usage is this plus the session's own bytes.
-  baselineBytesIn  BigInt @default(0)
-  baselineBytesOut BigInt @default(0)
-  firstSeenAt DateTime @default(now())
-  lastSeenAt  DateTime @default(now())
+  baselineBytesIn  BigInt   @default(0)
+  baselineBytesOut BigInt   @default(0)
+  firstSeenAt      DateTime @default(now())
+  lastSeenAt       DateTime @default(now())
 
   @@unique([tenantId, macAddress])
   @@index([tenantId, voucherCode])
@@ -2492,13 +2495,13 @@ model NetworkSyncTask {
 /// A branch or town an ISP operates in. Routers, customers and staff can belong to one; reports
 /// and lists filter by it. A staff member's branch is their default view, not an access boundary.
 model Branch {
-  id        String     @id @default(uuid())
+  id        String   @id @default(uuid())
   tenantId  String
-  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   name      String
   location  String?
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   routers   Router[]
   customers Customer[]
@@ -2526,4 +2529,41 @@ model PushSubscription {
   @@index([userId])
   @@index([tenantId])
   @@map("push_subscriptions")
+}
+
+enum UpgradeSuggestionStatus {
+  PENDING
+  APPLIED
+  DISMISSED
+}
+
+/// A subscriber who keeps running into their package's data cap, and the next plan up that would
+/// fit. Found by a worker job; staff apply it (which moves the subscription and re-provisions the
+/// router) or dismiss it. Package names and price are copied so the list still reads right after
+/// a package is renamed or repriced.
+model UpgradeSuggestion {
+  id                String                  @id @default(uuid())
+  tenantId          String
+  tenant            Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customerId        String
+  customer          Customer                @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customerServiceId String
+  customerService   CustomerService         @relation(fields: [customerServiceId], references: [id], onDelete: Cascade)
+  fromPackageId     String
+  fromPackageName   String
+  toPackageId       String
+  toPackageName     String
+  toPriceMinor      Int
+  currency          String                  @default("KES")
+  usedMb            Int
+  capMb             Int
+  status            UpgradeSuggestionStatus @default(PENDING)
+  smsSentAt         DateTime?
+  decidedByUserId   String?
+  decidedAt         DateTime?
+  createdAt         DateTime                @default(now())
+
+  @@index([tenantId, status])
+  @@index([customerServiceId, createdAt])
+  @@map("upgrade_suggestions")
 }
