@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
-import { prisma, type Customer } from "@mashupkgrid/database";
+import { prisma } from "@mashupkgrid/database";
 import { getOrCreateWallet, listWalletTransactions } from "@mashupkgrid/billing";
 import {
   getRadiusUserByCustomerServiceOrThrow,
@@ -22,6 +22,7 @@ import { authenticate } from "../plugins/authenticate.js";
 import { resolveTenant } from "../plugins/tenant.js";
 import { checkMaintenance } from "../plugins/maintenance.js";
 import { writeAuditLog } from "../lib/audit.js";
+import { resolveAccountHolderOrThrow, resolveMyAccountOrThrow, resolveMyCustomerOrThrow, resolvePayingCustomerOrThrow } from "../lib/my-account.js";
 import { initiateStkPushForCustomer, getStkRequestOrThrow, queryAndReconcileStkRequest } from "@mashupkgrid/payments";
 import { getReferralSummary, getPauseAllowance, pauseSubscription, resumeSubscription } from "@mashupkgrid/billing";
 
@@ -32,32 +33,10 @@ const ticketIdParamsSchema = z.object({ ticketId: z.string().uuid() });
 const createMyTicketSchema = z.object({ subject: z.string().min(1).max(200), body: z.string().min(1).max(5000) });
 const replyToMyTicketSchema = z.object({ body: z.string().min(1).max(5000) });
 
-/**
- * Resolves the caller's own billing record by `userId`, never by a client-supplied id — that's
- * what makes every route in this file safe to expose to the CUSTOMER role with no extra
- * permission check: the scoping *is* the security boundary, not a permission flag. A user with
- * no linked Customer (self-registered but not yet onboarded by staff — see
- * linkCustomerToUserAccount) gets a clear, specific 404, not an empty list that looks like "you
- * have nothing" when the real answer is "you aren't linked to a billing account yet".
- */
-async function resolveMyCustomerOrThrow(request: FastifyRequest): Promise<Customer> {
-  const tenantId = request.user!.tenantId;
-  if (tenantId === null) throw new ConflictError("Platform accounts have no customer record");
-
-  const customer = await prisma.customer.findFirst({ where: { tenantId, userId: request.user!.id } });
-  if (!customer) {
-    // NotFoundError appends " was not found" itself — this reads as "A linked customer record
-    // was not found", not a full sentence; the fuller "contact support" guidance lives in the
-    // frontend's CustomerPortal component instead of here.
-    throw new NotFoundError("A linked customer record");
-  }
-  return customer;
-}
-
 export async function meRoutes(app: FastifyInstance): Promise<void> {
   app.get("/customer", { config: { audience: "customer" }, preHandler: [...preHandler] }, async (request, reply) => {
-    const customer = await resolveMyCustomerOrThrow(request);
-    reply.send(successResponse(customer, request.id));
+    const { customer, role, canPay, name } = await resolveMyAccountOrThrow(request);
+    reply.send(successResponse({ ...customer, access: { role, canPay, name } }, request.id));
   });
 
   app.get("/subscriptions", { config: { audience: "customer" }, preHandler: [...preHandler] }, async (request, reply) => {
@@ -90,7 +69,7 @@ export async function meRoutes(app: FastifyInstance): Promise<void> {
     "/invoices/:invoiceId/pay",
     { config: { audience: "customer", maintenanceCategory: "payment" }, preHandler: [...preHandler] },
     async (request, reply) => {
-      const customer = await resolveMyCustomerOrThrow(request);
+      const customer = await resolvePayingCustomerOrThrow(request);
       const { invoiceId } = z.object({ invoiceId: z.string().uuid() }).parse(request.params);
       const { phone } = z.object({ phone: z.string().trim().min(9).max(15).optional() }).parse(request.body ?? {});
       const invoice = await prisma.invoice.findFirst({ where: { id: invoiceId, customerId: customer.id, tenantId: customer.tenantId } });
@@ -129,7 +108,7 @@ export async function meRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post("/subscriptions/:subscriptionId/pause", { config: { audience: "customer" }, preHandler: [...preHandler] }, async (request, reply) => {
-    const customer = await resolveMyCustomerOrThrow(request);
+    const customer = await resolveAccountHolderOrThrow(request);
     const { subscriptionId } = subscriptionIdParamsSchema.parse(request.params);
     const { days } = z.object({ days: z.number().int().min(1).max(180) }).parse(request.body);
     if (!(await prisma.customerService.findFirst({ where: { id: subscriptionId, customerId: customer.id } }))) throw new NotFoundError("Subscription");
@@ -139,7 +118,7 @@ export async function meRoutes(app: FastifyInstance): Promise<void> {
   });
 
   app.post("/subscriptions/:subscriptionId/resume", { config: { audience: "customer" }, preHandler: [...preHandler] }, async (request, reply) => {
-    const customer = await resolveMyCustomerOrThrow(request);
+    const customer = await resolveAccountHolderOrThrow(request);
     const { subscriptionId } = subscriptionIdParamsSchema.parse(request.params);
     if (!(await prisma.customerService.findFirst({ where: { id: subscriptionId, customerId: customer.id } }))) throw new NotFoundError("Subscription");
     const updated = await resumeSubscription(customer.tenantId, subscriptionId);
@@ -191,7 +170,7 @@ export async function meRoutes(app: FastifyInstance): Promise<void> {
     "/subscriptions/:subscriptionId/reveal-pppoe-password",
     { config: { audience: "customer" }, preHandler: [...preHandler] },
     async (request, reply) => {
-      const customer = await resolveMyCustomerOrThrow(request);
+      const customer = await resolveAccountHolderOrThrow(request);
       const { subscriptionId } = subscriptionIdParamsSchema.parse(request.params);
 
       const subscription = await prisma.customerService.findFirst({

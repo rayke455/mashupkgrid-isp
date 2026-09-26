@@ -10,6 +10,7 @@ import { EmptyState, Metric, MetricGrid, Notice, PageHeader, Panel, Pill, TableS
 import { customerStrings } from "@/lib/customer-strings";
 import { MyReferralPanel } from "@/components/my-referral-panel";
 import { PausePlan } from "@/components/pause-plan";
+import { AccountMembers } from "@/components/account-members";
 import { useLanguage } from "@/lib/language-context";
 
 /**
@@ -23,6 +24,8 @@ interface MyCustomer {
   customerNumber: string;
   phone: string;
   email: string | null;
+  /** A member (family or colleague) sees the holder's account; paying needs canPay. */
+  access?: { role: "holder" | "member"; canPay: boolean; name: string };
 }
 
 interface MySubscription {
@@ -128,6 +131,8 @@ export function CustomerPortal({ view = "all", onPay }: { view?: PortalView; onP
     retry: false,
   });
   const enabled = Boolean(customer);
+  const isHolder = customer?.access?.role !== "member";
+  const canPay = customer?.access?.canPay !== false;
   const { data: subscriptions } = useQuery({ queryKey: ["me-subscriptions"], queryFn: () => apiFetch<MySubscription[]>("/api/v1/me/subscriptions"), enabled });
   const { data: invoices } = useQuery({ queryKey: ["me-invoices"], queryFn: () => apiFetch<MyInvoice[]>("/api/v1/me/invoices"), enabled });
   const { data: walletData } = useQuery({ queryKey: ["me-wallet"], queryFn: () => apiFetch<MyWallet>("/api/v1/me/wallet"), enabled });
@@ -219,10 +224,10 @@ export function CustomerPortal({ view = "all", onPay }: { view?: PortalView; onP
   return (
     <div className="w-full min-w-0 space-y-6">
       {show("home", "bills") && <PageHeader
-        title={t.hello(customer.fullName.split(" ")[0] ?? "")}
+        title={t.hello((customer.access?.name ?? customer.fullName).split(" ")[0] ?? "")}
         description={t.account(customer.customerNumber)}
         actions={
-          firstOpen && (
+          firstOpen && canPay && (
             <button type="button" className={darkButton("primary")} onClick={() => setPayingInvoiceId(firstOpen.id)}>
               <IconMpesa size={16} /> {t.payNow(formatMoney(owedMinor, currency))}
             </button>
@@ -231,6 +236,14 @@ export function CustomerPortal({ view = "all", onPay }: { view?: PortalView; onP
       />}
 
       {error && <ErrorText>{error}</ErrorText>}
+
+      {!isHolder && show("home", "bills") && (
+        <Notice tone="neutral">
+          {lang === "sw"
+            ? `Umeingia kwenye akaunti ya ${customer.fullName.split(" ")[0]}.${canPay ? "" : " Mwenye akaunti pekee ndiye anayeweza kulipa bili."}`
+            : `You are signed in to ${customer.fullName.split(" ")[0]}'s account.${canPay ? "" : " Only the account holder can pay the bills."}`}
+        </Notice>
+      )}
 
       {primary && !serviceOn && primary.pausedUntil && (
         <Notice tone="neutral">
@@ -341,7 +354,7 @@ export function CustomerPortal({ view = "all", onPay }: { view?: PortalView; onP
                   </div>
                   <div className="shrink-0 text-right">
                     <p className="tabular-nums text-white">{formatMoney(balance > 0 && OPEN.has(inv.status) ? balance : inv.totalMinor, inv.currency)}</p>
-                    {OPEN.has(inv.status) && (
+                    {OPEN.has(inv.status) && canPay && (
                       <button type="button" className={`${darkButton("primary", "sm")} mt-1`} onClick={() => { setCheckoutRequestId(null); setPayingInvoiceId(inv.id); window.scrollTo({ top: 0, behavior: "smooth" }); }}>
                         {t.pay}
                       </button>
@@ -379,7 +392,7 @@ export function CustomerPortal({ view = "all", onPay }: { view?: PortalView; onP
                       <Pill tone={invoiceTone(inv.status)}>{inv.status.replace("_", " ").toLowerCase()}</Pill>
                     </td>
                     <td className={`${td} text-right`}>
-                      {OPEN.has(inv.status) && (
+                      {OPEN.has(inv.status) && canPay && (
                         <button type="button" className={darkButton("secondary", "sm")} onClick={() => { setCheckoutRequestId(null); setPayingInvoiceId(inv.id); }}>
                           {t.pay}
                         </button>
@@ -415,7 +428,7 @@ export function CustomerPortal({ view = "all", onPay }: { view?: PortalView; onP
                   </div>
                   <div className="mt-3 flex items-center gap-3">
                     <span className="text-xs text-slate-500">{t.renews(new Date(sub.nextBillingAt).toLocaleDateString())}</span>
-                    {!revealed[sub.id] ? (
+                    {!isHolder ? null : !revealed[sub.id] ? (
                       <button type="button" className={darkButton("ghost", "sm")} disabled={revealPassword.isPending} onClick={() => revealPassword.mutate(sub.id)}>
                         <IconShield size={13} /> {t.showPppoe}
                       </button>
@@ -425,7 +438,7 @@ export function CustomerPortal({ view = "all", onPay }: { view?: PortalView; onP
                       </span>
                     )}
                   </div>
-                  <PausePlan subscriptionId={sub.id} status={sub.status} pausedUntil={sub.pausedUntil} />
+                  {isHolder && <PausePlan subscriptionId={sub.id} status={sub.status} pausedUntil={sub.pausedUntil} />}
                 </div>
               ))}
             </div>
@@ -451,6 +464,8 @@ export function CustomerPortal({ view = "all", onPay }: { view?: PortalView; onP
           )}
         </Panel>
       </div>}
+
+      {show("account") && isHolder && <AccountMembers base="/api/v1/me/members" />}
 
       {show("refer") && <MyReferralPanel />}
 

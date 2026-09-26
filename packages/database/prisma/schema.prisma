@@ -135,6 +135,7 @@ model Tenant {
   hotspotVouchers  HotspotVoucher[]
   networkSyncTasks NetworkSyncTask[]
   provisioningJobs ProvisioningJob[]
+  customerMembers  CustomerMember[]
 
   @@index([status])
   @@map("tenants")
@@ -170,6 +171,7 @@ model User {
   loginAttempts           LoginAttempt[]
   auditLogsAsActor        AuditLog[]               @relation("AuditLogActor")
   customerProfile         Customer?
+  customerMembership      CustomerMember?
   apiKeysCreated          ApiKey[]
   ticketsAssigned         Ticket[]                 @relation("TicketAssignee")
   ticketsCreated          Ticket[]                 @relation("TicketCreatedBy")
@@ -471,6 +473,7 @@ model Customer {
   payments Payment[]
   wallet   Wallet?
   tickets  Ticket[]
+  members  CustomerMember[]
 
   mpesaStkRequests     MpesaStkRequest[]
   mpesaC2BTransactions MpesaC2BTransaction[]
@@ -2856,4 +2859,28 @@ model ServicePause {
 
   @@index([customerServiceId, startsAt])
   @@map("service_pauses")
+}
+
+/// An extra login on a customer's account: a family member or a colleague at a business. They
+/// see the account's plans, bills and usage, and can open tickets. Paying is allowed only when
+/// canPay is set; pausing, the router password and managing members stay with the account
+/// holder. Invited by a link; userId is set once they accept it.
+model CustomerMember {
+  id              String    @id @default(uuid())
+  tenantId        String
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customerId      String
+  customer        Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  userId          String?   @unique
+  user            User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name            String
+  phone           String?
+  canPay          Boolean   @default(false)
+  inviteCode      String?   @unique
+  inviteExpiresAt DateTime?
+  acceptedAt      DateTime?
+  createdAt       DateTime  @default(now())
+
+  @@index([customerId])
+  @@map("customer_members")
 }

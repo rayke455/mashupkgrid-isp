@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useParams } from "next/navigation";
 import { tr } from "@/lib/tr";
 import { ReferralCard } from "@/components/referral-card";
+import { AccountMembers } from "@/components/account-members";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
@@ -477,6 +478,8 @@ export default function CustomerDetailPage() {
           )}
         </div>
       </Card>
+
+      <AccountMembers base={`/api/v1/customers/${customerId}/members`} />
 
       {/* Invoices & Wallet in 2 columns */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
