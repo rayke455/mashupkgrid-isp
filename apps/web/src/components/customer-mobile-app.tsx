@@ -8,6 +8,7 @@ import { apiFetch } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
 import { useLanguage } from "@/lib/language-context";
 import { CustomerPortal, type PortalView } from "@/components/customer-portal";
+import { IconChat, IconGift, IconHome, IconReceipt, IconUserRound } from "@/components/icons";
 
 /**
  * The customer app: the same account data as the customer portal (balance, bills, M-Pesa
@@ -42,12 +43,12 @@ const S = {
   },
 };
 
-const ICONS: Record<Tab, ReactNode> = {
-  home: <path d="M3 10.5 12 3l9 7.5V21h-6v-6H9v6H3z" />,
-  bills: <path d="M6 2h12v20l-3-2-3 2-3-2-3 2zM9 7h6M9 11h6M9 15h4" />,
-  support: <path d="M4 5h16v11H8l-4 4zM8 9h8M8 12h5" />,
-  refer: <path d="M16 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM8 13a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM2 20c0-3 3-5 6-5s6 2 6 5M14 15c3 0 8 1 8 5" />,
-  account: <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21c0-4 4-6 8-6s8 2 8 6" />,
+const ICONS: Record<Tab, (props: { size?: number }) => ReactNode> = {
+  home: IconHome,
+  bills: IconReceipt,
+  support: IconChat,
+  refer: IconGift,
+  account: IconUserRound,
 };
 
 interface InstallEvent extends Event {
@@ -167,9 +168,10 @@ export function CustomerMobileApp({ tenantSlug }: { tenantSlug?: string }) {
               aria-current={tab === k ? "page" : undefined}
               className={`flex flex-col items-center gap-0.5 py-2 text-[11px] ${tab === k ? "text-brand-400" : "text-slate-400"}`}
             >
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                {ICONS[k]}
-              </svg>
+              {(() => {
+                const Glyph = ICONS[k];
+                return <Glyph size={22} />;
+              })()}
               {t.tabs[k]}
             </a>
           ))}

@@ -1,73 +1,110 @@
 import type { ReactNode } from "react";
-import type { NavIcon } from "@/lib/navigation";
+import type { LucideIcon } from "lucide-react";
 import {
-  IconAutomation,
-  IconBell,
-  IconDashboard,
-  IconInvoice,
-  IconLayers,
-  IconLifeBuoy,
-  IconLock,
-  IconMaintenance,
-  IconMessage,
-  IconMpesa,
-  IconNetworkPool,
-  IconPackage,
-  IconPulse,
-  IconRouter,
-  IconSession,
-  IconShield,
-  IconSparkles,
-  IconSpeed,
-  IconTenants,
-  IconTicket,
-  IconUsers,
-} from "@/components/icons";
+  BadgePercent,
+  Banknote,
+  Bell,
+  BellRing,
+  Building2,
+  CalendarClock,
+  ChartColumn,
+  ClipboardList,
+  CloudDownload,
+  Coins,
+  CreditCard,
+  FileText,
+  Gauge,
+  Gift,
+  Globe,
+  Hammer,
+  HandCoins,
+  History,
+  KeyRound,
+  Landmark,
+  Layers,
+  LayoutDashboard,
+  LifeBuoy,
+  Lock,
+  MapPinned,
+  MessageSquare,
+  MessagesSquare,
+  MonitorSmartphone,
+  Network,
+  Package,
+  Palette,
+  Receipt,
+  Router,
+  Scale,
+  ScrollText,
+  Settings,
+  ShieldCheck,
+  Smartphone,
+  Store,
+  Ticket,
+  TrendingUp,
+  Users,
+  Wallet,
+  Webhook,
+  Wifi,
+  Workflow,
+  Wrench,
+} from "lucide-react";
+import type { NavIcon } from "@/lib/navigation";
+import { ICON_STROKE } from "@/components/icons";
+
+/** Each menu entry's icon, from the Lucide set, one per destination so the menu scans at a glance. */
+const GLYPHS: Record<NavIcon, LucideIcon> = {
+  "badge-percent": BadgePercent,
+  "banknote": Banknote,
+  "bell": Bell,
+  "bell-ring": BellRing,
+  "building": Building2,
+  "calendar-clock": CalendarClock,
+  "chart": ChartColumn,
+  "clipboard": ClipboardList,
+  "cloud-download": CloudDownload,
+  "coins": Coins,
+  "credit-card": CreditCard,
+  "dashboard": LayoutDashboard,
+  "file-text": FileText,
+  "gauge": Gauge,
+  "gift": Gift,
+  "globe": Globe,
+  "hand-coins": HandCoins,
+  "hard-hat": Hammer,
+  "history": History,
+  "key": KeyRound,
+  "landmark": Landmark,
+  "layers": Layers,
+  "lifebuoy": LifeBuoy,
+  "lock": Lock,
+  "map": MapPinned,
+  "message": MessageSquare,
+  "messages": MessagesSquare,
+  "monitor": MonitorSmartphone,
+  "network": Network,
+  "package": Package,
+  "palette": Palette,
+  "receipt": Receipt,
+  "router": Router,
+  "scale": Scale,
+  "scroll": ScrollText,
+  "settings": Settings,
+  "shield": ShieldCheck,
+  "smartphone": Smartphone,
+  "store": Store,
+  "ticket": Ticket,
+  "trending-up": TrendingUp,
+  "users": Users,
+  "wallet": Wallet,
+  "webhook": Webhook,
+  "wifi": Wifi,
+  "workflow": Workflow,
+  "wrench": Wrench,
+};
 
 /** Renders a navigation catalog icon name (lib/navigation.ts keeps the catalog React-free). */
 export function NavIconGlyph({ name, size = 18 }: { name: NavIcon; size?: number }): ReactNode {
-  switch (name) {
-    case "dashboard":
-      return <IconDashboard size={size} />;
-    case "bell":
-      return <IconBell size={size} />;
-    case "users":
-      return <IconUsers size={size} />;
-    case "package":
-      return <IconPackage size={size} />;
-    case "invoice":
-      return <IconInvoice size={size} />;
-    case "lifebuoy":
-      return <IconLifeBuoy size={size} />;
-    case "ticket":
-      return <IconTicket size={size} />;
-    case "pulse":
-      return <IconPulse size={size} />;
-    case "router":
-      return <IconRouter size={size} />;
-    case "layers":
-      return <IconLayers size={size} />;
-    case "pool":
-      return <IconNetworkPool size={size} />;
-    case "speed":
-      return <IconSpeed size={size} />;
-    case "mpesa":
-      return <IconMpesa size={size} />;
-    case "maintenance":
-      return <IconMaintenance size={size} />;
-    case "message":
-      return <IconMessage size={size} />;
-    case "shield":
-      return <IconShield size={size} />;
-    case "session":
-      return <IconSession size={size} />;
-    case "tenants":
-      return <IconTenants size={size} />;
-    case "lock":
-      return <IconLock size={size} />;
-    case "sparkles":
-      return <IconSparkles size={size} />;
-    case "automation":
-      return <IconAutomation size={size} />;
-  }
+  const Glyph = GLYPHS[name] ?? LayoutDashboard;
+  return <Glyph size={size} strokeWidth={ICON_STROKE} aria-hidden="true" />;
 }

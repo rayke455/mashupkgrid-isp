@@ -1,5 +1,6 @@
 "use client";
 
+import { IconSend } from "@/components/icons";
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
@@ -203,10 +204,7 @@ function BotTestPanel() {
           {sendMessage.isPending ? (
             <span className="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
           ) : (
-            <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth={2.5}>
-              <path d="M22 2L11 13" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M22 2L15 22L11 13L2 9L22 2Z" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
+            <IconSend size={16} />
           )}
         </button>
       </form>

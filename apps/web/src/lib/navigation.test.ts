@@ -50,7 +50,7 @@ describe("navigation catalog", () => {
 
 describe("scoreNavMatch", () => {
   const plans = { href: "/packages", label: "Internet plans", icon: "package" as const, keywords: "rate plans speed" };
-  const paid = { href: "/payments-setup", label: "Getting paid", icon: "mpesa" as const, keywords: "m-pesa paystack till paybill" };
+  const paid = { href: "/payments-setup", label: "Getting paid", icon: "credit-card" as const, keywords: "m-pesa paystack till paybill" };
 
   it("ranks a label prefix above a keyword hit", () => {
     expect(scoreNavMatch("in", plans)).toBeGreaterThan(scoreNavMatch("pay", plans));

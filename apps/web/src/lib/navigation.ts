@@ -10,27 +10,53 @@ import type { CurrentUser } from "@/lib/auth-context";
  */
 
 export type NavIcon =
-  | "dashboard"
+  | "badge-percent"
+  | "banknote"
   | "bell"
-  | "users"
-  | "package"
-  | "invoice"
-  | "lifebuoy"
-  | "ticket"
-  | "pulse"
-  | "router"
+  | "bell-ring"
+  | "building"
+  | "calendar-clock"
+  | "chart"
+  | "clipboard"
+  | "cloud-download"
+  | "coins"
+  | "credit-card"
+  | "dashboard"
+  | "file-text"
+  | "gauge"
+  | "gift"
+  | "globe"
+  | "hand-coins"
+  | "hard-hat"
+  | "history"
+  | "key"
+  | "landmark"
   | "layers"
-  | "pool"
-  | "speed"
-  | "mpesa"
-  | "maintenance"
-  | "message"
-  | "shield"
-  | "session"
-  | "tenants"
+  | "lifebuoy"
   | "lock"
-  | "sparkles"
-  | "automation";
+  | "map"
+  | "message"
+  | "messages"
+  | "monitor"
+  | "network"
+  | "package"
+  | "palette"
+  | "receipt"
+  | "router"
+  | "scale"
+  | "scroll"
+  | "settings"
+  | "shield"
+  | "smartphone"
+  | "store"
+  | "ticket"
+  | "trending-up"
+  | "users"
+  | "wallet"
+  | "webhook"
+  | "wifi"
+  | "workflow"
+  | "wrench";
 
 export interface NavItem {
   href: string;
@@ -71,11 +97,11 @@ function tenantSections(has: Has): NavSection[] {
       title: "Customers",
       items: [
         ...(has("customers.read") ? [{ href: "/customers", label: "Customers", icon: "users", keywords: "subscribers pppoe" } as NavItem] : []),
-        ...(has("customers.read") ? [{ href: "/online-users", label: "Online now", icon: "pulse", keywords: "sessions active users hotspot pppoe who is connected tracking" } as NavItem] : []),
-        ...(has("customers.read") ? [{ href: "/customers/upgrades", label: "Plan upgrades", icon: "speed", keywords: "upgrade data cap fup bigger plan suggestions" } as NavItem] : []),
-        ...(has("customers.read") ? [{ href: "/customers/referrals", label: "Referrals", icon: "users", keywords: "refer neighbour reward code free days" } as NavItem] : []),
+        ...(has("customers.read") ? [{ href: "/online-users", label: "Online now", icon: "wifi", keywords: "sessions active users hotspot pppoe who is connected tracking" } as NavItem] : []),
+        ...(has("customers.read") ? [{ href: "/customers/upgrades", label: "Plan upgrades", icon: "trending-up", keywords: "upgrade data cap fup bigger plan suggestions" } as NavItem] : []),
+        ...(has("customers.read") ? [{ href: "/customers/referrals", label: "Referrals", icon: "gift", keywords: "refer neighbour reward code free days" } as NavItem] : []),
         ...(has("packages.read") ? [{ href: "/packages", label: "Internet plans", icon: "package", keywords: "packages rate plans speed" } as NavItem] : []),
-        ...(has("billing.read") ? [{ href: "/invoices", label: "Invoices", icon: "invoice", keywords: "billing bills" } as NavItem] : []),
+        ...(has("billing.read") ? [{ href: "/invoices", label: "Invoices", icon: "file-text", keywords: "billing bills" } as NavItem] : []),
         ...(has("tickets.read") ? [{ href: "/tickets", label: "Support tickets", icon: "lifebuoy", keywords: "helpdesk complaints" } as NavItem] : []),
       ],
     },
@@ -83,21 +109,22 @@ function tenantSections(has: Has): NavSection[] {
       title: "Hotspot",
       items: [
         ...(has("radius.manage") ? [{ href: "/vouchers", label: "Hotspot", icon: "ticket", keywords: "vouchers captive portal wifi" } as NavItem] : []),
-        ...(has("payments.read") ? [{ href: "/purchase-attempts", label: "Purchase attempts", icon: "pulse", keywords: "hotspot checkout failed" } as NavItem] : []),
-        ...(has("radius.manage") ? [{ href: "/captive-customizer", label: "Portal designer", icon: "sparkles", keywords: "captive portal theme login page" } as NavItem] : []),
+        ...(has("payments.read") ? [{ href: "/purchase-attempts", label: "Purchase attempts", icon: "history", keywords: "hotspot checkout failed" } as NavItem] : []),
+        ...(has("radius.manage") ? [{ href: "/captive-customizer", label: "Portal designer", icon: "palette", keywords: "captive portal theme login page" } as NavItem] : []),
       ],
     },
     {
       title: "Network",
       items: [
         ...(has("routers.read") ? [{ href: "/routers", label: "Routers", icon: "router", keywords: "mikrotik nas" } as NavItem] : []),
+        ...(has("routers.manage") ? [{ href: "/routers/updates", label: "Router updates", icon: "cloud-download", keywords: "ota firmware routeros upgrade push script features fleet reboot" } as NavItem] : []),
         ...(has("vlans.read") ? [{ href: "/vlans", label: "VLANs", icon: "layers", keywords: "segments tagging" } as NavItem] : []),
-        ...(has("routers.read") ? [{ href: "/ip-pools", label: "IP pools", icon: "pool", keywords: "addresses dhcp" } as NavItem] : []),
-        ...(has("routers.read") ? [{ href: "/network-map", label: "Network map", icon: "router", keywords: "sites map coverage where routers are" } as NavItem] : []),
-        ...(has("routers.read") ? [{ href: "/network-maintenance", label: "Planned maintenance", icon: "maintenance", keywords: "outage downtime notify customers sms scheduled work" } as NavItem] : []),
-        ...(has("reports.read") ? [{ href: "/reports", label: "Bandwidth usage", icon: "speed", keywords: "reports traffic revenue export" } as NavItem] : []),
-        ...(has("reports.read") ? [{ href: "/analytics", label: "Analytics", icon: "pulse", keywords: "growth revenue churn busiest hours packages sell" } as NavItem] : []),
-        ...(has("reports.read") ? [{ href: "/reports/vat", label: "VAT report", icon: "invoice", keywords: "tax kra itax vat return pin monthly" } as NavItem] : []),
+        ...(has("routers.read") ? [{ href: "/ip-pools", label: "IP pools", icon: "network", keywords: "addresses dhcp" } as NavItem] : []),
+        ...(has("routers.read") ? [{ href: "/network-map", label: "Network map", icon: "map", keywords: "sites map coverage where routers are" } as NavItem] : []),
+        ...(has("routers.read") ? [{ href: "/network-maintenance", label: "Planned maintenance", icon: "calendar-clock", keywords: "outage downtime notify customers sms scheduled work" } as NavItem] : []),
+        ...(has("reports.read") ? [{ href: "/reports", label: "Bandwidth usage", icon: "gauge", keywords: "reports traffic revenue export" } as NavItem] : []),
+        ...(has("reports.read") ? [{ href: "/analytics", label: "Analytics", icon: "chart", keywords: "growth revenue churn busiest hours packages sell" } as NavItem] : []),
+        ...(has("reports.read") ? [{ href: "/reports/vat", label: "VAT report", icon: "receipt", keywords: "tax kra itax vat return pin monthly" } as NavItem] : []),
       ],
     },
     {
@@ -107,30 +134,30 @@ function tenantSections(has: Has): NavSection[] {
       items: [
         ...(has("payments.read")
           ? ([
-              { href: "/payments", label: "Payments", icon: "dashboard", exact: true, keywords: "collections gateway" },
-              { href: "/payments/transactions", label: "Transactions", icon: "mpesa", keywords: "payments history" },
-              { href: "/payments/balance", label: "Balance", icon: "invoice", keywords: "wallet available" },
-              { href: "/payments/settlements", label: "Settlements", icon: "layers", keywords: "payouts withdraw" },
+              { href: "/payments", label: "Payments", icon: "wallet", exact: true, keywords: "collections gateway" },
+              { href: "/payments/transactions", label: "Transactions", icon: "credit-card", keywords: "payments history" },
+              { href: "/payments/balance", label: "Balance", icon: "coins", keywords: "wallet available" },
+              { href: "/payments/settlements", label: "Settlements", icon: "landmark", keywords: "payouts withdraw" },
             ] as NavItem[])
           : []),
-        ...(has("payments.reconcile") ? [{ href: "/payments/reconciliation", label: "Reconciliation", icon: "shield", keywords: "unmatched payments apply invoice m-pesa" } as NavItem] : []),
+        ...(has("payments.reconcile") ? [{ href: "/payments/reconciliation", label: "Reconciliation", icon: "scale", keywords: "unmatched payments apply invoice m-pesa" } as NavItem] : []),
         ...(has("settings.manage") || has("payments.reconcile")
           ? // One entry, not four: M-Pesa, Paystack and Pesapal answer one question for an operator.
-            [{ href: "/payments-setup", label: "Getting paid", icon: "mpesa", keywords: "m-pesa paystack pesapal till paybill" } as NavItem]
+            [{ href: "/payments-setup", label: "Getting paid", icon: "hand-coins", keywords: "m-pesa paystack pesapal till paybill" } as NavItem]
           : []),
       ],
     },
     {
       title: "Account",
       items: [
-        ...(has("settings.manage") ? [{ href: "/settings", label: "Settings", icon: "maintenance", keywords: "branding domain billing" } as NavItem] : []),
-        ...(has("settings.manage") ? [{ href: "/automation", label: "Automation", icon: "automation", keywords: "jobs scheduler worker billing cycle dunning" } as NavItem] : []),
+        ...(has("settings.manage") ? [{ href: "/settings", label: "Settings", icon: "settings", keywords: "branding domain billing" } as NavItem] : []),
+        ...(has("settings.manage") ? [{ href: "/automation", label: "Automation", icon: "workflow", keywords: "jobs scheduler worker billing cycle dunning" } as NavItem] : []),
         ...(has("settings.manage") ? [{ href: "/sms", label: "SMS gateway", icon: "message", keywords: "communications" } as NavItem] : []),
-        ...(has("customers.read") ? [{ href: "/field", label: "Field work", icon: "pulse", keywords: "technician installer installs visits phone" } as NavItem] : []),
-        { href: "/app", label: "Customer mobile app", icon: "layers", keywords: "phone app install home screen pay bills" },
-        { href: "/shop", label: "Hardware store", icon: "package", keywords: "buy routers antennas", external: true },
-        ...(has("audit_logs.read") ? [{ href: "/audit-log", label: "Audit log", icon: "shield", keywords: "history who changed" } as NavItem] : []),
-        { href: "/sessions", label: "My sessions", icon: "session", keywords: "devices sign out" },
+        ...(has("customers.read") ? [{ href: "/field", label: "Field work", icon: "hard-hat", keywords: "technician installer installs visits phone" } as NavItem] : []),
+        { href: "/app", label: "Customer mobile app", icon: "smartphone", keywords: "phone app install home screen pay bills" },
+        { href: "/shop", label: "Hardware store", icon: "store", keywords: "buy routers antennas", external: true },
+        ...(has("audit_logs.read") ? [{ href: "/audit-log", label: "Audit log", icon: "scroll", keywords: "history who changed" } as NavItem] : []),
+        { href: "/sessions", label: "My sessions", icon: "monitor", keywords: "devices sign out" },
       ],
     },
   ];
@@ -144,11 +171,11 @@ function platformSections(has: Has): NavSection[] {
     {
       title: "Platform",
       items: [
-        ...(has("tenants.read") ? [{ href: "/tenants", label: "Tenants", icon: "tenants", keywords: "isps customers accounts" } as NavItem] : []),
-        ...(has("tenants.update") ? [{ href: "/admin/notifications", label: "Notifications", icon: "bell", keywords: "announce broadcast" } as NavItem] : []),
+        ...(has("tenants.read") ? [{ href: "/tenants", label: "Tenants", icon: "building", keywords: "isps customers accounts" } as NavItem] : []),
+        ...(has("tenants.update") ? [{ href: "/admin/notifications", label: "Notifications", icon: "bell-ring", keywords: "announce broadcast" } as NavItem] : []),
         ...(has("plans.manage") ? [{ href: "/plans", label: "Subscription plans", icon: "layers", keywords: "pricing tiers" } as NavItem] : []),
-        ...(has("maintenance.manage") ? [{ href: "/maintenance", label: "Maintenance mode", icon: "maintenance", keywords: "downtime" } as NavItem] : []),
-        ...(has("maintenance.manage") ? [{ href: "/automation", label: "Automation", icon: "automation", keywords: "jobs scheduler worker queues" } as NavItem] : []),
+        ...(has("maintenance.manage") ? [{ href: "/maintenance", label: "Maintenance mode", icon: "wrench", keywords: "downtime" } as NavItem] : []),
+        ...(has("maintenance.manage") ? [{ href: "/automation", label: "Automation", icon: "workflow", keywords: "jobs scheduler worker queues" } as NavItem] : []),
         ...(has("maintenance.manage") ? [{ href: "/admin/walled-garden", label: "Walled garden", icon: "shield", keywords: "hotspot allowed hosts before login paywall" } as NavItem] : []),
       ],
     },
@@ -156,13 +183,13 @@ function platformSections(has: Has): NavSection[] {
       title: "Payments",
       items: has("platform_payments.read")
         ? [
-            { href: "/admin/payments", label: "Overview", icon: "dashboard", exact: true, keywords: "gateway collections" },
-            { href: "/admin/payments/transactions", label: "Transactions", icon: "mpesa" },
-            { href: "/admin/payments/settlements", label: "Settlements", icon: "layers", keywords: "payouts" },
-            { href: "/admin/payments/reconciliation", label: "Reconciliation", icon: "shield", keywords: "unmatched" },
+            { href: "/admin/payments", label: "Overview", icon: "wallet", exact: true, keywords: "gateway collections" },
+            { href: "/admin/payments/transactions", label: "Transactions", icon: "credit-card" },
+            { href: "/admin/payments/settlements", label: "Settlements", icon: "landmark", keywords: "payouts" },
+            { href: "/admin/payments/reconciliation", label: "Reconciliation", icon: "scale", keywords: "unmatched" },
             { href: "/admin/payments/gateway", label: "Payment gateway", icon: "lock" },
-            { href: "/admin/payments/fees", label: "Fees", icon: "invoice", keywords: "commission settlement policy" },
-            { href: "/admin/payments/webhooks", label: "Webhooks", icon: "pulse" },
+            { href: "/admin/payments/fees", label: "Fees", icon: "badge-percent", keywords: "commission settlement policy" },
+            { href: "/admin/payments/webhooks", label: "Webhooks", icon: "webhook" },
           ]
         : [],
     },
@@ -171,7 +198,7 @@ function platformSections(has: Has): NavSection[] {
       items: has("tenants.read")
         ? [
             { href: "/admin/products", label: "Hardware & pricing", icon: "package", keywords: "store catalog" },
-            { href: "/admin/orders", label: "Hardware orders", icon: "invoice" },
+            { href: "/admin/orders", label: "Hardware orders", icon: "clipboard" },
           ]
         : [],
     },
@@ -179,8 +206,8 @@ function platformSections(has: Has): NavSection[] {
       title: "Website",
       items: has("maintenance.manage")
         ? [
-            { href: "/landing-editor", label: "Landing page", icon: "sparkles", keywords: "homepage marketing" },
-            { href: "/testimonials", label: "Testimonials", icon: "message" },
+            { href: "/landing-editor", label: "Landing page", icon: "globe", keywords: "homepage marketing" },
+            { href: "/testimonials", label: "Testimonials", icon: "messages" },
           ]
         : [],
     },
@@ -188,13 +215,13 @@ function platformSections(has: Has): NavSection[] {
       title: "Integrations",
       items: has("tenants.create")
         ? [
-            { href: "/platform-mpesa", label: "Platform M-Pesa", icon: "mpesa", keywords: "daraja" },
-            { href: "/platform-google-signin", label: "Google sign-in", icon: "lock", keywords: "oauth" },
+            { href: "/platform-mpesa", label: "Platform M-Pesa", icon: "banknote", keywords: "daraja" },
+            { href: "/platform-google-signin", label: "Google sign-in", icon: "key", keywords: "oauth" },
             { href: "/platform-whatsapp", label: "Platform WhatsApp", icon: "message" },
           ]
         : [],
     },
-    { title: "Account", items: [{ href: "/sessions", label: "My sessions", icon: "session", keywords: "devices sign out" }] },
+    { title: "Account", items: [{ href: "/sessions", label: "My sessions", icon: "monitor", keywords: "devices sign out" }] },
   ];
 }
 
