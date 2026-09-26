@@ -2,6 +2,7 @@
 
 import type { CSSProperties } from "react";
 import { appOnlyLabel, type CaptiveThemeProps, type HotspotPackage, type ThemeMeta } from "./types";
+import { portalStrings, type PortalStrings } from "@/lib/portal-strings";
 
 /**
  * A family of captive-portal themes built from one well-tested layout and a palette.
@@ -55,8 +56,8 @@ function formatDuration(minutes: number): string {
   const h = minutes / 60;
   return plural(Number.isInteger(h) ? h : +h.toFixed(1), "hour");
 }
-function formatData(mb: number | null): string {
-  if (!mb) return "Unlimited";
+function formatData(mb: number | null, unlimited: string): string {
+  if (!mb) return unlimited;
   return mb >= 1024 ? `${+(mb / 1024).toFixed(1)} GB` : `${mb} MB`;
 }
 function formatSpeed(kbps: number | null): string | null {
@@ -79,10 +80,10 @@ function vars(p: PalettePreset, brandColor?: string | null): CSSProperties {
   };
 }
 
-function PackageItem({ pkg, layout, radius, onSelect }: { pkg: HotspotPackage; layout: PalettePreset["layout"]; radius: string; onSelect: () => void }) {
+function PackageItem({ pkg, layout, radius, onSelect, t }: { pkg: HotspotPackage; layout: PalettePreset["layout"]; radius: string; onSelect: () => void; t: PortalStrings }) {
   const speed = formatSpeed(pkg.downloadKbps);
   const appOnly = appOnlyLabel(pkg.appPolicy);
-  const flag = pkg.badge || (pkg.isPopular ? "Popular" : null);
+  const flag = pkg.badge || (pkg.isPopular ? t.popular : null);
   const base = `w-full border border-[var(--p-border)] bg-[var(--p-surface)] text-left transition-colors hover:border-[var(--p-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--p-accent)] ${radius}`;
 
   if (layout === "tiles") {
@@ -91,7 +92,7 @@ function PackageItem({ pkg, layout, radius, onSelect }: { pkg: HotspotPackage; l
         <button type="button" onClick={onSelect} className={`${base} flex flex-col items-center px-3 py-4 text-center`}>
           <span className="text-lg font-semibold tabular-nums text-[var(--p-text)]">{formatKes(pkg.priceMinor)}</span>
           <span className="mt-1 text-sm font-medium text-[var(--p-text)]">{pkg.name}</span>
-          <span className="mt-0.5 text-xs text-[var(--p-muted)]">{[formatDuration(pkg.durationMinutes), formatData(pkg.dataCapMb)].join(" · ")}</span>
+          <span className="mt-0.5 text-xs text-[var(--p-muted)]">{[formatDuration(pkg.durationMinutes), formatData(pkg.dataCapMb, t.unlimited)].join(" · ")}</span>
           {(flag || appOnly) && (
             <span className="mt-2 rounded-full bg-[var(--p-accent)] px-2 py-0.5 text-[11px] font-semibold text-[var(--p-on-accent)]">{appOnly ?? flag}</span>
           )}
@@ -108,11 +109,11 @@ function PackageItem({ pkg, layout, radius, onSelect }: { pkg: HotspotPackage; l
             <span className="text-[15px] font-semibold text-[var(--p-text)]">{pkg.name}</span>
             {flag && <span className="shrink-0 rounded-full bg-[var(--p-accent)] px-2 py-0.5 text-[11px] font-semibold text-[var(--p-on-accent)]">{flag}</span>}
           </span>
-          <span className="mt-1 text-xs text-[var(--p-muted)]">{[formatDuration(pkg.durationMinutes), formatData(pkg.dataCapMb), speed].filter(Boolean).join(" · ")}</span>
+          <span className="mt-1 text-xs text-[var(--p-muted)]">{[formatDuration(pkg.durationMinutes), formatData(pkg.dataCapMb, t.unlimited), speed].filter(Boolean).join(" · ")}</span>
           {appOnly && <span className="mt-1 text-xs font-medium text-[var(--p-accent)]">{appOnly}</span>}
           <span className="mt-3 flex items-end justify-between">
             <span className="text-lg font-semibold tabular-nums text-[var(--p-text)]">{formatKes(pkg.priceMinor)}</span>
-            <span className={`rounded-md bg-[var(--p-accent)] px-2.5 py-1 text-xs font-semibold text-[var(--p-on-accent)]`}>Buy</span>
+            <span className={`rounded-md bg-[var(--p-accent)] px-2.5 py-1 text-xs font-semibold text-[var(--p-on-accent)]`}>{t.buy}</span>
           </span>
         </button>
       </li>
@@ -128,11 +129,11 @@ function PackageItem({ pkg, layout, radius, onSelect }: { pkg: HotspotPackage; l
             {flag && <span className="rounded-full bg-[var(--p-accent)] px-2 py-0.5 text-[11px] font-semibold text-[var(--p-on-accent)]">{flag}</span>}
             {appOnly && <span className="rounded-full border border-[var(--p-border)] px-2 py-0.5 text-[11px] font-semibold text-[var(--p-muted)]">{appOnly}</span>}
           </span>
-          <span className="mt-0.5 block text-[13px] text-[var(--p-muted)]">{[formatDuration(pkg.durationMinutes), formatData(pkg.dataCapMb), speed].filter(Boolean).join(" · ")}</span>
+          <span className="mt-0.5 block text-[13px] text-[var(--p-muted)]">{[formatDuration(pkg.durationMinutes), formatData(pkg.dataCapMb, t.unlimited), speed].filter(Boolean).join(" · ")}</span>
         </span>
         <span className="shrink-0 text-right">
           <span className="block text-base font-semibold tabular-nums text-[var(--p-text)]">{formatKes(pkg.priceMinor)}</span>
-          <span className="mt-0.5 block text-xs font-medium text-[var(--p-accent)]">Buy</span>
+          <span className="mt-0.5 block text-xs font-medium text-[var(--p-accent)]">{t.buy}</span>
         </span>
       </button>
     </li>
@@ -165,13 +166,14 @@ export function createPaletteTheme(preset: PalettePreset) {
       accountResult,
       completingRouterLogin,
     } = props;
+    const t = props.t ?? portalStrings("en");
 
     const sorted = [...(packages ?? [])].sort((a, b) => a.priceMinor - b.priceMinor);
     const helpPhone = supportPhone || contactPhone;
     const name = tenantName || "Wi-Fi";
     const initial = name.trim().charAt(0).toUpperCase() || "W";
-    const title = welcomeTitle || "Fast, reliable Wi-Fi";
-    const subtitle = bannerSubtitle || "Pay with M-Pesa and connect instantly";
+    const title = welcomeTitle || t.defaultTitle;
+    const subtitle = bannerSubtitle || t.defaultSubtitle;
 
     const brand = (
       <div className="flex items-center gap-3">
@@ -185,7 +187,7 @@ export function createPaletteTheme(preset: PalettePreset) {
         )}
         <div className="min-w-0">
           <p className={`truncate text-base font-semibold ${preset.header === "plain" ? "text-[var(--p-text)]" : "text-[var(--p-on-accent)]"}`}>{name}</p>
-          <p className={`text-sm ${preset.header === "plain" ? "text-[var(--p-muted)]" : "text-[var(--p-on-accent)] opacity-80"}`}>Wi-Fi hotspot</p>
+          <p className={`text-sm ${preset.header === "plain" ? "text-[var(--p-muted)]" : "text-[var(--p-on-accent)] opacity-80"}`}>{t.hotspot}</p>
         </div>
       </div>
     );
@@ -223,17 +225,17 @@ export function createPaletteTheme(preset: PalettePreset) {
               {completingRouterLogin ? (
                 <p className="flex items-center gap-2 text-[15px] font-medium">
                   <span className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" aria-hidden="true" />
-                  Connecting you…
+                  {t.connectingYou}
                 </p>
               ) : (
                 <>
-                  <p className="text-[15px] font-semibold">You&apos;re connected</p>
+                  <p className="text-[15px] font-semibold">{t.youAreConnected}</p>
                   {voucherResult?.expiresAt && (
                     <p className="mt-0.5 text-sm text-[var(--p-muted)]">
-                      Access until {new Date(voucherResult.expiresAt).toLocaleString("en-KE", { weekday: "short", hour: "2-digit", minute: "2-digit" })}
+                      {t.accessUntil} {new Date(voucherResult.expiresAt).toLocaleString("en-KE", { weekday: "short", hour: "2-digit", minute: "2-digit" })}
                     </p>
                   )}
-                  {accountResult && <p className="mt-0.5 text-sm text-[var(--p-muted)]">Signed in as {accountResult.username}</p>}
+                  {accountResult && <p className="mt-0.5 text-sm text-[var(--p-muted)]">{t.signedInAs} {accountResult.username}</p>}
                 </>
               )}
             </div>
@@ -241,7 +243,7 @@ export function createPaletteTheme(preset: PalettePreset) {
 
           <section className={preset.header === "hero" ? "mt-5" : "mt-6"} aria-labelledby="packages-heading">
             <h2 id="packages-heading" className="text-sm font-semibold">
-              Choose a package
+              {t.choosePackage}
             </h2>
             {loadingPackages ? (
               <ul className={listClass} aria-hidden="true">
@@ -251,12 +253,12 @@ export function createPaletteTheme(preset: PalettePreset) {
               </ul>
             ) : sorted.length === 0 ? (
               <p className={`mt-3 border border-dashed border-[var(--p-border)] bg-[var(--p-surface)] px-4 py-6 text-center text-sm text-[var(--p-muted)] ${radius}`}>
-                No packages are on sale right now.{helpPhone ? ` Call ${helpPhone} for help.` : ""}
+                {t.noPackages}{helpPhone ? t.callForHelp(helpPhone) : ""}
               </p>
             ) : (
               <ul className={listClass}>
                 {sorted.map((pkg) => (
-                  <PackageItem key={pkg.id} pkg={pkg} layout={preset.layout} radius={radius} onSelect={() => onSelectPackage(pkg)} />
+                  <PackageItem key={pkg.id} pkg={pkg} layout={preset.layout} radius={radius} onSelect={() => onSelectPackage(pkg)} t={t} />
                 ))}
               </ul>
             )}
@@ -264,7 +266,7 @@ export function createPaletteTheme(preset: PalettePreset) {
 
           <section className={`mt-6 border border-[var(--p-border)] bg-[var(--p-surface)] p-4 ${radius}`} aria-labelledby="access-heading">
             <h2 id="access-heading" className="text-sm font-semibold">
-              Already have access?
+              {t.alreadyHaveAccess}
             </h2>
             <div className="mt-3 grid grid-cols-2 gap-2">
               <button
@@ -272,19 +274,19 @@ export function createPaletteTheme(preset: PalettePreset) {
                 onClick={onOpenVoucherModal}
                 className={`bg-[var(--p-accent)] px-3 py-2.5 text-sm font-semibold text-[var(--p-on-accent)] hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--p-accent)] focus-visible:ring-offset-2 ${radius}`}
               >
-                Enter voucher
+                {t.enterVoucher}
               </button>
               <button
                 type="button"
                 onClick={onOpenAccountModal}
                 className={`border border-[var(--p-border)] px-3 py-2.5 text-sm font-semibold hover:border-[var(--p-accent)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--p-accent)] ${radius}`}
               >
-                Account login
+                {t.accountLogin}
               </button>
             </div>
             {onOpenRecover && (
               <button type="button" onClick={onOpenRecover} className="mt-3 w-full text-center text-sm font-medium text-[var(--p-accent)] hover:underline">
-                Paid but not connected? Get connected
+                {t.paidNotConnected}
               </button>
             )}
           </section>
@@ -292,7 +294,7 @@ export function createPaletteTheme(preset: PalettePreset) {
           {fiberRates && fiberRates.length > 0 && (
             <section className={`mt-6 border border-[var(--p-border)] bg-[var(--p-surface)] p-4 ${radius}`} aria-labelledby="fibre-heading">
               <h2 id="fibre-heading" className="text-sm font-semibold">
-                Home internet
+                {t.homeInternet}
               </h2>
               <ul className="mt-2 divide-y divide-[var(--p-border)]">
                 {fiberRates.map((rate) => (
@@ -307,14 +309,14 @@ export function createPaletteTheme(preset: PalettePreset) {
               </ul>
               {(installationFee || contactPhone) && (
                 <p className="mt-2 text-sm text-[var(--p-muted)]">
-                  {installationFee ? `Installation ${installationFee}. ` : ""}
+                  {installationFee ? t.installation(installationFee) : ""}
                   {contactPhone ? (
                     <>
                       Call{" "}
                       <a href={`tel:${contactPhone}`} className="font-medium text-[var(--p-accent)]">
                         {contactPhone}
                       </a>{" "}
-                      to connect.
+                      {t.callToConnect}
                     </>
                   ) : null}
                 </p>
@@ -324,7 +326,7 @@ export function createPaletteTheme(preset: PalettePreset) {
 
           <footer className="mt-6 flex flex-wrap items-center justify-between gap-2 text-sm text-[var(--p-muted)]">
             <span>
-              Need help?{" "}
+              {t.needHelp}{" "}
               {helpPhone && (
                 <a href={`tel:${helpPhone}`} className="font-medium text-[var(--p-text)]">
                   {helpPhone}
@@ -333,7 +335,7 @@ export function createPaletteTheme(preset: PalettePreset) {
             </span>
             {onOpenSupport && (
               <button type="button" onClick={onOpenSupport} className="font-medium text-[var(--p-accent)] hover:underline">
-                Send us a message
+                {t.sendMessage}
               </button>
             )}
           </footer>

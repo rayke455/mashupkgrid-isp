@@ -1,5 +1,7 @@
 "use client";
 
+import { portalStrings } from "@/lib/portal-strings";
+
 import { appOnlyLabel, type CaptiveThemeProps } from "./types";
 
 function formatDuration(minutes: number): string {
@@ -18,6 +20,7 @@ function formatPrice(priceMinor: number): string {
 }
 
 export function CyberpunkNeonTheme({
+  t = portalStrings("en"),
   tenantSlug,
   tenantName,
   contactPhone,
@@ -116,7 +119,7 @@ export function CyberpunkNeonTheme({
                     >
                       {isPop && (
                         <div className="absolute -top-2.5 right-2 rounded bg-yellow-400 text-black px-2 py-0.2 text-[8px] font-black uppercase tracking-widest shadow-md">
-                          {pkg.badge || "MOST POPULAR"}
+                          {pkg.badge || t.popular.toUpperCase()}
                         </div>
                       )}
                       <div>

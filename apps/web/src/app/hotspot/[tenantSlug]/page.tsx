@@ -18,6 +18,7 @@ import {
 } from "@/components/hotspot/themes";
 import { CaptivePortalPluginContainer } from "@/components/hotspot/plugins/CaptivePortalPluginContainer";
 import { PortalSheet, SheetError, sheetInput, sheetLabel, sheetPrimary, sheetSecondary } from "@/components/hotspot/portal-sheet";
+import { loadPortalLanguage, portalStrings, savePortalLanguage, type PortalLanguage } from "@/lib/portal-strings";
 
 interface TenantInfo {
   name: string;
@@ -261,6 +262,27 @@ export default function HotspotCaptivePortalPage() {
   const queryTheme = searchParams.get("theme") as ThemeId | null;
   const paystackRef = searchParams.get("paystack") || searchParams.get("ref");
   const pesapalRef = searchParams.get("pesapal");
+
+  // Language: what this phone chose last time, else the tenant's default (English until the
+  // published plugin config says otherwise). Every theme and sheet below reads `t`.
+  const [lang, setLang] = useState<PortalLanguage>("en");
+  const langChosen = useRef(false);
+  useEffect(() => {
+    const stored = loadPortalLanguage();
+    if (stored) {
+      langChosen.current = true;
+      setLang(stored);
+    }
+  }, []);
+  const t = portalStrings(lang);
+  const applyTenantDefaultLanguage = (next: PortalLanguage) => {
+    if (!langChosen.current) setLang(next);
+  };
+  const changeLanguage = (next: PortalLanguage) => {
+    langChosen.current = true;
+    setLang(next);
+    savePortalLanguage(next);
+  };
 
   // Active Theme Selection
   const [activeThemeId, setActiveThemeId] = useState<ThemeId>(queryTheme || DEFAULT_THEME_ID);
@@ -810,6 +832,9 @@ export default function HotspotCaptivePortalPage() {
       voucherDataCapMb={voucherResult?.dataCapMb}
       isAuthenticating={completingRouterLogin || autoReconnecting}
       appearance={themeMeta.appearance ?? "dark"}
+      language={lang}
+      onLanguageChange={changeLanguage}
+      onPublishedDefaultLanguage={applyTenantDefaultLanguage}
       onVoucherCodeApplied={(scanned) => {
         setVoucherCode(scanned);
         setShowVoucherModal(true);
@@ -850,25 +875,25 @@ export default function HotspotCaptivePortalPage() {
 
         {/* One tap from online, but the browser wouldn't hand off to the router by itself. */}
         {stalledLoginUrl && (
-          <PortalSheet title="Payment received" description="One last tap to get online. Your browser needs you to confirm." zIndex="z-[100]">
+          <PortalSheet title={t.paymentReceived} description={t.oneLastTap} zIndex="z-[100]">
             <a href={stalledLoginUrl} className={`${sheetPrimary} block bg-emerald-600 text-center hover:bg-emerald-700`}>
-              Connect me now
+              {t.connectMeNow}
             </a>
             <button type="button" onClick={() => setStalledLoginUrl(null)} className={`${sheetSecondary} mt-2`}>
-              Show my voucher code instead
+              {t.showCodeInstead}
             </button>
           </PortalSheet>
         )}
 
         {showRecover && (
           <PortalSheet
-            title="Get connected"
-            description="Enter the number you paid with, or paste the M-Pesa message. We'll find your purchase and connect you."
+            title={t.getConnected}
+            description={t.getConnectedDesc}
             onClose={() => setShowRecover(false)}
             zIndex="z-[110]"
           >
             <label htmlFor="recoverPhone" className={sheetLabel}>
-              Phone number you paid with
+              {t.phonePaidWith}
             </label>
             <input
               id="recoverPhone"
@@ -880,7 +905,7 @@ export default function HotspotCaptivePortalPage() {
             />
             <div className="my-3 flex items-center gap-2 text-xs text-slate-400">
               <span className="h-px flex-1 bg-slate-200" />
-              or paste the M-Pesa message
+              {t.orPasteMessage}
               <span className="h-px flex-1 bg-slate-200" />
             </div>
             <textarea
@@ -901,10 +926,10 @@ export default function HotspotCaptivePortalPage() {
               onClick={() => recoverPurchase.mutate()}
               className={`${sheetPrimary} mt-4`}
             >
-              {recoverPurchase.isPending ? "Looking for your payment…" : "Connect me"}
+              {recoverPurchase.isPending ? t.lookingForPayment : t.connectMe}
             </button>
             <button type="button" onClick={() => setShowRecover(false)} className={`${sheetSecondary} mt-2`}>
-              Cancel
+              {t.cancel}
             </button>
           </PortalSheet>
         )}
@@ -918,7 +943,7 @@ export default function HotspotCaptivePortalPage() {
               disabled={autoReconnecting || connectWithVoucher.isPending}
               className="rounded-full bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-lg hover:bg-emerald-700 disabled:opacity-60"
             >
-              {autoReconnecting || connectWithVoucher.isPending ? "Reconnecting…" : "Reconnect with my code"}
+              {autoReconnecting || connectWithVoucher.isPending ? t.reconnecting : t.reconnectWithCode}
             </button>
           </div>
         )}
@@ -926,27 +951,27 @@ export default function HotspotCaptivePortalPage() {
         {/* Back online in one tap: this phone has paid before and still has time left. */}
         {deviceStatus?.canReconnect && !rememberedVoucher && !completingRouterLogin && !reconnectDismissed && macReconnectAttempted.current && (
           <PortalSheet
-            title="Welcome back"
+            title={t.welcomeBack}
             description={
               [
                 deviceStatus.packageName,
                 deviceStatus.minutesLeft != null
-                  ? `${deviceStatus.minutesLeft >= 120 ? `${Math.floor(deviceStatus.minutesLeft / 60)} h` : `${deviceStatus.minutesLeft} min`} left`
+                  ? `${deviceStatus.minutesLeft >= 120 ? `${Math.floor(deviceStatus.minutesLeft / 60)} h` : `${deviceStatus.minutesLeft} min`} ${t.left}`
                   : null,
                 deviceStatus.dataLeftMb != null
-                  ? `${deviceStatus.dataLeftMb >= 1024 ? `${(deviceStatus.dataLeftMb / 1024).toFixed(1)} GB` : `${deviceStatus.dataLeftMb} MB`} of data left`
+                  ? `${deviceStatus.dataLeftMb >= 1024 ? `${(deviceStatus.dataLeftMb / 1024).toFixed(1)} GB` : `${deviceStatus.dataLeftMb} MB`} ${t.ofDataLeft}`
                   : null,
               ]
                 .filter(Boolean)
-                .join(" · ") || "Your package is still active on this phone."
+                .join(" · ") || t.packageStillActive
             }
             onClose={() => setReconnectDismissed(true)}
           >
             <button type="button" onClick={reconnectByMac} className={sheetPrimary}>
-              Reconnect
+              {t.reconnect}
             </button>
             <button type="button" onClick={() => setReconnectDismissed(true)} className={`${sheetSecondary} mt-2`}>
-              Not now
+              {t.notNow}
             </button>
           </PortalSheet>
         )}
@@ -955,8 +980,8 @@ export default function HotspotCaptivePortalPage() {
           <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/60 p-6">
             <div className="w-full max-w-xs rounded-3xl bg-white p-6 text-center shadow-2xl">
               <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-[3px] border-emerald-600 border-t-transparent" aria-hidden="true" />
-              <p className="text-base font-semibold text-slate-900">Reconnecting you…</p>
-              <p className="mt-1 text-sm text-slate-500">Using your code from last time.</p>
+              <p className="text-base font-semibold text-slate-900">{t.reconnectingYou}</p>
+              <p className="mt-1 text-sm text-slate-500">{t.usingLastCode}</p>
             </div>
           </div>
         )}
@@ -967,12 +992,12 @@ export default function HotspotCaptivePortalPage() {
               <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-100 text-emerald-600">
                 <span className="h-8 w-8 animate-spin rounded-full border-4 border-emerald-600 border-t-transparent" />
               </div>
-              <p className="text-xl font-bold text-slate-900">Activating Internet…</p>
+              <p className="text-xl font-bold text-slate-900">{t.activatingInternet}</p>
               <p className="mt-2 text-sm text-slate-600">
-                Payment received! Connecting your device to the Wi-Fi gateway now…
+                {t.paymentConnecting}
               </p>
               <div className="mt-4 flex items-center justify-center gap-1.5 text-xs text-emerald-700 font-medium bg-emerald-50 py-1.5 px-3 rounded-full">
-                <span>✓ Verified</span> · <span>Automatic login in progress</span>
+                <span>✓ {t.verified}</span> · <span>{t.automaticLogin}</span>
               </div>
             </div>
           </div>
@@ -1009,6 +1034,7 @@ export default function HotspotCaptivePortalPage() {
           voucherResult={voucherResult}
           accountResult={accountResult}
           completingRouterLogin={completingRouterLogin}
+          t={t}
         />
 
         {/* Themes that don't show help themselves get one slim bar, and room at the bottom so it
@@ -1018,10 +1044,10 @@ export default function HotspotCaptivePortalPage() {
             <div className="h-20" aria-hidden="true" />
             <div className="fixed inset-x-0 bottom-0 z-40 flex items-center justify-center gap-2 border-t border-slate-200/80 bg-white/95 px-3 py-2.5 shadow-[0_-4px_16px_rgba(15,23,42,0.08)] [color-scheme:light]">
               <button type="button" onClick={openRecover} className="rounded-full bg-slate-900 px-4 py-2 text-sm font-semibold text-white">
-                Paid but not connected?
+                {t.paidNotConnectedShort}
               </button>
               <button type="button" onClick={openSupport} className="rounded-full border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700">
-                Help
+                {t.help}
               </button>
             </div>
           </>
@@ -1033,20 +1059,20 @@ export default function HotspotCaptivePortalPage() {
             {pollingStatus === "COMPLETED" ? (
               <div className="py-2 text-center">
                 <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-100 text-2xl text-emerald-700">✓</div>
-                <h2 className="mt-3 text-lg font-semibold text-slate-900">Payment confirmed</h2>
-                <p className="mt-1 text-sm text-slate-600">Connecting you to the internet now…</p>
+                <h2 className="mt-3 text-lg font-semibold text-slate-900">{t.paymentConfirmed}</h2>
+                <p className="mt-1 text-sm text-slate-600">{t.connectingNow}</p>
               </div>
             ) : pollingStatus === "PENDING" ? (
               <div className="text-center">
                 <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-50">
                   <span className="h-7 w-7 animate-spin rounded-full border-[3px] border-emerald-600 border-t-transparent" aria-hidden="true" />
                 </div>
-                <h2 className="mt-3 text-lg font-semibold text-slate-900">Check your phone</h2>
+                <h2 className="mt-3 text-lg font-semibold text-slate-900">{t.checkYourPhone}</h2>
                 <p className="mt-1 text-sm text-slate-600">
-                  Enter your M-Pesa PIN to pay <span className="font-semibold text-slate-900">{formatPriceKsh(selectedPkg.priceMinor)}</span> from{" "}
+                  {t.enterPinToPay} <span className="font-semibold text-slate-900">{formatPriceKsh(selectedPkg.priceMinor)}</span> {t.from}{" "}
                   <span className="font-semibold text-slate-900">{buyPhone}</span>.
                 </p>
-                <p className="mt-2 text-xs text-slate-400">Waiting for confirmation · {pollCountdown}s</p>
+                <p className="mt-2 text-xs text-slate-400">{t.waitingForConfirmation} · {pollCountdown}s</p>
                 <button
                   type="button"
                   className={`${sheetPrimary} mt-4`}
@@ -1067,7 +1093,7 @@ export default function HotspotCaptivePortalPage() {
                     }
                   }}
                 >
-                  I&apos;ve entered my PIN
+                  {t.enteredPin}
                 </button>
                 <button
                   type="button"
@@ -1077,7 +1103,7 @@ export default function HotspotCaptivePortalPage() {
                     setPollingStatus(null);
                   }}
                 >
-                  Cancel
+                  {t.cancel}
                 </button>
               </div>
             ) : (
@@ -1090,7 +1116,7 @@ export default function HotspotCaptivePortalPage() {
               >
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-sm text-slate-500">You&apos;re buying</p>
+                    <p className="text-sm text-slate-500">{t.youAreBuying}</p>
                     <h2 className="text-lg font-semibold text-slate-900">{selectedPkg.name}</h2>
                   </div>
                   <p className="text-xl font-semibold tabular-nums text-slate-900">{formatPriceKsh(selectedPkg.priceMinor)}</p>
@@ -1102,12 +1128,12 @@ export default function HotspotCaptivePortalPage() {
                 )}
 
                 {[paymentMethods?.mpesa, paymentMethods?.pesapal, paymentMethods?.paystack].filter(Boolean).length > 1 && (
-                  <div className="mt-4 grid grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1 text-sm" role="group" aria-label="Payment method">
+                  <div className="mt-4 grid grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1 text-sm" role="group" aria-label={t.paymentMethod}>
                     {(
                       [
                         ["MPESA", "M-Pesa", paymentMethods?.mpesa],
                         ["PESAPAL", "Pesapal", paymentMethods?.pesapal],
-                        ["PAYSTACK", "Card", paymentMethods?.paystack],
+                        ["PAYSTACK", t.card, paymentMethods?.paystack],
                       ] as const
                     )
                       .filter(([, , enabled]) => enabled)
@@ -1126,7 +1152,7 @@ export default function HotspotCaptivePortalPage() {
                 )}
 
                 <label htmlFor="buyPhone" className={`${sheetLabel} mt-4`}>
-                  {selectedGateway === "MPESA" ? "M-Pesa number" : "Phone number"}
+                  {selectedGateway === "MPESA" ? t.mpesaNumber : t.phoneNumber}
                 </label>
                 <input
                   id="buyPhone"
@@ -1141,16 +1167,16 @@ export default function HotspotCaptivePortalPage() {
                 />
                 <p className="mt-1.5 text-xs text-slate-500">
                   {selectedGateway === "MPESA"
-                    ? "You'll get a prompt on this phone to enter your M-Pesa PIN."
+                    ? t.mpesaHint
                     : selectedGateway === "PESAPAL"
-                    ? "Pay with M-Pesa, Airtel Money, Visa or Mastercard on Pesapal."
-                    : "We'll send your voucher code to this number."}
+                    ? t.pesapalHint
+                    : t.paystackHint}
                 </p>
 
                 {(selectedGateway === "PAYSTACK" || selectedGateway === "PESAPAL") && (
                   <>
                     <label htmlFor="buyEmail" className={`${sheetLabel} mt-4`}>
-                      Email {selectedGateway === "PESAPAL" && <span className="font-normal text-slate-400">(optional)</span>}
+                      {t.email} {selectedGateway === "PESAPAL" && <span className="font-normal text-slate-400">{t.optional}</span>}
                     </label>
                     <input
                       id="buyEmail"
@@ -1176,15 +1202,15 @@ export default function HotspotCaptivePortalPage() {
                   className={`${sheetPrimary} mt-5 ${selectedGateway === "MPESA" ? "bg-emerald-600 hover:bg-emerald-700" : ""}`}
                 >
                   {initiatePurchase.isPending
-                    ? "Sending…"
+                    ? t.sending
                     : selectedGateway === "PESAPAL"
-                    ? "Continue to Pesapal"
+                    ? t.continueToPesapal
                     : selectedGateway === "PAYSTACK"
-                    ? "Continue to card payment"
-                    : `Pay ${formatPriceKsh(selectedPkg.priceMinor)} with M-Pesa`}
+                    ? t.continueToCard
+                    : t.payWithMpesa(formatPriceKsh(selectedPkg.priceMinor))}
                 </button>
                 <button type="button" className={`${sheetSecondary} mt-2`} onClick={() => setSelectedPkg(null)}>
-                  Cancel
+                  {t.cancel}
                 </button>
               </form>
             )}
@@ -1193,7 +1219,7 @@ export default function HotspotCaptivePortalPage() {
 
         {/* Voucher code */}
         {showVoucherModal && (
-          <PortalSheet title="Enter your voucher" description="The code on your printed voucher or payment message." onClose={() => setShowVoucherModal(false)}>
+          <PortalSheet title={t.enterYourVoucher} description={t.voucherDesc} onClose={() => setShowVoucherModal(false)}>
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -1203,7 +1229,7 @@ export default function HotspotCaptivePortalPage() {
             >
               <input
                 autoFocus
-                aria-label="Voucher code"
+                aria-label={t.voucherCode}
                 placeholder="e.g. 9PMLTXCY"
                 autoCapitalize="characters"
                 autoComplete="off"
@@ -1218,10 +1244,10 @@ export default function HotspotCaptivePortalPage() {
                 </div>
               )}
               <button type="submit" disabled={connectWithVoucher.isPending || !voucherCode} className={`${sheetPrimary} mt-4`}>
-                {connectWithVoucher.isPending ? "Connecting…" : "Connect"}
+                {connectWithVoucher.isPending ? t.connecting : t.connect}
               </button>
               <button type="button" className={`${sheetSecondary} mt-2`} onClick={() => setShowVoucherModal(false)}>
-                Cancel
+                {t.cancel}
               </button>
             </form>
           </PortalSheet>
@@ -1229,7 +1255,7 @@ export default function HotspotCaptivePortalPage() {
 
         {/* Subscriber account */}
         {showAccountModal && (
-          <PortalSheet title="Account login" description="Sign in with the account your internet provider gave you." onClose={() => setShowAccountModal(false)}>
+          <PortalSheet title={t.accountLogin} description={t.accountLoginDesc} onClose={() => setShowAccountModal(false)}>
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -1238,7 +1264,7 @@ export default function HotspotCaptivePortalPage() {
               }}
             >
               <label htmlFor="accountPhone" className={sheetLabel}>
-                Phone number
+                {t.phoneNumber}
               </label>
               <input
                 id="accountPhone"
@@ -1251,7 +1277,7 @@ export default function HotspotCaptivePortalPage() {
                 required
               />
               <label htmlFor="accountPassword" className={`${sheetLabel} mt-3`}>
-                Password
+                {t.password}
               </label>
               <input
                 id="accountPassword"
@@ -1267,10 +1293,10 @@ export default function HotspotCaptivePortalPage() {
                 </div>
               )}
               <button type="submit" disabled={connectWithAccount.isPending || !accountPhone || !accountPassword} className={`${sheetPrimary} mt-4`}>
-                {connectWithAccount.isPending ? "Signing in…" : "Sign in and connect"}
+                {connectWithAccount.isPending ? t.signingIn : t.signInAndConnect}
               </button>
               <button type="button" className={`${sheetSecondary} mt-2`} onClick={() => setShowAccountModal(false)}>
-                Cancel
+                {t.cancel}
               </button>
             </form>
           </PortalSheet>
@@ -1279,12 +1305,12 @@ export default function HotspotCaptivePortalPage() {
         {/* TV / console */}
         {showTvModal && (
           <PortalSheet
-            title="Connect a TV or console"
-            description="Devices without a browser can't open this page. Buy a package on your phone, then enter the voucher code on the device, or ask support to add the device."
+            title={t.connectTv}
+            description={t.connectTvDesc}
             onClose={() => setShowTvModal(false)}
           >
             <button type="button" className={sheetPrimary} onClick={() => setShowTvModal(false)}>
-              Got it
+              {t.gotIt}
             </button>
           </PortalSheet>
         )}
@@ -1292,13 +1318,13 @@ export default function HotspotCaptivePortalPage() {
         {/* Contact support */}
         {showSupportModal && (
           <PortalSheet
-            title={supportSent ? "Message sent" : "Contact support"}
-            description={supportSent ? "We'll get back to you shortly." : "Tell us what's wrong and we'll follow up."}
+            title={supportSent ? t.messageSent : t.contactSupport}
+            description={supportSent ? t.weWillGetBack : t.tellUsWhatsWrong}
             onClose={() => setShowSupportModal(false)}
           >
             {supportSent ? (
               <button type="button" className={sheetPrimary} onClick={() => setShowSupportModal(false)}>
-                Close
+                {t.close}
               </button>
             ) : (
               <form
@@ -1309,11 +1335,11 @@ export default function HotspotCaptivePortalPage() {
                 }}
               >
                 <label htmlFor="supportName" className={sheetLabel}>
-                  Your name
+                  {t.yourName}
                 </label>
                 <input id="supportName" value={supportName} onChange={(e) => setSupportName(e.target.value)} className={sheetInput} required />
                 <label htmlFor="supportPhone" className={`${sheetLabel} mt-3`}>
-                  Phone number <span className="font-normal text-slate-400">(optional)</span>
+                  {t.phoneNumber} <span className="font-normal text-slate-400">{t.optional}</span>
                 </label>
                 <input
                   id="supportPhone"
@@ -1324,7 +1350,7 @@ export default function HotspotCaptivePortalPage() {
                   className={sheetInput}
                 />
                 <label htmlFor="supportMessage" className={`${sheetLabel} mt-3`}>
-                  What&apos;s the problem?
+                  {t.whatsTheProblem}
                 </label>
                 <textarea
                   id="supportMessage"
@@ -1340,10 +1366,10 @@ export default function HotspotCaptivePortalPage() {
                   </div>
                 )}
                 <button type="submit" disabled={submitSupportTicket.isPending} className={`${sheetPrimary} mt-4`}>
-                  {submitSupportTicket.isPending ? "Sending…" : "Send message"}
+                  {submitSupportTicket.isPending ? t.sending : t.sendMessageButton}
                 </button>
                 <button type="button" className={`${sheetSecondary} mt-2`} onClick={() => setShowSupportModal(false)}>
-                  Cancel
+                  {t.cancel}
                 </button>
               </form>
             )}

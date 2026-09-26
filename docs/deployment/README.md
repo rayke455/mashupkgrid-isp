@@ -104,6 +104,10 @@ az network nsg rule create -g $RG --nsg-name $NSG -n allow-wireguard --priority 
   --destination-port-ranges 51820 --protocol Udp --access Allow
 ```
 
+Set `RADIUS_SERVER_HOST` in `.env` to this VM's public IP before linking any router: the setup
+script points routers' RADIUS client at it, and left unset the platform falls back to resolving
+the API host, which behind Cloudflare's proxy is Cloudflare, not this VM.
+
 Scope the RADIUS rule to your MikroTik routers' public IPs. Leaving 1812/1813 open to the world
 invites shared-secret brute-forcing against your NAS clients.
 

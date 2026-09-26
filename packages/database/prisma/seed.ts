@@ -32,9 +32,9 @@ async function main() {
     });
   }
 
-  console.log("Seeding demo tenant + super admin...");
+  console.log("Seeding super admin...");
 
-  const superAdminEmail = "superadmin@mashupkgrid.local";
+  const superAdminEmail = process.env["SEED_SUPER_ADMIN_EMAIL"] ?? "superadmin@mashupkgrid.local";
   const superAdminPassword = process.env["SEED_SUPER_ADMIN_PASSWORD"] ?? "ChangeMe123!";
   const superAdminRole = await prisma.role.findFirstOrThrow({
     where: { name: "SUPER_ADMIN", tenantId: null },
@@ -61,6 +61,35 @@ async function main() {
     });
   }
 
+  // The demo tenant and its packages exist for local development and screenshots only. A
+  // commercial install starts empty: real ISPs sign up and the super admin approves them.
+  // Opt in with SEED_DEMO_TENANT=true; it is never created when NODE_ENV=production.
+  const wantDemo = process.env["SEED_DEMO_TENANT"] === "true" || (process.env["NODE_ENV"] !== "production" && process.env["SEED_DEMO_TENANT"] !== "false");
+  if (wantDemo) await seedDemoTenant();
+
+  console.log("Seeding initial maintenance state (disabled)...");
+  const latestMaintenance = await prisma.maintenanceEvent.findFirst({
+    orderBy: { createdAt: "desc" },
+  });
+  if (!latestMaintenance) {
+    await prisma.maintenanceEvent.create({
+      data: {
+        enabled: false,
+        level: 1,
+        allowedRoles: ["SUPER_ADMIN"],
+        allowedIps: [],
+        updatedBy: superAdmin.id,
+      },
+    });
+  }
+
+  console.log("Seed complete.");
+  console.log(`  Super admin: ${superAdminEmail} / ${superAdminPassword}`);
+  if (!wantDemo) console.log("  No demo tenant (set SEED_DEMO_TENANT=true for one).");
+}
+
+async function seedDemoTenant() {
+  console.log("Seeding demo tenant (development only)...");
   const demoTenant = await prisma.tenant.upsert({
     where: { slug: "demo-isp" },
     update: {},
@@ -249,24 +278,6 @@ async function main() {
     }
   }
 
-  console.log("Seeding initial maintenance state (disabled)...");
-  const latestMaintenance = await prisma.maintenanceEvent.findFirst({
-    orderBy: { createdAt: "desc" },
-  });
-  if (!latestMaintenance) {
-    await prisma.maintenanceEvent.create({
-      data: {
-        enabled: false,
-        level: 1,
-        allowedRoles: ["SUPER_ADMIN"],
-        allowedIps: [],
-        updatedBy: superAdmin.id,
-      },
-    });
-  }
-
-  console.log("Seed complete.");
-  console.log(`  Super admin: ${superAdminEmail} / ${superAdminPassword}`);
   console.log(`  Demo tenant owner: ${ownerEmail} / ${ownerPassword} (tenant: demo-isp)`);
 }
 
