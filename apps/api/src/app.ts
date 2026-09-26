@@ -56,6 +56,7 @@ import { customerMemberRoutes } from "./routes/customer-members.js";
 import { addOnRoutes } from "./routes/addons.js";
 import { winBackRoutes } from "./routes/win-back.js";
 import { agentRoutes } from "./routes/agents.js";
+import { campaignRoutes } from "./routes/campaigns.js";
 import { planRoutes } from "./routes/plans.js";
 import { tenantBillingRoutes } from "./routes/tenant-billing.js";
 import { landingContentRoutes } from "./routes/landing-content.js";
@@ -154,6 +155,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(addOnRoutes, { prefix: "/api/v1/addons" });
   await app.register(winBackRoutes, { prefix: "/api/v1/win-back" });
   await app.register(agentRoutes, { prefix: "/api/v1" });
+  await app.register(campaignRoutes, { prefix: "/api/v1/campaigns" });
   await app.register(planRoutes, { prefix: "/api/v1/platform/plans" });
   await app.register(tenantBillingRoutes, { prefix: "/api/v1/billing" });
   await app.register(landingContentRoutes, { prefix: "/api/v1/landing-content" });

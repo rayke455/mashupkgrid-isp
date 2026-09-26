@@ -20,3 +20,4 @@ export * from "./pause.service.js";
 export * from "./addon.service.js";
 export * from "./winback.service.js";
 export * from "./agent.service.js";
+export * from "./campaign.service.js";

@@ -24,6 +24,7 @@ export type NavIcon =
   | "dashboard"
   | "file-text"
   | "gauge"
+  | "megaphone"
   | "handshake"
   | "zap"
   | "gift"
@@ -104,6 +105,7 @@ function tenantSections(has: Has): NavSection[] {
         ...(has("customers.read") ? [{ href: "/online-users", label: "Online now", icon: "wifi", keywords: "sessions active users hotspot pppoe who is connected tracking" } as NavItem] : []),
         ...(has("customers.read") ? [{ href: "/customers/upgrades", label: "Plan upgrades", icon: "trending-up", keywords: "upgrade data cap fup bigger plan suggestions" } as NavItem] : []),
         ...(has("customers.read") ? [{ href: "/customers/referrals", label: "Referrals", icon: "gift", keywords: "refer neighbour reward code free days" } as NavItem] : []),
+        ...(has("customers.read") ? [{ href: "/customers/campaigns", label: "Campaigns", icon: "megaphone", keywords: "bulk sms whatsapp broadcast message announce" } as NavItem] : []),
         ...(has("customers.read") ? [{ href: "/customers/win-back", label: "Win-back offers", icon: "hand-coins", keywords: "churn at risk leaving come back discount offer sms" } as NavItem] : []),
         ...(has("packages.read") ? [{ href: "/packages", label: "Internet plans", icon: "package", keywords: "packages rate plans speed" } as NavItem] : []),
         ...(has("packages.read") ? [{ href: "/packages/addons", label: "Add-ons", icon: "zap", keywords: "speed boost extra data top up bundle prepaid" } as NavItem] : []),

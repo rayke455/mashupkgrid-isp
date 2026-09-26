@@ -36,6 +36,7 @@ import { handleReferralRewards } from "./jobs/referral-rewards.js";
 import { handleResumePausedPlans } from "./jobs/resume-paused-plans.js";
 import { handleSweepAddOns } from "./jobs/addons.js";
 import { handleWinBackOffers } from "./jobs/win-back.js";
+import { handleSendCampaigns } from "./jobs/campaigns.js";
 import { handleRouterRollouts } from "./jobs/router-rollouts.js";
 import { handleRouterBackups } from "./jobs/router-backups.js";
 import { handleAutoRouterUpdates } from "./jobs/auto-router-updates.js";
@@ -147,6 +148,8 @@ async function main() {
           return run(handleSweepAddOns);
         case JOB_NAMES.winBackOffers:
           return run(handleWinBackOffers);
+        case JOB_NAMES.sendCampaigns:
+          return run(handleSendCampaigns);
         default:
           throw new Error(`Unknown job in queue "${QUEUE_NAMES.billing}": ${job.name}`);
       }

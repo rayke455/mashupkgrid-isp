@@ -244,6 +244,16 @@ export const AUTOMATION_JOBS: readonly AutomationJobDefinition[] = [
     tenantVisible: true,
   },
   {
+    name: JOB_NAMES.sendCampaigns,
+    queue: QUEUE_NAMES.billing,
+    category: "billing",
+    label: "Campaigns",
+    description: "Sends scheduled SMS and WhatsApp campaigns in batches, and records who paid after getting one.",
+    everyMs: MINUTE,
+    counters: { sent: "Messages sent", failed: "Could not send", started: "Campaigns started", finished: "Campaigns finished", attributed: "Payments counted" },
+    tenantVisible: true,
+  },
+  {
     name: JOB_NAMES.referralRewards,
     queue: QUEUE_NAMES.billing,
     category: "billing",

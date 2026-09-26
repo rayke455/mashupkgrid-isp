@@ -142,6 +142,7 @@ model Tenant {
   agents           Agent[]
   agentSales       AgentSale[]
   agentRemittances AgentRemittance[]
+  campaigns        Campaign[]
 
   @@index([status])
   @@map("tenants")
@@ -489,10 +490,11 @@ model Customer {
   gatewayTransactions GatewayTransaction[]
   paymentReferences   PaymentReference[]
 
-  radiusUsers      RadiusUser[]
-  provisioningJobs ProvisioningJob[]
-  addOnPurchases   AddOnPurchase[]
-  winBackOffers    WinBackOffer[]
+  radiusUsers        RadiusUser[]
+  provisioningJobs   ProvisioningJob[]
+  addOnPurchases     AddOnPurchase[]
+  winBackOffers      WinBackOffer[]
+  campaignRecipients CampaignRecipient[]
 
   @@unique([tenantId, customerNumber])
   @@unique([tenantId, referralCode])
@@ -3089,4 +3091,71 @@ model AgentRemittance {
 
   @@index([agentId, createdAt])
   @@map("agent_remittances")
+}
+
+enum CampaignChannel {
+  SMS
+  WHATSAPP
+  BOTH
+}
+
+enum CampaignStatus {
+  SCHEDULED
+  SENDING
+  SENT
+  CANCELLED
+}
+
+/// A message sent to a group of customers at once (by SMS, WhatsApp or both), with a record of
+/// who got it and who paid in the days after, so the ISP can see whether it brought money in.
+model Campaign {
+  id              String              @id @default(uuid())
+  tenantId        String
+  tenant          Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name            String
+  /// Text with {firstName}, {accountNumber} and {amountDue} filled in per customer.
+  message         String
+  channel         CampaignChannel     @default(SMS)
+  /// Who gets it: { segment, branchId?, packageId?, inactiveDays? }.
+  audience        Json
+  status          CampaignStatus      @default(SCHEDULED)
+  scheduledAt     DateTime            @default(now())
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  /// Payments within this many days of the message count as the campaign's result.
+  trackDays       Int                 @default(7)
+  createdByUserId String?
+  createdAt       DateTime            @default(now())
+  recipients      CampaignRecipient[]
+
+  @@index([tenantId, createdAt])
+  @@index([status, scheduledAt])
+  @@map("campaigns")
+}
+
+enum CampaignRecipientStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+model CampaignRecipient {
+  id         String                  @id @default(uuid())
+  campaignId String
+  campaign   Campaign                @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  customerId String
+  customer   Customer                @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  phone      String
+  /// The message as this customer got it.
+  message    String
+  status     CampaignRecipientStatus @default(PENDING)
+  error      String?
+  sentAt     DateTime?
+  /// What they paid within the tracking window after the message, once they have.
+  paidMinor  Int?
+  paidAt     DateTime?
+
+  @@unique([campaignId, customerId])
+  @@index([campaignId, status])
+  @@map("campaign_recipients")
 }
