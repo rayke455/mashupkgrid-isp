@@ -93,6 +93,7 @@ function tenantSections(has: Has): NavSection[] {
         ...(has("routers.read") ? [{ href: "/ip-pools", label: "IP pools", icon: "pool", keywords: "addresses dhcp" } as NavItem] : []),
         ...(has("routers.read") ? [{ href: "/network-map", label: "Network map", icon: "router", keywords: "sites map coverage where routers are" } as NavItem] : []),
         ...(has("reports.read") ? [{ href: "/reports", label: "Bandwidth usage", icon: "speed", keywords: "reports traffic revenue export" } as NavItem] : []),
+        ...(has("reports.read") ? [{ href: "/analytics", label: "Analytics", icon: "pulse", keywords: "growth revenue churn busiest hours packages sell" } as NavItem] : []),
       ],
     },
     {

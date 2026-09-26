@@ -24,6 +24,7 @@ const LABELS_SW: Record<string, string> = {
   "IP pools": "Hifadhi za IP",
   "Bandwidth usage": "Matumizi ya data",
   "Network map": "Ramani ya mtandao",
+  Analytics: "Takwimu",
   "Field work": "Kazi za uwanjani",
   Money: "Fedha",
   Payments: "Malipo",

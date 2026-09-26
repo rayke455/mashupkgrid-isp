@@ -6,6 +6,7 @@ import {
   getComprehensiveRevenueReport,
   getClientsTrackingReport,
   getStampedPaymentReceipt,
+  getRevenueAnalytics,
 } from "@mashupkgrid/billing";
 import { getBandwidthByDay, getTopBandwidthConsumers } from "@mashupkgrid/radius";
 import { successResponse, ConflictError } from "@mashupkgrid/shared";
@@ -42,6 +43,17 @@ function requireTenant(tenantId: string | null): string {
 
 export async function reportRoutes(app: FastifyInstance): Promise<void> {
   // Legacy revenue by day (preserves backwards-compatibility)
+  /** Growth, what sells, when customers pay, and who is at risk of leaving. */
+  app.get(
+    "/analytics",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("reports.read")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const { months } = z.object({ months: z.coerce.number().int().min(2).max(24).default(6) }).parse(request.query);
+      reply.send(successResponse(await getRevenueAnalytics(tenantId, months), request.id));
+    }
+  );
+
   app.get(
     "/revenue",
     { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("reports.read")] },
