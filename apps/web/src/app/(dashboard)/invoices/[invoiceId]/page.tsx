@@ -61,6 +61,13 @@ export default function InvoiceDetailPage() {
     queryFn: () => apiFetch<Invoice>(`/api/v1/invoices/${invoiceId}`),
   });
 
+  const [emailNote, setEmailNote] = useState<string | null>(null);
+  const emailInvoice = useMutation({
+    mutationFn: () => apiFetch<{ to: string }>(`/api/v1/invoices/${invoiceId}/send`, { method: "POST" }),
+    onSuccess: (res) => setEmailNote(`Invoice emailed to ${res.to}.`),
+    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Could not email the invoice"),
+  });
+
   const recordPayment = useMutation({
     mutationFn: () =>
       apiFetch("/api/v1/payments/record", {
@@ -146,8 +153,12 @@ export default function InvoiceDetailPage() {
           </div>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
             Due {new Date(invoice.dueDate).toLocaleDateString()}
+            {emailNote && <span className="ml-2 text-emerald-600 dark:text-emerald-400">{emailNote}</span>}
           </p>
         </div>
+        <Button variant="secondary" size="sm" disabled={emailInvoice.isPending} onClick={() => emailInvoice.mutate()}>
+          {emailInvoice.isPending ? "Sending…" : "Email invoice to customer"}
+        </Button>
       </div>
 
       {/* Invoice Breakdown Card */}

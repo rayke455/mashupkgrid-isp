@@ -74,6 +74,11 @@ deployment) and the Phase 1/2/3 implementation plans this codebase follows.
   routers get them in their setup script, online routers through the hotspot self-repair pass.
 - **Online users** (`/online-users`): every hotspot and PPPoE session from RADIUS accounting,
   joined to the customer/voucher, router and last payment; live, searchable.
+- **Customer care.** Export every customer with what they have paid and every payment as CSV
+  (`/customers/export.csv`, `/payments/export.csv`); extend a subscription by N days (billing
+  date and open invoices move, a suspended line is reactivated) or add hours to a voucher;
+  message a customer by email/SMS from their profile; invoices are emailed automatically
+  when issued (`send-pending-invoice-emails`, every 5 min) and on demand.
 - **Housekeeping.** Failed/abandoned purchase attempts and failed payment records can be deleted
   (never completed ones, never anything linked to a gateway transaction); audit logs can be
   purged beyond 30 days. Every deletion is itself audited.

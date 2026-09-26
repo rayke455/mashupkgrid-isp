@@ -13,6 +13,7 @@ import {
   successResponse,
   ConflictError,
   paginationQuerySchema,
+  NotFoundError,
   paginate,
   toSkipTake,
 } from "@mashupkgrid/shared";
@@ -325,6 +326,49 @@ export async function voucherRoutes(app: FastifyInstance): Promise<void> {
       });
 
       reply.send(successResponse(voucher, request.id));
+    }
+  );
+
+  /**
+   * Adds time to a voucher — the Wi-Fi was down for an hour, a regular asked for a top-up. An
+   * unused voucher gets a longer duration; one already running gets its expiry pushed out (from
+   * now, if it had already lapsed, and back to ACTIVE so the phone can log in again).
+   */
+  app.post(
+    "/:code/extend",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("radius.manage")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const { code } = codeParamsSchema.parse(request.params);
+      const { minutes, reason } = z
+        .object({ minutes: z.number().int().min(5).max(60 * 24 * 90), reason: z.string().trim().max(200).optional() })
+        .parse(request.body);
+      const before = await prisma.hotspotVoucher.findUnique({ where: { tenantId_code: { tenantId, code } } });
+      if (!before) throw new NotFoundError("Voucher");
+
+      const now = Date.now();
+      const data =
+        before.status === "UNUSED"
+          ? { durationMinutes: (before.durationMinutes ?? 0) + minutes }
+          : {
+              expiresAt: new Date(Math.max(before.expiresAt?.getTime() ?? now, now) + minutes * 60_000),
+              durationMinutes: (before.durationMinutes ?? 0) + minutes,
+              status: "ACTIVE" as const,
+            };
+      const after = await prisma.hotspotVoucher.update({ where: { id: before.id }, data });
+
+      await writeAuditLog({
+        tenantId,
+        actorUserId: request.user!.id,
+        action: "voucher.extended",
+        resourceType: "HotspotVoucher",
+        resourceId: before.id,
+        before: { status: before.status, expiresAt: before.expiresAt, durationMinutes: before.durationMinutes },
+        after: { status: after.status, expiresAt: after.expiresAt, durationMinutes: after.durationMinutes, minutes, reason: reason ?? null },
+        ipAddress: request.ip,
+        userAgent: request.headers["user-agent"] ?? null,
+      });
+      reply.send(successResponse(after, request.id));
     }
   );
 }

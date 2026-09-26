@@ -62,6 +62,10 @@ export default function CustomerDetailPage() {
   const [revealed, setRevealed] = useState<Record<string, { username: string; password: string }>>({});
   const [linkEmail, setLinkEmail] = useState("");
   const [showLinkForm, setShowLinkForm] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [msgSubject, setMsgSubject] = useState("");
+  const [msgBody, setMsgBody] = useState("");
+  const [msgChannels, setMsgChannels] = useState<{ EMAIL: boolean; SMS: boolean }>({ EMAIL: true, SMS: true });
 
   const { data: customer } = useQuery({
     queryKey: ["customer", customerId],
@@ -129,6 +133,55 @@ export default function CustomerDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["customer", customerId] });
     },
     onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to link account"),
+  });
+
+  // Extra days for a subscriber: pushes the billing date and any open invoice's due date, and
+  // reactivates a suspended line — an outage credit or "pay me Friday" in one click.
+  const extend = useMutation({
+    mutationFn: ({ subscriptionId, days, reason }: { subscriptionId: string; days: number; reason: string }) =>
+      apiFetch<{ nextBillingAt: string; invoicesMoved: number; reactivated: boolean }>(`/api/v1/subscriptions/${subscriptionId}/extend`, {
+        method: "POST",
+        body: JSON.stringify({ days, reason: reason || undefined }),
+      }),
+    onSuccess: (res, vars) => {
+      setNotice(
+        `Extended by ${vars.days} day${vars.days === 1 ? "" : "s"}: next billing ${new Date(res.nextBillingAt).toLocaleDateString()}` +
+          (res.invoicesMoved ? `, ${res.invoicesMoved} open invoice${res.invoicesMoved === 1 ? "" : "s"} moved` : "") +
+          (res.reactivated ? ", service reactivated." : ".")
+      );
+      invalidateAll();
+    },
+    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to extend"),
+  });
+  const askExtend = (subscriptionId: string) => {
+    const answer = window.prompt("Extend this subscription by how many days?", "7");
+    if (answer === null) return;
+    const days = Number(answer);
+    if (!Number.isInteger(days) || days < 1 || days > 365) {
+      setError("Enter a whole number of days between 1 and 365.");
+      return;
+    }
+    const reason = window.prompt("Reason (optional, kept in the audit log):", "") ?? "";
+    setError(null);
+    extend.mutate({ subscriptionId, days, reason });
+  };
+
+  const sendMessage = useMutation({
+    mutationFn: () =>
+      apiFetch<{ note: string }>(`/api/v1/customers/${customerId}/message`, {
+        method: "POST",
+        body: JSON.stringify({
+          channels: (["EMAIL", "SMS"] as const).filter((c) => msgChannels[c]),
+          subject: msgSubject.trim(),
+          body: msgBody.trim(),
+        }),
+      }),
+    onSuccess: (res) => {
+      setNotice(res.note);
+      setMsgSubject("");
+      setMsgBody("");
+    },
+    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to send"),
   });
 
   const topUp = useMutation({
@@ -245,6 +298,50 @@ export default function CustomerDetailPage() {
         </div>
       </Card>
 
+      {notice && (
+        <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">{notice}</div>
+      )}
+
+      {/* Message the customer */}
+      <Card>
+        <h2 className="mb-1 font-semibold text-slate-900 dark:text-white">Message this customer</h2>
+        <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
+          Sent by email{customer.email ? ` (${customer.email})` : " (no address on file)"} and SMS ({customer.phone}). Delivery is recorded in the audit log.
+        </p>
+        <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+          <div className="space-y-2">
+            <Input placeholder="Subject" value={msgSubject} onChange={(e) => setMsgSubject(e.target.value)} maxLength={150} />
+            <textarea
+              value={msgBody}
+              onChange={(e) => setMsgBody(e.target.value)}
+              maxLength={2000}
+              rows={3}
+              placeholder="Your message…"
+              className="w-full rounded-lg border border-slate-300/90 bg-white px-3.5 py-2 text-sm text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 dark:border-obsidian-700 dark:bg-obsidian-950 dark:text-slate-100"
+            />
+          </div>
+          <div className="flex flex-col gap-2 text-sm">
+            <label className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+              <input type="checkbox" checked={msgChannels.EMAIL} disabled={!customer.email} onChange={(e) => setMsgChannels((c) => ({ ...c, EMAIL: e.target.checked }))} />
+              Email
+            </label>
+            <label className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
+              <input type="checkbox" checked={msgChannels.SMS} onChange={(e) => setMsgChannels((c) => ({ ...c, SMS: e.target.checked }))} />
+              SMS
+            </label>
+            <Button
+              disabled={sendMessage.isPending || !msgSubject.trim() || !msgBody.trim() || !((msgChannels.EMAIL && customer.email) || msgChannels.SMS)}
+              onClick={() => {
+                setError(null);
+                sendMessage.mutate();
+              }}
+            >
+              {sendMessage.isPending ? "Sending…" : "Send"}
+            </Button>
+          </div>
+        </div>
+      </Card>
+
       {/* Active Subscriptions Grid */}
       <Card>
         <h2 className="mb-3 font-semibold text-slate-900 dark:text-white">Active PPPoE Subscriptions</h2>
@@ -267,6 +364,11 @@ export default function CustomerDetailPage() {
                   <Badge variant={sub.status === "ACTIVE" ? "success" : "warning"}>
                     {sub.status}
                   </Badge>
+                  {sub.status !== "CANCELLED" && (
+                    <Button variant="secondary" className="px-2.5 py-1 text-xs" disabled={extend.isPending} onClick={() => askExtend(sub.id)}>
+                      Extend days
+                    </Button>
+                  )}
                   {!revealed[sub.id] && (
                     <Button
                       variant="secondary"

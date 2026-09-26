@@ -22,6 +22,7 @@ import {
   paginationQuerySchema,
   paginate,
   toSkipTake,
+  toCsv,
 } from "@mashupkgrid/shared";
 import { authenticate } from "../plugins/authenticate.js";
 import { resolveTenant } from "../plugins/tenant.js";
@@ -91,6 +92,57 @@ export async function paymentRoutes(app: FastifyInstance): Promise<void> {
         prisma.payment.count({ where }),
       ]);
       reply.send(successResponse(paginate(items, total, query), request.id));
+    }
+  );
+
+  /** Every coin, as a spreadsheet: one row per payment with who paid, for what, how, and the
+   *  receipt reference. Optional ?from=&to= (ISO dates) to bound it. */
+  app.get(
+    "/export.csv",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("payments.read")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const { from, to } = z.object({ from: z.string().datetime().optional(), to: z.string().datetime().optional() }).parse(request.query);
+      const payments = await prisma.payment.findMany({
+        where: {
+          tenantId,
+          ...(from || to ? { createdAt: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } } : {}),
+        },
+        orderBy: { createdAt: "asc" },
+        include: {
+          customer: { select: { customerNumber: true, fullName: true, phone: true } },
+          invoice: { select: { invoiceNumber: true } },
+          receipt: { select: { receiptNumber: true } },
+        },
+      });
+      const csv = toCsv(payments, [
+        { header: "Date", value: (p) => p.createdAt },
+        { header: "Amount", value: (p) => (p.amountMinor / 100).toFixed(2) },
+        { header: "Currency", value: (p) => p.currency },
+        { header: "Status", value: (p) => p.status },
+        { header: "Method", value: (p) => p.method },
+        { header: "Reference", value: (p) => p.reference },
+        { header: "Receipt", value: (p) => p.receipt?.receiptNumber ?? "" },
+        { header: "Invoice", value: (p) => p.invoice?.invoiceNumber ?? "" },
+        { header: "Customer number", value: (p) => p.customer?.customerNumber ?? "" },
+        { header: "Customer", value: (p) => p.customer?.fullName ?? "Hotspot guest" },
+        { header: "Phone", value: (p) => p.customer?.phone ?? "" },
+        { header: "Reversed", value: (p) => p.reversedAt },
+        { header: "Reversal reason", value: (p) => p.reversalReason },
+      ]);
+      await writeAuditLog({
+        tenantId,
+        actorUserId: request.user!.id,
+        action: "payments.exported",
+        resourceType: "Payment",
+        after: { rows: payments.length, from: from ?? null, to: to ?? null },
+        ipAddress: request.ip,
+        userAgent: request.headers["user-agent"] ?? null,
+      });
+      reply
+        .header("content-type", "text/csv; charset=utf-8")
+        .header("content-disposition", `attachment; filename="payments-${new Date().toISOString().slice(0, 10)}.csv"`)
+        .send(csv);
     }
   );
 

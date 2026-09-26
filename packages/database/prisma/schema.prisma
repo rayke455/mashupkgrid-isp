@@ -592,6 +592,10 @@ model Invoice {
   /// only ever moves forward, so the same invoice never gets the same notice emailed twice.
   dunningStage      Int              @default(0)
   lastDunningAt     DateTime?
+  /// When the invoice itself was emailed to the customer (the worker's send-pending-invoice-emails
+  /// job, or a staff "Email invoice" click). Null until then; set even when the transport is not
+  /// configured, so an unconfigured server never re-queues the same invoice every tick.
+  emailedAt         DateTime?
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
 

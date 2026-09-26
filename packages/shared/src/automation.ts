@@ -109,6 +109,17 @@ export const AUTOMATION_JOBS: readonly AutomationJobDefinition[] = [
     tenantVisible: true,
   },
 
+  {
+    name: JOB_NAMES.sendPendingInvoiceEmails,
+    queue: QUEUE_NAMES.email,
+    category: "collections",
+    label: "Email new invoices",
+    description: "Emails every newly issued invoice to the customer, with the amount, due date and how to pay.",
+    everyMs: 5 * MINUTE,
+    counters: { sent: "Invoices emailed", noEmail: "Customers without email" },
+    tenantVisible: true,
+  },
+
   // --- network ---------------------------------------------------------------------------------
   {
     name: JOB_NAMES.runProvisioningJobs,

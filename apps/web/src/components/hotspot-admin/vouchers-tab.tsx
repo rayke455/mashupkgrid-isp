@@ -56,6 +56,23 @@ export function VouchersTab({ brand }: { brand: string }) {
     if (packageId === "" && firstActiveId) setPackageId(firstActiveId);
   }, [packageId, firstActiveId]);
 
+  const extend = useMutation({
+    mutationFn: ({ code, minutes }: { code: string; minutes: number }) =>
+      apiFetch<Voucher>(`/api/v1/vouchers/${encodeURIComponent(code)}/extend`, { method: "POST", body: JSON.stringify({ minutes }) }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: VOUCHERS_QUERY_KEY }),
+    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Could not extend this voucher"),
+  });
+  const askExtend = (code: string) => {
+    const answer = window.prompt(`Add how many hours to ${code}? (decimals allowed, e.g. 0.5)`, "1");
+    if (answer === null) return;
+    const hours = Number(answer);
+    if (!Number.isFinite(hours) || hours <= 0) {
+      setError("Enter a number of hours greater than 0.");
+      return;
+    }
+    extend.mutate({ code, minutes: Math.max(5, Math.round(hours * 60)) });
+  };
+
   const generate = useMutation({
     mutationFn: () =>
       apiFetch<Voucher[]>("/api/v1/vouchers", {
@@ -249,6 +266,9 @@ export function VouchersTab({ brand }: { brand: string }) {
                 <th className={th}>Status</th>
                 <th className={th}>Expires</th>
                 <th className={th}>Made</th>
+                <th className={`${th} text-right`}>
+                  <span className="sr-only">Actions</span>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -261,6 +281,13 @@ export function VouchersTab({ brand }: { brand: string }) {
                   </td>
                   <td className={`${td} text-slate-400`}>{v.expiresAt ? new Date(v.expiresAt).toLocaleString() : "—"}</td>
                   <td className={`${td} text-slate-400`}>{new Date(v.createdAt).toLocaleDateString()}</td>
+                  <td className={`${td} text-right`}>
+                    {v.status !== "USED" && (
+                      <button type="button" onClick={() => askExtend(v.code)} disabled={extend.isPending} className={darkButton("ghost", "sm")}>
+                        Add time
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

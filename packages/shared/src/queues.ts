@@ -67,6 +67,26 @@ export const sendEmailOtpJobSchema = z.object({
 });
 export type SendEmailOtpJob = z.infer<typeof sendEmailOtpJobSchema>;
 
+/** Emails one invoice to its customer — a staff "Email invoice" click. The scheduled
+ *  `sendPendingInvoiceEmails` job needs no payload: it finds what has not been sent yet. */
+export const sendInvoiceEmailJobSchema = z.object({
+  tenantId: z.string().uuid(),
+  invoiceId: z.string().uuid(),
+});
+export type SendInvoiceEmailJob = z.infer<typeof sendInvoiceEmailJobSchema>;
+
+/** A message staff wrote to one customer, on the channels they chose. Sent by the worker so a
+ *  slow SMS gateway or mail server never holds up the dashboard request. */
+export const sendCustomerMessageJobSchema = z.object({
+  tenantId: z.string().uuid(),
+  customerId: z.string().uuid(),
+  channels: z.array(z.enum(["EMAIL", "SMS"])).min(1),
+  subject: z.string().trim().min(1).max(150),
+  body: z.string().trim().min(1).max(2000),
+  sentByUserId: z.string().uuid(),
+});
+export type SendCustomerMessageJob = z.infer<typeof sendCustomerMessageJobSchema>;
+
 export const applyScheduledMaintenanceJobSchema = z.object({});
 export type ApplyScheduledMaintenanceJob = z.infer<typeof applyScheduledMaintenanceJobSchema>;
 
@@ -214,6 +234,10 @@ export const JOB_NAMES = {
   whatsappTestMessage: "whatsapp-test-message",
   sendTenantWelcomeEmail: "send-tenant-welcome-email",
   sendEmailOtp: "send-email-otp",
+  // Customer communication: invoices go out on their own; staff can also message a customer.
+  sendInvoiceEmail: "send-invoice-email",
+  sendPendingInvoiceEmails: "send-pending-invoice-emails",
+  sendCustomerMessage: "send-customer-message",
 } as const;
 
 /** Webhook event types a tenant can subscribe an endpoint to. Kept in `shared` (not just the API)

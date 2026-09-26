@@ -17,6 +17,8 @@ import {
   type SendEmailOtpJob,
   type AutomationJobDefinition,
   type AutomationRunNowPayload,
+  type SendInvoiceEmailJob,
+  type SendCustomerMessageJob,
 } from "@mashupkgrid/shared";
 
 const connection = { url: env.REDIS_URL };
@@ -65,6 +67,21 @@ export async function enqueueSendTenantWelcomeEmail(data: SendTenantWelcomeEmail
     removeOnComplete: 1000,
     removeOnFail: 5000,
   });
+}
+
+export async function enqueueSendInvoiceEmail(data: SendInvoiceEmailJob): Promise<void> {
+  await emailQueue.add(JOB_NAMES.sendInvoiceEmail, data, {
+    attempts: 3,
+    backoff: { type: "exponential", delay: 5000 },
+    removeOnComplete: 1000,
+    removeOnFail: 2000,
+  });
+}
+
+/** One attempt: a message staff typed should be delivered once or reported, never retried
+ *  into a customer's inbox three times. */
+export async function enqueueSendCustomerMessage(data: SendCustomerMessageJob): Promise<void> {
+  await emailQueue.add(JOB_NAMES.sendCustomerMessage, data, { attempts: 1, removeOnComplete: 1000, removeOnFail: 2000 });
 }
 
 export async function enqueueSendEmailOtp(data: SendEmailOtpJob): Promise<void> {

@@ -16,6 +16,7 @@ import { resolveTenant } from "../plugins/tenant.js";
 import { checkMaintenance } from "../plugins/maintenance.js";
 import { requirePermission } from "../plugins/authorize.js";
 import { writeAuditLog } from "../lib/audit.js";
+import { enqueueSendInvoiceEmail } from "../lib/queue.js";
 
 const preHandler = [authenticate, resolveTenant, checkMaintenance] as const;
 
@@ -96,6 +97,32 @@ export async function invoiceRoutes(app: FastifyInstance): Promise<void> {
       });
 
       reply.send(successResponse(after, request.id));
+    }
+  );
+
+  /** Emails the invoice to the customer now (new invoices also go out on their own — see the
+   *  worker's send-pending-invoice-emails job). */
+  app.post(
+    "/:invoiceId/send",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("billing.read")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const { invoiceId } = idParamsSchema.parse(request.params);
+      const invoice = await prisma.invoice.findFirst({ where: { id: invoiceId, tenantId }, include: { customer: { select: { email: true } } } });
+      if (!invoice) throw new NotFoundError("Invoice");
+      if (!invoice.customer.email) throw new ConflictError("This customer has no email address on file — add one on their profile first");
+      await enqueueSendInvoiceEmail({ tenantId, invoiceId });
+      await writeAuditLog({
+        tenantId,
+        actorUserId: request.user!.id,
+        action: "invoice.emailed",
+        resourceType: "Invoice",
+        resourceId: invoiceId,
+        after: { to: invoice.customer.email },
+        ipAddress: request.ip,
+        userAgent: request.headers["user-agent"] ?? null,
+      });
+      reply.status(202).send(successResponse({ queued: true, to: invoice.customer.email }, request.id));
     }
   );
 }

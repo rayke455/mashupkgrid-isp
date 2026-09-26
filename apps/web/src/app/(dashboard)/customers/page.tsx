@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
+import { downloadFromApi } from "@/lib/download";
 import { Button, Card, ErrorText, Input, Label, Badge, StatusDot } from "@/components/ui";
 import { IconUsers, IconArrowRight } from "@/components/icons";
 
@@ -62,10 +63,26 @@ export default function CustomersPage() {
             Your broadband subscribers, their PPPoE logins, subscriptions, joined dates, and spending.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            className="text-xs"
+            onClick={() => downloadFromApi("/api/v1/customers/export.csv", "customers.csv").catch((e) => setError(e instanceof Error ? e.message : "Export failed"))}
+          >
+            Export customers (CSV)
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            className="text-xs"
+            onClick={() => downloadFromApi("/api/v1/payments/export.csv", "payments.csv").catch((e) => setError(e instanceof Error ? e.message : "Export failed"))}
+          >
+            Export all payments (CSV)
+          </Button>
           <Link href="/reports">
-            <Button variant="secondary" size="sm" className="gap-1.5 text-xs">
-              <span>📊</span> Spends & Receipts Report
+            <Button variant="secondary" size="sm" className="text-xs">
+              Reports
             </Button>
           </Link>
           <Button onClick={() => setShowForm((v) => !v)}>
