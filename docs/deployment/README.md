@@ -345,7 +345,31 @@ lives on the VM's OS disk — deleting the VM takes the database with it.
 
 ---
 
-## 7. Known gaps
+## 7. Tenants' custom domains
+
+An ISP can serve its dashboard and login page on its own name (Settings → Domain management).
+The pieces, and what each side must do:
+
+1. **The ISP** adds `wifi.acme.co.ke` in the dashboard and creates a CNAME at their DNS host
+   pointing it at their platform subdomain (`acme.mashuphost.tech`), then clicks **Verify DNS**.
+   The API checks the real CNAME record; nothing is marked verified on trust.
+2. **Caddy** has no site block for names it cannot know in advance, so the catch-all `https://`
+   block in the Caddyfile serves them with an on-demand certificate. Before issuing one, Caddy
+   asks `GET /api/v1/domains/tls-check?domain=…` and only proceeds on a 200, which the API returns
+   for verified custom domains and real tenant subdomains. Anyone else pointing a name at the
+   server gets nothing, so the certificate authority's rate limits stay ours.
+3. **The certificate** for a custom domain comes over the HTTP-01 / TLS-ALPN challenge (the
+   Cloudflare DNS challenge covers only our own zone), so **port 80 must stay open** to the
+   internet. It already is for the ACME redirect.
+4. **CORS**: the API admits an `https://` origin whose hostname is a verified custom domain, so a
+   login from the ISP's own name works. Answers are cached for a minute per hostname.
+5. The ISP's domain must **not** be proxied through their own Cloudflare (orange cloud) unless
+   they set SSL to *Full*; with *Flexible* the origin sees HTTP and Caddy's HTTPS redirect loops.
+
+The first visit after verification takes a few seconds longer while the certificate is issued;
+the dashboard shows the domain as **SSL active** once Caddy has asked for it.
+
+## 8. Known gaps
 
 - **WireGuard remote access ships disabled** (`ENABLE_WIREGUARD_REMOTE_ACCESS=false`).
   [`wireguard-peer.service.ts`](../../packages/network/src/wireguard-peer.service.ts) shells out

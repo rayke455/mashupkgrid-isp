@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
 import helmet from "@fastify/helmet";
 import { env, isDevelopment } from "@mashupkgrid/config";
+import { prisma } from "@mashupkgrid/database";
 
 export async function registerSecurity(app: FastifyInstance): Promise<void> {
   await app.register(helmet, {
@@ -65,6 +66,36 @@ export async function registerSecurity(app: FastifyInstance): Promise<void> {
     return label.length > 0 && !label.includes(".");
   }
 
+  // A tenant's own verified custom domain (Settings → Domain management) serves the same web app,
+  // so its origin is ours too. Looked up per hostname and remembered briefly: CORS runs on every
+  // request, and a verified domain does not change from one second to the next.
+  const customDomainCache = new Map<string, { ok: boolean; until: number }>();
+  const CUSTOM_DOMAIN_TTL_MS = 60_000;
+  async function isVerifiedCustomDomain(origin: string): Promise<boolean> {
+    let url: URL;
+    try {
+      url = new URL(origin);
+    } catch {
+      return false;
+    }
+    if (!isDevelopment && url.protocol !== "https:") return false;
+    const host = url.hostname.toLowerCase();
+    const cached = customDomainCache.get(host);
+    if (cached && cached.until > Date.now()) return cached.ok;
+    let ok = false;
+    try {
+      const domain = await prisma.domain.findFirst({
+        where: { hostname: host, status: { in: ["VERIFIED", "SSL_PENDING", "SSL_ACTIVE"] } },
+        select: { id: true },
+      });
+      ok = domain !== null;
+    } catch {
+      ok = false;
+    }
+    customDomainCache.set(host, { ok, until: Date.now() + CUSTOM_DOMAIN_TTL_MS });
+    return ok;
+  }
+
   await app.register(cors, {
     origin(origin, cb) {
       // No Origin header at all: same-origin navigations and non-browser callers such as
@@ -72,7 +103,7 @@ export async function registerSecurity(app: FastifyInstance): Promise<void> {
       if (!origin) return cb(null, true);
       if (allowedOrigins.includes(origin)) return cb(null, true);
       if (isOwnTenantSubdomain(origin)) return cb(null, true);
-      cb(null, false);
+      void isVerifiedCustomDomain(origin).then((ok) => cb(null, ok));
     },
     // @fastify/cors v11 changed its default `methods` to the CORS-safelisted set
     // ("GET,HEAD,POST") — every preflight for a DELETE, PATCH or PUT is answered with an
