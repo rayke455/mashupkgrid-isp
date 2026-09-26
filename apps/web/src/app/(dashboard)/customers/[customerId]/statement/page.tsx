@@ -76,7 +76,7 @@ export default function CustomerStatementPage() {
         </button>
       </div>
 
-      <article className="rounded-xl bg-white p-8 text-slate-900 shadow-sm [color-scheme:light] print:rounded-none print:p-0 print:shadow-none">
+      <article className="theme-native rounded-xl bg-white p-8 text-slate-900 shadow-sm [color-scheme:light] print:rounded-none print:p-0 print:shadow-none">
         <header className="flex items-start justify-between gap-6 border-b border-slate-200 pb-6">
           <div className="flex items-center gap-3">
             {settings?.logoUrl && (

@@ -3,6 +3,9 @@ import type { PortalLanguage } from "./portal-strings";
 /** The dashboard chrome (header, sidebar footer, palette) and the home page, in EN and SW. */
 export interface DashboardStrings {
   language: string;
+  theme: string;
+  dark: string;
+  light: string;
   loading: string;
   operator: string;
   platformAdmin: string;
@@ -80,6 +83,9 @@ export interface DashboardStrings {
 
 const EN: DashboardStrings = {
   language: "Language",
+  theme: "Theme",
+  dark: "Dark",
+  light: "Light",
   loading: "Loading…",
   operator: "Operator",
   platformAdmin: "Platform admin",
@@ -156,6 +162,9 @@ const EN: DashboardStrings = {
 
 const SW: DashboardStrings = {
   language: "Lugha",
+  theme: "Mandhari",
+  dark: "Giza",
+  light: "Mwanga",
   loading: "Inapakia…",
   operator: "Mwendeshaji",
   platformAdmin: "Msimamizi wa jukwaa",

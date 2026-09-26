@@ -16,6 +16,7 @@ import { CommandPalette, CommandPaletteTrigger, useCommandPalette } from "@/comp
 import { IconChevronRight, IconClose, IconLogOut, IconMenu } from "@/components/icons";
 import { NotificationBell } from "@/components/notifications";
 import { LanguageProvider, useLanguage } from "@/lib/language-context";
+import { ThemeProvider, useTheme } from "@/lib/theme-context";
 import { localizeNavSections } from "@/lib/nav-strings";
 import { dashboardStrings } from "@/lib/dashboard-strings";
 import { Segmented } from "@/components/dashboard/surface";
@@ -48,7 +49,9 @@ function initialsOf(email: string | null | undefined): string {
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
     <LanguageProvider>
-      <DashboardShell>{children}</DashboardShell>
+      <ThemeProvider>
+        <DashboardShell>{children}</DashboardShell>
+      </ThemeProvider>
     </LanguageProvider>
   );
 }
@@ -56,6 +59,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 function DashboardShell({ children }: { children: ReactNode }) {
   const { user, loading, logout } = useAuth();
   const { lang, setLang } = useLanguage();
+  const { theme, setTheme } = useTheme();
   const t = dashboardStrings(lang);
   const router = useRouter();
   const pathname = usePathname();
@@ -117,7 +121,7 @@ function DashboardShell({ children }: { children: ReactNode }) {
 
   return (
     <TenantThemeStyle brandColor={user.tenantBrandColor}>
-      <div className="flex min-h-screen w-full overflow-x-hidden bg-obsidian-950 text-slate-100 antialiased selection:bg-brand-500/30">
+      <div className={`flex min-h-screen w-full overflow-x-hidden bg-obsidian-950 text-slate-100 antialiased selection:bg-brand-500/30 ${theme === "light" ? "theme-light" : ""}`}>
         {/* Backdrop for Mobile & Tablet (<1024px). Tapping off the drawer closes it. */}
         {mobileNavOpen && (
           <div
@@ -228,6 +232,15 @@ function DashboardShell({ children }: { children: ReactNode }) {
                 options={[
                   { value: "en", label: "EN" },
                   { value: "sw", label: "SW" },
+                ]}
+              />
+              <Segmented
+                label={t.theme}
+                value={theme}
+                onChange={setTheme}
+                options={[
+                  { value: "dark", label: t.dark },
+                  { value: "light", label: t.light },
                 ]}
               />
               <CommandPaletteTrigger onOpen={() => palette.setOpen(true)} />

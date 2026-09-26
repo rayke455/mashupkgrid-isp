@@ -61,7 +61,7 @@ export function StampedReceiptModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm print:p-0 print:bg-white print:static print:z-auto">
+    <div className="theme-native fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-sm print:p-0 print:bg-white print:static print:z-auto">
       {/* Printable Container */}
       <div className="relative w-full max-w-xl bg-white dark:bg-obsidian-900 text-slate-900 dark:text-white rounded-2xl shadow-2xl border border-slate-200 dark:border-obsidian-800 overflow-hidden print:border-none print:shadow-none print:w-full print:max-w-none print:rounded-none">
         
