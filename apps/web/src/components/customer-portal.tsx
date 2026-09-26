@@ -6,7 +6,9 @@ import { apiFetch, ApiRequestError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/money";
 import { Badge, Button, ErrorText, Input, Label } from "@/components/ui";
 import { IconMpesa, IconShield } from "@/components/icons";
-import { EmptyState, Metric, MetricGrid, Notice, PageHeader, Panel, Pill, TableShell, darkButton, td, th } from "@/components/dashboard/surface";
+import { EmptyState, Metric, MetricGrid, Notice, PageHeader, Panel, Pill, Segmented, TableShell, darkButton, td, th } from "@/components/dashboard/surface";
+import { customerStrings } from "@/lib/customer-strings";
+import { loadPortalLanguage, savePortalLanguage, type PortalLanguage } from "@/lib/portal-strings";
 
 /**
  * What a subscriber sees when they sign in: is my internet on, when is the next bill, what do I
@@ -96,6 +98,26 @@ function daysUntil(iso: string): number {
 }
 
 export function CustomerPortal() {
+  const [lang, setLang] = useState<PortalLanguage>("en");
+  useEffect(() => {
+    const stored = loadPortalLanguage();
+    if (stored) setLang(stored);
+  }, []);
+  const t = customerStrings(lang);
+  const languageSwitch = (
+    <Segmented
+      label={t.language}
+      value={lang}
+      onChange={(next) => {
+        setLang(next);
+        savePortalLanguage(next);
+      }}
+      options={[
+        { value: "en", label: "EN" },
+        { value: "sw", label: "SW" },
+      ]}
+    />
+  );
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [revealed, setRevealed] = useState<Record<string, { username: string; password: string }>>({});
@@ -141,7 +163,7 @@ export function CustomerPortal() {
     mutationFn: (invoiceId: string) =>
       apiFetch<{ checkoutRequestId: string }>(`/api/v1/me/invoices/${invoiceId}/pay`, { method: "POST", body: JSON.stringify({ phone: payPhone.trim() }) }),
     onSuccess: (res) => setCheckoutRequestId(res.checkoutRequestId),
-    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Could not start the M-Pesa payment"),
+    onError: (err) => setError(err instanceof ApiRequestError ? err.message : t.couldNotStartPayment),
   });
 
   const { data: stk } = useQuery({
@@ -161,7 +183,7 @@ export function CustomerPortal() {
   const revealPassword = useMutation({
     mutationFn: (subscriptionId: string) => apiFetch<{ username: string; password: string }>(`/api/v1/me/subscriptions/${subscriptionId}/reveal-pppoe-password`, { method: "POST" }),
     onSuccess: (data, subscriptionId) => setRevealed((prev) => ({ ...prev, [subscriptionId]: data })),
-    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to reveal password"),
+    onError: (err) => setError(err instanceof ApiRequestError ? err.message : t.failedReveal),
   });
 
   const createTicket = useMutation({
@@ -172,7 +194,7 @@ export function CustomerPortal() {
       setShowTicketForm(false);
       queryClient.invalidateQueries({ queryKey: ["me-tickets"] });
     },
-    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to raise ticket"),
+    onError: (err) => setError(err instanceof ApiRequestError ? err.message : t.failedTicket),
   });
 
   const replyToTicket = useMutation({
@@ -182,18 +204,15 @@ export function CustomerPortal() {
       queryClient.invalidateQueries({ queryKey: ["me-ticket", expandedTicketId] });
       queryClient.invalidateQueries({ queryKey: ["me-tickets"] });
     },
-    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to send reply"),
+    onError: (err) => setError(err instanceof ApiRequestError ? err.message : t.failedReply),
   });
 
-  if (customerLoading) return <p className="text-sm text-slate-400">Loading your account…</p>;
+  if (customerLoading) return <p className="text-sm text-slate-400">{t.loadingAccount}</p>;
 
   if (customerError || !customer) {
     return (
-      <Panel title="Your account is not linked yet">
-        <p className="text-sm leading-6 text-slate-400">
-          Your login isn&rsquo;t connected to a subscriber record yet. Contact support with your account email and they&rsquo;ll link it —
-          this usually happens right after installation.
-        </p>
+      <Panel title={t.notLinkedTitle} actions={languageSwitch}>
+        <p className="text-sm leading-6 text-slate-400">{t.notLinkedBody}</p>
       </Panel>
     );
   }
@@ -211,14 +230,17 @@ export function CustomerPortal() {
   return (
     <div className="w-full min-w-0 space-y-6">
       <PageHeader
-        title={`Hello, ${customer.fullName.split(" ")[0]}`}
-        description={`Account ${customer.customerNumber}`}
+        title={t.hello(customer.fullName.split(" ")[0] ?? "")}
+        description={t.account(customer.customerNumber)}
         actions={
-          firstOpen && (
-            <button type="button" className={darkButton("primary")} onClick={() => setPayingInvoiceId(firstOpen.id)}>
-              <IconMpesa size={16} /> Pay {formatMoney(owedMinor, currency)} now
-            </button>
-          )
+          <>
+            {languageSwitch}
+            {firstOpen && (
+              <button type="button" className={darkButton("primary")} onClick={() => setPayingInvoiceId(firstOpen.id)}>
+                <IconMpesa size={16} /> {t.payNow(formatMoney(owedMinor, currency))}
+              </button>
+            )}
+          </>
         }
       />
 
@@ -227,42 +249,42 @@ export function CustomerPortal() {
       {primary && !serviceOn && (
         <Notice tone={primary.status === "SUSPENDED" ? "bad" : "warn"}>
           {primary.status === "SUSPENDED"
-            ? "Your internet is suspended because of an unpaid invoice. It comes back on automatically within a minute of your payment."
-            : `Your subscription is ${primary.status.toLowerCase()}.`}
+            ? t.suspendedNotice
+            : t.subscriptionIs(primary.status.toLowerCase())}
         </Notice>
       )}
 
       <MetricGrid columns={4}>
         <Metric
-          label="Internet"
-          value={primary ? (serviceOn ? "On" : primary.status === "SUSPENDED" ? "Suspended" : primary.status) : "No plan"}
-          hint={primary ? `${primary.package.name} · ${mbps(primary.package.downloadKbps)} down / ${mbps(primary.package.uploadKbps)} up` : "Ask support to set up your plan"}
+          label={t.internet}
+          value={primary ? (serviceOn ? t.on : primary.status === "SUSPENDED" ? t.suspended : primary.status) : t.noPlan}
+          hint={primary ? `${primary.package.name} · ${t.downUp(mbps(primary.package.downloadKbps), mbps(primary.package.uploadKbps))}` : t.askSupportPlan}
           tone={primary ? (serviceOn ? "good" : "bad") : undefined}
         />
         <Metric
-          label="Next bill"
+          label={t.nextBill}
           value={primary ? new Date(primary.nextBillingAt).toLocaleDateString(undefined, { day: "numeric", month: "short" }) : "—"}
-          hint={nextDays === null ? undefined : nextDays < 0 ? `${-nextDays} day${nextDays === -1 ? "" : "s"} ago` : nextDays === 0 ? "Today" : `In ${nextDays} day${nextDays === 1 ? "" : "s"}`}
+          hint={nextDays === null ? undefined : nextDays < 0 ? t.daysAgo(-nextDays) : nextDays === 0 ? t.today : t.inDays(nextDays)}
           tone={nextDays !== null && nextDays <= 3 ? "warn" : undefined}
         />
         <Metric
-          label="Amount due"
+          label={t.amountDue}
           value={formatMoney(owedMinor, currency)}
-          hint={openInvoices.length === 0 ? "Nothing outstanding" : `${openInvoices.length} open invoice${openInvoices.length === 1 ? "" : "s"}`}
+          hint={openInvoices.length === 0 ? t.nothingOutstanding : t.openInvoices(openInvoices.length)}
           tone={owedMinor > 0 ? (openInvoices.some((i) => i.status === "OVERDUE") ? "bad" : "warn") : "good"}
         />
-        <Metric label="Wallet" value={walletData ? formatMoney(walletData.wallet.balanceMinor, walletData.wallet.currency) : "—"} hint="Credit applied to your next bill" />
+        <Metric label={t.wallet} value={walletData ? formatMoney(walletData.wallet.balanceMinor, walletData.wallet.currency) : "—"} hint={t.walletHint} />
       </MetricGrid>
 
       {/* Pay sheet: the phone to prompt and the live result of the push. */}
       {payingInvoice && (
         <Panel
-          title={`Pay ${payingInvoice.invoiceNumber} with M-Pesa`}
-          description={`${formatMoney(payingInvoice.totalMinor - payingInvoice.amountPaidMinor, payingInvoice.currency)} due ${new Date(payingInvoice.dueDate).toLocaleDateString()}`}
+          title={t.payInvoiceWith(payingInvoice.invoiceNumber)}
+          description={t.due(formatMoney(payingInvoice.totalMinor - payingInvoice.amountPaidMinor, payingInvoice.currency), new Date(payingInvoice.dueDate).toLocaleDateString())}
           actions={
             !checkoutRequestId && (
               <button type="button" className={darkButton("ghost", "sm")} onClick={() => setPayingInvoiceId(null)}>
-                Cancel
+                {t.cancel}
               </button>
             )
           }
@@ -270,7 +292,7 @@ export function CustomerPortal() {
           {!checkoutRequestId ? (
             <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
               <div className="flex-1">
-                <Label htmlFor="payPhone">M-Pesa phone number</Label>
+                <Label htmlFor="payPhone">{t.mpesaPhone}</Label>
                 <Input id="payPhone" value={payPhone} onChange={(e) => setPayPhone(e.target.value)} placeholder="07XX XXX XXX" inputMode="tel" />
               </div>
               <Button
@@ -280,41 +302,41 @@ export function CustomerPortal() {
                   pay.mutate(payingInvoice.id);
                 }}
               >
-                {pay.isPending ? "Sending prompt…" : "Send M-Pesa prompt"}
+                {pay.isPending ? t.sendingPrompt : t.sendPrompt}
               </Button>
             </div>
           ) : stk?.status === "COMPLETED" ? (
             <Notice tone="good">
-              Paid — thank you. Receipt {stk.mpesaReceiptNumber ?? "pending"}. {primary && !serviceOn ? "Your internet is being switched back on now." : ""}
+              {t.paidThankYou(stk.mpesaReceiptNumber ?? t.receiptPending)} {primary && !serviceOn ? t.switchingBackOn : ""}
               <button type="button" className={`${darkButton("ghost", "sm")} ml-2`} onClick={() => { setCheckoutRequestId(null); setPayingInvoiceId(null); }}>
-                Done
+                {t.done}
               </button>
             </Notice>
           ) : stk?.status === "FAILED" || stk?.status === "CANCELLED" ? (
             <Notice tone="bad">
-              {stk.status === "CANCELLED" ? "The prompt was cancelled on your phone." : `Payment failed${stk.resultDesc ? `: ${stk.resultDesc}` : "."}`}
+              {stk.status === "CANCELLED" ? t.promptCancelled : t.paymentFailed(stk.resultDesc ?? null)}
               <button type="button" className={`${darkButton("secondary", "sm")} ml-2`} onClick={() => setCheckoutRequestId(null)}>
-                Try again
+                {t.tryAgain}
               </button>
             </Notice>
           ) : (
-            <Notice tone="warn">Check your phone — enter your M-Pesa PIN to complete the payment. This updates on its own.</Notice>
+            <Notice tone="warn">{t.checkPhone}</Notice>
           )}
         </Panel>
       )}
 
       {/* Invoices */}
-      <Panel title="Invoices" padded={false}>
+      <Panel title={t.invoices} padded={false}>
         {!invoices || invoices.length === 0 ? (
-          <EmptyState title="No invoices yet" />
+          <EmptyState title={t.noInvoices} />
         ) : (
           <TableShell minWidth={560}>
             <thead>
               <tr>
-                <th className={th}>Invoice</th>
-                <th className={th}>Due</th>
-                <th className={`${th} text-right`}>Amount</th>
-                <th className={th}>Status</th>
+                <th className={th}>{t.invoice}</th>
+                <th className={th}>{t.dueHeader}</th>
+                <th className={`${th} text-right`}>{t.amount}</th>
+                <th className={th}>{t.status}</th>
                 <th className={`${th} text-right`}>
                   <span className="sr-only">Actions</span>
                 </th>
@@ -329,7 +351,7 @@ export function CustomerPortal() {
                     <td className={`${td} text-slate-400`}>{new Date(inv.dueDate).toLocaleDateString()}</td>
                     <td className={`${td} text-right tabular-nums text-white`}>
                       {formatMoney(inv.totalMinor, inv.currency)}
-                      {inv.amountPaidMinor > 0 && balance > 0 && <span className="block text-xs text-slate-500">{formatMoney(balance, inv.currency)} left</span>}
+                      {inv.amountPaidMinor > 0 && balance > 0 && <span className="block text-xs text-slate-500">{formatMoney(balance, inv.currency)} {t.left}</span>}
                     </td>
                     <td className={td}>
                       <Pill tone={invoiceTone(inv.status)}>{inv.status.replace("_", " ").toLowerCase()}</Pill>
@@ -337,7 +359,7 @@ export function CustomerPortal() {
                     <td className={`${td} text-right`}>
                       {OPEN.has(inv.status) && (
                         <button type="button" className={darkButton("secondary", "sm")} onClick={() => { setCheckoutRequestId(null); setPayingInvoiceId(inv.id); }}>
-                          Pay
+                          {t.pay}
                         </button>
                       )}
                     </td>
@@ -351,9 +373,9 @@ export function CustomerPortal() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Plan + PPPoE login */}
-        <Panel title="My plan">
+        <Panel title={t.myPlan}>
           {!subscriptions || subscriptions.length === 0 ? (
-            <p className="text-sm text-slate-400">No plan on this account yet.</p>
+            <p className="text-sm text-slate-400">{t.noPlanYet}</p>
           ) : (
             <div className="space-y-4">
               {subscriptions.map((sub) => (
@@ -368,10 +390,10 @@ export function CustomerPortal() {
                     <Badge variant={sub.status === "ACTIVE" ? "success" : "danger"}>{sub.status}</Badge>
                   </div>
                   <div className="mt-3 flex items-center gap-3">
-                    <span className="text-xs text-slate-500">Renews {new Date(sub.nextBillingAt).toLocaleDateString()}</span>
+                    <span className="text-xs text-slate-500">{t.renews(new Date(sub.nextBillingAt).toLocaleDateString())}</span>
                     {!revealed[sub.id] ? (
                       <button type="button" className={darkButton("ghost", "sm")} disabled={revealPassword.isPending} onClick={() => revealPassword.mutate(sub.id)}>
-                        <IconShield size={13} /> Show PPPoE login
+                        <IconShield size={13} /> {t.showPppoe}
                       </button>
                     ) : (
                       <span className="rounded bg-obsidian-800 px-2 py-1 font-mono text-xs text-slate-200">
@@ -386,9 +408,9 @@ export function CustomerPortal() {
         </Panel>
 
         {/* Wallet */}
-        <Panel title="Wallet" description="Credit and adjustments on your account">
+        <Panel title={t.wallet} description={t.walletDesc}>
           {!walletData || walletData.transactions.length === 0 ? (
-            <p className="text-sm text-slate-400">No wallet activity yet.</p>
+            <p className="text-sm text-slate-400">{t.noWalletActivity}</p>
           ) : (
             <ul className="divide-y divide-obsidian-800 text-sm">
               {walletData.transactions.slice(0, 8).map((tx) => (
@@ -407,11 +429,11 @@ export function CustomerPortal() {
 
       {/* Support */}
       <Panel
-        title="Support"
-        description="Tell us what's wrong and we'll reply here."
+        title={t.support}
+        description={t.supportDesc}
         actions={
           <button type="button" className={darkButton("secondary", "sm")} onClick={() => setShowTicketForm((v) => !v)}>
-            {showTicketForm ? "Cancel" : "New request"}
+            {showTicketForm ? t.cancel : t.newRequest}
           </button>
         }
       >
@@ -425,11 +447,11 @@ export function CustomerPortal() {
             className="mb-5 space-y-3 rounded-lg border border-obsidian-800 p-4"
           >
             <div>
-              <Label htmlFor="ticketSubject">Subject</Label>
-              <Input id="ticketSubject" value={ticketSubject} onChange={(e) => setTicketSubject(e.target.value)} placeholder="e.g. My connection keeps dropping" required />
+              <Label htmlFor="ticketSubject">{t.subject}</Label>
+              <Input id="ticketSubject" value={ticketSubject} onChange={(e) => setTicketSubject(e.target.value)} placeholder={t.subjectPlaceholder} required />
             </div>
             <div>
-              <Label htmlFor="ticketBody">What&rsquo;s happening?</Label>
+              <Label htmlFor="ticketBody">{t.whatsHappening}</Label>
               <textarea
                 id="ticketBody"
                 value={ticketBody}
@@ -440,13 +462,13 @@ export function CustomerPortal() {
               />
             </div>
             <Button type="submit" disabled={createTicket.isPending} size="sm">
-              {createTicket.isPending ? "Sending…" : "Send"}
+              {createTicket.isPending ? t.sending : t.send}
             </Button>
           </form>
         )}
 
         {!tickets || tickets.length === 0 ? (
-          <p className="text-sm text-slate-400">No support requests yet.</p>
+          <p className="text-sm text-slate-400">{t.noRequests}</p>
         ) : (
           <div className="space-y-2">
             {tickets.map((ticket) => (
@@ -465,7 +487,7 @@ export function CustomerPortal() {
                       {expandedTicket?.messages.map((msg) => (
                         <div key={msg.id} className={`rounded-lg px-3 py-2 text-xs ${msg.authorUserId ? "bg-obsidian-800" : "bg-brand-950/40"}`}>
                           <p className="mb-0.5 font-semibold text-slate-400">
-                            {msg.authorUserId ? "Support" : (msg.authorLabel ?? "You")} · {new Date(msg.createdAt).toLocaleString()}
+                            {msg.authorUserId ? t.supportLabel : (msg.authorLabel ?? t.you)} · {new Date(msg.createdAt).toLocaleString()}
                           </p>
                           <p className="whitespace-pre-wrap text-slate-200">{msg.body}</p>
                         </div>
@@ -479,9 +501,9 @@ export function CustomerPortal() {
                       }}
                       className="mt-3 flex items-center gap-2"
                     >
-                      <Input value={replyBody} onChange={(e) => setReplyBody(e.target.value)} placeholder="Reply…" className="flex-1" required />
+                      <Input value={replyBody} onChange={(e) => setReplyBody(e.target.value)} placeholder={t.replyPlaceholder} className="flex-1" required />
                       <Button type="submit" size="sm" disabled={replyToTicket.isPending}>
-                        Send
+                        {t.send}
                       </Button>
                     </form>
                   </div>
