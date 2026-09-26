@@ -21,3 +21,4 @@ export * from "./addon.service.js";
 export * from "./winback.service.js";
 export * from "./agent.service.js";
 export * from "./campaign.service.js";
+export * from "./coverage.service.js";

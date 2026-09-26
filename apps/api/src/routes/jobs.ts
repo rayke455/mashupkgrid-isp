@@ -65,7 +65,7 @@ async function workableJob(request: FastifyRequest, jobId: string): Promise<JobC
   return job;
 }
 
-async function nextJobNumber(tenantId: string, attempt: number): Promise<string> {
+export async function nextJobNumber(tenantId: string, attempt: number): Promise<string> {
   const count = await prisma.jobCard.count({ where: { tenantId } });
   return `JOB-${String(count + 1 + attempt).padStart(5, "0")}`;
 }

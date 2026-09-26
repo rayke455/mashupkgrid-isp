@@ -83,6 +83,12 @@ export const tenantPreferencesSchema = z.object({
     /** Never offer the same customer again sooner than this. */
     minDaysBetween: z.number().int().min(7).max(365),
   }),
+  /** The public coverage check and signup page. */
+  coverage: z.object({
+    enabled: z.boolean(),
+    /** How far from a router with a known location counts as covered. */
+    radiusKm: z.number().min(0.1).max(50),
+  }),
   /** VAT details for the monthly tax report. */
   tax: z.object({
     vatRegistered: z.boolean(),
@@ -146,6 +152,7 @@ export const DEFAULT_TENANT_PREFERENCES: TenantPreferences = {
   autoUpdate: { enabled: false, dayOfMonth: 5, hour: 3, includeFirmware: true },
   pauses: { enabled: true, maxDaysPerYear: 30, minDays: 3 },
   winBack: { enabled: false, discountPercent: 20, validDays: 7, minDaysBetween: 60 },
+  coverage: { enabled: true, radiusKm: 3 },
 };
 
 /** Merges whatever is stored with the defaults, so a partial or old record never breaks a job. */
@@ -159,6 +166,7 @@ export function resolveTenantPreferences(stored: unknown): TenantPreferences {
   const tax = (raw.tax && typeof raw.tax === "object" ? raw.tax : {}) as Record<string, unknown>;
   const referrals = (raw.referrals && typeof raw.referrals === "object" ? raw.referrals : {}) as Record<string, unknown>;
   const upgrades = (raw.upgrades && typeof raw.upgrades === "object" ? raw.upgrades : {}) as Record<string, unknown>;
+  const coverage = (raw.coverage && typeof raw.coverage === "object" ? raw.coverage : {}) as Record<string, unknown>;
   const winBack = (raw.winBack && typeof raw.winBack === "object" ? raw.winBack : {}) as Record<string, unknown>;
   const merged = {
     reminders: {
@@ -176,6 +184,7 @@ export function resolveTenantPreferences(stored: unknown): TenantPreferences {
     autoUpdate: { ...DEFAULT_TENANT_PREFERENCES.autoUpdate, ...autoUpdate },
     pauses: { ...DEFAULT_TENANT_PREFERENCES.pauses, ...pauses },
     winBack: { ...DEFAULT_TENANT_PREFERENCES.winBack, ...winBack },
+    coverage: { ...DEFAULT_TENANT_PREFERENCES.coverage, ...coverage },
   };
   const parsed = tenantPreferencesSchema.safeParse(merged);
   return parsed.success ? parsed.data : DEFAULT_TENANT_PREFERENCES;

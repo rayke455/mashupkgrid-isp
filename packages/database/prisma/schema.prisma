@@ -143,6 +143,7 @@ model Tenant {
   agentSales       AgentSale[]
   agentRemittances AgentRemittance[]
   campaigns        Campaign[]
+  leads            Lead[]
 
   @@index([status])
   @@map("tenants")
@@ -495,6 +496,7 @@ model Customer {
   addOnPurchases     AddOnPurchase[]
   winBackOffers      WinBackOffer[]
   campaignRecipients CampaignRecipient[]
+  leads              Lead[]
 
   @@unique([tenantId, customerNumber])
   @@unique([tenantId, referralCode])
@@ -2733,6 +2735,7 @@ model JobCard {
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
   attachments      JobCardAttachment[]
+  leads            Lead[]
 
   @@unique([tenantId, number])
   @@index([tenantId, status])
@@ -3158,4 +3161,48 @@ model CampaignRecipient {
   @@unique([campaignId, customerId])
   @@index([campaignId, status])
   @@map("campaign_recipients")
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  /// A site survey or installation job has been booked.
+  BOOKED
+  /// Now a customer.
+  WON
+  LOST
+}
+
+/// Someone who asked for a connection on the ISP's public signup page. The page checked their
+/// location against the ISP's coverage; staff call them, then turn them into a customer with an
+/// installation or survey job in one step.
+model Lead {
+  id          String     @id @default(uuid())
+  tenantId    String
+  tenant      Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  fullName    String
+  phone       String
+  email       String?
+  address     String
+  latitude    Float?
+  longitude   Float?
+  /// Null when no location was shared, so coverage couldn't be checked.
+  covered     Boolean?
+  distanceKm  Float?
+  nearestSite String?
+  packageId   String?
+  packageName String?
+  notes       String?
+  status      LeadStatus @default(NEW)
+  lostReason  String?
+  source      String     @default("web")
+  customerId  String?
+  customer    Customer?  @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  jobCardId   String?
+  jobCard     JobCard?   @relation(fields: [jobCardId], references: [id], onDelete: SetNull)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([tenantId, status, createdAt])
+  @@map("leads")
 }

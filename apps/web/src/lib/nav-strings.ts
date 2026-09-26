@@ -21,6 +21,7 @@ const LABELS_SW: Record<string, string> = {
   "Planned maintenance": "Matengenezo yaliyopangwa",
   "Internet plans": "Vifurushi vya intaneti",
   "Add-ons": "Nyongeza",
+  "Signup requests": "Maombi ya kuunganishwa",
   "Campaigns": "Kampeni",
   "Agents": "Mawakala",
   "Win-back offers": "Ofa za kuwarudisha wateja",
