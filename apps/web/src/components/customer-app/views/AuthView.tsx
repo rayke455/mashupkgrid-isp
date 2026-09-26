@@ -69,7 +69,7 @@ export function AuthView({ onSuccess, brandName = "FiberConnect", brandColor = "
   return (
     <div className="min-h-full flex flex-col justify-between bg-slate-50 dark:bg-slate-950 p-4 sm:p-6 select-none">
       {/* Top Hero Wave Art matching Screenshot */}
-      <div className="relative w-full rounded-3xl overflow-hidden shadow-2xl bg-gradient-to-br from-blue-900 via-indigo-950 to-slate-950 border border-blue-500/30 p-6 pt-8 text-white min-h-[220px] flex flex-col justify-between">
+      <div className="relative w-full rounded-2xl overflow-hidden bg-slate-950 border border-slate-800 p-6 pt-8 text-white min-h-[220px] flex flex-col justify-between">
         {/* Glow Curves Background */}
         <div className="absolute inset-0 opacity-40 mix-blend-screen pointer-events-none">
           <svg className="w-full h-full" viewBox="0 0 400 220" fill="none" preserveAspectRatio="none">
@@ -106,7 +106,7 @@ export function AuthView({ onSuccess, brandName = "FiberConnect", brandColor = "
             <div className="w-8 h-8 rounded-xl bg-blue-600/80 backdrop-blur-md flex items-center justify-center border border-blue-400/40 shadow-inner">
               <WifiIcon className="w-5 h-5 text-white" />
             </div>
-            <span className="font-extrabold text-lg tracking-tight bg-gradient-to-r from-white via-blue-100 to-blue-200 bg-clip-text text-transparent">
+            <span className="font-semibold text-lg tracking-tight text-white">
               {brandName}
             </span>
           </div>

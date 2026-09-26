@@ -11,6 +11,7 @@ import { BarList } from "@/components/charts/bar-list";
 import { ChartTable } from "@/components/charts/chart-table";
 import { formatMoney } from "@/lib/money";
 import { OnboardingChecklist } from "@/components/onboarding-checklist";
+import { CustomerPortal } from "@/components/customer-portal";
 import {
   EmptyState,
   Metric,
@@ -324,6 +325,10 @@ export default function DashboardHomePage() {
     : onlineRouters === totalRouters
     ? "All online"
     : `${totalRouters - onlineRouters} not reporting`;
+
+  // A subscriber (tenant-scoped, no staff permissions) gets their own portal, not an empty
+  // operator dashboard: their service, bills, a pay button and support.
+  if (!isPlatform && !isStaff) return <CustomerPortal />;
 
   return (
     <div className="w-full min-w-0 space-y-6">

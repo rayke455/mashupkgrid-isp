@@ -103,6 +103,30 @@ const PLAN_INCLUDES = [
   "Reports and audit logs",
 ];
 
+/** What a subscriber gets. Every item is a shipped surface: apps/web/src/app/hotspot (captive
+ *  portal), components/customer-portal.tsx (bills + M-Pesa self-pay), the worker's invoice and
+ *  dunning emails, packages/whatsapp (service status messages). */
+const CUSTOMER_POINTS: { title: string; body: string; icon: Icon; bullets: string[] }[] = [
+  {
+    title: "Branded captive portal",
+    body: "Walk-in customers connect to your Wi-Fi, pick a package and pay by M-Pesa — online in seconds, no voucher paper needed.",
+    icon: IconTicket,
+    bullets: ["Your logo, colours and support number", "Reconnects the same phone automatically", "Works on a MikroTik you already own"],
+  },
+  {
+    title: "Customer portal",
+    body: "Monthly subscribers sign in to see whether their internet is on, what they owe, and pay it from their phone.",
+    icon: IconUsers,
+    bullets: ["Pay an invoice with one M-Pesa prompt", "Service restored within a minute of paying", "Raise a support request and get replies"],
+  },
+  {
+    title: "Messages that land",
+    body: "Invoices, reminders and service updates go out by email, SMS and WhatsApp on their own — you only step in when you want to.",
+    icon: IconWhatsApp,
+    bullets: ["New invoices emailed automatically", "Due-soon, overdue and final notices", "WhatsApp when service is activated or restored"],
+  },
+];
+
 const OPERATOR_POINTS: { title: string; body: string; icon: Icon }[] = [
   {
     title: "Your money, your choice",
@@ -198,7 +222,7 @@ function formatKes(amount: number): string {
 
 export function LandingClient({ initialContent }: { initialContent?: LandingContent }) {
   const content = initialContent ?? DEFAULT_LANDING_CONTENT;
-  const { pricing, faqs, footer } = content;
+  const { hero, pricing, faqs, footer } = content;
   const [annual, setAnnual] = useState(false);
   const [openFaq, setOpenFaq] = useState<number | null>(0);
 
@@ -235,25 +259,22 @@ export function LandingClient({ initialContent }: { initialContent?: LandingCont
           />
           <div className="relative mx-auto grid max-w-7xl items-center gap-12 px-4 pt-14 pb-16 sm:px-6 sm:pt-20 sm:pb-24 lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] lg:gap-14 lg:px-8">
             <div className="max-w-xl">
+              {/* The hero is the copy the landing editor (Website › Landing page) edits; it used
+                  to be hardcoded here, so edits saved but never showed. */}
               <p className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 shadow-sm">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
-                All-in-one ISP Management Platform
+                {hero.statusBadge}
               </p>
-              <h1 className="mt-6 text-[2.75rem] font-semibold leading-[1.02] tracking-[-0.04em] text-slate-950 sm:text-6xl lg:text-[4.25rem]">
-                Run Your ISP
-                <br />
-                <span className="text-blue-700">Smarter.</span>
+              <h1 className="mt-6 text-[2.5rem] font-semibold leading-[1.05] tracking-[-0.035em] text-slate-950 sm:text-5xl lg:text-[3.6rem]">
+                {hero.mainHeadingStart} <span className="text-blue-700">{hero.mainHeadingGradient}</span> {hero.mainHeadingEnd}
               </h1>
-              <p className="mt-6 text-lg leading-8 text-slate-600">
-                Manage subscribers, automate billing, collect <span className="font-medium text-slate-900">M-Pesa</span> payments, and control
-                your network — all from one powerful platform.
-              </p>
+              <p className="mt-6 text-lg leading-8 text-slate-600">{hero.description}</p>
               <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-                <PrimaryButton href="/register">
-                  Get Started <IconArrowRight size={16} />
+                <PrimaryButton href={hero.primaryCtaUrl || "/register"}>
+                  {hero.primaryCtaText || "Get started"} <IconArrowRight size={16} />
                 </PrimaryButton>
-                <SecondaryButton href="#product">
-                  View Demo <IconArrowRight size={16} />
+                <SecondaryButton href={hero.secondaryCtaUrl && !hero.secondaryCtaUrl.startsWith("#demo") ? hero.secondaryCtaUrl : "#product"}>
+                  {hero.secondaryCtaText && !hero.secondaryCtaUrl?.startsWith("#demo") ? hero.secondaryCtaText : "See the product"} <IconArrowRight size={16} />
                 </SecondaryButton>
               </div>
               <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-600">
@@ -351,6 +372,37 @@ export function LandingClient({ initialContent }: { initialContent?: LandingCont
             <div className="min-w-0">
               <DashboardCustomersPreview />
             </div>
+          </div>
+        </section>
+
+        {/* ------------------------------------------------------- FOR YOUR CUSTOMERS */}
+        <section id="customers" aria-labelledby="customers-title" className="scroll-mt-20 border-b border-slate-200">
+          <div className="mx-auto max-w-7xl px-4 py-20 sm:px-6 sm:py-28 lg:px-8">
+            <SectionHeading
+              id="customers-title"
+              eyebrow="For your customers"
+              title="Self-service that keeps them paying"
+              body="Your subscribers see your brand, not ours: a captive portal to buy Wi-Fi, a portal to pay bills, and messages that arrive where they already are."
+            />
+            <ul className="mt-14 grid gap-4 md:grid-cols-3">
+              {CUSTOMER_POINTS.map(({ title, body, icon: PointIcon, bullets }) => (
+                <li key={title} className="rounded-lg border border-slate-200 bg-white p-6">
+                  <span className="grid h-10 w-10 place-items-center rounded-md border border-blue-100 bg-blue-50 text-blue-700">
+                    <PointIcon size={20} aria-hidden="true" />
+                  </span>
+                  <h3 className="mt-5 text-base font-semibold text-slate-950">{title}</h3>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">{body}</p>
+                  <ul className="mt-4 space-y-2">
+                    {bullets.map((b) => (
+                      <li key={b} className="flex gap-2 text-sm text-slate-700">
+                        <IconCheck size={16} className="mt-0.5 shrink-0 text-emerald-600" aria-hidden="true" />
+                        {b}
+                      </li>
+                    ))}
+                  </ul>
+                </li>
+              ))}
+            </ul>
           </div>
         </section>
 

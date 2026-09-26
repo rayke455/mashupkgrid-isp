@@ -22,6 +22,7 @@ import { authenticate } from "../plugins/authenticate.js";
 import { resolveTenant } from "../plugins/tenant.js";
 import { checkMaintenance } from "../plugins/maintenance.js";
 import { writeAuditLog } from "../lib/audit.js";
+import { initiateStkPushForCustomer, getStkRequestOrThrow, queryAndReconcileStkRequest } from "@mashupkgrid/payments";
 
 const preHandler = [authenticate, resolveTenant, checkMaintenance] as const;
 
@@ -76,6 +77,61 @@ export async function meRoutes(app: FastifyInstance): Promise<void> {
       take: 100,
     });
     reply.send(successResponse(invoices, request.id));
+  });
+
+  /**
+   * Self-service payment: an M-Pesa prompt to the customer's phone for one of their own open
+   * invoices. The amount is always the invoice's remaining balance — never client-supplied —
+   * and the invoice must belong to the caller, so the only thing a customer can choose is which
+   * phone gets the prompt.
+   */
+  app.post(
+    "/invoices/:invoiceId/pay",
+    { config: { audience: "customer", maintenanceCategory: "payment" }, preHandler: [...preHandler] },
+    async (request, reply) => {
+      const customer = await resolveMyCustomerOrThrow(request);
+      const { invoiceId } = z.object({ invoiceId: z.string().uuid() }).parse(request.params);
+      const { phone } = z.object({ phone: z.string().trim().min(9).max(15).optional() }).parse(request.body ?? {});
+      const invoice = await prisma.invoice.findFirst({ where: { id: invoiceId, customerId: customer.id, tenantId: customer.tenantId } });
+      if (!invoice) throw new NotFoundError("Invoice");
+      const remaining = invoice.totalMinor - invoice.amountPaidMinor;
+      if (!["PENDING", "PARTIALLY_PAID", "OVERDUE"].includes(invoice.status) || remaining <= 0) {
+        throw new ConflictError("This invoice has nothing left to pay");
+      }
+      const stkRequest = await initiateStkPushForCustomer(customer.tenantId, {
+        customerId: customer.id,
+        invoiceId: invoice.id,
+        phone: phone || customer.phone,
+        amountMinor: remaining,
+        initiatedByUserId: request.user!.id,
+      });
+      await writeAuditLog({
+        tenantId: customer.tenantId,
+        actorUserId: request.user!.id,
+        action: "mpesa.stk_push_initiated",
+        resourceType: "MpesaStkRequest",
+        resourceId: stkRequest.id,
+        after: { invoiceId: invoice.id, amountMinor: remaining, selfService: true },
+        ipAddress: request.ip,
+        userAgent: request.headers["user-agent"] ?? null,
+      });
+      reply.status(201).send(successResponse({ checkoutRequestId: stkRequest.checkoutRequestId, amountMinor: remaining }, request.id));
+    }
+  );
+
+  /** Where that prompt got to. Only the customer's own requests are visible. */
+  app.get("/payments/:checkoutRequestId", { config: { audience: "customer" }, preHandler: [...preHandler] }, async (request, reply) => {
+    const customer = await resolveMyCustomerOrThrow(request);
+    const { checkoutRequestId } = z.object({ checkoutRequestId: z.string().min(1) }).parse(request.params);
+    const current = await getStkRequestOrThrow(customer.tenantId, checkoutRequestId);
+    if (current.customerId !== customer.id) throw new NotFoundError("Payment request");
+    const latest = current.status === "PENDING" ? (await queryAndReconcileStkRequest(customer.tenantId, checkoutRequestId)).request : current;
+    reply.send(
+      successResponse(
+        { checkoutRequestId, status: latest.status, resultDesc: latest.resultDesc, mpesaReceiptNumber: latest.mpesaReceiptNumber, amountMinor: latest.amountMinor },
+        request.id
+      )
+    );
   });
 
   app.get("/wallet", { config: { audience: "customer" }, preHandler: [...preHandler] }, async (request, reply) => {
