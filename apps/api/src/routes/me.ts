@@ -23,7 +23,7 @@ import { resolveTenant } from "../plugins/tenant.js";
 import { checkMaintenance } from "../plugins/maintenance.js";
 import { writeAuditLog } from "../lib/audit.js";
 import { initiateStkPushForCustomer, getStkRequestOrThrow, queryAndReconcileStkRequest } from "@mashupkgrid/payments";
-import { getReferralSummary } from "@mashupkgrid/billing";
+import { getReferralSummary, getPauseAllowance, pauseSubscription, resumeSubscription } from "@mashupkgrid/billing";
 
 const preHandler = [authenticate, resolveTenant, checkMaintenance] as const;
 
@@ -119,6 +119,33 @@ export async function meRoutes(app: FastifyInstance): Promise<void> {
       reply.status(201).send(successResponse({ checkoutRequestId: stkRequest.checkoutRequestId, amountMinor: remaining }, request.id));
     }
   );
+
+  /** How many pause days the customer has left on a plan this year. */
+  app.get("/subscriptions/:subscriptionId/pause", { config: { audience: "customer" }, preHandler: [...preHandler] }, async (request, reply) => {
+    const customer = await resolveMyCustomerOrThrow(request);
+    const { subscriptionId } = subscriptionIdParamsSchema.parse(request.params);
+    if (!(await prisma.customerService.findFirst({ where: { id: subscriptionId, customerId: customer.id } }))) throw new NotFoundError("Subscription");
+    reply.send(successResponse(await getPauseAllowance(customer.tenantId, subscriptionId), request.id));
+  });
+
+  app.post("/subscriptions/:subscriptionId/pause", { config: { audience: "customer" }, preHandler: [...preHandler] }, async (request, reply) => {
+    const customer = await resolveMyCustomerOrThrow(request);
+    const { subscriptionId } = subscriptionIdParamsSchema.parse(request.params);
+    const { days } = z.object({ days: z.number().int().min(1).max(180) }).parse(request.body);
+    if (!(await prisma.customerService.findFirst({ where: { id: subscriptionId, customerId: customer.id } }))) throw new NotFoundError("Subscription");
+    const updated = await pauseSubscription(customer.tenantId, subscriptionId, days, "customer");
+    await writeAuditLog({ tenantId: customer.tenantId, actorUserId: request.user!.id, action: "subscription.paused", resourceType: "CustomerService", resourceId: subscriptionId, after: { days, until: updated.pausedUntil }, ipAddress: request.ip, userAgent: request.headers["user-agent"] ?? null });
+    reply.send(successResponse(updated, request.id));
+  });
+
+  app.post("/subscriptions/:subscriptionId/resume", { config: { audience: "customer" }, preHandler: [...preHandler] }, async (request, reply) => {
+    const customer = await resolveMyCustomerOrThrow(request);
+    const { subscriptionId } = subscriptionIdParamsSchema.parse(request.params);
+    if (!(await prisma.customerService.findFirst({ where: { id: subscriptionId, customerId: customer.id } }))) throw new NotFoundError("Subscription");
+    const updated = await resumeSubscription(customer.tenantId, subscriptionId);
+    await writeAuditLog({ tenantId: customer.tenantId, actorUserId: request.user!.id, action: "subscription.resumed", resourceType: "CustomerService", resourceId: subscriptionId, ipAddress: request.ip, userAgent: request.headers["user-agent"] ?? null });
+    reply.send(successResponse(updated, request.id));
+  });
 
   /** The signed-in customer's own referral code and what it has earned them. */
   app.get("/referral", { config: { audience: "customer" }, preHandler: [...preHandler] }, async (request, reply) => {

@@ -712,4 +712,12 @@ export const SW: Record<string, string> = {
   "router": "ruta",
   "routers": "ruta",
   "routers selected": "ruta zimechaguliwa",
+  "Plan paused until": "Mpango umesimamishwa hadi",
+  "Plan resumed.": "Mpango umeendelea.",
+  "Pause this plan for how many days?": "Simamisha mpango huu kwa siku ngapi?",
+  "Enter a whole number of days between 1 and 365.": "Weka idadi kamili ya siku kati ya 1 na 365.",
+  "Paused until": "Umesimamishwa hadi",
+  "PAUSED": "UMESIMAMISHWA",
+  "Pause": "Simamisha",
+  "Resume": "Endelea",
 };

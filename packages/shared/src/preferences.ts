@@ -89,6 +89,13 @@ export const tenantPreferencesSchema = z.object({
     /** Also bring RouterBOARD firmware up to date 45 minutes later, after the upgrade reboot. */
     includeFirmware: z.boolean(),
   }),
+  /** Customers pausing their own plan from the app. */
+  pauses: z.object({
+    enabled: z.boolean(),
+    /** Total pause days allowed in any 12 months. */
+    maxDaysPerYear: z.number().int().min(1).max(180),
+    minDays: z.number().int().min(1).max(30),
+  }),
 });
 
 export type TenantPreferences = z.infer<typeof tenantPreferencesSchema>;
@@ -126,6 +133,7 @@ export const DEFAULT_TENANT_PREFERENCES: TenantPreferences = {
   referrals: { enabled: true, rewardType: "DAYS", rewardDays: 7, rewardCreditMinor: 50_000 },
   tax: { vatRegistered: false, kraPin: "", vatRatePercent: 16 },
   autoUpdate: { enabled: false, dayOfMonth: 5, hour: 3, includeFirmware: true },
+  pauses: { enabled: true, maxDaysPerYear: 30, minDays: 3 },
 };
 
 /** Merges whatever is stored with the defaults, so a partial or old record never breaks a job. */
@@ -134,6 +142,7 @@ export function resolveTenantPreferences(stored: unknown): TenantPreferences {
   const reminders = (raw.reminders && typeof raw.reminders === "object" ? raw.reminders : {}) as Record<string, unknown>;
   const tickets = (raw.tickets && typeof raw.tickets === "object" ? raw.tickets : {}) as Record<string, unknown>;
   const alerts = (raw.alerts && typeof raw.alerts === "object" ? raw.alerts : {}) as Record<string, unknown>;
+  const pauses = (raw.pauses && typeof raw.pauses === "object" ? raw.pauses : {}) as Record<string, unknown>;
   const autoUpdate = (raw.autoUpdate && typeof raw.autoUpdate === "object" ? raw.autoUpdate : {}) as Record<string, unknown>;
   const tax = (raw.tax && typeof raw.tax === "object" ? raw.tax : {}) as Record<string, unknown>;
   const referrals = (raw.referrals && typeof raw.referrals === "object" ? raw.referrals : {}) as Record<string, unknown>;
@@ -152,6 +161,7 @@ export function resolveTenantPreferences(stored: unknown): TenantPreferences {
     referrals: { ...DEFAULT_TENANT_PREFERENCES.referrals, ...referrals },
     tax: { ...DEFAULT_TENANT_PREFERENCES.tax, ...tax },
     autoUpdate: { ...DEFAULT_TENANT_PREFERENCES.autoUpdate, ...autoUpdate },
+    pauses: { ...DEFAULT_TENANT_PREFERENCES.pauses, ...pauses },
   };
   const parsed = tenantPreferencesSchema.safeParse(merged);
   return parsed.success ? parsed.data : DEFAULT_TENANT_PREFERENCES;

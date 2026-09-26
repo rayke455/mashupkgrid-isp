@@ -33,6 +33,7 @@ import { handleDeliverWebhook } from "./jobs/deliver-webhook.js";
 import { handlePushLargePayments } from "./jobs/push-large-payments.js";
 import { handleSuggestUpgrades } from "./jobs/suggest-upgrades.js";
 import { handleReferralRewards } from "./jobs/referral-rewards.js";
+import { handleResumePausedPlans } from "./jobs/resume-paused-plans.js";
 import { handleRouterRollouts } from "./jobs/router-rollouts.js";
 import { handleRouterBackups } from "./jobs/router-backups.js";
 import { handleAutoRouterUpdates } from "./jobs/auto-router-updates.js";
@@ -138,6 +139,8 @@ async function main() {
           return run(handleSuggestUpgrades);
         case JOB_NAMES.referralRewards:
           return run(handleReferralRewards);
+        case JOB_NAMES.resumePausedPlans:
+          return run(handleResumePausedPlans);
         default:
           throw new Error(`Unknown job in queue "${QUEUE_NAMES.billing}": ${job.name}`);
       }

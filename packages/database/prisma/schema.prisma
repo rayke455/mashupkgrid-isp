@@ -28,6 +28,7 @@ enum UserStatus {
 
 model Tenant {
   id                     String                  @id @default(uuid())
+  servicePauses          ServicePause[]
   routerBackups          RouterBackup[]
   routerRollouts         RouterRollout[]
   jobCards               JobCard[]
@@ -559,6 +560,10 @@ enum CustomerServiceStatus {
 /// thing that gets provisioned on network equipment.
 model CustomerService {
   id                 String                @id @default(uuid())
+  /// Set while the customer has paused the plan: it stays off until then, and the billing sweep
+  /// that turns cleared accounts back on leaves it alone.
+  pausedUntil        DateTime?
+  pauses             ServicePause[]
   upgradeSuggestions UpgradeSuggestion[]
   tenantId           String
   tenant             Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
@@ -2833,4 +2838,22 @@ model RouterHealthSample {
   @@index([routerId, at])
   @@index([at])
   @@map("router_health_samples")
+}
+
+/// A pause of a subscription (travel, a closed shop). Billing moves forward by the paused days;
+/// an early resume gives the unused days back. `days` is what was actually used.
+model ServicePause {
+  id                String          @id @default(uuid())
+  tenantId          String
+  tenant            Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customerServiceId String
+  customerService   CustomerService @relation(fields: [customerServiceId], references: [id], onDelete: Cascade)
+  startsAt          DateTime        @default(now())
+  endsAt            DateTime
+  days              Int
+  requestedBy       String
+  resumedAt         DateTime?
+
+  @@index([customerServiceId, startsAt])
+  @@map("service_pauses")
 }

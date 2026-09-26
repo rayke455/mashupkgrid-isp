@@ -214,6 +214,16 @@ export const AUTOMATION_JOBS: readonly AutomationJobDefinition[] = [
     tenantVisible: true,
   },
   {
+    name: JOB_NAMES.resumePausedPlans,
+    queue: QUEUE_NAMES.billing,
+    category: "billing",
+    label: "Resume paused plans",
+    description: "Turns a customer's paused plan back on when the pause ends.",
+    everyMs: 15 * MINUTE,
+    counters: { resumed: "Plans resumed", failed: "Could not resume" },
+    tenantVisible: true,
+  },
+  {
     name: JOB_NAMES.referralRewards,
     queue: QUEUE_NAMES.billing,
     category: "billing",

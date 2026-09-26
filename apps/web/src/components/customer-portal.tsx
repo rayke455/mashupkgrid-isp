@@ -9,6 +9,7 @@ import { IconMpesa, IconShield } from "@/components/icons";
 import { EmptyState, Metric, MetricGrid, Notice, PageHeader, Panel, Pill, TableShell, darkButton, td, th } from "@/components/dashboard/surface";
 import { customerStrings } from "@/lib/customer-strings";
 import { MyReferralPanel } from "@/components/my-referral-panel";
+import { PausePlan } from "@/components/pause-plan";
 import { useLanguage } from "@/lib/language-context";
 
 /**
@@ -28,6 +29,7 @@ interface MySubscription {
   id: string;
   status: string;
   nextBillingAt: string;
+  pausedUntil: string | null;
   package: { name: string; downloadKbps: number; uploadKbps: number; priceMinor: number; currency: string; billingCycle: string };
 }
 
@@ -230,7 +232,14 @@ export function CustomerPortal({ view = "all", onPay }: { view?: PortalView; onP
 
       {error && <ErrorText>{error}</ErrorText>}
 
-      {primary && !serviceOn && (
+      {primary && !serviceOn && primary.pausedUntil && (
+        <Notice tone="neutral">
+          {lang === "sw"
+            ? `Mpango wako umesimamishwa hadi ${new Date(primary.pausedUntil).toLocaleDateString()}. Unaweza kuendelea wakati wowote kwenye Akaunti.`
+            : `Your plan is paused until ${new Date(primary.pausedUntil).toLocaleDateString()}. You can resume any time under Account.`}
+        </Notice>
+      )}
+      {primary && !serviceOn && !primary.pausedUntil && (
         <Notice tone={primary.status === "SUSPENDED" ? "bad" : "warn"}>
           {primary.status === "SUSPENDED"
             ? t.suspendedNotice
@@ -402,7 +411,7 @@ export function CustomerPortal({ view = "all", onPay }: { view?: PortalView; onP
                         {mbps(sub.package.downloadKbps)} / {mbps(sub.package.uploadKbps)} · {formatMoney(sub.package.priceMinor, sub.package.currency)} {sub.package.billingCycle.toLowerCase()}
                       </p>
                     </div>
-                    <Badge variant={sub.status === "ACTIVE" ? "success" : "danger"}>{sub.status}</Badge>
+                    <Badge variant={sub.status === "ACTIVE" ? "success" : sub.pausedUntil ? "neutral" : "danger"}>{sub.pausedUntil ? (lang === "sw" ? "IMESIMAMISHWA" : "PAUSED") : sub.status}</Badge>
                   </div>
                   <div className="mt-3 flex items-center gap-3">
                     <span className="text-xs text-slate-500">{t.renews(new Date(sub.nextBillingAt).toLocaleDateString())}</span>
@@ -416,6 +425,7 @@ export function CustomerPortal({ view = "all", onPay }: { view?: PortalView; onP
                       </span>
                     )}
                   </div>
+                  <PausePlan subscriptionId={sub.id} status={sub.status} pausedUntil={sub.pausedUntil} />
                 </div>
               ))}
             </div>

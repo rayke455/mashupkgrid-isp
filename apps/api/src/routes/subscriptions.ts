@@ -5,6 +5,8 @@ import {
   subscribeCustomerToPackage,
   cancelSubscription,
   suspendSubscription,
+  pauseSubscription,
+  resumeSubscription,
   reactivateSubscription,
   getSubscriptionOrThrow,
 } from "@mashupkgrid/billing";
@@ -95,6 +97,32 @@ export async function subscriptionRoutes(app: FastifyInstance): Promise<void> {
       const tenantId = requireTenant(request.user!.tenantId);
       const { subscriptionId } = idParamsSchema.parse(request.params);
       reply.send(successResponse(await getSubscriptionOrThrow(tenantId, subscriptionId), request.id));
+    }
+  );
+
+  /** Staff pause a plan for a customer (no yearly allowance applies), or end a pause. */
+  app.post(
+    "/:subscriptionId/pause",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("customer_services.manage")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const { subscriptionId } = idParamsSchema.parse(request.params);
+      const { days } = z.object({ days: z.number().int().min(1).max(180) }).parse(request.body);
+      const after = await pauseSubscription(tenantId, subscriptionId, days, "staff");
+      await writeAuditLog({ tenantId, actorUserId: request.user!.id, action: "customer_service.paused", resourceType: "CustomerService", resourceId: subscriptionId, after: { days, until: after.pausedUntil }, ipAddress: request.ip, userAgent: request.headers["user-agent"] ?? null });
+      reply.send(successResponse(after, request.id));
+    }
+  );
+
+  app.post(
+    "/:subscriptionId/resume",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("customer_services.manage")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const { subscriptionId } = idParamsSchema.parse(request.params);
+      const after = await resumeSubscription(tenantId, subscriptionId);
+      await writeAuditLog({ tenantId, actorUserId: request.user!.id, action: "customer_service.resumed", resourceType: "CustomerService", resourceId: subscriptionId, ipAddress: request.ip, userAgent: request.headers["user-agent"] ?? null });
+      reply.send(successResponse(after, request.id));
     }
   );
 

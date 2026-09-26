@@ -37,6 +37,7 @@ interface Subscription {
   id: string;
   status: string;
   nextBillingAt: string;
+  pausedUntil?: string | null;
   package: Package;
 }
 
@@ -174,6 +175,32 @@ export default function CustomerDetailPage() {
     const reason = window.prompt("Reason (optional, kept in the audit log):", "") ?? "";
     setError(null);
     extend.mutate({ subscriptionId, days, reason });
+  };
+
+  // A pause switches the line off and moves the next bill out by the paused days; staff pauses
+  // aren't limited by the customer's yearly allowance.
+  const pause = useMutation({
+    mutationFn: ({ subscriptionId, days }: { subscriptionId: string; days?: number }) =>
+      apiFetch<{ pausedUntil: string | null }>(`/api/v1/subscriptions/${subscriptionId}/${days ? "pause" : "resume"}`, {
+        method: "POST",
+        body: JSON.stringify(days ? { days } : {}),
+      }),
+    onSuccess: (res) => {
+      setNotice(res.pausedUntil ? `${tr("Plan paused until")} ${new Date(res.pausedUntil).toLocaleDateString()}.` : tr("Plan resumed."));
+      invalidateAll();
+    },
+    onError: (err) => setError(err instanceof ApiRequestError ? err.message : tr("Something went wrong.")),
+  });
+  const askPause = (subscriptionId: string) => {
+    const answer = window.prompt(tr("Pause this plan for how many days?"), "14");
+    if (answer === null) return;
+    const days = Number(answer);
+    if (!Number.isInteger(days) || days < 1 || days > 365) {
+      setError(tr("Enter a whole number of days between 1 and 365."));
+      return;
+    }
+    setError(null);
+    pause.mutate({ subscriptionId, days });
   };
 
   const sendMessage = useMutation({
@@ -397,12 +424,24 @@ export default function CustomerDetailPage() {
                   </p>
                   <p className="text-xs text-slate-500">
                     {t.nextBilling(new Date(sub.nextBillingAt).toLocaleDateString())}
+                    {sub.pausedUntil && ` · ${tr("Paused until")} ${new Date(sub.pausedUntil).toLocaleDateString()}`}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
                   <Badge variant={sub.status === "ACTIVE" ? "success" : "warning"}>
-                    {sub.status}
+                    {sub.pausedUntil ? tr("PAUSED") : sub.status}
                   </Badge>
+                  {sub.pausedUntil ? (
+                    <Button variant="secondary" className="px-2.5 py-1 text-xs" disabled={pause.isPending} onClick={() => pause.mutate({ subscriptionId: sub.id })}>
+                      {tr("Resume")}
+                    </Button>
+                  ) : (
+                    sub.status === "ACTIVE" && (
+                      <Button variant="secondary" className="px-2.5 py-1 text-xs" disabled={pause.isPending} onClick={() => askPause(sub.id)}>
+                        {tr("Pause")}
+                      </Button>
+                    )
+                  )}
                   {sub.status !== "CANCELLED" && (
                     <Button variant="secondary" className="px-2.5 py-1 text-xs" disabled={extend.isPending} onClick={() => askExtend(sub.id)}>
                       {t.extendDays}
