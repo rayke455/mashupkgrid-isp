@@ -1916,6 +1916,7 @@ enum RouterStatus {
 /// apps/api / apps/worker, never sent to apps/web (docs/architecture/06).
 model Router {
   id                   String                @id @default(uuid())
+  healthSamples        RouterHealthSample[]
   backups              RouterBackup[]
   /// Last seen by the Router updates page: RouterOS version, board model and bootloader firmware.
   routerOsVersion      String?
@@ -2809,4 +2810,22 @@ model RouterBackup {
   @@index([routerId, createdAt])
   @@index([tenantId, createdAt])
   @@map("router_backups")
+}
+
+/// One reading of a router's health, kept every 5 minutes for 30 days so the dashboard can chart
+/// CPU, memory, temperature and availability over time.
+model RouterHealthSample {
+  id            BigInt   @id @default(autoincrement())
+  routerId      String
+  router        Router   @relation(fields: [routerId], references: [id], onDelete: Cascade)
+  at            DateTime @default(now())
+  reachable     Boolean
+  cpuPercent    Int?
+  memoryPercent Int?
+  temperatureC  Float?
+  uptimeSeconds Int?
+
+  @@index([routerId, at])
+  @@index([at])
+  @@map("router_health_samples")
 }

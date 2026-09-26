@@ -65,6 +65,14 @@ export class MikroTikAdapter implements NetworkDeviceAdapter {
       const [resource] = await client.print(["/system/resource/print"]);
       const [identity] = await client.print(["/system/identity/print"]);
       if (!resource) return { reachable: false, error: "No response from /system/resource/print" };
+      // RouterOS 7 lists sensors as name/value rows; RouterOS 6 has one row of fields. Not every
+      // board has a sensor, and that is not an error.
+      const health = await client.print(["/system/health/print"]).catch(() => [] as Array<Record<string, string>>);
+      const tempRaw =
+        health.find((h) => h["name"] === "temperature" || h["name"] === "cpu-temperature" || h["name"] === "board-temperature1")?.["value"] ??
+        health[0]?.["temperature"] ??
+        health[0]?.["cpu-temperature"];
+      const temperatureC = tempRaw !== undefined && Number.isFinite(Number(tempRaw)) ? Number(tempRaw) : undefined;
 
       return {
         reachable: true,
@@ -75,6 +83,7 @@ export class MikroTikAdapter implements NetworkDeviceAdapter {
             : undefined,
         memoryTotalBytes: resource["total-memory"] ? BigInt(resource["total-memory"]) : undefined,
         uptimeSeconds: resource["uptime"] ? parseRouterOSUptime(resource["uptime"]) : undefined,
+        temperatureC,
         identity: identity?.["name"],
         version: resource["version"],
       };

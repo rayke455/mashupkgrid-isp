@@ -1,6 +1,7 @@
 import { prisma } from "@mashupkgrid/database";
 import type { AutomationSummary } from "@mashupkgrid/shared";
 import { backupRouter } from "@mashupkgrid/network";
+import { pruneHealthSamples } from "./router-health.js";
 
 /** Daily backups: every linked, online MikroTik gets one when its newest is over a day old. */
 const DAY = 86_400_000;
@@ -31,5 +32,6 @@ export async function handleRouterBackups(): Promise<AutomationSummary> {
       console.warn(`[backups] "${router.name}" could not be backed up:`, err instanceof Error ? err.message : err);
     }
   }
-  return { due: due.length, saved, failed };
+  const pruned = await pruneHealthSamples().catch(() => 0);
+  return { due: due.length, saved, failed, pruned };
 }

@@ -10,6 +10,8 @@ export interface DeviceHealth {
   memoryUsedBytes?: bigint;
   memoryTotalBytes?: bigint;
   uptimeSeconds?: number;
+  /** Board temperature, where the hardware reports one. */
+  temperatureC?: number;
   identity?: string;
   version?: string;
   error?: string;

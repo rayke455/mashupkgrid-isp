@@ -2,6 +2,7 @@ import { retryPendingSyncTasks, expireOverdueVouchers } from "@mashupkgrid/radiu
 import { prisma } from "@mashupkgrid/database";
 import { testRouterConnection, reconcileRouterProvisioning } from "@mashupkgrid/network";
 import { notifyRouterRecovered, notifyRouterWentDown, routerAlertFor } from "./router-alerts.js";
+import { recordRouterHealth } from "./router-health.js";
 import type { AutomationSummary } from "@mashupkgrid/shared";
 
 export async function handleRetryPendingSyncTasks(): Promise<AutomationSummary> {
@@ -33,6 +34,8 @@ export async function handlePollRouterHealth(): Promise<AutomationSummary> {
   for (const router of routers) {
     try {
       const health = await testRouterConnection(router.tenantId, router.id);
+      // History for the health graphs, and the CPU/heat/reboot alerts; never allowed to fail the poll.
+      await recordRouterHealth(router, health).catch((err) => console.warn(`[network] health sample for ${router.id} failed:`, err instanceof Error ? err.message : err));
       const alert = routerAlertFor(router.status, health.reachable);
       if (alert) {
         // Best-effort: a router really is down (or back) whether or not SMS/email cooperate, and
