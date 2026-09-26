@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
 import { Button, Card, ErrorText, HintText, Input, Label, Badge } from "@/components/ui";
 import { IconKey, IconWebhook, IconCopy, IconCheck } from "@/components/icons";
+import { tr } from "@/lib/tr";
 
 interface ApiKeyRow {
   id: string;
@@ -164,9 +165,9 @@ export default function DeveloperSettingsPage() {
   return (
     <div className="max-w-3xl space-y-8">
       <div>
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Developer</h2>
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-white">{tr("Developer")}</h2>
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          API tokens for external clients, and webhooks for outbound event delivery.
+          {tr("API tokens for external clients, and webhooks for outbound event delivery.")}
         </p>
       </div>
 
@@ -176,7 +177,7 @@ export default function DeveloperSettingsPage() {
       <Card>
         <div className="mb-4 flex items-center gap-2">
           <IconKey className="text-brand-600 dark:text-brand-400" />
-          <h3 className="font-semibold text-slate-900 dark:text-white">API tokens</h3>
+          <h3 className="font-semibold text-slate-900 dark:text-white">{tr("API tokens")}</h3>
         </div>
         <p className="mb-4 text-sm text-slate-500 dark:text-slate-400">
           A token authenticates as the staff member who created it — send it as{" "}
@@ -204,7 +205,7 @@ export default function DeveloperSettingsPage() {
                 {copied === "token" ? "Copied" : "Copy"}
               </Button>
               <Button variant="secondary" className="px-2.5 py-1.5 text-xs" onClick={() => setRevealedToken(null)}>
-                Dismiss
+                {tr("Dismiss")}
               </Button>
             </div>
           </div>
@@ -219,10 +220,10 @@ export default function DeveloperSettingsPage() {
           className="mb-5 space-y-3 rounded-lg border border-slate-200 p-3.5 dark:border-obsidian-800"
         >
           <div>
-            <Label htmlFor="keyName">Key name</Label>
+            <Label htmlFor="keyName">{tr("Key name")}</Label>
             <Input
               id="keyName"
-              placeholder="e.g. claude-desktop — so you know which one to revoke"
+              placeholder={tr("e.g. claude-desktop — so you know which one to revoke")}
               value={newKeyName}
               onChange={(e) => setNewKeyName(e.target.value)}
               required
@@ -237,7 +238,7 @@ export default function DeveloperSettingsPage() {
               className="h-4 w-4 rounded text-brand-600 focus:ring-brand-500 border-slate-300 dark:border-obsidian-700"
             />
             <Label htmlFor="fullAccess" className="!mb-0 cursor-pointer">
-              Full access (same permissions as your account)
+              {tr("Full access (same permissions as your account)")}
             </Label>
           </div>
           {!fullAccess && (
@@ -265,7 +266,7 @@ export default function DeveloperSettingsPage() {
         </form>
 
         {keysLoading ? (
-          <p className="text-sm text-slate-500">Loading...</p>
+          <p className="text-sm text-slate-500">{tr("Loading...")}</p>
         ) : apiKeys && apiKeys.length > 0 ? (
           <div className="space-y-2">
             {apiKeys.map((key) => (
@@ -276,7 +277,7 @@ export default function DeveloperSettingsPage() {
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">{key.name}</p>
-                    {key.revokedAt && <Badge variant="danger">Revoked</Badge>}
+                    {key.revokedAt && <Badge variant="danger">{tr("Revoked")}</Badge>}
                   </div>
                   <p className="font-mono text-xs text-slate-500">
                     {key.keyPrefix}... · created by {key.createdBy?.email ?? "unknown"} · last used{" "}
@@ -296,14 +297,14 @@ export default function DeveloperSettingsPage() {
                       }
                     }}
                   >
-                    Revoke
+                    {tr("Revoke")}
                   </Button>
                 )}
               </div>
             ))}
           </div>
         ) : (
-          <p className="text-sm text-slate-500">No tokens yet.</p>
+          <p className="text-sm text-slate-500">{tr("No tokens yet.")}</p>
         )}
       </Card>
 
@@ -312,7 +313,7 @@ export default function DeveloperSettingsPage() {
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <IconWebhook className="text-brand-600 dark:text-brand-400" />
-            <h3 className="font-semibold text-slate-900 dark:text-white">Webhooks</h3>
+            <h3 className="font-semibold text-slate-900 dark:text-white">{tr("Webhooks")}</h3>
           </div>
           <Button variant="secondary" className="px-3 py-1.5 text-xs" onClick={() => setShowWebhookForm((v) => !v)}>
             {showWebhookForm ? "Cancel" : "+ Add endpoint"}
@@ -326,7 +327,7 @@ export default function DeveloperSettingsPage() {
 
         {revealedSecret && (
           <div className="mb-4 rounded-lg border border-amber-300 bg-amber-50 p-3 dark:border-amber-900/60 dark:bg-amber-950/30">
-            <p className="mb-2 text-xs font-semibold text-amber-800 dark:text-amber-300">Signing secret</p>
+            <p className="mb-2 text-xs font-semibold text-amber-800 dark:text-amber-300">{tr("Signing secret")}</p>
             <div className="flex items-center gap-2">
               <code className="flex-1 truncate rounded bg-white px-2 py-1.5 font-mono text-xs dark:bg-obsidian-950">
                 {revealedSecret.secret}
@@ -340,7 +341,7 @@ export default function DeveloperSettingsPage() {
                 {copied === "secret" ? "Copied" : "Copy"}
               </Button>
               <Button variant="secondary" className="px-2.5 py-1.5 text-xs" onClick={() => setRevealedSecret(null)}>
-                Dismiss
+                {tr("Dismiss")}
               </Button>
             </div>
           </div>
@@ -356,7 +357,7 @@ export default function DeveloperSettingsPage() {
             className="mb-5 space-y-3 rounded-lg border border-slate-200 p-3.5 dark:border-obsidian-800"
           >
             <div>
-              <Label htmlFor="webhookUrl">Endpoint URL</Label>
+              <Label htmlFor="webhookUrl">{tr("Endpoint URL")}</Label>
               <Input
                 id="webhookUrl"
                 type="url"
@@ -367,16 +368,16 @@ export default function DeveloperSettingsPage() {
               />
             </div>
             <div>
-              <Label htmlFor="webhookDescription">Description (optional)</Label>
+              <Label htmlFor="webhookDescription">{tr("Description (optional)")}</Label>
               <Input
                 id="webhookDescription"
-                placeholder="e.g. Sync payments to our accounting system"
+                placeholder={tr("e.g. Sync payments to our accounting system")}
                 value={webhookDescription}
                 onChange={(e) => setWebhookDescription(e.target.value)}
               />
             </div>
             <div>
-              <Label>Events</Label>
+              <Label>{tr("Events")}</Label>
               <div className="flex flex-wrap gap-3">
                 {(eventCatalog ?? []).map((eventType) => (
                   <label key={eventType} className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400">
@@ -402,7 +403,7 @@ export default function DeveloperSettingsPage() {
         )}
 
         {webhooksLoading ? (
-          <p className="text-sm text-slate-500">Loading...</p>
+          <p className="text-sm text-slate-500">{tr("Loading...")}</p>
         ) : webhooks && webhooks.length > 0 ? (
           <div className="space-y-2">
             {webhooks.map((hook) => (
@@ -416,7 +417,7 @@ export default function DeveloperSettingsPage() {
                       <Badge variant={hook.isActive ? "success" : "neutral"}>
                         {hook.isActive ? "Active" : "Disabled"}
                       </Badge>
-                      {hook.consecutiveFailures >= 3 && <Badge variant="danger">Failing</Badge>}
+                      {hook.consecutiveFailures >= 3 && <Badge variant="danger">{tr("Failing")}</Badge>}
                     </div>
                     {hook.description && <p className="text-xs text-slate-500">{hook.description}</p>}
                     <p className="mt-1 text-[11px] text-slate-400">
@@ -430,7 +431,7 @@ export default function DeveloperSettingsPage() {
                       className="px-2.5 py-1 text-xs"
                       onClick={() => revealSecret.mutate(hook.id)}
                     >
-                      Reveal secret
+                      {tr("Reveal secret")}
                     </Button>
                     <Button
                       variant="secondary"
@@ -438,7 +439,7 @@ export default function DeveloperSettingsPage() {
                       onClick={() => testWebhook.mutate(hook.id)}
                       disabled={testWebhook.isPending}
                     >
-                      Send test
+                      {tr("Send test")}
                     </Button>
                     <Button
                       variant="secondary"
@@ -461,7 +462,7 @@ export default function DeveloperSettingsPage() {
                         if (confirm("Delete this webhook endpoint?")) deleteWebhook.mutate(hook.id);
                       }}
                     >
-                      Delete
+                      {tr("Delete")}
                     </Button>
                   </div>
                 </div>
@@ -473,9 +474,9 @@ export default function DeveloperSettingsPage() {
                       <table className="w-full min-w-[32rem] text-left text-xs">
                         <thead className="text-slate-500 dark:text-slate-400">
                           <tr>
-                            <th className="py-1 font-medium">Event</th>
-                            <th className="py-1 font-medium">Status</th>
-                            <th className="py-1 font-medium">Attempted</th>
+                            <th className="py-1 font-medium">{tr("Event")}</th>
+                            <th className="py-1 font-medium">{tr("Status")}</th>
+                            <th className="py-1 font-medium">{tr("Attempted")}</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100 dark:divide-obsidian-800">
@@ -500,7 +501,7 @@ export default function DeveloperSettingsPage() {
                       </table>
                       </div>
                     ) : (
-                      <p className="text-xs text-slate-500">No deliveries yet.</p>
+                      <p className="text-xs text-slate-500">{tr("No deliveries yet.")}</p>
                     )}
                   </div>
                 )}
@@ -508,7 +509,7 @@ export default function DeveloperSettingsPage() {
             ))}
           </div>
         ) : (
-          <p className="text-sm text-slate-500">No webhook endpoints yet.</p>
+          <p className="text-sm text-slate-500">{tr("No webhook endpoints yet.")}</p>
         )}
       </Card>
     </div>

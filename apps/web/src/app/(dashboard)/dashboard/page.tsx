@@ -28,6 +28,7 @@ import {
   td,
   th,
 } from "@/components/dashboard/surface";
+import { tr } from "@/lib/tr";
 
 interface OutstandingSummary {
   outstandingMinor: number;
@@ -354,25 +355,25 @@ export default function DashboardHomePage() {
           isPlatform ? (
             <>
               <Link href="/tenants" className={darkButton("primary")}>
-                Manage tenants
+                {tr("Manage tenants")}
               </Link>
               <Link href="/admin/products" className={darkButton("secondary")}>
-                Store prices
+                {tr("Store prices")}
               </Link>
               <Link href="/admin/orders" className={darkButton("secondary")}>
-                Hardware orders
+                {tr("Hardware orders")}
               </Link>
             </>
           ) : (
             <>
               {user?.permissions.includes("customers.read") && (
                 <Link href="/customers" className={darkButton("primary")}>
-                  Add customer
+                  {tr("Add customer")}
                 </Link>
               )}
               {canReadRouters && (
                 <Link href="/routers/new" className={darkButton("secondary")}>
-                  Link router
+                  {tr("Link router")}
                 </Link>
               )}
             </>
@@ -385,36 +386,36 @@ export default function DashboardHomePage() {
         <>
           <MetricGrid columns={5}>
             <Metric
-              label="ISPs on the platform"
+              label={tr("ISPs on the platform")}
               value={platformTenants?.pagination.total ?? "—"}
               hint={platformTenants ? `${activeTenantsCount} active · ${trialTenantsCount} in trial` : undefined}
               href="/tenants"
             />
             <Metric
-              label="Platform status"
+              label={tr("Platform status")}
               value={platformMaintenance ? (platformMaintenance.enabled ? "Maintenance" : "Normal") : "—"}
               hint={platformMaintenance ? (platformMaintenance.enabled ? "Customers see the maintenance notice" : "No maintenance scheduled") : undefined}
               tone={platformMaintenance?.enabled ? "warn" : undefined}
               href="/maintenance"
             />
             <Metric
-              label="Awaiting approval"
+              label={tr("Awaiting approval")}
               value={pendingTenants ? pendingTenants.pagination.total : "—"}
               hint={pendingTenants ? (pendingTenants.pagination.total > 0 ? "New ISPs waiting for you to approve them" : "No applications waiting") : undefined}
               tone={pendingTenants && pendingTenants.pagination.total > 0 ? "warn" : undefined}
               href="/tenants"
             />
-            <Metric label="Payments" value="Gateway" hint="Collections, settlements and reconciliation" href="/admin/payments" />
-            <Metric label="Automation" value={automationMetric.value} hint={automationMetric.hint} tone={automationMetric.tone} href="/automation" />
+            <Metric label={tr("Payments")} value="Gateway" hint={tr("Collections, settlements and reconciliation")} href="/admin/payments" />
+            <Metric label={tr("Automation")} value={automationMetric.value} hint={automationMetric.hint} tone={automationMetric.tone} href="/automation" />
           </MetricGrid>
 
           <Panel
-            title="ISPs"
-            description="The ten most recent tenants"
+            title={tr("ISPs")}
+            description={tr("The ten most recent tenants")}
             padded={false}
             actions={
               <Link href="/tenants" className={darkButton("secondary", "sm")}>
-                View all
+                {tr("View all")}
               </Link>
             }
           >
@@ -423,8 +424,8 @@ export default function DashboardHomePage() {
                 <tr>
                   <th className={th}>ISP</th>
                   <th className={th}>Slug</th>
-                  <th className={th}>Status</th>
-                  <th className={th}>Plan</th>
+                  <th className={th}>{tr("Status")}</th>
+                  <th className={th}>{tr("Plan")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -445,7 +446,7 @@ export default function DashboardHomePage() {
                 })}
               </tbody>
             </TableShell>
-            {platformTenants && platformTenants.items.length === 0 && <EmptyState title="No ISPs yet" />}
+            {platformTenants && platformTenants.items.length === 0 && <EmptyState title={tr("No ISPs yet")} />}
           </Panel>
         </>
       )}
@@ -509,10 +510,10 @@ export default function DashboardHomePage() {
               actions={
                 <>
                   <Link href="/routers/new" className={darkButton("secondary", "sm")}>
-                    Link router
+                    {tr("Link router")}
                   </Link>
                   <Link href="/routers" className={darkButton("ghost", "sm")}>
-                    View all
+                    {tr("View all")}
                   </Link>
                 </>
               }
@@ -521,10 +522,10 @@ export default function DashboardHomePage() {
                 <TableShell minWidth={560}>
                   <thead>
                     <tr>
-                      <th className={th}>Name</th>
-                      <th className={th}>Address</th>
-                      <th className={th}>Model</th>
-                      <th className={th}>Status</th>
+                      <th className={th}>{tr("Name")}</th>
+                      <th className={th}>{tr("Address")}</th>
+                      <th className={th}>{tr("Model")}</th>
+                      <th className={th}>{tr("Status")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -549,14 +550,14 @@ export default function DashboardHomePage() {
                 </TableShell>
               ) : (
                 <EmptyState
-                  title="No routers linked yet"
+                  title={tr("No routers linked yet")}
                   action={
                     <Link href="/routers/new" className={darkButton("primary", "sm")}>
-                      Link your first MikroTik
+                      {tr("Link your first MikroTik")}
                     </Link>
                   }
                 >
-                  Linking a router generates a setup script for it, with its own RADIUS secret.
+                  {tr("Linking a router generates a setup script for it, with its own RADIUS secret.")}
                 </EmptyState>
               )}
             </Panel>
@@ -565,8 +566,8 @@ export default function DashboardHomePage() {
           {/* VLANs */}
           {canReadVlans && (
             <Panel
-              title="VLANs"
-              description="Tagged network segments and their provisioning status"
+              title={tr("VLANs")}
+              description={tr("Tagged network segments and their provisioning status")}
               padded={false}
               actions={
                 <>
@@ -574,7 +575,7 @@ export default function DashboardHomePage() {
                     {autoProvision.isPending ? "Setting up…" : "Set up standard VLANs"}
                   </button>
                   <Link href="/vlans" className={darkButton("ghost", "sm")}>
-                    Manage
+                    {tr("Manage")}
                   </Link>
                 </>
               }
@@ -589,11 +590,11 @@ export default function DashboardHomePage() {
                   <thead>
                     <tr>
                       <th className={th}>VLAN</th>
-                      <th className={th}>Name</th>
-                      <th className={th}>Type</th>
-                      <th className={th}>Router</th>
-                      <th className={th}>Subnet</th>
-                      <th className={th}>Provisioning</th>
+                      <th className={th}>{tr("Name")}</th>
+                      <th className={th}>{tr("Type")}</th>
+                      <th className={th}>{tr("Router")}</th>
+                      <th className={th}>{tr("Subnet")}</th>
+                      <th className={th}>{tr("Provisioning")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -615,7 +616,7 @@ export default function DashboardHomePage() {
                   </tbody>
                 </TableShell>
               ) : (
-                <EmptyState title="No VLANs yet">
+                <EmptyState title={tr("No VLANs yet")}>
                   VLANs keep PPPoE, hotspot and management traffic on separate networks. &ldquo;Set up standard VLANs&rdquo; creates 100 (PPPoE),
                   200 (hotspot) and 99 (management).
                 </EmptyState>
@@ -640,7 +641,7 @@ export default function DashboardHomePage() {
                 <TrendChart
                   points={revenue.map((day) => ({ date: day.date, value: day.totalMinor }))}
                   format={formatMoney}
-                  caption="Revenue per day, last 30 days"
+                  caption={tr("Revenue per day, last 30 days")}
                 />
                 <div className="mt-3 flex items-center justify-between border-t border-obsidian-800 pt-3 text-sm text-slate-400">
                   <span>

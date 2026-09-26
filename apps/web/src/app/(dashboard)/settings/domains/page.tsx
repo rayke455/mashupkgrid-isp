@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
 import { Button, Card, ErrorText, HintText, Input, Label, Badge, StatusDot } from "@/components/ui";
 import { IconGlobe, IconCopy, IconCheck } from "@/components/icons";
+import { tr } from "@/lib/tr";
 
 type DomainStatus =
   | "PENDING"
@@ -57,7 +58,7 @@ function CopyableValue({ value }: { value: string }) {
           setTimeout(() => setCopied(false), 2000);
         }}
         className="shrink-0 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-        title="Copy"
+        title={tr("Copy")}
       >
         {copied ? <IconCheck size={14} /> : <IconCopy size={14} />}
       </button>
@@ -95,7 +96,7 @@ function DomainCard({ domain, cnameTarget }: { domain: Domain; cnameTarget: stri
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="font-mono text-sm font-semibold text-slate-900 dark:text-white">{domain.hostname}</span>
-          {domain.isPrimary && <Badge variant="info">Primary</Badge>}
+          {domain.isPrimary && <Badge variant="info">{tr("Primary")}</Badge>}
         </div>
         <Badge variant={meta.variant}>
           <StatusDot status={meta.variant === "success" ? "ONLINE" : meta.variant === "danger" ? "DOWN" : "UNKNOWN"} />
@@ -105,13 +106,13 @@ function DomainCard({ domain, cnameTarget }: { domain: Domain; cnameTarget: stri
 
       {!isVerified && (
         <div className="rounded-lg border border-slate-200 dark:border-obsidian-800 p-3 space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Configure DNS</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{tr("Configure DNS")}</p>
           <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs items-center">
-            <span className="text-slate-400">Type</span>
+            <span className="text-slate-400">{tr("Type")}</span>
             <span className="font-mono">CNAME</span>
-            <span className="text-slate-400">Name</span>
+            <span className="text-slate-400">{tr("Name")}</span>
             <span className="font-mono">{domain.hostname.split(".")[0]}</span>
-            <span className="text-slate-400">Target</span>
+            <span className="text-slate-400">{tr("Target")}</span>
             <CopyableValue value={cnameTarget} />
           </div>
           {domain.lastError && <ErrorText>{domain.lastError}</ErrorText>}
@@ -140,7 +141,7 @@ function DomainCard({ domain, cnameTarget }: { domain: Domain; cnameTarget: stri
           }}
           disabled={remove.isPending}
         >
-          Remove
+          {tr("Remove")}
         </Button>
       </div>
       {error && <ErrorText>{error}</ErrorText>}
@@ -181,27 +182,27 @@ export default function DomainManagementPage() {
       <div>
         <h2 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
           <IconGlobe size={18} className="text-brand-600 dark:text-brand-400" />
-          Domain Management
+          {tr("Domain Management")}
         </h2>
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          Your platform subdomain always works — connect a custom domain if you want your own branded URL.
+          {tr("Your platform subdomain always works — connect a custom domain if you want your own branded URL.")}
         </p>
       </div>
 
       <Card>
-        <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">Your Platform Domain</p>
+        <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5">{tr("Your Platform Domain")}</p>
         <div className="flex items-center gap-2">
           <span className="font-mono text-sm text-slate-700 dark:text-slate-300">{settings?.platformUrl ?? "..."}</span>
           <Badge variant="success">
             <StatusDot status="ONLINE" />
-            <span>Active</span>
+            <span>{tr("Active")}</span>
           </Badge>
         </div>
       </Card>
 
       <div>
         <div className="flex items-center justify-between mb-3">
-          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Custom Domain</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{tr("Custom Domain")}</p>
           <Button variant="secondary" className="text-xs py-1.5" onClick={() => setShowConnect((v) => !v)}>
             {showConnect ? "Cancel" : "+ Connect Custom Domain"}
           </Button>
@@ -218,7 +219,7 @@ export default function DomainManagementPage() {
               className="space-y-3"
             >
               <div>
-                <Label htmlFor="hostname">Domain</Label>
+                <Label htmlFor="hostname">{tr("Domain")}</Label>
                 <Input
                   id="hostname"
                   placeholder="billing.yourcompany.co.ke"
@@ -227,7 +228,7 @@ export default function DomainManagementPage() {
                   className="font-mono text-sm"
                   required
                 />
-                <HintText>A subdomain of a domain you own — not the bare platform domain.</HintText>
+                <HintText>{tr("A subdomain of a domain you own — not the bare platform domain.")}</HintText>
               </div>
               <Button type="submit" disabled={addDomain.isPending}>
                 {addDomain.isPending ? "Connecting..." : "Connect Domain"}
@@ -237,11 +238,11 @@ export default function DomainManagementPage() {
           </Card>
         )}
 
-        {isLoading && <p className="text-sm text-slate-500">Loading domains...</p>}
+        {isLoading && <p className="text-sm text-slate-500">{tr("Loading domains...")}</p>}
 
         {domains && domains.length === 0 && !showConnect && (
           <div className="rounded-xl border border-dashed border-slate-300 dark:border-obsidian-800 p-6 text-center">
-            <p className="text-sm text-slate-500">No custom domain connected</p>
+            <p className="text-sm text-slate-500">{tr("No custom domain connected")}</p>
           </div>
         )}
 

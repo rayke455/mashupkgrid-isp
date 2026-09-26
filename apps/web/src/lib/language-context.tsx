@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { setTrLanguage } from "./tr";
 import { loadPortalLanguage, savePortalLanguage, type PortalLanguage } from "./portal-strings";
 
 /**
@@ -20,6 +21,8 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
     const stored = loadPortalLanguage();
     if (stored) setLangState(stored);
   }, []);
+  // Set before any child renders, so tr() calls in this render pass use the chosen language.
+  setTrLanguage(lang);
   const setLang = (next: PortalLanguage) => {
     setLangState(next);
     savePortalLanguage(next);

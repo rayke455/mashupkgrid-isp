@@ -17,6 +17,7 @@ import {
   formatSpeed,
   type HotspotPackage,
 } from "./shared";
+import { tr } from "@/lib/tr";
 
 const selectClass =
   "w-full rounded-lg border border-slate-300/90 bg-white px-3.5 py-2 text-sm text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 dark:border-obsidian-700 dark:bg-obsidian-950 dark:text-slate-100";
@@ -121,55 +122,55 @@ function PackageForm({ initial, onClose }: { initial: HotspotPackage | null; onC
       open
       onClose={onClose}
       title={initial ? `Edit ${initial.name}` : "New package"}
-      description="What customers can buy on your hotspot portal."
+      description={tr("What customers can buy on your hotspot portal.")}
       width="max-w-xl"
     >
       <form id="package-form" onSubmit={submit} className="space-y-5">
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
-            <Label htmlFor="pkg-name">Name</Label>
-            <Input id="pkg-name" value={f.name} onChange={(e) => set("name", e.target.value)} placeholder="e.g. 1 hour" autoFocus />
+            <Label htmlFor="pkg-name">{tr("Name")}</Label>
+            <Input id="pkg-name" value={f.name} onChange={(e) => set("name", e.target.value)} placeholder={tr("e.g. 1 hour")} autoFocus />
           </div>
           <div>
-            <Label htmlFor="pkg-price">Price (KSh)</Label>
+            <Label htmlFor="pkg-price">{tr("Price (KSh)")}</Label>
             <Input id="pkg-price" inputMode="decimal" value={f.price} onChange={(e) => set("price", e.target.value)} placeholder="20" />
           </div>
           <div>
-            <Label htmlFor="pkg-duration">Lasts</Label>
+            <Label htmlFor="pkg-duration">{tr("Lasts")}</Label>
             <select id="pkg-duration" className={selectClass} value={f.duration} onChange={(e) => set("duration", e.target.value)}>
               {DURATION_PRESETS.map((p) => (
                 <option key={p.minutes} value={p.minutes}>
                   {p.label}
                 </option>
               ))}
-              <option value="custom">Custom…</option>
+              <option value="custom">{tr("Custom…")}</option>
             </select>
           </div>
           {f.duration === "custom" && (
             <div>
-              <Label htmlFor="pkg-custom">Minutes</Label>
+              <Label htmlFor="pkg-custom">{tr("Minutes")}</Label>
               <Input id="pkg-custom" inputMode="numeric" value={f.customDuration} onChange={(e) => set("customDuration", e.target.value)} placeholder="1500" />
               <HintText>{f.customDuration ? formatDuration(Number(f.customDuration)) : "e.g. 1500 for 25 hours"}</HintText>
             </div>
           )}
           <div>
-            <Label htmlFor="pkg-data">Data limit (MB)</Label>
-            <Input id="pkg-data" inputMode="numeric" value={f.dataCap} onChange={(e) => set("dataCap", e.target.value)} placeholder="Unlimited" />
+            <Label htmlFor="pkg-data">{tr("Data limit (MB)")}</Label>
+            <Input id="pkg-data" inputMode="numeric" value={f.dataCap} onChange={(e) => set("dataCap", e.target.value)} placeholder={tr("Unlimited")} />
           </div>
           <div>
-            <Label htmlFor="pkg-down">Download speed (Mbps)</Label>
-            <Input id="pkg-down" inputMode="decimal" value={f.downloadMbps} onChange={(e) => set("downloadMbps", e.target.value)} placeholder="No limit" />
+            <Label htmlFor="pkg-down">{tr("Download speed (Mbps)")}</Label>
+            <Input id="pkg-down" inputMode="decimal" value={f.downloadMbps} onChange={(e) => set("downloadMbps", e.target.value)} placeholder={tr("No limit")} />
           </div>
           <div>
-            <Label htmlFor="pkg-up">Upload speed (Mbps)</Label>
-            <Input id="pkg-up" inputMode="decimal" value={f.uploadMbps} onChange={(e) => set("uploadMbps", e.target.value)} placeholder="No limit" />
+            <Label htmlFor="pkg-up">{tr("Upload speed (Mbps)")}</Label>
+            <Input id="pkg-up" inputMode="decimal" value={f.uploadMbps} onChange={(e) => set("uploadMbps", e.target.value)} placeholder={tr("No limit")} />
           </div>
           <div>
-            <Label htmlFor="pkg-devices">Devices per voucher</Label>
+            <Label htmlFor="pkg-devices">{tr("Devices per voucher")}</Label>
             <Input id="pkg-devices" inputMode="numeric" value={f.devices} onChange={(e) => set("devices", e.target.value)} />
           </div>
           <div>
-            <Label htmlFor="pkg-app">What it unlocks</Label>
+            <Label htmlFor="pkg-app">{tr("What it unlocks")}</Label>
             <select id="pkg-app" className={selectClass} value={f.appPolicy} onChange={(e) => set("appPolicy", e.target.value as SocialAppPolicy)}>
               {APP_POLICY_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>
@@ -184,18 +185,18 @@ function PackageForm({ initial, onClose }: { initial: HotspotPackage | null; onC
           <label className="flex items-start gap-3">
             <input type="checkbox" className="mt-0.5 h-4 w-4" checked={f.blockTethering} onChange={(e) => set("blockTethering", e.target.checked)} />
             <span>
-              <span className="block text-sm font-medium text-slate-200">Block sharing over a phone hotspot</span>
-              <span className="block text-xs text-slate-400">Stops one buyer re-sharing this package to other devices. Can also block legitimate travel routers.</span>
+              <span className="block text-sm font-medium text-slate-200">{tr("Block sharing over a phone hotspot")}</span>
+              <span className="block text-xs text-slate-400">{tr("Stops one buyer re-sharing this package to other devices. Can also block legitimate travel routers.")}</span>
             </span>
           </label>
           <label className="flex items-start gap-3">
             <input type="checkbox" className="mt-0.5 h-4 w-4" checked={f.isPopular} onChange={(e) => set("isPopular", e.target.checked)} />
-            <span className="block text-sm font-medium text-slate-200">Highlight on the portal</span>
+            <span className="block text-sm font-medium text-slate-200">{tr("Highlight on the portal")}</span>
           </label>
           {f.isPopular && (
             <div className="pl-7">
-              <Label htmlFor="pkg-badge">Label</Label>
-              <Input id="pkg-badge" value={f.badge} onChange={(e) => set("badge", e.target.value)} placeholder="Most popular" maxLength={24} />
+              <Label htmlFor="pkg-badge">{tr("Label")}</Label>
+              <Input id="pkg-badge" value={f.badge} onChange={(e) => set("badge", e.target.value)} placeholder={tr("Most popular")} maxLength={24} />
             </div>
           )}
         </div>
@@ -203,7 +204,7 @@ function PackageForm({ initial, onClose }: { initial: HotspotPackage | null; onC
         {error && <Notice tone="bad">{error}</Notice>}
         <div className="flex justify-end gap-2">
           <button type="button" className={darkButton("ghost")} onClick={onClose}>
-            Cancel
+            {tr("Cancel")}
           </button>
           <button type="submit" className={darkButton("primary")} disabled={save.isPending}>
             {save.isPending ? "Saving…" : initial ? "Save changes" : "Add package"}
@@ -238,8 +239,8 @@ export function PackagesTab() {
   return (
     <div className="space-y-6">
       <Panel
-        title="Packages"
-        description="What customers can buy on your hotspot. Switched-off packages stay here but don't show on the portal."
+        title={tr("Packages")}
+        description={tr("What customers can buy on your hotspot. Switched-off packages stay here but don't show on the portal.")}
         padded={false}
         actions={
           <>
@@ -247,7 +248,7 @@ export function PackagesTab() {
               {showAssistant ? "Hide assistant" : "Use the assistant"}
             </button>
             <button type="button" className={darkButton("primary", "sm")} onClick={() => setEditing("new")}>
-              Add package
+              {tr("Add package")}
             </button>
           </>
         }
@@ -258,31 +259,31 @@ export function PackagesTab() {
           </div>
         )}
         {isLoading ? (
-          <p className="px-5 py-8 text-sm text-slate-400">Loading packages…</p>
+          <p className="px-5 py-8 text-sm text-slate-400">{tr("Loading packages…")}</p>
         ) : sorted.length === 0 ? (
           <EmptyState
-            title="No packages yet"
+            title={tr("No packages yet")}
             action={
               <button type="button" className={darkButton("primary", "sm")} onClick={() => setEditing("new")}>
-                Add your first package
+                {tr("Add your first package")}
               </button>
             }
           >
-            Customers see these on the Wi-Fi sign-in page and pay for them with M-Pesa.
+            {tr("Customers see these on the Wi-Fi sign-in page and pay for them with M-Pesa.")}
           </EmptyState>
         ) : (
           <TableShell minWidth={820}>
             <thead>
               <tr>
-                <th className={th}>Package</th>
-                <th className={`${th} text-right`}>Price</th>
-                <th className={th}>Lasts</th>
-                <th className={th}>Speed</th>
-                <th className={th}>Data</th>
-                <th className={th}>Devices</th>
-                <th className={th}>On portal</th>
+                <th className={th}>{tr("Package")}</th>
+                <th className={`${th} text-right`}>{tr("Price")}</th>
+                <th className={th}>{tr("Lasts")}</th>
+                <th className={th}>{tr("Speed")}</th>
+                <th className={th}>{tr("Data")}</th>
+                <th className={th}>{tr("Devices")}</th>
+                <th className={th}>{tr("On portal")}</th>
                 <th className={th}>
-                  <span className="sr-only">Actions</span>
+                  <span className="sr-only">{tr("Actions")}</span>
                 </th>
               </tr>
             </thead>
@@ -326,7 +327,7 @@ export function PackagesTab() {
                     <td className={`${td} text-right`}>
                       <div className="flex justify-end gap-1">
                         <button type="button" className={darkButton("ghost", "sm")} onClick={() => setEditing(pkg)}>
-                          Edit
+                          {tr("Edit")}
                         </button>
                         <button
                           type="button"
@@ -336,7 +337,7 @@ export function PackagesTab() {
                             if (confirm(`Delete "${pkg.name}"? Vouchers already sold keep working.`)) remove.mutate(pkg.id);
                           }}
                         >
-                          Delete
+                          {tr("Delete")}
                         </button>
                       </div>
                     </td>
@@ -349,7 +350,7 @@ export function PackagesTab() {
       </Panel>
 
       {showAssistant && (
-        <Panel title="Package assistant" description="Describe the packages you want in plain words, and it creates or edits them for you.">
+        <Panel title={tr("Package assistant")} description={tr("Describe the packages you want in plain words, and it creates or edits them for you.")}>
           <PackageAssistantChat />
         </Panel>
       )}

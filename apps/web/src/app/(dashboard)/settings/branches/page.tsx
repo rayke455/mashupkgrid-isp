@@ -6,6 +6,7 @@ import { apiFetch, ApiRequestError } from "@/lib/api-client";
 import { useBranches } from "@/lib/use-branches";
 import { Button, Card, ErrorText, HintText, Input, Label } from "@/components/ui";
 import { EmptyState, TableShell, darkButton, td, th } from "@/components/dashboard/surface";
+import { tr } from "@/lib/tr";
 
 /** The towns or areas the ISP runs, and how many routers, customers and staff are in each. */
 export default function BranchesSettingsPage() {
@@ -39,9 +40,9 @@ export default function BranchesSettingsPage() {
   return (
     <div className="max-w-3xl space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">Branches</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">{tr("Branches")}</h1>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          The towns or areas you run. Put routers, customers and staff in a branch to filter lists and analytics by it.
+          {tr("The towns or areas you run. Put routers, customers and staff in a branch to filter lists and analytics by it.")}
         </p>
       </div>
 
@@ -55,12 +56,12 @@ export default function BranchesSettingsPage() {
           }}
         >
           <div>
-            <Label htmlFor="branchName">Branch name</Label>
-            <Input id="branchName" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Kasarani" required minLength={2} />
+            <Label htmlFor="branchName">{tr("Branch name")}</Label>
+            <Input id="branchName" value={name} onChange={(e) => setName(e.target.value)} placeholder={tr("e.g. Kasarani")} required minLength={2} />
           </div>
           <div>
-            <Label htmlFor="branchLocation">Location (optional)</Label>
-            <Input id="branchLocation" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g. Nairobi, Thika Road" />
+            <Label htmlFor="branchLocation">{tr("Location (optional)")}</Label>
+            <Input id="branchLocation" value={location} onChange={(e) => setLocation(e.target.value)} placeholder={tr("e.g. Nairobi, Thika Road")} />
           </div>
           <Button type="submit" disabled={add.isPending || name.trim().length < 2}>
             {add.isPending ? "Adding…" : "Add branch"}
@@ -74,17 +75,17 @@ export default function BranchesSettingsPage() {
 
       <Card className="p-0">
         {branches.length === 0 ? (
-          <EmptyState title="No branches yet">If you run in one area only, you do not need any.</EmptyState>
+          <EmptyState title={tr("No branches yet")}>{tr("If you run in one area only, you do not need any.")}</EmptyState>
         ) : (
           <TableShell minWidth={560}>
             <thead>
               <tr>
-                <th className={th}>Branch</th>
-                <th className={`${th} text-right`}>Routers</th>
-                <th className={`${th} text-right`}>Customers</th>
-                <th className={`${th} text-right`}>Staff</th>
+                <th className={th}>{tr("Branch")}</th>
+                <th className={`${th} text-right`}>{tr("Routers")}</th>
+                <th className={`${th} text-right`}>{tr("Customers")}</th>
+                <th className={`${th} text-right`}>{tr("Staff")}</th>
                 <th className={`${th} text-right`}>
-                  <span className="sr-only">Actions</span>
+                  <span className="sr-only">{tr("Actions")}</span>
                 </th>
               </tr>
             </thead>
@@ -107,14 +108,14 @@ export default function BranchesSettingsPage() {
                         if (next && next.trim() && next.trim() !== b.name) rename.mutate({ id: b.id, name: next.trim() });
                       }}
                     >
-                      Rename
+                      {tr("Rename")}
                     </button>
                     <button
                       type="button"
                       className={`${darkButton("ghost", "sm")} text-rose-300`}
                       onClick={() => confirm(`Delete ${b.name}? Its routers, customers and staff stay, with no branch.`) && remove.mutate(b.id)}
                     >
-                      Delete
+                      {tr("Delete")}
                     </button>
                   </td>
                 </tr>

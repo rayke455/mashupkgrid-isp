@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
 import { EmptyState, Metric, MetricGrid, Notice, PageHeader, Panel, Pill, darkButton } from "@/components/dashboard/surface";
+import { tr } from "@/lib/tr";
 
 /**
  * Every router on a map, coloured by whether it is reporting. Routers without coordinates are
@@ -122,21 +123,21 @@ export default function NetworkMapPage() {
 
   return (
     <div className="w-full min-w-0 space-y-6">
-      <PageHeader title="Network map" description="Where your routers are and which ones are reporting. Click a router in the list, then click the map to place it." />
+      <PageHeader title={tr("Network map")} description={tr("Where your routers are and which ones are reporting. Click a router in the list, then click the map to place it.")} />
       {error && <Notice tone="bad">{error}</Notice>}
       {placing && (
         <Notice tone="warn">
           Click the map where <strong>{placing.name}</strong> is installed.{" "}
           <button type="button" className="underline" onClick={() => setPlacing(null)}>
-            Cancel
+            {tr("Cancel")}
           </button>
         </Notice>
       )}
 
       <MetricGrid columns={3}>
-        <Metric label="Routers" value={routers ? routers.length : "—"} hint={routers ? `${placed.length} placed on the map` : undefined} />
-        <Metric label="Online" value={routers ? online : "—"} tone={routers && routers.length > 0 && online === routers.length ? "good" : undefined} />
-        <Metric label="Offline" value={routers ? down : "—"} tone={down > 0 ? "bad" : undefined} />
+        <Metric label={tr("Routers")} value={routers ? routers.length : "—"} hint={routers ? `${placed.length} placed on the map` : undefined} />
+        <Metric label={tr("Online")} value={routers ? online : "—"} tone={routers && routers.length > 0 && online === routers.length ? "good" : undefined} />
+        <Metric label={tr("Offline")} value={routers ? down : "—"} tone={down > 0 ? "bad" : undefined} />
       </MetricGrid>
 
       <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
@@ -144,14 +145,14 @@ export default function NetworkMapPage() {
           {mapError ? (
             <p className="px-5 py-8 text-sm text-slate-400">{mapError}. The map needs internet access to load its tiles.</p>
           ) : (
-            <div ref={mapEl} className="h-[520px] w-full rounded-xl" aria-label="Router map" />
+            <div ref={mapEl} className="h-[520px] w-full rounded-xl" aria-label={tr("Router map")} />
           )}
         </Panel>
-        <Panel title="Routers" padded={false}>
+        <Panel title={tr("Routers")} padded={false}>
           {isLoading ? (
-            <p className="px-5 py-6 text-sm text-slate-400">Loading…</p>
+            <p className="px-5 py-6 text-sm text-slate-400">{tr("Loading…")}</p>
           ) : !routers || routers.length === 0 ? (
-            <EmptyState title="No routers yet" action={<Link href="/routers/new" className={darkButton("primary")}>Link a router</Link>} />
+            <EmptyState title={tr("No routers yet")} action={<Link href="/routers/new" className={darkButton("primary")}>{tr("Link a router")}</Link>} />
           ) : (
             <ul className="divide-y divide-obsidian-800">
               {routers.map((r) => (
@@ -173,7 +174,7 @@ export default function NetworkMapPage() {
                         if (name !== null) place.mutate({ id: r.id, latitude: r.latitude, longitude: r.longitude, siteName: name.trim() || null });
                       }}
                     >
-                      Site
+                      {tr("Site")}
                     </button>
                   </div>
                 </li>

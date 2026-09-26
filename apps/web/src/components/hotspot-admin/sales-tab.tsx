@@ -5,6 +5,7 @@ import { apiFetch } from "@/lib/api-client";
 import { formatMoney } from "@/lib/money";
 import { EmptyState, Panel, Pill, TableShell, td, th } from "@/components/dashboard/surface";
 import { VOUCHER_STATUS, formatBytes, type HotspotPurchase } from "./shared";
+import { tr } from "@/lib/tr";
 
 export function SalesTab() {
   const { data: purchases, isLoading } = useQuery({
@@ -13,23 +14,23 @@ export function SalesTab() {
   });
 
   return (
-    <Panel title="Sales" description="Everyone who bought a package on your hotspot portal, and how much they've used." padded={false}>
+    <Panel title={tr("Sales")} description={tr("Everyone who bought a package on your hotspot portal, and how much they've used.")} padded={false}>
       {isLoading ? (
-        <p className="px-5 py-8 text-sm text-slate-400">Loading sales…</p>
+        <p className="px-5 py-8 text-sm text-slate-400">{tr("Loading sales…")}</p>
       ) : !purchases || purchases.length === 0 ? (
-        <EmptyState title="No sales yet">Purchases made on your hotspot portal appear here.</EmptyState>
+        <EmptyState title={tr("No sales yet")}>{tr("Purchases made on your hotspot portal appear here.")}</EmptyState>
       ) : (
         <TableShell minWidth={1000}>
           <thead>
             <tr>
-              <th className={th}>Paid</th>
-              <th className={th}>Customer</th>
-              <th className={th}>Package</th>
-              <th className={`${th} text-right`}>Amount</th>
-              <th className={th}>Receipt</th>
-              <th className={th}>Voucher</th>
-              <th className={th}>Phone (MAC)</th>
-              <th className={th}>Used</th>
+              <th className={th}>{tr("Paid")}</th>
+              <th className={th}>{tr("Customer")}</th>
+              <th className={th}>{tr("Package")}</th>
+              <th className={`${th} text-right`}>{tr("Amount")}</th>
+              <th className={th}>{tr("Receipt")}</th>
+              <th className={th}>{tr("Voucher")}</th>
+              <th className={th}>{tr("Phone (MAC)")}</th>
+              <th className={th}>{tr("Used")}</th>
             </tr>
           </thead>
           <tbody>
@@ -67,7 +68,7 @@ export function SalesTab() {
                         {p.devices.length > 1 && <span className="block text-xs text-slate-500">+{p.devices.length - 1} more</span>}
                       </>
                     ) : (
-                      <span className="text-slate-500">Not connected yet</span>
+                      <span className="text-slate-500">{tr("Not connected yet")}</span>
                     )}
                   </td>
                   <td className={td}>

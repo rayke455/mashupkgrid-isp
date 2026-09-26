@@ -6,6 +6,7 @@ import { apiFetch, ApiRequestError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/money";
 import { Button, Card, ErrorText, Input, Label, Badge, StatusDot } from "@/components/ui";
 import { IconPackage, IconSpeed } from "@/components/icons";
+import { tr } from "@/lib/tr";
 
 interface Package {
   id: string;
@@ -109,10 +110,10 @@ export default function PackagesPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">
-            Packages
+            {tr("Packages")}
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Monthly internet plans for PPPoE subscribers: speed and price.
+            {tr("Monthly internet plans for PPPoE subscribers: speed and price.")}
           </p>
         </div>
         <Button onClick={() => setShowForm((v) => !v)}>
@@ -121,7 +122,7 @@ export default function PackagesPage() {
       </div>
       {showForm && (
         <Card className="border-brand-500/40 bg-brand-50/20 dark:bg-brand-950/20">
-          <h2 className="font-semibold text-slate-900 dark:text-white mb-3">Create Broadband Plan</h2>
+          <h2 className="font-semibold text-slate-900 dark:text-white mb-3">{tr("Create Broadband Plan")}</h2>
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -131,11 +132,11 @@ export default function PackagesPage() {
             className="grid grid-cols-1 sm:grid-cols-3 gap-4"
           >
             <div>
-              <Label htmlFor="name">Package Name</Label>
-              <Input id="name" placeholder="e.g. Fiber Premium 20Mbps" value={name} onChange={(e) => setName(e.target.value)} required />
+              <Label htmlFor="name">{tr("Package Name")}</Label>
+              <Input id="name" placeholder={tr("e.g. Fiber Premium 20Mbps")} value={name} onChange={(e) => setName(e.target.value)} required />
             </div>
             <div>
-              <Label htmlFor="downloadKbps">Download Speed (Kbps)</Label>
+              <Label htmlFor="downloadKbps">{tr("Download Speed (Kbps)")}</Label>
               <Input
                 id="downloadKbps"
                 type="number"
@@ -146,7 +147,7 @@ export default function PackagesPage() {
               />
             </div>
             <div>
-              <Label htmlFor="uploadKbps">Upload Speed (Kbps)</Label>
+              <Label htmlFor="uploadKbps">{tr("Upload Speed (Kbps)")}</Label>
               <Input
                 id="uploadKbps"
                 type="number"
@@ -157,7 +158,7 @@ export default function PackagesPage() {
               />
             </div>
             <div>
-              <Label htmlFor="billingCycle">Billing Frequency</Label>
+              <Label htmlFor="billingCycle">{tr("Billing Frequency")}</Label>
               <select
                 id="billingCycle"
                 className="w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2 text-sm outline-none focus:border-brand-500 dark:border-obsidian-700 dark:bg-obsidian-950 dark:text-slate-100"
@@ -172,7 +173,7 @@ export default function PackagesPage() {
               </select>
             </div>
             <div>
-              <Label htmlFor="price">Price (KES, e.g. 2500.00)</Label>
+              <Label htmlFor="price">{tr("Price (KES, e.g. 2500.00)")}</Label>
               <Input
                 id="price"
                 type="number"
@@ -194,7 +195,7 @@ export default function PackagesPage() {
         </Card>
       )}
 
-      {isLoading && <p className="text-sm text-slate-500">Loading packages...</p>}
+      {isLoading && <p className="text-sm text-slate-500">{tr("Loading packages...")}</p>}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {data?.items.map((pkg) => (
@@ -228,7 +229,7 @@ export default function PackagesPage() {
                 className="w-1/2 py-1.5 text-xs font-semibold"
                 onClick={() => openEditModal(pkg)}
               >
-                Edit
+                {tr("Edit")}
               </Button>
               <button
                 type="button"
@@ -259,8 +260,8 @@ export default function PackagesPage() {
         {data && data.items.length === 0 && (
           <div className="col-span-full rounded-xl border border-dashed border-slate-300 p-8 text-center dark:border-obsidian-800">
             <IconPackage size={32} className="mx-auto text-slate-400 mb-2" />
-            <h3 className="font-semibold text-slate-700 dark:text-slate-300">No packages defined</h3>
-            <p className="text-xs text-slate-500 mt-1">Create your first bandwidth subscription plan above.</p>
+            <h3 className="font-semibold text-slate-700 dark:text-slate-300">{tr("No packages defined")}</h3>
+            <p className="text-xs text-slate-500 mt-1">{tr("Create your first bandwidth subscription plan above.")}</p>
           </div>
         )}
       </div>
@@ -274,7 +275,7 @@ export default function PackagesPage() {
                   Edit Broadband Plan: {editingPackage.name}
                 </h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Update speed tiers and monthly pricing.
+                  {tr("Update speed tiers and monthly pricing.")}
                 </p>
               </div>
               <button
@@ -294,18 +295,18 @@ export default function PackagesPage() {
               className="space-y-4"
             >
               <div>
-                <Label htmlFor="editName">Package Name</Label>
+                <Label htmlFor="editName">{tr("Package Name")}</Label>
                 <Input
                   id="editName"
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  placeholder="e.g. Fiber Premium 20Mbps"
+                  placeholder={tr("e.g. Fiber Premium 20Mbps")}
                   required
                 />
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="editDownloadKbps">Download Speed (Kbps)</Label>
+                  <Label htmlFor="editDownloadKbps">{tr("Download Speed (Kbps)")}</Label>
                   <Input
                     id="editDownloadKbps"
                     type="number"
@@ -319,7 +320,7 @@ export default function PackagesPage() {
                   </span>
                 </div>
                 <div>
-                  <Label htmlFor="editUploadKbps">Upload Speed (Kbps)</Label>
+                  <Label htmlFor="editUploadKbps">{tr("Upload Speed (Kbps)")}</Label>
                   <Input
                     id="editUploadKbps"
                     type="number"
@@ -334,7 +335,7 @@ export default function PackagesPage() {
                 </div>
               </div>
               <div>
-                <Label htmlFor="editPrice">Price (KES)</Label>
+                <Label htmlFor="editPrice">{tr("Price (KES)")}</Label>
                 <Input
                   id="editPrice"
                   type="number"
@@ -354,7 +355,7 @@ export default function PackagesPage() {
                   onClick={() => setEditingPackage(null)}
                   disabled={updatePackage.isPending}
                 >
-                  Cancel
+                  {tr("Cancel")}
                 </Button>
                 <Button type="submit" disabled={updatePackage.isPending}>
                   {updatePackage.isPending ? "Saving..." : "Save Changes"}

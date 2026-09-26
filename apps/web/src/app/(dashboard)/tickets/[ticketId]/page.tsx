@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
 import { Button, Card, ErrorText, Badge } from "@/components/ui";
+import { tr } from "@/lib/tr";
 
 type TicketStatus = "OPEN" | "IN_PROGRESS" | "RESOLVED" | "CLOSED";
 type TicketPriority = "LOW" | "NORMAL" | "HIGH" | "URGENT";
@@ -80,7 +81,7 @@ export default function TicketDetailPage() {
     onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to update ticket"),
   });
 
-  if (isLoading) return <p className="text-sm text-slate-500">Loading ticket...</p>;
+  if (isLoading) return <p className="text-sm text-slate-500">{tr("Loading ticket...")}</p>;
   if (!ticket) return null;
 
   return (
@@ -102,7 +103,7 @@ export default function TicketDetailPage() {
       </div>
       <Card className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-1.5">
-          <span className="text-xs font-semibold text-slate-500 uppercase">Status</span>
+          <span className="text-xs font-semibold text-slate-500 uppercase">{tr("Status")}</span>
           <select
             value={ticket.status}
             onChange={(e) => update.mutate({ status: e.target.value as TicketStatus })}
@@ -116,7 +117,7 @@ export default function TicketDetailPage() {
           </select>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="text-xs font-semibold text-slate-500 uppercase">Priority</span>
+          <span className="text-xs font-semibold text-slate-500 uppercase">{tr("Priority")}</span>
           <select
             value={ticket.priority}
             onChange={(e) => update.mutate({ priority: e.target.value as TicketPriority })}
@@ -165,7 +166,7 @@ export default function TicketDetailPage() {
             value={replyBody}
             onChange={(e) => setReplyBody(e.target.value)}
             rows={4}
-            placeholder="Write a reply..."
+            placeholder={tr("Write a reply...")}
             className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 dark:border-obsidian-700 dark:bg-obsidian-950 dark:text-slate-100"
             required
           />
@@ -176,7 +177,7 @@ export default function TicketDetailPage() {
                 checked={isInternalNote}
                 onChange={(e) => setIsInternalNote(e.target.checked)}
               />
-              Internal note (not visible to the customer)
+              {tr("Internal note (not visible to the customer)")}
             </label>
             <Button type="submit" disabled={reply.isPending || !replyBody.trim()} className="px-4 py-1.5 text-xs">
               {reply.isPending ? "Sending..." : isInternalNote ? "Add Note" : "Send Reply"}

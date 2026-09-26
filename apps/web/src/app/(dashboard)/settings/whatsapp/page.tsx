@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
 import { Button, Card, ErrorText, HintText, Badge, StatusDot, Input } from "@/components/ui";
+import { tr } from "@/lib/tr";
 
 type ConnectionStatus = "DISCONNECTED" | "CONNECTING" | "CONNECTED" | "LOGGED_OUT";
 
@@ -104,7 +105,7 @@ function BotTestPanel() {
         <div>
           <h2 className="text-base font-semibold text-slate-900 dark:text-white flex items-center gap-2">
             
-            Test Bot
+            {tr("Test Bot")}
           </h2>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
             Interact with your WhatsApp self-service bot as if you were a customer. Enter a phone
@@ -114,13 +115,13 @@ function BotTestPanel() {
         </div>
         <form onSubmit={handleStartChat} className="flex gap-2">
           <Input
-            placeholder="Customer phone, e.g. 254712345678"
+            placeholder={tr("Customer phone, e.g. 254712345678")}
             value={testPhone}
             onChange={(e) => setTestPhone(e.target.value)}
             className="flex-1 font-mono text-sm"
           />
           <Button type="submit" disabled={testPhone.replace(/\D/g, "").length < 8}>
-            Start Chat
+            {tr("Start Chat")}
           </Button>
         </form>
       </Card>
@@ -135,7 +136,7 @@ function BotTestPanel() {
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-lg">
           </div>
           <div>
-            <p className="text-sm font-bold text-slate-900 dark:text-white">Bot Test</p>
+            <p className="text-sm font-bold text-slate-900 dark:text-white">{tr("Bot Test")}</p>
             <p className="text-xs font-mono text-slate-500">+{activePhone}</p>
           </div>
         </div>
@@ -153,7 +154,7 @@ function BotTestPanel() {
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 bg-slate-50/50 dark:bg-obsidian-950/30">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center text-sm text-slate-400 gap-2">
-            <p>Send a message to test the bot.</p>
+            <p>{tr("Send a message to test the bot.")}</p>
             <p className="text-xs">Try &quot;hi&quot;, &quot;1&quot;, &quot;2&quot;, &quot;3&quot;, or &quot;4&quot; to navigate the menu.</p>
           </div>
         )}
@@ -189,7 +190,7 @@ function BotTestPanel() {
       >
         <input
           type="text"
-          placeholder="Type a message..."
+          placeholder={tr("Type a message...")}
           value={msgText}
           onChange={(e) => setMsgText(e.target.value)}
           className="flex-1 rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm outline-none transition-colors focus:border-emerald-400 focus:ring-2 focus:ring-emerald-400/20 dark:border-obsidian-700 dark:bg-obsidian-800 dark:text-white dark:focus:border-emerald-500"
@@ -275,10 +276,10 @@ export default function WhatsappSettingsPage() {
       <div className="flex items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">
-            WhatsApp
+            {tr("WhatsApp")}
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Link your own WhatsApp number to send vouchers and answer customers automatically.
+            {tr("Link your own WhatsApp number to send vouchers and answer customers automatically.")}
           </p>
         </div>
         <Badge variant={meta.variant}>
@@ -289,12 +290,12 @@ export default function WhatsappSettingsPage() {
       {connection?.deliveringOnPlatformLine && (
         <Card className="border-amber-500/40 bg-amber-50/40 dark:bg-amber-950/20">
           <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
-            Your customers are being messaged from a shared number
+            {tr("Your customers are being messaged from a shared number")}
           </p>
           <p className="mt-1 text-sm text-amber-800 dark:text-amber-300">
             Until you link your own WhatsApp, vouchers and login codes still reach your customers —
             but they arrive from a number that isn&apos;t yours, and{" "}
-            <strong>anything a customer replies there is discarded</strong>: it does not reach your
+            <strong>{tr("anything a customer replies there is discarded")}</strong>: it does not reach your
             support queue and nobody sees it. Link your number below to send from your own line and
             start receiving replies.
           </p>
@@ -310,7 +311,7 @@ export default function WhatsappSettingsPage() {
       {status === "CONNECTED" ? (
         <Card className="space-y-4">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Linked number</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{tr("Linked number")}</p>
             <p className="mt-0.5 font-mono text-lg font-bold text-slate-900 dark:text-white">
               {connection?.phoneNumber ?? "—"}
             </p>
@@ -321,17 +322,17 @@ export default function WhatsappSettingsPage() {
             )}
           </div>
           <div className="rounded-xl border border-slate-200 p-3.5 text-sm dark:border-obsidian-800">
-            <p className="font-semibold text-slate-800 dark:text-slate-100">What this number now does</p>
+            <p className="font-semibold text-slate-800 dark:text-slate-100">{tr("What this number now does")}</p>
             <ul className="mt-1.5 space-y-1 text-xs text-slate-500 dark:text-slate-400">
               <li>• Sends a voucher code the moment a customer&apos;s payment completes</li>
-              <li>• Answers customers with a self-service menu (balance, buy Wi-Fi, report an outage, support)</li>
+              <li>{tr("• Answers customers with a self-service menu (balance, buy Wi-Fi, report an outage, support)")}</li>
             </ul>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="secondary" onClick={() => disconnect.mutate()} disabled={disconnect.isPending}>
               {disconnect.isPending ? "Disconnecting..." : "Disconnect"}
             </Button>
-            <HintText>Reconnecting later needs a new QR scan.</HintText>
+            <HintText>{tr("Reconnecting later needs a new QR scan.")}</HintText>
           </div>
         </Card>
       ) : (
@@ -339,20 +340,20 @@ export default function WhatsappSettingsPage() {
           {isPairing && connection?.pairingCode ? (
             <div className="space-y-3 text-center">
               <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-                Enter this code on your phone
+                {tr("Enter this code on your phone")}
               </p>
               <p className="font-mono text-3xl font-semibold tracking-[0.3em] text-white">
                 {connection.pairingCode}
               </p>
               <p className="text-xs text-slate-500">
-                WhatsApp → Settings → <strong>Linked Devices</strong> →{" "}
-                <strong>Link with phone number</strong>
+                WhatsApp → Settings → <strong>{tr("Linked Devices")}</strong> →{" "}
+                <strong>{tr("Link with phone number")}</strong>
               </p>
             </div>
           ) : isPairing && connection?.qr ? (
             <div className="space-y-3 text-center">
               <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-                Scan this from the phone you want to connect
+                {tr("Scan this from the phone you want to connect")}
               </p>
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -363,14 +364,14 @@ export default function WhatsappSettingsPage() {
                 height={280}
               />
               <p className="text-xs text-slate-500">
-                WhatsApp → Settings → <strong>Linked Devices</strong> → <strong>Link a Device</strong>
+                WhatsApp → Settings → <strong>{tr("Linked Devices")}</strong> → <strong>{tr("Link a Device")}</strong>
               </p>
               <HintText>This code refreshes automatically until it&apos;s scanned.</HintText>
             </div>
           ) : isPairing ? (
             <div className="py-8 text-center">
-              <p className="text-sm text-slate-500">Preparing your QR code…</p>
-              <HintText>This takes a few seconds.</HintText>
+              <p className="text-sm text-slate-500">{tr("Preparing your QR code…")}</p>
+              <HintText>{tr("This takes a few seconds.")}</HintText>
             </div>
           ) : (
             <div className="space-y-3">
@@ -383,7 +384,7 @@ export default function WhatsappSettingsPage() {
               </Button>
               <div className="border-t border-slate-100 pt-3 dark:border-obsidian-800">
                 <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
-                  Or link with a phone number
+                  {tr("Or link with a phone number")}
                 </p>
                 <p className="mt-0.5 mb-2.5 text-xs text-slate-500 dark:text-slate-400">
                   WhatsApp gives you an 8-character code to type on the phone, instead of scanning
@@ -422,7 +423,7 @@ export default function WhatsappSettingsPage() {
                 onClick={() => disconnect.mutate()}
                 disabled={disconnect.isPending}
               >
-                Cancel
+                {tr("Cancel")}
               </Button>
             </div>
           )}

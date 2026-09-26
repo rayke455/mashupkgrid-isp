@@ -11,6 +11,8 @@ import { BarList } from "@/components/charts/bar-list";
 import { ChartTable } from "@/components/charts/chart-table";
 import { HourColumns } from "@/components/charts/hour-columns";
 import { EmptyState, Metric, MetricGrid, PageHeader, Panel, Pill, Segmented, TableShell, td, th } from "@/components/dashboard/surface";
+import { tr } from "@/lib/tr";
+import { useLanguage } from "@/lib/language-context";
 
 /**
  * The business at a glance: is revenue growing, what sells, when customers pay, and who is about
@@ -39,6 +41,7 @@ export default function AnalyticsPage() {
   const [months, setMonths] = useState<6 | 12>(6);
   const [branch, setBranch] = useState("");
   const { branches } = useBranches();
+  const sw = useLanguage().lang === "sw";
   const { data, isLoading, error } = useQuery({
     queryKey: ["analytics", months, branch],
     queryFn: () => apiFetch<Analytics>(`/api/v1/reports/analytics?months=${months}${branch ? `&branchId=${branch}` : ""}`),
@@ -61,13 +64,13 @@ export default function AnalyticsPage() {
   return (
     <div className="w-full min-w-0 space-y-6">
       <PageHeader
-        title="Analytics"
-        description="Growth, what sells, when customers pay, and who is at risk of leaving."
+        title={tr("Analytics")}
+        description={tr("Growth, what sells, when customers pay, and who is at risk of leaving.")}
         actions={
           <div className="flex flex-wrap items-center gap-2">
           {branches.length > 0 && (
-            <select value={branch} onChange={(e) => setBranch(e.target.value)} aria-label="Branch" className="rounded-lg border border-obsidian-700 bg-obsidian-950 px-2.5 py-1 text-xs text-slate-200">
-              <option value="">All branches</option>
+            <select value={branch} onChange={(e) => setBranch(e.target.value)} aria-label={tr("Branch")} className="rounded-lg border border-obsidian-700 bg-obsidian-950 px-2.5 py-1 text-xs text-slate-200">
+              <option value="">{tr("All branches")}</option>
               {branches.map((b) => (
                 <option key={b.id} value={b.id}>
                   {b.name}
@@ -76,12 +79,12 @@ export default function AnalyticsPage() {
             </select>
           )}
           <Segmented
-            label="Period"
+            label={tr("Period")}
             value={months}
             onChange={setMonths}
             options={[
-              { value: 6, label: "6 months" },
-              { value: 12, label: "12 months" },
+              { value: 6, label: sw ? "Miezi 6" : "6 months" },
+              { value: 12, label: sw ? "Miezi 12" : "12 months" },
             ]}
           />
           </div>
@@ -89,38 +92,42 @@ export default function AnalyticsPage() {
       />
 
       {error && <p className="text-sm text-rose-300">Could not load analytics: {error instanceof Error ? error.message : String(error)}</p>}
-      {isLoading && <p className="text-sm text-slate-400">Loading…</p>}
+      {isLoading && <p className="text-sm text-slate-400">{tr("Loading…")}</p>}
 
       {data && (
         <>
           <MetricGrid columns={4}>
             <Metric
-              label="This month"
+              label={tr("This month")}
               value={money(g!.thisMonthMinor)}
-              hint={g!.changePercent === null ? "No revenue last month to compare with" : `${g!.changePercent >= 0 ? "+" : ""}${g!.changePercent}% on last month (${money(g!.lastMonthMinor)})`}
+              hint={
+                g!.changePercent === null
+                  ? sw ? "Hakuna mapato mwezi uliopita ya kulinganisha" : "No revenue last month to compare with"
+                  : `${g!.changePercent >= 0 ? "+" : ""}${g!.changePercent}% ${sw ? "ukilinganisha na mwezi uliopita" : "on last month"} (${money(g!.lastMonthMinor)})`
+              }
               tone={g!.changePercent === null ? undefined : g!.changePercent >= 0 ? "good" : "bad"}
             />
-            <Metric label={`Revenue, ${months} months`} value={money(totalRevenue)} hint={`${newCustomers} new customer${newCustomers === 1 ? "" : "s"}`} />
+            <Metric label={sw ? `Mapato, miezi ${months}` : `Revenue, ${months} months`} value={money(totalRevenue)} hint={sw ? `Wateja wapya ${newCustomers}` : `${newCustomers} new customer${newCustomers === 1 ? "" : "s"}`} />
             <Metric
-              label="Average per subscriber"
+              label={tr("Average per subscriber")}
               value={data.subscribers.arpuMinor === null ? "—" : money(data.subscribers.arpuMinor)}
-              hint={`Last 30 days · ${data.subscribers.active} active`}
+              hint={sw ? `Siku 30 zilizopita · ${data.subscribers.active} hai` : `Last 30 days · ${data.subscribers.active} active`}
             />
             <Metric
-              label="Suspended"
+              label={tr("Suspended")}
               value={data.subscribers.suspended}
-              hint="Subscriptions off for non-payment"
+              hint={tr("Subscriptions off for non-payment")}
               tone={data.subscribers.suspended > 0 ? "warn" : "good"}
               href="/customers"
             />
           </MetricGrid>
 
-          <Panel title="Revenue by month" description="Completed payments, in your timezone">
+          <Panel title={tr("Revenue by month")} description={tr("Completed payments, in your timezone")}>
             {totalRevenue === 0 ? (
-              <EmptyState title="No payments in this period">Revenue will be charted here as payments come in.</EmptyState>
+              <EmptyState title={tr("No payments in this period")}>{tr("Revenue will be charted here as payments come in.")}</EmptyState>
             ) : (
               <>
-                <TrendChart points={data.months.map((m) => ({ date: monthLabel(m.month), value: m.revenueMinor }))} format={compactMoney} caption="Revenue per month" />
+                <TrendChart points={data.months.map((m) => ({ date: monthLabel(m.month), value: m.revenueMinor }))} format={compactMoney} caption={tr("Revenue per month")} />
                 <ChartTable
                   columns={["Month", "Revenue", "Payments", "New customers"]}
                   rows={data.months.map((m) => [monthLabel(m.month), money(m.revenueMinor), m.payments, m.newCustomers])}
@@ -130,15 +137,21 @@ export default function AnalyticsPage() {
           </Panel>
 
           <div className="grid gap-6 lg:grid-cols-2">
-            <Panel title="What sells" description={branch ? `Subscription revenue by package, last ${months} months. Hotspot sales have no branch.` : `Revenue by package, last ${months} months`}>
+            <Panel title={tr("What sells")} description={
+                sw
+                  ? branch ? `Mapato ya usajili kwa kifurushi, miezi ${months} iliyopita. Mauzo ya hotspot hayana tawi.` : `Mapato kwa kifurushi, miezi ${months} iliyopita`
+                  : branch ? `Subscription revenue by package, last ${months} months. Hotspot sales have no branch.` : `Revenue by package, last ${months} months`
+              }>
               {data.byPackage.length === 0 ? (
-                <p className="py-6 text-center text-sm text-slate-400">No package sales in this period.</p>
+                <p className="py-6 text-center text-sm text-slate-400">{tr("No package sales in this period.")}</p>
               ) : (
                 <BarList
                   items={data.byPackage.map((p) => ({
                     label: p.name,
                     value: p.revenueMinor,
-                    detail: `${p.kind === "HOTSPOT" ? "Hotspot" : "Subscription"} · ${p.sales} sale${p.sales === 1 ? "" : "s"}`,
+                    detail: sw
+                      ? `${p.kind === "HOTSPOT" ? "Hotspot" : "Usajili"} · mauzo ${p.sales}`
+                      : `${p.kind === "HOTSPOT" ? "Hotspot" : "Subscription"} · ${p.sales} sale${p.sales === 1 ? "" : "s"}`,
                   }))}
                   format={money}
                 />
@@ -146,31 +159,35 @@ export default function AnalyticsPage() {
             </Panel>
 
             <Panel
-              title="When customers pay"
-              description={busiest && busiest.payments > 0 ? `Busiest hour: ${String(busiest.hour).padStart(2, "0")}:00, last 90 days` : "Payments by hour, last 90 days"}
+              title={tr("When customers pay")}
+              description={
+                busiest && busiest.payments > 0
+                  ? `${sw ? "Saa yenye malipo mengi" : "Busiest hour"}: ${String(busiest.hour).padStart(2, "0")}:00, ${sw ? "siku 90 zilizopita" : "last 90 days"}`
+                  : sw ? "Malipo kwa saa, siku 90 zilizopita" : "Payments by hour, last 90 days"
+              }
             >
               <HourColumns hours={data.byHour} />
               <div className="mt-5">
                 <BarList
-                  items={data.byWeekday.map((w) => ({ label: WEEKDAYS[w.weekday]!, value: w.payments }))}
-                  format={(n) => `${n} payment${n === 1 ? "" : "s"}`}
+                  items={data.byWeekday.map((w) => ({ label: tr(WEEKDAYS[w.weekday]!), value: w.payments }))}
+                  format={(n) => (sw ? `malipo ${n}` : `${n} payment${n === 1 ? "" : "s"}`)}
                 />
               </div>
               <ChartTable columns={["Hour", "Payments"]} rows={data.byHour.map((h) => [`${String(h.hour).padStart(2, "0")}:00`, h.payments])} />
             </Panel>
           </div>
 
-          <Panel title="Customers at risk" description="Suspended, overdue, or a paying customer who has gone quiet. Call them before they leave." padded={false}>
+          <Panel title={tr("Customers at risk")} description={tr("Suspended, overdue, or a paying customer who has gone quiet. Call them before they leave.")} padded={false}>
             {data.atRisk.length === 0 ? (
-              <EmptyState title="Nobody at risk right now">Every active customer is paid up and paying regularly.</EmptyState>
+              <EmptyState title={tr("Nobody at risk right now")}>{tr("Every active customer is paid up and paying regularly.")}</EmptyState>
             ) : (
               <TableShell minWidth={640}>
                 <thead>
                   <tr>
-                    <th className={th}>Customer</th>
-                    <th className={th}>Why</th>
-                    <th className={th}>Since</th>
-                    <th className={`${th} text-right`}>Owed</th>
+                    <th className={th}>{tr("Customer")}</th>
+                    <th className={th}>{tr("Why")}</th>
+                    <th className={th}>{tr("Since")}</th>
+                    <th className={`${th} text-right`}>{tr("Owed")}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -183,7 +200,7 @@ export default function AnalyticsPage() {
                         <span className="block text-xs text-slate-500">{c.phone}</span>
                       </td>
                       <td className={td}>
-                        <Pill tone={c.reason.startsWith("Suspended") ? "bad" : c.reason.startsWith("Invoice") ? "warn" : "neutral"}>{c.reason}</Pill>
+                        <Pill tone={c.reason.startsWith("Suspended") ? "bad" : c.reason.startsWith("Invoice") ? "warn" : "neutral"}>{tr(c.reason)}</Pill>
                       </td>
                       <td className={`${td} text-slate-400`}>{c.since ? new Date(c.since).toLocaleDateString() : "—"}</td>
                       <td className={`${td} text-right tabular-nums text-white`}>{c.owedMinor > 0 ? money(c.owedMinor) : "—"}</td>

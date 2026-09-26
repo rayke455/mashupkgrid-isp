@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/money";
 import { EmptyState, Metric, MetricGrid, Modal, Notice, PageHeader, Panel, TableShell, darkButton, td, th } from "@/components/dashboard/surface";
+import { tr } from "@/lib/tr";
 
 /**
  * Money that arrived with nowhere to land. Each row is a completed payment with no invoice: an
@@ -74,34 +75,34 @@ export default function ReconciliationPage() {
   return (
     <div className="w-full min-w-0 space-y-6">
       <PageHeader
-        title="Reconciliation"
-        description="Payments that arrived without an invoice to settle. Apply each one to the right invoice so the customer's balance and service are correct."
+        title={tr("Reconciliation")}
+        description={tr("Payments that arrived without an invoice to settle. Apply each one to the right invoice so the customer's balance and service are correct.")}
       />
       {done && <Notice tone="good">{done}</Notice>}
       {error && <Notice tone="bad">{error}</Notice>}
 
       <MetricGrid columns={3}>
-        <Metric label="Unmatched payments" value={data ? data.summary.count : "—"} tone={data && data.summary.count > 0 ? "warn" : "good"} />
-        <Metric label="Money waiting" value={data ? formatMoney(data.summary.totalMinor) : "—"} hint="Received but not yet on an invoice" />
-        <Metric label="Checked" value={data ? "Live" : "—"} hint="Refreshes every minute" />
+        <Metric label={tr("Unmatched payments")} value={data ? data.summary.count : "—"} tone={data && data.summary.count > 0 ? "warn" : "good"} />
+        <Metric label={tr("Money waiting")} value={data ? formatMoney(data.summary.totalMinor) : "—"} hint={tr("Received but not yet on an invoice")} />
+        <Metric label={tr("Checked")} value={data ? "Live" : "—"} hint={tr("Refreshes every minute")} />
       </MetricGrid>
 
       <Panel padded={false}>
         {isLoading ? (
-          <p className="px-5 py-8 text-sm text-slate-400">Loading…</p>
+          <p className="px-5 py-8 text-sm text-slate-400">{tr("Loading…")}</p>
         ) : items.length === 0 ? (
-          <EmptyState title="Everything is matched">Every completed payment is on an invoice. Nothing to do here.</EmptyState>
+          <EmptyState title={tr("Everything is matched")}>{tr("Every completed payment is on an invoice. Nothing to do here.")}</EmptyState>
         ) : (
           <TableShell minWidth={760}>
             <thead>
               <tr>
-                <th className={th}>Received</th>
-                <th className={th}>Reference</th>
-                <th className={th}>Method</th>
-                <th className={th}>Paid by</th>
-                <th className={`${th} text-right`}>Amount</th>
+                <th className={th}>{tr("Received")}</th>
+                <th className={th}>{tr("Reference")}</th>
+                <th className={th}>{tr("Method")}</th>
+                <th className={th}>{tr("Paid by")}</th>
+                <th className={`${th} text-right`}>{tr("Amount")}</th>
                 <th className={`${th} text-right`}>
-                  <span className="sr-only">Actions</span>
+                  <span className="sr-only">{tr("Actions")}</span>
                 </th>
               </tr>
             </thead>
@@ -118,7 +119,7 @@ export default function ReconciliationPage() {
                         <span className="block text-xs text-slate-500">{p.customer.phone}</span>
                       </Link>
                     ) : (
-                      <span className="text-slate-500">Unknown payer</span>
+                      <span className="text-slate-500">{tr("Unknown payer")}</span>
                     )}
                   </td>
                   <td className={`${td} text-right font-medium tabular-nums text-white`}>{formatMoney(p.amountMinor, p.currency)}</td>
@@ -132,7 +133,7 @@ export default function ReconciliationPage() {
                         setMatching(p);
                       }}
                     >
-                      Apply to invoice
+                      {tr("Apply to invoice")}
                     </button>
                   </td>
                 </tr>
@@ -145,11 +146,11 @@ export default function ReconciliationPage() {
       <Modal
         open={matching !== null}
         onClose={() => setMatching(null)}
-        title="Apply payment to an invoice"
+        title={tr("Apply payment to an invoice")}
         description={matching ? `${formatMoney(matching.amountMinor, matching.currency)} received ${new Date(matching.createdAt).toLocaleString()}${matching.reference ? ` · ${matching.reference}` : ""}` : undefined}
         footer={
           <button type="button" className={darkButton("secondary")} onClick={() => setMatching(null)}>
-            Cancel
+            {tr("Cancel")}
           </button>
         }
       >
@@ -157,7 +158,7 @@ export default function ReconciliationPage() {
           autoFocus
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Invoice number, customer name or phone"
+          placeholder={tr("Invoice number, customer name or phone")}
           className="w-full rounded-lg border border-obsidian-700 bg-obsidian-950 px-3 py-2 text-sm text-white outline-none placeholder:text-slate-500 focus:border-brand-500"
         />
         <div className="mt-3 space-y-2">
@@ -178,12 +179,12 @@ export default function ReconciliationPage() {
                   disabled={match.isPending}
                   onClick={() => matching && match.mutate({ paymentId: matching.id, invoiceId: inv.id })}
                 >
-                  Apply
+                  {tr("Apply")}
                 </button>
               </div>
             );
           })}
-          {invoices && invoices.items.length === 0 && <p className="text-sm text-slate-500">No open invoices match.</p>}
+          {invoices && invoices.items.length === 0 && <p className="text-sm text-slate-500">{tr("No open invoices match.")}</p>}
         </div>
       </Modal>
     </div>

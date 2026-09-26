@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth-context";
 import { useBranches } from "@/lib/use-branches";
 import { Badge, Button, Card, ErrorText, HintText, Input, Label } from "@/components/ui";
 import { EmptyState, Pill, TableShell, darkButton, td, th } from "@/components/dashboard/surface";
+import { tr } from "@/lib/tr";
 
 /** Who can sign in to this ISP's dashboard and what they may do. */
 
@@ -96,8 +97,8 @@ export default function StaffSettingsPage() {
     <div className="max-w-4xl space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">Staff and roles</h1>
-          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Who can sign in to this dashboard, and what each person may do.</p>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">{tr("Staff and roles")}</h1>
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{tr("Who can sign in to this dashboard, and what each person may do.")}</p>
         </div>
         <Button onClick={() => setShowForm((v) => !v)}>{showForm ? "Cancel" : "Add staff member"}</Button>
       </div>
@@ -115,20 +116,20 @@ export default function StaffSettingsPage() {
             }}
           >
             <div>
-              <Label htmlFor="staffEmail">Email</Label>
+              <Label htmlFor="staffEmail">{tr("Email")}</Label>
               <Input id="staffEmail" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
             </div>
             <div>
-              <Label htmlFor="staffPhone">Phone (optional)</Label>
+              <Label htmlFor="staffPhone">{tr("Phone (optional)")}</Label>
               <Input id="staffPhone" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="07XX XXX XXX" />
             </div>
             <div>
-              <Label htmlFor="staffPassword">Temporary password</Label>
+              <Label htmlFor="staffPassword">{tr("Temporary password")}</Label>
               <Input id="staffPassword" type="text" value={password} onChange={(e) => setPassword(e.target.value)} minLength={8} required />
-              <HintText>Share it with them privately. They can change it under Settings → Password.</HintText>
+              <HintText>{tr("Share it with them privately. They can change it under Settings → Password.")}</HintText>
             </div>
             <div>
-              <Label htmlFor="staffRole">Role</Label>
+              <Label htmlFor="staffRole">{tr("Role")}</Label>
               <select
                 id="staffRole"
                 value={roleId}
@@ -136,7 +137,7 @@ export default function StaffSettingsPage() {
                 required
                 className="w-full rounded-lg border border-slate-300/90 bg-white px-3.5 py-2 text-sm text-slate-900 outline-none focus:border-brand-500 dark:border-obsidian-700 dark:bg-obsidian-950 dark:text-slate-100"
               >
-                <option value="">Choose a role…</option>
+                <option value="">{tr("Choose a role…")}</option>
                 {assignable.map((r) => (
                   <option key={r.id} value={r.id}>
                     {roleLabel(r.name)}
@@ -147,14 +148,14 @@ export default function StaffSettingsPage() {
             </div>
             {branches.length > 0 && (
               <div>
-                <Label htmlFor="staffBranch">Home branch (optional)</Label>
+                <Label htmlFor="staffBranch">{tr("Home branch (optional)")}</Label>
                 <select
                   id="staffBranch"
                   value={branchId}
                   onChange={(e) => setBranchId(e.target.value)}
                   className="w-full rounded-lg border border-slate-300/90 bg-white px-3.5 py-2 text-sm text-slate-900 outline-none focus:border-brand-500 dark:border-obsidian-700 dark:bg-obsidian-950 dark:text-slate-100"
                 >
-                  <option value="">All branches</option>
+                  <option value="">{tr("All branches")}</option>
                   {branches.map((b) => (
                     <option key={b.id} value={b.id}>
                       {b.name}
@@ -174,19 +175,19 @@ export default function StaffSettingsPage() {
 
       <Card className="p-0">
         {isLoading ? (
-          <p className="px-5 py-6 text-sm text-slate-500">Loading…</p>
+          <p className="px-5 py-6 text-sm text-slate-500">{tr("Loading…")}</p>
         ) : !staff || staff.length === 0 ? (
-          <EmptyState title="Only you so far">Add a colleague and give them a role that matches their job.</EmptyState>
+          <EmptyState title={tr("Only you so far")}>{tr("Add a colleague and give them a role that matches their job.")}</EmptyState>
         ) : (
           <TableShell minWidth={720}>
             <thead>
               <tr>
-                <th className={th}>Person</th>
-                <th className={th}>Roles</th>
-                <th className={th}>Last sign-in</th>
-                <th className={th}>Status</th>
+                <th className={th}>{tr("Person")}</th>
+                <th className={th}>{tr("Roles")}</th>
+                <th className={th}>{tr("Last sign-in")}</th>
+                <th className={th}>{tr("Status")}</th>
                 <th className={`${th} text-right`}>
-                  <span className="sr-only">Actions</span>
+                  <span className="sr-only">{tr("Actions")}</span>
                 </th>
               </tr>
             </thead>
@@ -197,7 +198,7 @@ export default function StaffSettingsPage() {
                   <tr key={s.id}>
                     <td className={td}>
                       <span className="font-medium text-white">{s.email}</span>
-                      {isMe && <span className="ml-2 text-xs text-slate-500">you</span>}
+                      {isMe && <span className="ml-2 text-xs text-slate-500">{tr("you")}</span>}
                       {(s.phone || s.branch) && <span className="block text-xs text-slate-500">{[s.phone, s.branch?.name].filter(Boolean).join(" · ")}</span>}
                     </td>
                     <td className={`${td} whitespace-normal`}>
@@ -217,9 +218,9 @@ export default function StaffSettingsPage() {
                             value=""
                             onChange={(e) => e.target.value && assignRole.mutate({ userId: s.id, roleId: e.target.value })}
                             className="rounded-md border border-obsidian-700 bg-obsidian-950 px-1.5 py-0.5 text-xs text-slate-300"
-                            aria-label="Add a role"
+                            aria-label={tr("Add a role")}
                           >
-                            <option value="">+ role</option>
+                            <option value="">{tr("+ role")}</option>
                             {assignable
                               .filter((r) => !s.roles.some((x) => x.id === r.id))
                               .map((r) => (
@@ -239,11 +240,11 @@ export default function StaffSettingsPage() {
                       {!isMe &&
                         (s.status === "SUSPENDED" ? (
                           <button type="button" className={darkButton("secondary", "sm")} onClick={() => setStatus.mutate({ id: s.id, status: "ACTIVE" })}>
-                            Restore access
+                            {tr("Restore access")}
                           </button>
                         ) : (
                           <button type="button" className={`${darkButton("ghost", "sm")} text-rose-300`} onClick={() => confirm(`Suspend ${s.email}? They are signed out immediately.`) && setStatus.mutate({ id: s.id, status: "SUSPENDED" })}>
-                            Suspend
+                            {tr("Suspend")}
                           </button>
                         ))}
                     </td>
@@ -256,7 +257,7 @@ export default function StaffSettingsPage() {
       </Card>
 
       <Card className="p-6">
-        <p className="font-medium text-slate-900 dark:text-white">What each role can do</p>
+        <p className="font-medium text-slate-900 dark:text-white">{tr("What each role can do")}</p>
         <ul className="mt-3 grid gap-2 text-sm text-slate-600 dark:text-slate-400 sm:grid-cols-2">
           {assignable.map((r) => (
             <li key={r.id} className="rounded-lg border border-slate-200 p-3 dark:border-obsidian-800">

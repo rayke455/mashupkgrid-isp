@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
 import { Button, Card, ErrorText, HintText, Input, Label, Badge, StatusDot } from "@/components/ui";
+import { tr } from "@/lib/tr";
 
 interface AiAssistantConfigStatus {
   configured: boolean;
@@ -34,10 +35,10 @@ export default function AiAssistantSettingsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">
-            AI assistant
+            {tr("AI assistant")}
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Lets you manage hotspot packages by describing changes in plain language, from the Hotspot Vouchers page.
+            {tr("Lets you manage hotspot packages by describing changes in plain language, from the Hotspot Vouchers page.")}
           </p>
         </div>
         {status?.configured && (
@@ -49,7 +50,7 @@ export default function AiAssistantSettingsPage() {
       </div>
 
       <Card>
-        <h2 className="mb-2 font-semibold text-slate-900 dark:text-white">Anthropic API key</h2>
+        <h2 className="mb-2 font-semibold text-slate-900 dark:text-white">{tr("Anthropic API key")}</h2>
         <p className="mb-4 text-xs text-slate-500 dark:text-slate-400">
           Your own key from{" "}
           <span className="font-mono">console.anthropic.com</span> — this platform never uses its own key on your
@@ -64,7 +65,7 @@ export default function AiAssistantSettingsPage() {
           className="space-y-4"
         >
           <div>
-            <Label htmlFor="apiKey">API key</Label>
+            <Label htmlFor="apiKey">{tr("API key")}</Label>
             <Input
               id="apiKey"
               type="password"
@@ -73,7 +74,7 @@ export default function AiAssistantSettingsPage() {
               onChange={(e) => setApiKey(e.target.value)}
               required
             />
-            <HintText>Needs at least one available Claude model on your account.</HintText>
+            <HintText>{tr("Needs at least one available Claude model on your account.")}</HintText>
           </div>
           <Button type="submit" disabled={saveConfig.isPending}>
             {saveConfig.isPending ? "Saving..." : "Save key"}
@@ -83,9 +84,9 @@ export default function AiAssistantSettingsPage() {
       </Card>
 
       <Card>
-        <h2 className="mb-2 font-semibold text-slate-900 dark:text-white">What it can do</h2>
+        <h2 className="mb-2 font-semibold text-slate-900 dark:text-white">{tr("What it can do")}</h2>
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          Once configured, open the <span className="font-medium text-slate-700 dark:text-slate-300">Hotspot Vouchers</span>{" "}
+          Once configured, open the <span className="font-medium text-slate-700 dark:text-slate-300">{tr("Hotspot Vouchers")}</span>{" "}
           page and use the assistant panel there to create, change, or deactivate hotspot packages by describing
           what you want — e.g. &quot;add a 2 hour package for KES 50&quot; or &quot;raise the daily plan to KES
           150&quot;. Every action it takes goes through the same package tools the dashboard itself uses, and is

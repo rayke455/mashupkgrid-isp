@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
 import { Button, Card, ErrorText, HintText, Input, Label, Badge, StatusDot } from "@/components/ui";
+import { tr } from "@/lib/tr";
 
 interface LiveChatConfig {
   isActive: boolean;
@@ -53,10 +54,10 @@ export default function LiveChatSettingsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">
-            Live chat
+            {tr("Live chat")}
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Embed a Tawk.to chat widget for staff and/or hotspot customers.
+            {tr("Embed a Tawk.to chat widget for staff and/or hotspot customers.")}
           </p>
         </div>
         {config && (
@@ -68,7 +69,7 @@ export default function LiveChatSettingsPage() {
       </div>
 
       <Card>
-        <h2 className="mb-2 font-semibold text-slate-900 dark:text-white">Tawk.to widget ID</h2>
+        <h2 className="mb-2 font-semibold text-slate-900 dark:text-white">{tr("Tawk.to widget ID")}</h2>
         <p className="mb-4 text-xs text-slate-500 dark:text-slate-400">
           From your Tawk.to dashboard → Administration → Chat Widget → the embed code has a line like{" "}
           <span className="font-mono">src=&apos;https://embed.tawk.to/&lt;PROPERTY_ID&gt;/&lt;WIDGET_ID&gt;&apos;</span> —
@@ -83,30 +84,30 @@ export default function LiveChatSettingsPage() {
           className="space-y-4"
         >
           <div>
-            <Label htmlFor="widgetId">Widget ID</Label>
+            <Label htmlFor="widgetId">{tr("Widget ID")}</Label>
             <Input
               id="widgetId"
               placeholder="60f1a2b3c4d5e6f7a8b9c0d1/1abcdefgh"
               value={widgetId}
               onChange={(e) => setWidgetId(e.target.value)}
             />
-            <HintText>Not a secret — this is meant to be visible in the page, same as on any website.</HintText>
+            <HintText>{tr("Not a secret — this is meant to be visible in the page, same as on any website.")}</HintText>
           </div>
 
           <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
             <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
-            Enabled
+            {tr("Enabled")}
           </label>
 
           <div className="rounded-lg border border-slate-200 p-3 dark:border-obsidian-800 space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Where it shows</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">{tr("Where it shows")}</p>
             <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
               <input
                 type="checkbox"
                 checked={showOnHotspotPortal}
                 onChange={(e) => setShowOnHotspotPortal(e.target.checked)}
               />
-              Hotspot captive portal (customer-facing)
+              {tr("Hotspot captive portal (customer-facing)")}
             </label>
             <label className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-300">
               <input
@@ -114,7 +115,7 @@ export default function LiveChatSettingsPage() {
                 checked={showOnDashboard}
                 onChange={(e) => setShowOnDashboard(e.target.checked)}
               />
-              Staff dashboard
+              {tr("Staff dashboard")}
             </label>
           </div>
 

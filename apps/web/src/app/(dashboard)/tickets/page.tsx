@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api-client";
 import { Card, Badge } from "@/components/ui";
 import { IconLifeBuoy } from "@/components/icons";
+import { tr } from "@/lib/tr";
 
 type TicketStatus = "OPEN" | "IN_PROGRESS" | "RESOLVED" | "CLOSED";
 
@@ -58,10 +59,10 @@ export default function TicketsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">
-          Support tickets
+          {tr("Support tickets")}
         </h1>
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          Requests from subscribers, hotspot walk-ins, and staff — reply, assign, and track to resolution.
+          {tr("Requests from subscribers, hotspot walk-ins, and staff — reply, assign, and track to resolution.")}
         </p>
       </div>
 
@@ -82,13 +83,13 @@ export default function TicketsPage() {
         ))}
       </div>
 
-      {isLoading && <p className="text-sm text-slate-500">Loading tickets...</p>}
+      {isLoading && <p className="text-sm text-slate-500">{tr("Loading tickets...")}</p>}
 
       {tickets && tickets.length === 0 && (
         <div className="rounded-xl border border-dashed border-slate-300 p-8 text-center dark:border-obsidian-800">
           <IconLifeBuoy size={32} className="mx-auto text-slate-400 mb-2" />
-          <h3 className="font-semibold text-slate-700 dark:text-slate-300">No tickets here</h3>
-          <p className="text-xs text-slate-500 mt-1">Nothing matches this filter right now.</p>
+          <h3 className="font-semibold text-slate-700 dark:text-slate-300">{tr("No tickets here")}</h3>
+          <p className="text-xs text-slate-500 mt-1">{tr("Nothing matches this filter right now.")}</p>
         </div>
       )}
 
@@ -97,14 +98,14 @@ export default function TicketsPage() {
           <table className="w-full text-sm">
             <thead className="bg-slate-50 dark:bg-obsidian-900 text-left text-xs uppercase tracking-wider text-slate-500">
               <tr>
-                <th className="px-4 py-2.5">Subject</th>
-                <th className="px-4 py-2.5">From</th>
-                <th className="px-4 py-2.5">Source</th>
-                <th className="px-4 py-2.5">Priority</th>
-                <th className="px-4 py-2.5">Status</th>
-                <th className="px-4 py-2.5">Response</th>
-                <th className="px-4 py-2.5">Assigned</th>
-                <th className="px-4 py-2.5">Updated</th>
+                <th className="px-4 py-2.5">{tr("Subject")}</th>
+                <th className="px-4 py-2.5">{tr("From")}</th>
+                <th className="px-4 py-2.5">{tr("Source")}</th>
+                <th className="px-4 py-2.5">{tr("Priority")}</th>
+                <th className="px-4 py-2.5">{tr("Status")}</th>
+                <th className="px-4 py-2.5">{tr("Response")}</th>
+                <th className="px-4 py-2.5">{tr("Assigned")}</th>
+                <th className="px-4 py-2.5">{tr("Updated")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 dark:divide-obsidian-800">
@@ -127,10 +128,10 @@ export default function TicketsPage() {
                   </td>
                   <td className="px-4 py-2.5 text-xs">
                     {ticket.firstRepliedAt ? (
-                      <span className="text-slate-500">Replied</span>
+                      <span className="text-slate-500">{tr("Replied")}</span>
                     ) : ticket.status === "OPEN" || ticket.status === "IN_PROGRESS" ? (
                       ticket.responseOverdue ? (
-                        <Badge variant="danger">Overdue</Badge>
+                        <Badge variant="danger">{tr("Overdue")}</Badge>
                       ) : ticket.responseDueAt ? (
                         <span className="text-slate-500">by {new Date(ticket.responseDueAt).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" })}</span>
                       ) : null
