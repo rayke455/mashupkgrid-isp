@@ -15,6 +15,10 @@ import { NavIconGlyph } from "@/components/nav-icon";
 import { CommandPalette, CommandPaletteTrigger, useCommandPalette } from "@/components/command-palette";
 import { IconChevronRight, IconClose, IconLogOut, IconMenu } from "@/components/icons";
 import { NotificationBell } from "@/components/notifications";
+import { LanguageProvider, useLanguage } from "@/lib/language-context";
+import { localizeNavSections } from "@/lib/nav-strings";
+import { dashboardStrings } from "@/lib/dashboard-strings";
+import { Segmented } from "@/components/dashboard/surface";
 
 function NavLink({ item, active }: { item: NavItem; active: boolean }) {
   return (
@@ -42,7 +46,17 @@ function initialsOf(email: string | null | undefined): string {
 }
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <LanguageProvider>
+      <DashboardShell>{children}</DashboardShell>
+    </LanguageProvider>
+  );
+}
+
+function DashboardShell({ children }: { children: ReactNode }) {
   const { user, loading, logout } = useAuth();
+  const { lang, setLang } = useLanguage();
+  const t = dashboardStrings(lang);
   const router = useRouter();
   const pathname = usePathname();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -83,7 +97,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   // The sidebar, the palette and the breadcrumb all render from this one catalog
   // (lib/navigation.ts), so a page is never reachable from one and missing from another.
-  const sections = useMemo(() => (user ? buildNavSections(user) : []), [user]);
+  const sections = useMemo(() => (user ? localizeNavSections(buildNavSections(user), lang) : []), [user, lang]);
   const current = useMemo(() => findCurrentNav(sections, pathname), [sections, pathname]);
 
   if (loading) {
@@ -91,7 +105,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="flex min-h-screen items-center justify-center bg-slate-50 dark:bg-obsidian-950">
         <div className="flex items-center gap-3 text-sm text-slate-500 dark:text-slate-400">
           <span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-transparent dark:border-obsidian-700 dark:border-t-transparent" aria-hidden="true" />
-          Loading…
+          {t.loading}
         </div>
       </div>
     );
@@ -127,13 +141,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-600 text-sm font-semibold text-white">M</div>
             <div className="min-w-0 flex-1">
               <span className="block truncate text-sm font-semibold text-white">MashupHost</span>
-              <span className="block truncate text-xs text-slate-500">{user.tenantId ? user.tenantSlug ?? "Operator" : "Platform admin"}</span>
+              <span className="block truncate text-xs text-slate-500">{user.tenantId ? user.tenantSlug ?? t.operator : t.platformAdmin}</span>
             </div>
             {/* Explicit Close Button for Mobile Drawer */}
             <button
               type="button"
               onClick={() => setMobileNavOpen(false)}
-              aria-label="Close navigation menu"
+              aria-label={t.closeMenu}
               className="ml-auto inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-obsidian-800 hover:text-white lg:hidden"
             >
               <IconClose size={20} />
@@ -159,16 +173,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 {initialsOf(user.email)}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-[13px] font-medium text-slate-100">{user.email ?? "Signed in"}</p>
+                <p className="truncate text-[13px] font-medium text-slate-100">{user.email ?? t.signedIn}</p>
                 <p className="truncate text-xs text-slate-500">
-                  {!user.tenantId ? "Super admin" : has("reports.read") ? "Staff" : "Customer"}
+                  {!user.tenantId ? t.superAdmin : has("reports.read") ? t.staff : t.customer}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => logout().then(() => router.replace("/login"))}
-                title="Sign out"
-                aria-label="Sign out"
+                title={t.signOut}
+                aria-label={t.signOut}
                 className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-obsidian-800 hover:text-white"
               >
                 <IconLogOut size={16} />
@@ -185,7 +199,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               <button
                 type="button"
                 onClick={() => setMobileNavOpen(true)}
-                aria-label="Open navigation menu"
+                aria-label={t.openMenu}
                 aria-expanded={mobileNavOpen}
                 aria-controls="dashboard-nav"
                 className="-ml-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-obsidian-800 hover:text-white lg:hidden"
@@ -207,6 +221,15 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
 
             <div className="flex shrink-0 items-center gap-2">
+              <Segmented
+                label={t.language}
+                value={lang}
+                onChange={setLang}
+                options={[
+                  { value: "en", label: "EN" },
+                  { value: "sw", label: "SW" },
+                ]}
+              />
               <CommandPaletteTrigger onOpen={() => palette.setOpen(true)} />
               {isTenantScoped && <NotificationBell />}
               {user.tenantTrialEndsAt && (
@@ -217,7 +240,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                       : "border-amber-500/25 bg-amber-500/10 text-amber-300"
                   }`}
                 >
-                  {user.isTrialExpired ? "Trial Expired" : "Trial"}
+                  {user.isTrialExpired ? t.trialExpired : t.trial}
                 </span>
               )}
             </div>

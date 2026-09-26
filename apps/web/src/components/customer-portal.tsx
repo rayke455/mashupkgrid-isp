@@ -6,9 +6,9 @@ import { apiFetch, ApiRequestError } from "@/lib/api-client";
 import { formatMoney } from "@/lib/money";
 import { Badge, Button, ErrorText, Input, Label } from "@/components/ui";
 import { IconMpesa, IconShield } from "@/components/icons";
-import { EmptyState, Metric, MetricGrid, Notice, PageHeader, Panel, Pill, Segmented, TableShell, darkButton, td, th } from "@/components/dashboard/surface";
+import { EmptyState, Metric, MetricGrid, Notice, PageHeader, Panel, Pill, TableShell, darkButton, td, th } from "@/components/dashboard/surface";
 import { customerStrings } from "@/lib/customer-strings";
-import { loadPortalLanguage, savePortalLanguage, type PortalLanguage } from "@/lib/portal-strings";
+import { useLanguage } from "@/lib/language-context";
 
 /**
  * What a subscriber sees when they sign in: is my internet on, when is the next bill, what do I
@@ -98,26 +98,8 @@ function daysUntil(iso: string): number {
 }
 
 export function CustomerPortal() {
-  const [lang, setLang] = useState<PortalLanguage>("en");
-  useEffect(() => {
-    const stored = loadPortalLanguage();
-    if (stored) setLang(stored);
-  }, []);
+  const { lang } = useLanguage();
   const t = customerStrings(lang);
-  const languageSwitch = (
-    <Segmented
-      label={t.language}
-      value={lang}
-      onChange={(next) => {
-        setLang(next);
-        savePortalLanguage(next);
-      }}
-      options={[
-        { value: "en", label: "EN" },
-        { value: "sw", label: "SW" },
-      ]}
-    />
-  );
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const [revealed, setRevealed] = useState<Record<string, { username: string; password: string }>>({});
@@ -211,7 +193,7 @@ export function CustomerPortal() {
 
   if (customerError || !customer) {
     return (
-      <Panel title={t.notLinkedTitle} actions={languageSwitch}>
+      <Panel title={t.notLinkedTitle}>
         <p className="text-sm leading-6 text-slate-400">{t.notLinkedBody}</p>
       </Panel>
     );
@@ -233,14 +215,11 @@ export function CustomerPortal() {
         title={t.hello(customer.fullName.split(" ")[0] ?? "")}
         description={t.account(customer.customerNumber)}
         actions={
-          <>
-            {languageSwitch}
-            {firstOpen && (
-              <button type="button" className={darkButton("primary")} onClick={() => setPayingInvoiceId(firstOpen.id)}>
-                <IconMpesa size={16} /> {t.payNow(formatMoney(owedMinor, currency))}
-              </button>
-            )}
-          </>
+          firstOpen && (
+            <button type="button" className={darkButton("primary")} onClick={() => setPayingInvoiceId(firstOpen.id)}>
+              <IconMpesa size={16} /> {t.payNow(formatMoney(owedMinor, currency))}
+            </button>
+          )
         }
       />
 

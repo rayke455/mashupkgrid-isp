@@ -4,6 +4,9 @@ import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { buildNavActions, buildNavSections, scoreNavMatch, type NavItem } from "@/lib/navigation";
+import { useLanguage } from "@/lib/language-context";
+import { localizeNavActions, localizeNavSections } from "@/lib/nav-strings";
+import { dashboardStrings } from "@/lib/dashboard-strings";
 import { NavIconGlyph } from "@/components/nav-icon";
 import { IconArrowRight, IconSearch } from "@/components/icons";
 
@@ -39,16 +42,18 @@ export function useCommandPalette() {
 
 /** The header's search button: shows the shortcut on devices that have a keyboard. */
 export function CommandPaletteTrigger({ onOpen }: { onOpen: () => void }) {
+  const { lang } = useLanguage();
+  const t = dashboardStrings(lang);
   return (
     <button
       type="button"
       onClick={onOpen}
-      aria-label="Search pages and actions"
+      aria-label={t.searchAria}
       aria-keyshortcuts="Control+K Meta+K"
       className="inline-flex h-9 items-center gap-2 rounded-lg border border-obsidian-800 bg-obsidian-900 px-2.5 text-[13px] text-slate-400 transition-colors hover:border-obsidian-700 hover:text-slate-200"
     >
       <IconSearch size={15} />
-      <span className="hidden sm:inline">Search…</span>
+      <span className="hidden sm:inline">{t.search}</span>
       <kbd className="hidden rounded border border-obsidian-700 bg-obsidian-950 px-1.5 font-sans text-[11px] text-slate-500 md:inline">⌘K</kbd>
     </button>
   );
@@ -56,6 +61,8 @@ export function CommandPaletteTrigger({ onOpen }: { onOpen: () => void }) {
 
 export function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { user } = useAuth();
+  const { lang } = useLanguage();
+  const t = dashboardStrings(lang);
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [cursor, setCursor] = useState(0);
@@ -65,8 +72,8 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
 
   const rows = useMemo<Row[]>(() => {
     if (!user) return [];
-    const sections = buildNavSections(user);
-    const actions = buildNavActions(user);
+    const sections = localizeNavSections(buildNavSections(user), lang);
+    const actions = localizeNavActions(buildNavActions(user), lang);
     const q = query.trim();
 
     const pages: Row[] = sections.flatMap((section) =>
@@ -94,7 +101,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       .filter((row) => row.score > 0)
       .sort((a, b) => (q ? b.score - a.score : 0))
       .slice(0, q ? MAX_ROWS : 60);
-  }, [user, query]);
+  }, [user, query, lang]);
 
   useEffect(() => {
     if (!open) return;
@@ -157,7 +164,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
             ref={inputRef}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Where to? Type a page or an action…"
+            placeholder={t.searchPlaceholder}
             role="combobox"
             aria-expanded="true"
             aria-controls={listId}
