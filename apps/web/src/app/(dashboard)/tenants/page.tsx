@@ -501,7 +501,36 @@ export default function TenantsPage() {
     mutationFn: ({ id, suspend }: { id: string; suspend: boolean }) =>
       apiFetch(`/api/v1/platform/tenants/${id}/${suspend ? "suspend" : "reactivate"}`, { method: "POST" }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["tenants"] }),
+    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to update tenant"),
   });
+
+  // Approval sends the owner their sign-in details automatically (email, and WhatsApp when they
+  // gave a number) — the server reports which channels were queued so the admin knows.
+  const [decisionNote, setDecisionNote] = useState<string | null>(null);
+  const approveTenant = useMutation({
+    mutationFn: (id: string) =>
+      apiFetch<{ name: string; notified: { email: boolean; whatsapp: boolean } }>(`/api/v1/platform/tenants/${id}/approve`, { method: "POST" }),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ["tenants"] });
+      const channels = [res.notified.email && "email", res.notified.whatsapp && "WhatsApp"].filter(Boolean).join(" and ");
+      setDecisionNote(`${res.name} approved. Sign-in details sent by ${channels || "no channel — the owner has no contact details on file"}.`);
+    },
+    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to approve tenant"),
+  });
+  const rejectTenant = useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) =>
+      apiFetch<{ name: string }>(`/api/v1/platform/tenants/${id}/reject`, { method: "POST", body: JSON.stringify({ reason: reason || undefined }) }),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ["tenants"] });
+      setDecisionNote(`${res.name} was not approved. The applicant has been told.`);
+    },
+    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to reject tenant"),
+  });
+  const askRejectReason = (id: string, name: string) => {
+    const reason = window.prompt(`Why is ${name} not being approved? This is sent to the applicant (leave empty to send no reason).`);
+    if (reason === null) return; // cancelled
+    rejectTenant.mutate({ id, reason: reason.trim().slice(0, 500) });
+  };
 
   const sendBroadcast = useMutation({
     mutationFn: () =>
@@ -585,7 +614,7 @@ export default function TenantsPage() {
           }`}
         >
           <span className="text-[11px] font-bold text-slate-500 uppercase block">Total Tenants</span>
-          <span className="text-2xl font-black text-slate-900 dark:text-white">{totalCount}</span>
+          <span className="text-2xl font-semibold text-slate-900 dark:text-white">{totalCount}</span>
         </div>
 
         <div
@@ -597,7 +626,7 @@ export default function TenantsPage() {
           }`}
         >
           <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase block">Active</span>
-          <span className="text-2xl font-black text-emerald-600 dark:text-emerald-400">{activeCount}</span>
+          <span className="text-2xl font-semibold text-emerald-600 dark:text-emerald-400">{activeCount}</span>
         </div>
 
         <div
@@ -609,7 +638,7 @@ export default function TenantsPage() {
           }`}
         >
           <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 uppercase block">In Trial</span>
-          <span className="text-2xl font-black text-amber-600 dark:text-amber-400">{trialCount}</span>
+          <span className="text-2xl font-semibold text-amber-600 dark:text-amber-400">{trialCount}</span>
         </div>
 
         <div
@@ -621,7 +650,7 @@ export default function TenantsPage() {
           }`}
         >
           <span className="text-[11px] font-bold text-rose-600 dark:text-rose-400 uppercase block">Suspended</span>
-          <span className="text-2xl font-black text-rose-600 dark:text-rose-400">{suspendedCount}</span>
+          <span className="text-2xl font-semibold text-rose-600 dark:text-rose-400">{suspendedCount}</span>
         </div>
 
         <div
@@ -633,7 +662,7 @@ export default function TenantsPage() {
           }`}
         >
           <span className="text-[11px] font-bold text-orange-600 dark:text-orange-400 uppercase block">Pending</span>
-          <span className="text-2xl font-black text-orange-600 dark:text-orange-400">{pendingCount}</span>
+          <span className="text-2xl font-semibold text-orange-600 dark:text-orange-400">{pendingCount}</span>
         </div>
 
         {/* The card an operator should look at first: administrative status says a tenant is
@@ -649,7 +678,7 @@ export default function TenantsPage() {
           <span className="block text-[11px] font-bold uppercase text-amber-600 dark:text-amber-400">
             Needs attention
           </span>
-          <span className="text-2xl font-black text-amber-600 dark:text-amber-400">{attentionCount}</span>
+          <span className="text-2xl font-semibold text-amber-600 dark:text-amber-400">{attentionCount}</span>
         </div>
       </div>
 
@@ -848,6 +877,11 @@ export default function TenantsPage() {
             </div>
           </form>
           {error && <ErrorText>{error}</ErrorText>}
+          {decisionNote && (
+            <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-700 dark:text-emerald-300">
+              {decisionNote}
+            </div>
+          )}
         </Card>
       )}
 
@@ -984,14 +1018,34 @@ export default function TenantsPage() {
                   >
                     {expandedId === tenant.id ? "Close" : "⚙️ Manage"}
                   </Button>
-                  <Button
-                    variant={tenant.status === "ACTIVE" ? "danger" : "secondary"}
-                    className="text-xs py-1.5"
-                    onClick={() => toggleSuspend.mutate({ id: tenant.id, suspend: tenant.status === "ACTIVE" })}
-                    disabled={toggleSuspend.isPending}
-                  >
-                    {tenant.status === "PENDING_APPROVAL" ? "✅ Approve" : tenant.status === "ACTIVE" ? "Suspend" : "Reactivate"}
-                  </Button>
+                  {tenant.status === "PENDING_APPROVAL" ? (
+                    <>
+                      <Button
+                        className="text-xs py-1.5"
+                        onClick={() => approveTenant.mutate(tenant.id)}
+                        disabled={approveTenant.isPending || rejectTenant.isPending}
+                      >
+                        {approveTenant.isPending ? "Approving…" : "Approve"}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="text-xs py-1.5"
+                        onClick={() => askRejectReason(tenant.id, tenant.name)}
+                        disabled={approveTenant.isPending || rejectTenant.isPending}
+                      >
+                        Reject
+                      </Button>
+                    </>
+                  ) : (
+                    <Button
+                      variant={tenant.status === "ACTIVE" ? "danger" : "secondary"}
+                      className="text-xs py-1.5"
+                      onClick={() => toggleSuspend.mutate({ id: tenant.id, suspend: tenant.status === "ACTIVE" })}
+                      disabled={toggleSuspend.isPending}
+                    >
+                      {tenant.status === "ACTIVE" ? "Suspend" : "Reactivate"}
+                    </Button>
+                  )}
                 </div>
               </div>
 

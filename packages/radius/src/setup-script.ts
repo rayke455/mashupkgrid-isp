@@ -244,6 +244,10 @@ export function buildMikrotikProvisioningScript(
      *  NOT on portalHost, so without these the redirect lands on a host the hotspot is still
      *  blocking and the customer sees a connection error instead of a login page. */
     portalDomains?: string[];
+    /** Hosts a super admin allowed platform-wide (PlatformWalledGardenHost), already validated
+     *  by packages/network normalizeWalledGardenHost. Added verbatim: an IP goes to the IP menu,
+     *  a name to both, exactly like the built-in entries. */
+    extraWalledGardenHosts?: string[];
     /** PPPoE server settings. Omitted entirely when `pppoeInterface` is absent — see the step 8
      *  comment in the generated script for why this is opt-in rather than defaulted. */
     pppoeInterface?: string | null;
@@ -321,6 +325,7 @@ export function buildMikrotikProvisioningScript(
     ...hostWithSubdomains("mashuphost.tech"),
     ...(options.portalDomains ?? []).flatMap((d) => hostWithSubdomains(hostFromUrl(d))),
     ...PAYMENT_GATEWAY_WALLED_GARDEN_HOSTS,
+    ...(options.extraWalledGardenHosts ?? []),
   ];
 
   const rawHotspotPorts = (options.hotspotPorts && options.hotspotPorts.length > 0)

@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { apiFetch } from "@/lib/api-client";
-import { Badge, Card, Input } from "@/components/ui";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiFetch, ApiRequestError } from "@/lib/api-client";
+import { useAuth } from "@/lib/auth-context";
+import { Badge, Button, Card, Input } from "@/components/ui";
 
 interface AuditEntry {
   id: string;
@@ -46,6 +47,29 @@ export default function AuditLogPage() {
   const [action, setAction] = useState("");
   const [page, setPage] = useState(1);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const canPurge = Boolean(user?.permissions.includes(user?.tenantId === null ? "maintenance.manage" : "settings.manage"));
+  const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
+  // The server keeps the last 30 days whatever is asked, and records the purge as the newest entry.
+  const purge = useMutation({
+    mutationFn: (olderThanDays: number) => apiFetch<{ deleted: number; olderThanDays: number }>(`/api/v1/audit-logs?olderThanDays=${olderThanDays}`, { method: "DELETE" }),
+    onSuccess: (res) => {
+      setNotice({ ok: true, text: `Deleted ${res.deleted} entr${res.deleted === 1 ? "y" : "ies"} older than ${res.olderThanDays} days.` });
+      queryClient.invalidateQueries({ queryKey: ["audit-logs"] });
+    },
+    onError: (err) => setNotice({ ok: false, text: err instanceof ApiRequestError ? err.message : "Purge failed" }),
+  });
+  const askPurge = () => {
+    const answer = window.prompt("Delete audit entries older than how many days? The last 30 days are always kept.", "90");
+    if (answer === null) return;
+    const daysBack = Number(answer);
+    if (!Number.isInteger(daysBack) || daysBack < 30) {
+      setNotice({ ok: false, text: "Enter a whole number of days, at least 30." });
+      return;
+    }
+    if (window.confirm(`Permanently delete every audit entry older than ${daysBack} days?`)) purge.mutate(daysBack);
+  };
 
   const { data, isLoading } = useQuery({
     queryKey: ["audit-logs", resourceType, action, page],
@@ -62,15 +86,34 @@ export default function AuditLogPage() {
 
   return (
     <div className="max-w-4xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">
-          Audit log
-        </h1>
-        <p className="text-sm text-slate-500 dark:text-slate-400">
-          Who did what, and when. Every credential reveal, plan change, refund and router action is
-          recorded here.
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">
+            Audit log
+          </h1>
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Who did what, and when. Every credential reveal, plan change, refund and router action is
+            recorded here.
+          </p>
+        </div>
+        {canPurge && (
+          <Button variant="outline" size="sm" onClick={askPurge} disabled={purge.isPending} className="shrink-0">
+            {purge.isPending ? "Deleting…" : "Delete old entries"}
+          </Button>
+        )}
       </div>
+
+      {notice && (
+        <div
+          className={`rounded-lg border px-4 py-3 text-sm ${
+            notice.ok
+              ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+              : "border-rose-500/25 bg-rose-500/10 text-rose-700 dark:text-rose-300"
+          }`}
+        >
+          {notice.text}
+        </div>
+      )}
 
       {/* Filters sit above the list, not inside it — they govern the whole view. */}
       <div className="flex flex-wrap items-end gap-3">

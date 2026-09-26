@@ -75,7 +75,7 @@ export default function AdminOrdersPage() {
             </span>
             <span className="text-xs text-slate-400">• Customer M-Pesa Dispatches</span>
           </div>
-          <h1 className="text-2xl font-black tracking-tight text-white">
+          <h1 className="text-2xl font-semibold tracking-tight text-white">
             Hardware Orders & Kenya Deliveries
           </h1>
           <p className="text-xs text-slate-400 mt-0.5">

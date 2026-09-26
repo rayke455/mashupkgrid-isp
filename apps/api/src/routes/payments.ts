@@ -4,11 +4,18 @@ import { z } from "zod";
 import { prisma } from "@mashupkgrid/database";
 import {
   recordPaymentForInvoice,
+  restoreServiceAfterPayment,
   topUpWallet,
   refundPaymentWithDb,
   getStampedPaymentReceipt,
 } from "@mashupkgrid/billing";
-import { listPurchaseAttempts, summarisePurchaseAttempts, reverseGatewayTransactionForPayment } from "@mashupkgrid/payments";
+import {
+  listPurchaseAttempts,
+  summarisePurchaseAttempts,
+  reverseGatewayTransactionForPayment,
+  purgePurchaseAttempts,
+  deletePurchaseAttempt,
+} from "@mashupkgrid/payments";
 import {
   successResponse,
   ConflictError,
@@ -54,6 +61,16 @@ const topUpSchema = z.object({
 const refundSchema = z.object({ reason: z.string().min(1) });
 
 const listQuerySchema = paginationQuerySchema.extend({ customerId: z.string().uuid().optional() });
+
+const cleanupSchema = z.object({
+  olderThanDays: z.coerce.number().int().min(1).max(3650).default(7),
+  statuses: z.array(z.enum(["PENDING", "FAILED", "ABANDONED"])).optional(),
+});
+const attemptParamsSchema = z.object({ provider: z.enum(["MPESA", "PAYSTACK", "PESAPAL"]), attemptId: z.string().uuid() });
+
+/** Only rows that never moved money are deletable, and never a payment a gateway transaction
+ *  hangs off (the ledger's link to real funds — Prisma enforces that with onDelete: Restrict). */
+const DELETABLE_PAYMENT_STATUSES = ["FAILED", "PENDING"] as const;
 const idParamsSchema = z.object({ paymentId: z.string().uuid() });
 
 function requireTenant(tenantId: string | null): string {
@@ -114,6 +131,10 @@ export async function paymentRoutes(app: FastifyInstance): Promise<void> {
         idempotencyKey: body.idempotencyKey ?? randomUUID(),
       });
 
+      // A suspended customer who just paid at the counter should be back online before they
+      // leave it, not on the next scheduled sweep.
+      if (!result.wasAlreadyProcessed) await restoreServiceAfterPayment(tenantId, result.payment.customerId);
+
       if (!result.wasAlreadyProcessed) {
         await writeAuditLog({
           tenantId,
@@ -164,6 +185,108 @@ export async function paymentRoutes(app: FastifyInstance): Promise<void> {
       }
 
       reply.status(201).send(successResponse(result, request.id));
+    }
+  );
+
+  // --- housekeeping: the rows that will never be money -------------------------------------
+  //
+  // A busy hotspot leaves thousands of failed and abandoned M-Pesa prompts behind. They matter
+  // for a week (someone to call back) and are noise after that. All deletion here is
+  // tenant-scoped, refuses anything COMPLETED or linked to money that arrived, needs
+  // payments.refund (the same trust as reversing money), and is audited with counts.
+
+  app.delete(
+    "/purchase-attempts/:provider/:attemptId",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("payments.refund")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const { provider, attemptId } = attemptParamsSchema.parse(request.params);
+      const deleted = await deletePurchaseAttempt(tenantId, provider, attemptId);
+      if (!deleted) throw new ConflictError("This attempt is completed or linked to a payment, so it stays");
+      await writeAuditLog({
+        tenantId,
+        actorUserId: request.user!.id,
+        action: "purchase_attempt.deleted",
+        resourceType: "PurchaseAttempt",
+        resourceId: attemptId,
+        after: { provider },
+        ipAddress: request.ip,
+        userAgent: request.headers["user-agent"] ?? null,
+      });
+      reply.send(successResponse({ deleted: true }, request.id));
+    }
+  );
+
+  app.post(
+    "/purchase-attempts/cleanup",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("payments.refund")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const body = cleanupSchema.parse(request.body ?? {});
+      const result = await purgePurchaseAttempts(tenantId, body);
+      await writeAuditLog({
+        tenantId,
+        actorUserId: request.user!.id,
+        action: "purchase_attempts.purged",
+        resourceType: "PurchaseAttempt",
+        after: { ...body, deleted: result },
+        ipAddress: request.ip,
+        userAgent: request.headers["user-agent"] ?? null,
+      });
+      reply.send(successResponse({ deleted: result.mpesa + result.gateway, ...result }, request.id));
+    }
+  );
+
+  app.post(
+    "/cleanup",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("payments.refund")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const { olderThanDays } = cleanupSchema.parse(request.body ?? {});
+      const cutoff = new Date(Date.now() - olderThanDays * 24 * 60 * 60 * 1000);
+      const result = await prisma.payment.deleteMany({
+        where: { tenantId, status: { in: [...DELETABLE_PAYMENT_STATUSES] }, createdAt: { lt: cutoff }, gatewayTransaction: null },
+      });
+      await writeAuditLog({
+        tenantId,
+        actorUserId: request.user!.id,
+        action: "payments.failed_purged",
+        resourceType: "Payment",
+        after: { olderThanDays, deleted: result.count },
+        ipAddress: request.ip,
+        userAgent: request.headers["user-agent"] ?? null,
+      });
+      reply.send(successResponse({ deleted: result.count }, request.id));
+    }
+  );
+
+  app.delete(
+    "/:paymentId",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("payments.refund")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const { paymentId } = idParamsSchema.parse(request.params);
+      const payment = await prisma.payment.findFirst({ where: { id: paymentId, tenantId }, include: { gatewayTransaction: { select: { id: true } } } });
+      if (!payment) throw new ConflictError("No such payment in this tenant");
+      if (!(DELETABLE_PAYMENT_STATUSES as readonly string[]).includes(payment.status) || payment.gatewayTransaction) {
+        throw new ConflictError(
+          payment.status === "COMPLETED"
+            ? "A completed payment is part of the books; reverse it with a refund instead of deleting it"
+            : "This payment is linked to a gateway transaction and cannot be deleted"
+        );
+      }
+      await prisma.payment.delete({ where: { id: paymentId } });
+      await writeAuditLog({
+        tenantId,
+        actorUserId: request.user!.id,
+        action: "payment.deleted",
+        resourceType: "Payment",
+        resourceId: paymentId,
+        before: { status: payment.status, amountMinor: payment.amountMinor, method: payment.method, reference: payment.reference, createdAt: payment.createdAt },
+        ipAddress: request.ip,
+        userAgent: request.headers["user-agent"] ?? null,
+      });
+      reply.send(successResponse({ deleted: true }, request.id));
     }
   );
 

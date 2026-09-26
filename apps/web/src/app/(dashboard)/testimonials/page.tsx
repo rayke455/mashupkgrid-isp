@@ -102,7 +102,7 @@ export default function TestimonialsManagerPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-800 pb-5">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-black text-white tracking-tight">
+            <h1 className="text-2xl font-semibold text-white tracking-tight">
               Landing Page Testimonials &amp; Reviews
             </h1>
             <span className="px-2 py-0.5 rounded-full bg-brand-500/15 border border-brand-500/30 text-[10px] font-mono font-bold text-brand-400">
@@ -385,7 +385,7 @@ export default function TestimonialsManagerPage() {
         <div className="rounded-3xl border border-slate-800 bg-slate-950/90 p-6 sm:p-10 space-y-10">
           <div className="text-center max-w-3xl mx-auto space-y-3">
             <Badge variant="info">{config.badge}</Badge>
-            <h2 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+            <h2 className="text-2xl sm:text-3xl font-semibold text-white tracking-tight">
               {config.title}
             </h2>
             <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">

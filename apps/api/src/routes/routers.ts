@@ -30,6 +30,7 @@ import {
   routerFacingApiBase,
   appFilterPortalHosts,
   routerRadiusHost,
+  listPlatformWalledGardenHosts,
 } from "@mashupkgrid/network";
 import {
   buildMikrotikProvisioningScript,
@@ -382,6 +383,7 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
         loginTemplateUrl,
         portalHost: env.APP_PORTAL_URL ? new URL(env.APP_PORTAL_URL).hostname : "captive.mashuphost.tech",
         portalDomains: await getTenantPortalDomains(tenantId),
+        extraWalledGardenHosts: await listPlatformWalledGardenHosts(),
         pppoeInterface: router.pppoeInterface,
         pppoeGatewayIp: router.pppoeGatewayIp,
         pppoePoolRange: router.pppoePoolRange,
@@ -933,6 +935,7 @@ function getClientIp(request: { headers: Record<string, string | string[] | unde
       loginTemplateUrl,
       portalHost: env.APP_PORTAL_URL ? new URL(env.APP_PORTAL_URL).hostname : "captive.mashuphost.tech",
       portalDomains: await getTenantPortalDomains(router.tenantId),
+      extraWalledGardenHosts: await listPlatformWalledGardenHosts(),
       pppoeInterface: router.pppoeInterface,
       pppoeGatewayIp: router.pppoeGatewayIp,
       pppoePoolRange: router.pppoePoolRange,

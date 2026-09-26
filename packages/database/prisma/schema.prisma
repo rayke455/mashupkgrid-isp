@@ -1438,6 +1438,23 @@ model Donation {
 
 /// "Sign in with Google" is platform-wide, same reasoning as PlatformMpesaConfig — one OAuth app
 /// registered against this deployment's own fixed domain serves every tenant. Was previously an
+/// A hostname, wildcard or IP a hotspot customer may reach BEFORE logging in, on every router on
+/// the platform. The platform's own hosts and the payment gateways are built in (see
+/// packages/radius setup-script.ts); this is what a super admin adds on top — a new gateway, a
+/// support site, an app's CDN — from the dashboard, without a code release. Applied by the
+/// setup script of every router linked from then on and by the hotspot self-repair pass on
+/// routers already online.
+model PlatformWalledGardenHost {
+  id              String   @id @default(uuid())
+  /// "example.com", "*.example.com" or "203.0.113.5"; validated in packages/network walled-garden.ts.
+  host            String   @unique
+  note            String?
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+
+  @@map("platform_walled_garden_hosts")
+}
+
 /// env-var-only setting (GOOGLE_OAUTH_CLIENT_ID); moved into the DB once a super admin needed to
 /// toggle/edit it from the dashboard instead of editing .env and restarting the API. `clientId`
 /// is not a secret — it's the OAuth `aud` value, meant to sit in the frontend bundle.

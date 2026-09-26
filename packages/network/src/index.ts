@@ -11,3 +11,4 @@ export * from "./vlan.service.js";
 export * from "./app-filter.js";
 export * from "./anti-tunnel.js";
 export * from "./hotspot-device.service.js";
+export * from "./walled-garden.js";

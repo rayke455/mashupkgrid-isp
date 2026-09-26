@@ -206,10 +206,10 @@ export default function CaptiveCustomizerPage() {
       <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-800">
         <div>
           <div className="flex items-center gap-2.5">
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-500 text-white shadow-lg">
+            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-600 text-white">
               🎭
             </span>
-            <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
+            <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">
               Captive Portal Studio &amp; 30 Plugins
             </h1>
           </div>
@@ -237,7 +237,7 @@ export default function CaptiveCustomizerPage() {
           <button
             onClick={handleSave}
             disabled={isSaving}
-            className="px-5 py-2 rounded-xl bg-gradient-to-r from-brand-600 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 text-white text-xs font-black shadow-lg shadow-brand-500/25 transition-all flex items-center gap-2 disabled:opacity-60"
+            className="px-5 py-2 rounded-lg bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold transition-colors flex items-center gap-2 disabled:opacity-60"
           >
             <span>{isSaving ? "Publishing…" : "Save & Publish"}</span>
             {savedToast && <span className="text-emerald-300">✓</span>}
@@ -269,7 +269,7 @@ export default function CaptiveCustomizerPage() {
             onClick={() => setActiveTab(t.id)}
             className={`px-4 py-2 rounded-xl transition-all ${
               activeTab === t.id
-                ? "bg-brand-600 text-white shadow-md shadow-brand-600/30"
+                ? "bg-brand-600 text-white"
                 : "text-slate-400 hover:text-white hover:bg-slate-900"
             }`}
           >
@@ -911,7 +911,7 @@ export default function CaptiveCustomizerPage() {
                     <h4 className="text-xs font-bold text-white">{p.name}</h4>
                     <button
                       onClick={() => updatePluginToggle(p.key, !isEnabled)}
-                      className={`px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider transition-colors ${
+                      className={`px-2.5 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wider transition-colors ${
                         isEnabled
                           ? "bg-emerald-500/20 text-emerald-400 border border-emerald-500/40"
                           : "bg-slate-800 text-slate-500 border border-slate-700"
@@ -1150,28 +1150,28 @@ export default function CaptiveCustomizerPage() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="p-4 rounded-xl bg-slate-900 border border-slate-800">
               <span className="text-[11px] text-slate-400">Portal Visits</span>
-              <p className="text-xl font-black text-brand-400 mt-1">
+              <p className="text-xl font-semibold text-brand-400 mt-1">
                 {(state.analytics.events || []).filter((e) => e.type === "impression").length}
               </p>
             </div>
 
             <div className="p-4 rounded-xl bg-slate-900 border border-slate-800">
               <span className="text-[11px] text-slate-400">Voucher Logins</span>
-              <p className="text-xl font-black text-emerald-400 mt-1">
+              <p className="text-xl font-semibold text-emerald-400 mt-1">
                 {(state.analytics.events || []).filter((e) => e.type === "voucher_success").length}
               </p>
             </div>
 
             <div className="p-4 rounded-xl bg-slate-900 border border-slate-800">
               <span className="text-[11px] text-slate-400">Package Selections</span>
-              <p className="text-xl font-black text-indigo-400 mt-1">
+              <p className="text-xl font-semibold text-indigo-400 mt-1">
                 {(state.analytics.events || []).filter((e) => e.type === "package_click").length}
               </p>
             </div>
 
             <div className="p-4 rounded-xl bg-slate-900 border border-slate-800">
               <span className="text-[11px] text-slate-400">Ad Clicks</span>
-              <p className="text-xl font-black text-amber-400 mt-1">
+              <p className="text-xl font-semibold text-amber-400 mt-1">
                 {(state.analytics.events || []).filter((e) => e.type === "ad_click").length}
               </p>
             </div>

@@ -1,5 +1,6 @@
 import { prisma } from "@mashupkgrid/database";
 import { invalidateMaintenanceCache } from "../lib/redis.js";
+import type { AutomationSummary } from "@mashupkgrid/shared";
 
 /**
  * Flips maintenance on/off at the boundaries of a scheduled window
@@ -7,9 +8,9 @@ import { invalidateMaintenanceCache } from "../lib/redis.js";
  * even while the platform is itself under maintenance, since it's what turns maintenance back
  * off on schedule. Runs every minute (see index.ts repeatable job registration).
  */
-export async function handleApplyScheduledMaintenance(): Promise<void> {
+export async function handleApplyScheduledMaintenance(): Promise<AutomationSummary> {
   const latest = await prisma.maintenanceEvent.findFirst({ orderBy: { createdAt: "desc" } });
-  if (!latest || (!latest.startAt && !latest.endAt)) return;
+  if (!latest || (!latest.startAt && !latest.endAt)) return { switched: 0 };
 
   const now = new Date();
 
@@ -32,7 +33,7 @@ export async function handleApplyScheduledMaintenance(): Promise<void> {
       },
     });
     await invalidateMaintenanceCache();
-    return;
+    return { switched: 1 };
   }
 
   if (latest.enabled && latest.endAt && latest.endAt <= now) {
@@ -54,5 +55,7 @@ export async function handleApplyScheduledMaintenance(): Promise<void> {
       },
     });
     await invalidateMaintenanceCache();
+    return { switched: 1 };
   }
+  return { switched: 0 };
 }

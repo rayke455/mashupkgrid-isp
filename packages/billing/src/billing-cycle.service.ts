@@ -174,3 +174,25 @@ export async function reactivateCustomerIfCleared(tenantId: string, customerId: 
 
   return suspended.length;
 }
+
+/**
+ * Turns a customer's service back on the moment their payment lands, rather than on the next
+ * scheduled sweep. Called after the payment's transaction has committed — from the manual
+ * "record payment" route and from every gateway callback (M-Pesa STK and C2B, Paystack,
+ * Pesapal) — because reactivating inside the transaction would push a router change for a
+ * payment that might still roll back.
+ *
+ * Best-effort by design: the money is already recorded; a RADIUS or router hiccup here is
+ * logged and left to the every-minute `reactivateClearedCustomers` sweep, which is idempotent.
+ */
+export async function restoreServiceAfterPayment(tenantId: string, customerId: string | null | undefined): Promise<number> {
+  if (!customerId) return 0;
+  try {
+    const restored = await reactivateCustomerIfCleared(tenantId, customerId);
+    if (restored > 0) console.log(`[billing] restored ${restored} suspended service(s) for customer ${customerId} after payment`);
+    return restored;
+  } catch (err) {
+    console.error(`[billing] could not restore service for customer ${customerId} after payment`, err);
+    return 0;
+  }
+}

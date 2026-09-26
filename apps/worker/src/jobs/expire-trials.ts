@@ -1,4 +1,5 @@
 import { prisma } from "@mashupkgrid/database";
+import type { AutomationSummary } from "@mashupkgrid/shared";
 
 const GRACE_PERIOD_DAYS = 3;
 
@@ -13,7 +14,7 @@ const GRACE_PERIOD_DAYS = 3;
  * Stage 2: PAST_DUE subscriptions whose grace period has elapsed move to EXPIRED, and the tenant
  * itself is SUSPENDED — the exact mechanism resolveTenant already enforces (TenantSuspendedError).
  */
-export async function handleExpireTrials(): Promise<void> {
+export async function handleExpireTrials(): Promise<AutomationSummary> {
   const now = new Date();
 
   // 1. Immediately expire trials that have ended
@@ -79,4 +80,5 @@ export async function handleExpireTrials(): Promise<void> {
   console.log(
     `[billing] expire-trials: expiredTrials=${expiredTrials.length} past_due=${dueSubscriptions.length} overdueExpired=${overdueSubscriptions.length}`
   );
+  return { expiredTrials: expiredTrials.length, pastDue: dueSubscriptions.length, expired: overdueSubscriptions.length };
 }

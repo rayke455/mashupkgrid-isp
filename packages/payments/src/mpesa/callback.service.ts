@@ -1,7 +1,7 @@
 import { prisma, type MpesaStkRequest, type Prisma } from "@mashupkgrid/database";
 import { recordPlatformCollection, upgradeProvisionalReceipt } from "../gateway/collection.service.js";
 import { NotFoundError, generateSecureToken } from "@mashupkgrid/shared";
-import { recordPaymentForInvoiceWithDb, topUpWalletWithDb } from "@mashupkgrid/billing";
+import { recordPaymentForInvoiceWithDb, topUpWalletWithDb, restoreServiceAfterPayment } from "@mashupkgrid/billing";
 import { sendHotspotVoucherSms } from "@mashupkgrid/sms";
 
 interface StkCallbackMetadata {
@@ -378,6 +378,8 @@ export async function completeStkRequest(
       })
       .catch((err) => console.error(`[mpesa] voucher text failed for ${checkoutRequestId}`, err));
   }
+  // Same post-commit rule: a suspended customer whose M-Pesa just landed goes back online now.
+  if (outcome.status === "COMPLETED") await restoreServiceAfterPayment(tenantId, outcome.customerId);
   return outcome;
 }
 

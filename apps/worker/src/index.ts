@@ -1,7 +1,7 @@
 import { handleRunProvisioningJobs } from "./jobs/run-provisioning-jobs.js";
 import { Worker, Queue } from "bullmq";
 import { env } from "@mashupkgrid/config";
-import { QUEUE_NAMES, JOB_NAMES } from "@mashupkgrid/shared";
+import { QUEUE_NAMES, JOB_NAMES, AUTOMATION_JOBS, type AutomationSummary } from "@mashupkgrid/shared";
 import { handleSendVerificationEmail } from "./jobs/send-verification-email.js";
 import { handleSendPasswordResetEmail } from "./jobs/send-password-reset-email.js";
 import { handleSendPaymentConfirmationEmail } from "./jobs/send-payment-confirmation-email.js";
@@ -36,6 +36,7 @@ import {
   handleSendWhatsappServiceStatus,
 } from "./jobs/whatsapp-notifications.js";
 import { createGracefulShutdown } from "./lib/shutdown.js";
+import { recordJobRun, startWorkerHeartbeat, triggerOf } from "./lib/job-runs.js";
 import { startRadiusServer } from "@mashupkgrid/radius";
 import { startWinboxRelay, loadWinboxRelayTargets } from "@mashupkgrid/network";
 import { whatsappConnectJobSchema, whatsappDisconnectJobSchema, whatsappTestMessageJobSchema } from "@mashupkgrid/shared";
@@ -44,7 +45,14 @@ import { startWhatsAppRuntime, getManager } from "./lib/whatsapp-runtime.js";
 
 const connection = { url: env.REDIS_URL };
 
+/** Runs a scheduled handler and leaves its run record for the dashboard's automation page. */
+function scheduled(jobName: string, data: unknown, handler: () => Promise<AutomationSummary | void>): Promise<AutomationSummary> {
+  return recordJobRun(jobName, triggerOf(data), handler);
+}
+
 async function main() {
+  const stopHeartbeat = startWorkerHeartbeat();
+
   const emailWorker = new Worker(
     QUEUE_NAMES.email,
     async (job) => {
@@ -70,7 +78,7 @@ async function main() {
     QUEUE_NAMES.maintenance,
     async (job) => {
       if (job.name === JOB_NAMES.applyScheduledMaintenance) {
-        return handleApplyScheduledMaintenance();
+        return scheduled(job.name, job.data, handleApplyScheduledMaintenance);
       }
       throw new Error(`Unknown job in queue "${QUEUE_NAMES.maintenance}": ${job.name}`);
     },
@@ -81,7 +89,7 @@ async function main() {
     QUEUE_NAMES.cleanup,
     async (job) => {
       if (job.name === JOB_NAMES.cleanupExpiredTokens) {
-        return handleCleanupExpiredTokens();
+        return scheduled(job.name, job.data, handleCleanupExpiredTokens);
       }
       throw new Error(`Unknown job in queue "${QUEUE_NAMES.cleanup}": ${job.name}`);
     },
@@ -91,25 +99,26 @@ async function main() {
   const billingWorker = new Worker(
     QUEUE_NAMES.billing,
     async (job) => {
+      const run = (handler: () => Promise<AutomationSummary | void>) => scheduled(job.name, job.data, handler);
       switch (job.name) {
         case JOB_NAMES.generateInvoices:
-          return handleGenerateInvoices();
+          return run(handleGenerateInvoices);
         case JOB_NAMES.markOverdueInvoices:
-          return handleMarkOverdueInvoices();
+          return run(handleMarkOverdueInvoices);
         case JOB_NAMES.suspendOverdueCustomers:
-          return handleSuspendOverdueCustomers();
+          return run(handleSuspendOverdueCustomers);
         case JOB_NAMES.reactivateClearedCustomers:
-          return handleReactivateClearedCustomers();
+          return run(handleReactivateClearedCustomers);
         case JOB_NAMES.sendDueSoonReminders:
-          return handleSendDueSoonReminders();
+          return run(handleSendDueSoonReminders);
         case JOB_NAMES.sendOverdueNotices:
-          return handleSendOverdueNotices();
+          return run(handleSendOverdueNotices);
         case JOB_NAMES.sendFinalDunningNotices:
-          return handleSendFinalDunningNotices();
+          return run(handleSendFinalDunningNotices);
         case JOB_NAMES.runTenantPayouts:
-          return handleRunTenantPayouts();
+          return run(handleRunTenantPayouts);
         case JOB_NAMES.expireTrials:
-          return handleExpireTrials();
+          return run(handleExpireTrials);
         default:
           throw new Error(`Unknown job in queue "${QUEUE_NAMES.billing}": ${job.name}`);
       }
@@ -124,7 +133,7 @@ async function main() {
     QUEUE_NAMES.mpesa,
     async (job) => {
       if (job.name === JOB_NAMES.pollPendingStkRequests) {
-        return handlePollPendingStkRequests();
+        return scheduled(job.name, job.data, handlePollPendingStkRequests);
       }
       throw new Error(`Unknown job in queue "${QUEUE_NAMES.mpesa}": ${job.name}`);
     },
@@ -134,15 +143,16 @@ async function main() {
   const networkWorker = new Worker(
     QUEUE_NAMES.network,
     async (job) => {
+      const run = (handler: () => Promise<AutomationSummary | void>) => scheduled(job.name, job.data, handler);
       switch (job.name) {
         case JOB_NAMES.retryPendingSyncTasks:
-          return handleRetryPendingSyncTasks();
+          return run(handleRetryPendingSyncTasks);
         case JOB_NAMES.runProvisioningJobs:
-          return handleRunProvisioningJobs();
+          return run(async () => ({ ...(await handleRunProvisioningJobs()) }));
         case JOB_NAMES.expireOverdueVouchers:
-          return handleExpireOverdueVouchers();
+          return run(handleExpireOverdueVouchers);
         case JOB_NAMES.pollRouterHealth:
-          return handlePollRouterHealth();
+          return run(handlePollRouterHealth);
         default:
           throw new Error(`Unknown job in queue "${QUEUE_NAMES.network}": ${job.name}`);
       }
@@ -182,126 +192,50 @@ async function main() {
     });
   }
 
-  // Repeatable jobs: the scheduler. `apply-scheduled-maintenance` runs every minute
-  // (CRITICAL — must keep running under maintenance itself); `cleanup-expired-tokens` runs
-  // daily (NON-CRITICAL).
-  const maintenanceQueue = new Queue(QUEUE_NAMES.maintenance, { connection });
-  const cleanupQueue = new Queue(QUEUE_NAMES.cleanup, { connection });
-  const billingQueue = new Queue(QUEUE_NAMES.billing, { connection });
-  const mpesaQueue = new Queue(QUEUE_NAMES.mpesa, { connection });
-  const networkQueue = new Queue(QUEUE_NAMES.network, { connection });
-
-  await maintenanceQueue.add(
-    JOB_NAMES.applyScheduledMaintenance,
-    {},
-    { repeat: { every: 60_000 }, removeOnComplete: true, removeOnFail: 100 }
-  );
-  await cleanupQueue.add(
-    JOB_NAMES.cleanupExpiredTokens,
-    {},
-    { repeat: { every: 24 * 60 * 60_000 }, removeOnComplete: true, removeOnFail: 20 }
-  );
-  // Billing cycle: check hourly for due renewals/overdue invoices/suspensions rather than
-  // daily — a tenant with DAILY-billing packages needs finer granularity than once a day.
-  await billingQueue.add(
-    JOB_NAMES.generateInvoices,
-    {},
-    { repeat: { every: 60 * 60_000 }, removeOnComplete: true, removeOnFail: 50 }
-  );
-  await billingQueue.add(
-    JOB_NAMES.markOverdueInvoices,
-    {},
-    { repeat: { every: 60 * 60_000 }, removeOnComplete: true, removeOnFail: 50 }
-  );
-  await billingQueue.add(
-    JOB_NAMES.suspendOverdueCustomers,
-    {},
-    { repeat: { every: 60 * 60_000 }, removeOnComplete: true, removeOnFail: 50 }
-  );
-  await billingQueue.add(
-    JOB_NAMES.reactivateClearedCustomers,
-    {},
-    { repeat: { every: 60 * 60_000 }, removeOnComplete: true, removeOnFail: 50 }
-  );
-  // Dunning: hourly, same cadence as the rest of the billing cycle — each stage is idempotent
-  // (dunningStage only moves forward), so running more often than the underlying data changes
-  // is harmless, just a no-op most ticks.
-  await billingQueue.add(
-    JOB_NAMES.sendDueSoonReminders,
-    {},
-    { repeat: { every: 60 * 60_000 }, removeOnComplete: true, removeOnFail: 50 }
-  );
-  await billingQueue.add(
-    JOB_NAMES.sendOverdueNotices,
-    {},
-    { repeat: { every: 60 * 60_000 }, removeOnComplete: true, removeOnFail: 50 }
-  );
-  await billingQueue.add(
-    JOB_NAMES.sendFinalDunningNotices,
-    {},
-    { repeat: { every: 60 * 60_000 }, removeOnComplete: true, removeOnFail: 50 }
-  );
-  // Same hourly cadence as the rest of the billing cycle — a trial ending mid-hour gets caught
-  // on the next tick, same tolerance already accepted for overdue-customer suspension.
-  await billingQueue.add(
-    JOB_NAMES.expireTrials,
-    {},
-    { repeat: { every: 60 * 60_000 }, removeOnComplete: true, removeOnFail: 50 }
-  );
-
-  // Settlements: a 5-minute tick. The platform's settlement policy decides what each tick does —
-  // INSTANT settles what is owed (batched per tick, so one M-Pesa transfer fee per tenant rather
-  // than one per payment); DAILY/WEEKLY act only once their slot has passed. See
-  // runScheduledSettlements.
-  await billingQueue.add(
-    JOB_NAMES.runTenantPayouts,
-    {},
-    { repeat: { every: 5 * 60_000 }, removeOnComplete: true, removeOnFail: 50 }
-  );
-  // Every 2 minutes: covers the "delayed callback" case without hammering Safaricom's Query API.
-  await mpesaQueue.add(
-    JOB_NAMES.pollPendingStkRequests,
-    {},
-    { repeat: { every: 2 * 60_000 }, removeOnComplete: true, removeOnFail: 100 }
-  );
-  // Every 30 seconds: a suspended customer's active PPPoE session should get kicked promptly,
-  // not sit connected for up to an hour waiting on the next billing-cycle tick.
-  await networkQueue.add(
-    JOB_NAMES.retryPendingSyncTasks,
-    {},
-    { repeat: { every: 30_000 }, removeOnComplete: true, removeOnFail: 100 }
-  );
-  // Every 10 seconds: routers are polled far more often than the billing/mpesa jobs since
-  // "is the router still up" is what the dashboard's live status badge reflects — the web UI
-  // polls the routers list every few seconds, so this is the freshness bound on what it shows.
-  // Every 20 seconds: this is the delay between a customer paying and their internet coming back
-  // on, so it is deliberately the tightest interval in this file. Jobs run one at a time inside
-  // the handler, so a short interval does not mean many concurrent router connections.
-  await networkQueue.add(
-    JOB_NAMES.runProvisioningJobs,
-    {},
-    { repeat: { every: 20_000 }, removeOnComplete: true, removeOnFail: 100 }
-  );
-  // Every 30 seconds, not 10: each poll is a full API login on the router, and a small hAP (650 MHz,
-  // 32 MB) spends real CPU on every one — at 10s it was measurably loaded before it served a single
-  // customer. Liveness also comes from the router's own 1-minute heartbeat, so 30s loses nothing.
-  // BullMQ keys a repeatable job by its interval, so changing `every` adds a second schedule
-  // beside the old one instead of replacing it. Drop any older router-poll schedule first.
-  for (const job of await networkQueue.getRepeatableJobs()) {
-    if (job.name === JOB_NAMES.pollRouterHealth && Number(job.every) !== 30_000) {
-      await networkQueue.removeRepeatableByKey(job.key);
+  // Repeatable jobs: the scheduler. Every interval lives in packages/shared's AUTOMATION_JOBS,
+  // which is also what the API and the dashboard's automation page read — a job cannot be
+  // listed there without being scheduled here, or the other way round. The rationale for each
+  // cadence is documented on its catalog entry; the short version:
+  // - apply-scheduled-maintenance every minute (CRITICAL: it is what turns maintenance back off).
+  // - billing, dunning and trial expiry hourly: DAILY-billing packages need finer than daily,
+  //   and every stage is idempotent so a tick with nothing due is a no-op.
+  // - settlements every 5 minutes; INSTANT batches per tick (one transfer fee per tenant).
+  // - STK polling every 2 minutes covers a lost callback without hammering Safaricom.
+  // - provisioning every 20s: this is the delay between paying and getting back online.
+  // - router health every 30s, not 10: each poll is a full API login, and a small hAP was
+  //   measurably loaded at 10s. Liveness also comes from the router's own 1-minute heartbeat.
+  //
+  // BullMQ keys a repeatable job by its interval, so changing `everyMs` would add a second
+  // schedule beside the old one instead of replacing it. Any schedule for a catalog job at an
+  // interval the catalog no longer specifies is dropped first.
+  const queues = new Map<string, Queue>();
+  const queueFor = (name: string): Queue => {
+    let queue = queues.get(name);
+    if (!queue) {
+      queue = new Queue(name, { connection });
+      queues.set(name, queue);
+    }
+    return queue;
+  };
+  for (const queueName of new Set(AUTOMATION_JOBS.map((job) => job.queue))) {
+    const queue = queueFor(queueName);
+    for (const existing of await queue.getRepeatableJobs()) {
+      const definition = AUTOMATION_JOBS.find((job) => job.name === existing.name && job.queue === queueName);
+      if (definition && Number(existing.every) !== definition.everyMs) {
+        await queue.removeRepeatableByKey(existing.key);
+        console.log(`[worker] dropped stale schedule for ${existing.name} (every ${existing.every}ms → ${definition.everyMs}ms)`);
+      }
     }
   }
-  await networkQueue.add(
-    JOB_NAMES.pollRouterHealth,
-    {},
-    { repeat: { every: 30_000 }, removeOnComplete: true, removeOnFail: 50 }
-  );
-  await networkQueue.add(
-    JOB_NAMES.expireOverdueVouchers,
-    {},
-    { repeat: { every: 60_000 }, removeOnComplete: true, removeOnFail: 100 }
-  );
+  for (const job of AUTOMATION_JOBS) {
+    await queueFor(job.queue).add(
+      job.name,
+      {},
+      // Failed runs are kept for inspection; the run record in Redis carries the error message
+      // the dashboard shows, and the BullMQ row is the fallback for a stack trace.
+      { repeat: { every: job.everyMs }, removeOnComplete: true, removeOnFail: 50 }
+    );
+  }
 
   console.log("[worker] MASHUPKGRID ISP worker started. Queues:", Object.values(QUEUE_NAMES).join(", "));
 
@@ -405,6 +339,7 @@ async function main() {
 
   const shutdown = createGracefulShutdown(
     [
+      async () => stopHeartbeat(),
       () => whatsappManager.stopAll().catch(() => {}),
       () => emailWorker.close(),
       () => maintenanceWorker.close(),

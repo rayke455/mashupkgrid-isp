@@ -1,6 +1,7 @@
 import { pollPendingStkRequests } from "@mashupkgrid/payments";
+import type { AutomationSummary } from "@mashupkgrid/shared";
 
-export async function handlePollPendingStkRequests(): Promise<void> {
+export async function handlePollPendingStkRequests(): Promise<AutomationSummary> {
   const result = await pollPendingStkRequests();
   console.log(
     `[mpesa] poll-pending-stk-requests: checked=${result.checked} resolved=${result.resolved} errors=${result.errors}`
@@ -12,4 +13,10 @@ export async function handlePollPendingStkRequests(): Promise<void> {
       `[mpesa] ${result.unresolvedSuccesses.length} STK request(s) confirmed successful by Safaricom but still awaiting a receipt number (no callback received yet): ${result.unresolvedSuccesses.join(", ")}`
     );
   }
+  return {
+    checked: result.checked,
+    resolved: result.resolved,
+    errors: result.errors,
+    awaitingReceipt: result.unresolvedSuccesses.length,
+  };
 }

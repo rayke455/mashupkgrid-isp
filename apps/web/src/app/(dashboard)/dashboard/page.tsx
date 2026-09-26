@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
 import { apiFetch } from "@/lib/api-client";
@@ -101,6 +101,11 @@ interface MaintenanceStatus {
   message?: string | null;
 }
 
+interface AutomationHealth {
+  worker: { online: boolean; lastHeartbeatAt: string | null };
+  jobs: Array<{ name: string; label: string; status: "ok" | "failed" | "late" | "never" }>;
+}
+
 interface VlanOverview {
   total: number;
   enabled: number;
@@ -190,6 +195,13 @@ export default function DashboardHomePage() {
     enabled: isPlatform,
   });
 
+  const { data: pendingTenants } = useQuery({
+    queryKey: ["platform-tenants-pending"],
+    queryFn: () => apiFetch<PaginatedTenants>("/api/v1/platform/tenants?status=PENDING_APPROVAL&limit=1"),
+    enabled: isPlatform,
+    refetchInterval: 60_000,
+  });
+
   const { data: platformMaintenance } = useQuery({
     queryKey: ["platform-maintenance"],
     queryFn: () => apiFetch<MaintenanceStatus>("/api/v1/maintenance", { skipAuth: true }),
@@ -256,6 +268,23 @@ export default function DashboardHomePage() {
     enabled: canReadVlans,
     refetchInterval: 15_000,
   });
+
+  // Whether the background work (billing, reminders, router checks) is actually happening.
+  const canSeeAutomation = isPlatform ? Boolean(user?.permissions.includes("maintenance.manage")) : isStaff && Boolean(user?.permissions.includes("settings.manage"));
+  const { data: automation } = useQuery({
+    queryKey: ["automation-jobs"],
+    queryFn: () => apiFetch<AutomationHealth>("/api/v1/automation/jobs"),
+    enabled: canSeeAutomation,
+    refetchInterval: 30_000,
+  });
+  const automationTrouble = automation?.jobs.filter((j) => j.status === "failed" || j.status === "late") ?? [];
+  const automationMetric = !automation
+    ? { value: "—" as ReactNode, hint: undefined as string | undefined, tone: undefined as "good" | "warn" | "bad" | undefined }
+    : !automation.worker.online
+    ? { value: "Stopped", hint: "Worker is not running", tone: "bad" as const }
+    : automationTrouble.length > 0
+    ? { value: "Needs attention", hint: `${automationTrouble.length} job${automationTrouble.length === 1 ? "" : "s"} failing or late`, tone: "warn" as const }
+    : { value: "Running", hint: `${automation.jobs.length} scheduled jobs healthy`, tone: "good" as const };
 
   const autoProvision = useMutation({
     mutationFn: () => apiFetch<{ provisioned: number }>("/api/v1/vlans/auto-provision", { method: "POST" }),
@@ -339,7 +368,7 @@ export default function DashboardHomePage() {
       {/* Super admin */}
       {isPlatform && (
         <>
-          <MetricGrid columns={3}>
+          <MetricGrid columns={5}>
             <Metric
               label="ISPs on the platform"
               value={platformTenants?.pagination.total ?? "—"}
@@ -353,7 +382,15 @@ export default function DashboardHomePage() {
               tone={platformMaintenance?.active ? "warn" : undefined}
               href="/maintenance"
             />
+            <Metric
+              label="Awaiting approval"
+              value={pendingTenants ? pendingTenants.pagination.total : "—"}
+              hint={pendingTenants ? (pendingTenants.pagination.total > 0 ? "New ISPs waiting for you to approve them" : "No applications waiting") : undefined}
+              tone={pendingTenants && pendingTenants.pagination.total > 0 ? "warn" : undefined}
+              href="/tenants"
+            />
             <Metric label="Payments" value="Gateway" hint="Collections, settlements and reconciliation" href="/admin/payments" />
+            <Metric label="Automation" value={automationMetric.value} hint={automationMetric.hint} tone={automationMetric.tone} href="/automation" />
           </MetricGrid>
 
           <Panel
@@ -403,7 +440,7 @@ export default function DashboardHomePage() {
       {/* Tenant staff */}
       {isStaff && (
         <>
-          <MetricGrid columns={canReadVlans ? 5 : 4}>
+          <MetricGrid columns={canReadVlans && canSeeAutomation ? 6 : canReadVlans || canSeeAutomation ? 5 : 4}>
             <Metric
               label="Collected, last 30 days"
               value={revenue30dMinor !== null ? formatMoney(revenue30dMinor) : "—"}
@@ -439,6 +476,9 @@ export default function DashboardHomePage() {
                 tone={vlanOverview && vlanOverview.provisioningFailed > 0 ? "bad" : undefined}
                 href="/vlans"
               />
+            )}
+            {canSeeAutomation && (
+              <Metric label="Automation" value={automationMetric.value} hint={automationMetric.hint} tone={automationMetric.tone} href="/automation" />
             )}
           </MetricGrid>
 

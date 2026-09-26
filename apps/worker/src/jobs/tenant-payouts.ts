@@ -1,4 +1,5 @@
 import { runScheduledSettlements } from "@mashupkgrid/payments";
+import type { AutomationSummary } from "@mashupkgrid/shared";
 
 /**
  * Creates and dispatches tenant settlements according to the platform's settlement policy
@@ -9,11 +10,12 @@ import { runScheduledSettlements } from "@mashupkgrid/payments";
  * been claimed (so a restart or two workers can never run the same slot twice), MANUAL never.
  * Balances below the configured minimum roll over to the next run — nothing is lost.
  */
-export async function handleRunTenantPayouts(): Promise<void> {
+export async function handleRunTenantPayouts(): Promise<AutomationSummary> {
   const result = await runScheduledSettlements();
   if (result.ran) {
     console.log(
       `[settlements] run complete: created=${result.created} skipped=${result.skipped} failed=${result.failed}`
     );
   }
+  return { created: result.created, skipped: result.skipped, failed: result.failed };
 }

@@ -375,9 +375,12 @@ export default function HotspotCaptivePortalPage() {
   const [supportMessage, setSupportMessage] = useState("");
   const [supportSent, setSupportSent] = useState(false);
 
-  const { data: tenant, isLoading: loadingTenant } = useQuery({
+  const { data: tenant, isLoading: loadingTenant, error: tenantError } = useQuery({
     queryKey: ["hotspot-info", tenantSlug],
     queryFn: () => apiFetch<TenantInfo>(`/api/v1/hotspot/${tenantSlug}/info`, { skipAuth: true }),
+    // A tenant that is not open for business answers with a definite code; polling it again
+    // will not change the answer.
+    retry: (count, err) => !(err instanceof ApiRequestError && err.status < 500) && count < 2,
   });
 
   const [localConfig, setLocalConfig] = useState<Partial<TenantInfo> | null>(null);
@@ -743,6 +746,27 @@ export default function HotspotCaptivePortalPage() {
   const bannerSubtitleToUse = tenant?.bannerSubtitle || localConfig?.bannerSubtitle || undefined;
   const installationFeeToUse = tenant?.installationFee || localConfig?.installationFee || undefined;
   const fiberRatesToUse = tenant?.fiberRates || localConfig?.fiberRates || undefined;
+
+  // An ISP that is not (or no longer) open: still awaiting platform approval, suspended, or
+  // cancelled. Customers on its Wi-Fi land here from the router redirect, so this has to say
+  // something a person can act on rather than a spinner or a raw error code.
+  if (tenantError instanceof ApiRequestError && ["TENANT_PENDING_APPROVAL", "TENANT_SUSPENDED", "UNAUTHORIZED", "NOT_FOUND"].includes(tenantError.code)) {
+    const pending = tenantError.code === "TENANT_PENDING_APPROVAL";
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center bg-[#090d16] p-6 text-center text-white">
+        <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-white/5 p-6">
+          <p className="text-lg font-semibold">{pending ? "This Wi-Fi is not open yet" : "This Wi-Fi is not available"}</p>
+          <p className="mt-2 text-sm leading-6 text-slate-300">
+            {pending
+              ? "The network operator's account is still being set up. Please try again later, or ask the venue for help."
+              : tenantError.code === "NOT_FOUND"
+                ? "There is no network at this address. Check the link you were given."
+                : "The network operator's account is currently inactive. Please ask the venue for help."}
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   // Prevent old "classic-dark" build from flashing before tenant's real theme is loaded
   if (loadingTenant && !tenant && !localConfig && !queryTheme && !userSelectedTheme) {

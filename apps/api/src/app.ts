@@ -49,6 +49,9 @@ import { productRoutes } from "./routes/products.js";
 import { platformPaymentRoutes } from "./routes/platform-payments.js";
 import { tenantPaymentRoutes } from "./routes/tenant-payments.js";
 import { checkoutRoutes } from "./routes/checkout.js";
+import { automationRoutes } from "./routes/automation.js";
+import { platformWalledGardenRoutes } from "./routes/platform-walled-garden.js";
+import { radiusSessionRoutes } from "./routes/radius-sessions.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
@@ -106,6 +109,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(vlanRoutes, { prefix: "/api/v1/vlans" });
   await app.register(provisioningRoutes, { prefix: "/api/v1/provisioning" });
   await app.register(radiusUserRoutes, { prefix: "/api/v1/radius/users" });
+  await app.register(radiusSessionRoutes, { prefix: "/api/v1/radius/sessions" });
   await app.register(voucherRoutes, { prefix: "/api/v1/vouchers" });
   await app.register(settingsRoutes, { prefix: "/api/v1/settings" });
   await app.register(meRoutes, { prefix: "/api/v1/me" });
@@ -127,6 +131,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(platformPaymentRoutes, { prefix: "/api/v1/platform/payments" });
   await app.register(tenantPaymentRoutes, { prefix: "/api/v1/tenant-payments" });
   await app.register(checkoutRoutes, { prefix: "/api/v1/pay" });
+  await app.register(automationRoutes, { prefix: "/api/v1/automation" });
+  await app.register(platformWalledGardenRoutes, { prefix: "/api/v1/platform/walled-garden" });
   // apps/api/src/routes/customer-portal.ts is still an unimplemented demo surface: it serves one
   // hardcoded customer's details to any caller, accepts "123456" (and, before the fix in that
   // file, literally any 4+ character string) as a phone OTP, hands back a fabricated
