@@ -30,6 +30,7 @@ const createStaffSchema = z.object({
   password: z.string().min(8).max(200),
   phone: z.string().max(32).optional(),
   roleId: z.string().uuid(),
+  branchId: z.string().uuid().nullable().optional(),
 });
 const staffStatusSchema = z.object({ status: z.enum(["ACTIVE", "SUSPENDED"]) });
 
@@ -161,7 +162,7 @@ export async function rbacRoutes(app: FastifyInstance): Promise<void> {
       if (tenantId === null) throw new ConflictError("Staff belong to an ISP account");
       const users = await prisma.user.findMany({
         where: { tenantId, deletedAt: null, userRoles: { some: { role: { name: { not: "CUSTOMER" } } } } },
-        include: { userRoles: { include: { role: { select: { id: true, name: true } } } } },
+        include: { userRoles: { include: { role: { select: { id: true, name: true } } } }, branch: { select: { id: true, name: true } } },
         orderBy: { createdAt: "asc" },
       });
       reply.send(
@@ -172,6 +173,7 @@ export async function rbacRoutes(app: FastifyInstance): Promise<void> {
             phone: u.phone,
             status: u.status,
             lastLoginAt: u.lastLoginAt,
+            branch: u.branch,
             createdAt: u.createdAt,
             roles: u.userRoles.map((ur) => ({ userRoleId: ur.id, id: ur.role.id, name: ur.role.name })),
           })),
@@ -205,6 +207,7 @@ export async function rbacRoutes(app: FastifyInstance): Promise<void> {
           tenantId,
           email: body.email,
           phone: body.phone ?? null,
+          branchId: body.branchId ? (await prisma.branch.findFirst({ where: { id: body.branchId, tenantId } }))?.id ?? null : null,
           passwordHash: await hashPassword(body.password),
           status: "ACTIVE",
           emailVerifiedAt: new Date(),

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
+import { useBranches } from "@/lib/use-branches";
 import { useLanguage } from "@/lib/language-context";
 import { pageStrings } from "@/lib/page-strings";
 import {
@@ -23,6 +24,7 @@ import { IconRouter } from "@/components/icons";
 interface RouterRow {
   id: string;
   name: string;
+  branchId?: string | null;
   vendor: string;
   host: string | null;
   apiPort: number;
@@ -127,6 +129,7 @@ function vendorOf(ap: ConnectedAccessPoint): string {
 
 export default function RoutersPage() {
   const { lang } = useLanguage();
+  const { branches } = useBranches();
   const t = pageStrings(lang).routers;
   const c = pageStrings(lang).common;
   const queryClient = useQueryClient();
@@ -358,6 +361,25 @@ export default function RoutersPage() {
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="text-[15px] font-semibold text-white">{router.name}</h2>
                       <Pill tone={status.tone}>{status.label}</Pill>
+                      {branches.length > 0 && (
+                        <select
+                          aria-label="Branch"
+                          value={router.branchId ?? ""}
+                          onChange={(e) =>
+                            apiFetch(`/api/v1/routers/${router.id}`, { method: "PATCH", body: JSON.stringify({ branchId: e.target.value || null }) })
+                              .then(() => queryClient.invalidateQueries({ queryKey: ["routers"] }))
+                              .catch((err) => setError(err instanceof ApiRequestError ? err.message : String(err)))
+                          }
+                          className="rounded-md border border-obsidian-700 bg-obsidian-950 px-1.5 py-0.5 text-xs text-slate-300"
+                        >
+                          <option value="">No branch</option>
+                          {branches.map((b) => (
+                            <option key={b.id} value={b.id}>
+                              {b.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
                     </div>
                     <p className="mt-1 flex flex-wrap items-center gap-x-2 text-sm text-slate-400">
                       {router.host ? (

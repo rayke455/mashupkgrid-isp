@@ -86,6 +86,7 @@ model Tenant {
   deletedAt              DateTime?
 
   users            User[]
+  branches         Branch[]
   roles            Role[]
   userRoles        UserRole[]
   sessions         Session[]
@@ -136,6 +137,9 @@ model User {
   id                  String     @id @default(uuid())
   tenantId            String?
   tenant              Tenant?    @relation(fields: [tenantId], references: [id])
+  /// Staff member's home branch: the branch their lists open on. Null means all branches.
+  branchId            String?
+  branch              Branch?    @relation(fields: [branchId], references: [id], onDelete: SetNull)
   email               String
   phone               String?
   passwordHash        String
@@ -417,6 +421,8 @@ model Customer {
   id               String         @id @default(uuid())
   tenantId         String
   tenant           Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branchId         String?
+  branch           Branch?        @relation(fields: [branchId], references: [id], onDelete: SetNull)
   userId           String?        @unique
   user             User?          @relation(fields: [userId], references: [id])
   customerNumber   String
@@ -1896,6 +1902,8 @@ model Router {
   /// Where the router physically is: a site or branch name and, when known, coordinates for the
   /// network map. All optional; nothing else depends on them.
   siteName             String?
+  branchId             String?
+  branch               Branch?      @relation(fields: [branchId], references: [id], onDelete: SetNull)
   latitude             Float?
   longitude            Float?
   /// Null until the router either calls home (see provisionTokenHash) or an admin fills it in
@@ -2478,4 +2486,24 @@ model NetworkSyncTask {
 
   @@index([tenantId, status])
   @@map("network_sync_tasks")
+}
+
+/// A branch or town an ISP operates in. Routers, customers and staff can belong to one; reports
+/// and lists filter by it. A staff member's branch is their default view, not an access boundary.
+model Branch {
+  id        String     @id @default(uuid())
+  tenantId  String
+  tenant    Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String
+  location  String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+
+  routers   Router[]
+  customers Customer[]
+  users     User[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@map("branches")
 }

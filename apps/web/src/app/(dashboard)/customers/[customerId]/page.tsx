@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
+import { useBranches } from "@/lib/use-branches";
 import { useLanguage } from "@/lib/language-context";
 import { pageStrings } from "@/lib/page-strings";
 import { formatMoney } from "@/lib/money";
@@ -19,6 +20,7 @@ interface Customer {
   email: string | null;
   status: string;
   userId: string | null;
+  branchId?: string | null;
 }
 
 interface Package {
@@ -60,6 +62,7 @@ export default function CustomerDetailPage() {
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
   const { lang } = useLanguage();
+  const { branches } = useBranches();
   const t = pageStrings(lang).customers;
   const c = pageStrings(lang).common;
   const [selectedPackageId, setSelectedPackageId] = useState("");
@@ -228,6 +231,25 @@ export default function CustomerDetailPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          {branches.length > 0 && (
+            <select
+              aria-label={t.branch}
+              value={customer.branchId ?? ""}
+              onChange={(e) =>
+                apiFetch(`/api/v1/customers/${customer.id}`, { method: "PATCH", body: JSON.stringify({ branchId: e.target.value || null }) })
+                  .then(() => queryClient.invalidateQueries({ queryKey: ["customer", customerId] }))
+                  .catch((err) => setError(err instanceof ApiRequestError ? err.message : String(err)))
+              }
+              className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm dark:border-obsidian-700 dark:bg-obsidian-950 dark:text-slate-200 text-xs"
+            >
+              <option value="">{t.noBranch}</option>
+              {branches.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+          )}
           <Link href={`/customers/${customer.id}/statement`}>
             <Button variant="secondary" className="px-3 py-1.5 text-xs">
               Statement

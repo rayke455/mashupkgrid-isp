@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { prisma } from "@mashupkgrid/database";
 import {
   getRevenueByDay,
   getOutstandingSummary,
@@ -49,8 +50,13 @@ export async function reportRoutes(app: FastifyInstance): Promise<void> {
     { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("reports.read")] },
     async (request, reply) => {
       const tenantId = requireTenant(request.user!.tenantId);
-      const { months } = z.object({ months: z.coerce.number().int().min(2).max(24).default(6) }).parse(request.query);
-      reply.send(successResponse(await getRevenueAnalytics(tenantId, months), request.id));
+      const { months, branchId } = z
+        .object({ months: z.coerce.number().int().min(2).max(24).default(6), branchId: z.string().uuid().optional() })
+        .parse(request.query);
+      if (branchId && !(await prisma.branch.findFirst({ where: { id: branchId, tenantId }, select: { id: true } }))) {
+        throw new ConflictError("That branch is not part of this account");
+      }
+      reply.send(successResponse(await getRevenueAnalytics(tenantId, months, branchId ?? null), request.id));
     }
   );
 

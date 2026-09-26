@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
+import { useBranches } from "@/lib/use-branches";
 import { Badge, Button, Card, ErrorText, HintText, Input, Label } from "@/components/ui";
 import { EmptyState, Pill, TableShell, darkButton, td, th } from "@/components/dashboard/surface";
 
@@ -16,6 +17,7 @@ interface StaffRow {
   status: "ACTIVE" | "SUSPENDED" | "PENDING_VERIFICATION" | "DISABLED";
   lastLoginAt: string | null;
   createdAt: string;
+  branch?: { id: string; name: string } | null;
   roles: { userRoleId: string; id: string; name: string }[];
 }
 interface Role {
@@ -54,6 +56,8 @@ export default function StaffSettingsPage() {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [roleId, setRoleId] = useState("");
+  const [branchId, setBranchId] = useState("");
+  const { branches } = useBranches();
   const [error, setError] = useState<string | null>(null);
 
   const { data: staff, isLoading } = useQuery({ queryKey: ["staff"], queryFn: () => apiFetch<StaffRow[]>("/api/v1/rbac/staff") });
@@ -62,7 +66,7 @@ export default function StaffSettingsPage() {
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["staff"] });
   const add = useMutation({
-    mutationFn: () => apiFetch("/api/v1/rbac/staff", { method: "POST", body: JSON.stringify({ email, phone: phone || undefined, password, roleId }) }),
+    mutationFn: () => apiFetch("/api/v1/rbac/staff", { method: "POST", body: JSON.stringify({ email, phone: phone || undefined, password, roleId, branchId: branchId || null }) }),
     onSuccess: () => {
       setEmail("");
       setPhone("");
@@ -141,6 +145,24 @@ export default function StaffSettingsPage() {
               </select>
               {roleId && <HintText>{ROLE_HELP[assignable.find((r) => r.id === roleId)?.name ?? ""] ?? "A custom role for this account."}</HintText>}
             </div>
+            {branches.length > 0 && (
+              <div>
+                <Label htmlFor="staffBranch">Home branch (optional)</Label>
+                <select
+                  id="staffBranch"
+                  value={branchId}
+                  onChange={(e) => setBranchId(e.target.value)}
+                  className="w-full rounded-lg border border-slate-300/90 bg-white px-3.5 py-2 text-sm text-slate-900 outline-none focus:border-brand-500 dark:border-obsidian-700 dark:bg-obsidian-950 dark:text-slate-100"
+                >
+                  <option value="">All branches</option>
+                  {branches.map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {b.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div className="sm:col-span-2">
               <Button type="submit" disabled={add.isPending || !roleId}>
                 {add.isPending ? "Adding…" : "Add staff member"}
@@ -176,7 +198,7 @@ export default function StaffSettingsPage() {
                     <td className={td}>
                       <span className="font-medium text-white">{s.email}</span>
                       {isMe && <span className="ml-2 text-xs text-slate-500">you</span>}
-                      {s.phone && <span className="block text-xs text-slate-500">{s.phone}</span>}
+                      {(s.phone || s.branch) && <span className="block text-xs text-slate-500">{[s.phone, s.branch?.name].filter(Boolean).join(" · ")}</span>}
                     </td>
                     <td className={`${td} whitespace-normal`}>
                       <div className="flex flex-wrap items-center gap-1.5">

@@ -72,6 +72,7 @@ const createRouterSchema = z.object({
   username: z.string().min(1),
   password: z.string().min(1),
   siteName: z.string().trim().max(80).nullable().optional(),
+  branchId: z.string().uuid().nullable().optional(),
   latitude: z.number().min(-90).max(90).nullable().optional(),
   longitude: z.number().min(-180).max(180).nullable().optional(),
 });

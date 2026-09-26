@@ -11,6 +11,7 @@ import {
 import {
   successResponse,
   ConflictError,
+  NotFoundError,
   paginationQuerySchema,
   paginate,
   toSkipTake,
@@ -29,6 +30,13 @@ import { assertWithinPlanLimit } from "../lib/plan-limits.js";
 
 const preHandler = [authenticate, resolveTenant, checkMaintenance] as const;
 
+/** A branch id from the request must belong to this tenant; anything else is refused. */
+async function assertBranchInTenant(tenantId: string, branchId: string | null | undefined): Promise<void> {
+  if (!branchId) return;
+  const branch = await prisma.branch.findFirst({ where: { id: branchId, tenantId }, select: { id: true } });
+  if (!branch) throw new NotFoundError("Branch");
+}
+
 const createCustomerSchema = z.object({
   fullName: z.string().min(1),
   email: z.string().email().optional(),
@@ -38,6 +46,7 @@ const createCustomerSchema = z.object({
   gpsLat: z.number().optional(),
   gpsLng: z.number().optional(),
   connectionType: z.string().optional(),
+  branchId: z.string().uuid().nullable().optional(),
 });
 
 const updateCustomerSchema = createCustomerSchema.partial().extend({ notes: z.string().optional() });
@@ -57,6 +66,8 @@ const statusSchema = z.object({
 const listQuerySchema = paginationQuerySchema.extend({
   search: z.string().optional(),
   status: z.string().optional(),
+  /** A branch id, or "none" for customers in no branch. */
+  branchId: z.union([z.string().uuid(), z.literal("none")]).optional(),
   sortBy: z.string().optional(),
   sortOrder: z.enum(["asc", "desc"]).optional(),
 });
@@ -90,6 +101,7 @@ export async function customerRoutes(app: FastifyInstance): Promise<void> {
         tenantId,
         deletedAt: null,
         ...(query.status ? { status: query.status as never } : {}),
+        ...(query.branchId ? { branchId: query.branchId === "none" ? null : query.branchId } : {}),
         ...buildKeywordSearchWhere(query.search, SEARCHABLE_FIELDS),
       };
       const [items, total] = await Promise.all([
@@ -204,6 +216,7 @@ export async function customerRoutes(app: FastifyInstance): Promise<void> {
     async (request, reply) => {
       const tenantId = requireTenant(request.user!.tenantId);
       const body = createCustomerSchema.parse(request.body);
+      await assertBranchInTenant(tenantId, body.branchId);
       await assertWithinPlanLimit(tenantId, "customers");
       const customer = await createCustomer(tenantId, body);
 
@@ -248,6 +261,7 @@ export async function customerRoutes(app: FastifyInstance): Promise<void> {
       const { customerId } = idParamsSchema.parse(request.params);
       const body = updateCustomerSchema.parse(request.body);
       const before = await getCustomerOrThrow(tenantId, customerId);
+      await assertBranchInTenant(tenantId, body.branchId);
       const after = await updateCustomer(tenantId, customerId, body);
 
       await writeAuditLog({

@@ -37,6 +37,7 @@ export interface CreateRouterInput {
   username: string;
   password: string;
   siteName?: string | null;
+  branchId?: string | null;
   latitude?: number | null;
   longitude?: number | null;
 }
@@ -433,6 +434,7 @@ export async function updateRouter(tenantId: string, routerId: string, patch: Up
       ...(patch.apiPort !== undefined ? { apiPort: patch.apiPort } : {}),
       ...(patch.useTls !== undefined ? { useTls: patch.useTls } : {}),
       ...(patch.siteName !== undefined ? { siteName: patch.siteName || null } : {}),
+      ...(patch.branchId !== undefined ? { branchId: patch.branchId } : {}),
       ...(patch.latitude !== undefined ? { latitude: patch.latitude } : {}),
       ...(patch.longitude !== undefined ? { longitude: patch.longitude } : {}),
       ...(patch.username !== undefined

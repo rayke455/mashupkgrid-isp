@@ -48,6 +48,9 @@ export interface PageStrings {
     statusSuspended: string;
     statusInactive: string;
     matching: (n: number) => string;
+    allBranches: string;
+    noBranch: string;
+    branch: string;
     // detail
     loadingDetails: string;
     account: string;
@@ -246,6 +249,8 @@ export interface PageStrings {
     groupAccount: string;
     reminders: string;
     remindersHint: string;
+    branches: string;
+    branchesHint: string;
     staff: string;
     staffHint: string;
     password: string;
@@ -347,6 +352,9 @@ const EN: PageStrings = {
     statusSuspended: "Suspended",
     statusInactive: "Inactive",
     matching: (n) => `${n} matching`,
+    allBranches: "All branches",
+    noBranch: "No branch",
+    branch: "Branch",
     loadingDetails: "Loading subscriber details…",
     account: "Account",
     portalLinked: "Self-service portal linked",
@@ -543,6 +551,8 @@ const EN: PageStrings = {
     liveChatHint: "Tawk.to widget",
     groupAccount: "Account",
     reminders: "Reminders and tickets",
+    branches: "Branches",
+    branchesHint: "Towns or areas you run",
     remindersHint: "Payment reminders, response targets",
     staff: "Staff and roles",
     staffHint: "Who can sign in, and what they may do",
@@ -644,6 +654,9 @@ const SW: PageStrings = {
     statusSuspended: "Imesimamishwa",
     statusInactive: "Haitumiki",
     matching: (n) => `${n} zinalingana`,
+    allBranches: "Matawi yote",
+    noBranch: "Bila tawi",
+    branch: "Tawi",
     loadingDetails: "Inapakia maelezo ya mteja…",
     account: "Akaunti",
     portalLinked: "Akaunti ya kujihudumia imeunganishwa",
@@ -840,6 +853,8 @@ const SW: PageStrings = {
     liveChatHint: "Wijeti ya Tawk.to",
     groupAccount: "Akaunti",
     reminders: "Vikumbusho na tiketi",
+    branches: "Matawi",
+    branchesHint: "Miji au maeneo mnayohudumia",
     remindersHint: "Vikumbusho vya malipo, muda wa majibu",
     staff: "Wafanyakazi na majukumu",
     staffHint: "Nani anaweza kuingia, na anaruhusiwa nini",

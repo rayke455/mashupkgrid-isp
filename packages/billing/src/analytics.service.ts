@@ -20,25 +20,30 @@ export interface RevenueAnalytics {
 
 const DAY = 86_400_000;
 
-export async function getRevenueAnalytics(tenantId: string, monthsBack = 6): Promise<RevenueAnalytics> {
+export async function getRevenueAnalytics(tenantId: string, monthsBack = 6, branchId?: string | null): Promise<RevenueAnalytics> {
   const tenant = await prisma.tenant.findUniqueOrThrow({ where: { id: tenantId }, select: { timezone: true, currency: true } });
   const tz = tenant.timezone || "Africa/Nairobi";
   const months = Math.min(24, Math.max(2, monthsBack));
   const now = new Date();
   const since = new Date(now.getFullYear(), now.getMonth() - (months - 1), 1);
   const ninetyDaysAgo = new Date(now.getTime() - 90 * DAY);
+  // With a branch chosen, money counts only when it came from a customer in that branch. Hotspot
+  // sales have no customer and no branch, so they are left out of a branch view entirely.
+  const payBranch = branchId ? Prisma.sql`AND "customerId" IN (SELECT id FROM customers WHERE "branchId" = ${branchId})` : Prisma.empty;
+  const payBranchAliased = branchId ? Prisma.sql`AND pay."customerId" IN (SELECT id FROM customers WHERE "branchId" = ${branchId})` : Prisma.empty;
+  const custBranch = branchId ? Prisma.sql`AND "branchId" = ${branchId}` : Prisma.empty;
 
   const [monthlyRevenue, monthlyCustomers, subscriptionPackages, hotspotPackages, hours, weekdays] = await Promise.all([
     prisma.$queryRaw<{ month: Date; revenue: bigint | null; payments: bigint }[]>`
       SELECT date_trunc('month', "createdAt" AT TIME ZONE ${tz}) AS month,
              SUM("amountMinor")::bigint AS revenue, COUNT(*)::bigint AS payments
       FROM payments
-      WHERE "tenantId" = ${tenantId} AND status = 'COMPLETED' AND "reversedAt" IS NULL AND "createdAt" >= ${since}
+      WHERE "tenantId" = ${tenantId} AND status = 'COMPLETED' AND "reversedAt" IS NULL AND "createdAt" >= ${since} ${payBranch}
       GROUP BY 1 ORDER BY 1`,
     prisma.$queryRaw<{ month: Date; customers: bigint }[]>`
       SELECT date_trunc('month', "createdAt" AT TIME ZONE ${tz}) AS month, COUNT(*)::bigint AS customers
       FROM customers
-      WHERE "tenantId" = ${tenantId} AND "deletedAt" IS NULL AND "createdAt" >= ${since}
+      WHERE "tenantId" = ${tenantId} AND "deletedAt" IS NULL AND "createdAt" >= ${since} ${custBranch}
       GROUP BY 1`,
     prisma.$queryRaw<{ name: string; revenue: bigint | null; sales: bigint }[]>`
       SELECT p.name, SUM(pay."amountMinor")::bigint AS revenue, COUNT(DISTINCT i.id)::bigint AS sales
@@ -46,9 +51,11 @@ export async function getRevenueAnalytics(tenantId: string, monthsBack = 6): Pro
       JOIN invoices i ON i.id = pay."invoiceId"
       JOIN customer_services cs ON cs.id = i."customerServiceId"
       JOIN packages p ON p.id = cs."packageId"
-      WHERE pay."tenantId" = ${tenantId} AND pay.status = 'COMPLETED' AND pay."reversedAt" IS NULL AND pay."createdAt" >= ${since}
+      WHERE pay."tenantId" = ${tenantId} AND pay.status = 'COMPLETED' AND pay."reversedAt" IS NULL AND pay."createdAt" >= ${since} ${payBranchAliased}
       GROUP BY p.name`,
-    prisma.$queryRaw<{ name: string; revenue: bigint | null; sales: bigint }[]>`
+    branchId
+      ? Promise.resolve([] as { name: string; revenue: bigint | null; sales: bigint }[])
+      : prisma.$queryRaw<{ name: string; revenue: bigint | null; sales: bigint }[]>`
       SELECT hp.name, SUM(s."amountMinor")::bigint AS revenue, COUNT(*)::bigint AS sales
       FROM mpesa_stk_requests s
       JOIN hotspot_packages hp ON hp.id = s."hotspotPackageId"
@@ -57,12 +64,12 @@ export async function getRevenueAnalytics(tenantId: string, monthsBack = 6): Pro
     prisma.$queryRaw<{ hour: number; payments: bigint }[]>`
       SELECT EXTRACT(HOUR FROM "createdAt" AT TIME ZONE ${tz})::int AS hour, COUNT(*)::bigint AS payments
       FROM payments
-      WHERE "tenantId" = ${tenantId} AND status = 'COMPLETED' AND "createdAt" >= ${ninetyDaysAgo}
+      WHERE "tenantId" = ${tenantId} AND status = 'COMPLETED' AND "createdAt" >= ${ninetyDaysAgo} ${payBranch}
       GROUP BY 1`,
     prisma.$queryRaw<{ weekday: number; payments: bigint }[]>`
       SELECT EXTRACT(DOW FROM "createdAt" AT TIME ZONE ${tz})::int AS weekday, COUNT(*)::bigint AS payments
       FROM payments
-      WHERE "tenantId" = ${tenantId} AND status = 'COMPLETED' AND "createdAt" >= ${ninetyDaysAgo}
+      WHERE "tenantId" = ${tenantId} AND status = 'COMPLETED' AND "createdAt" >= ${ninetyDaysAgo} ${payBranch}
       GROUP BY 1`,
   ]);
 
@@ -81,9 +88,12 @@ export async function getRevenueAnalytics(tenantId: string, monthsBack = 6): Pro
   const lastMonth = monthRows[monthRows.length - 2]?.revenueMinor ?? 0;
 
   const [active, suspended, last30] = await Promise.all([
-    prisma.customerService.count({ where: { tenantId, status: "ACTIVE" } }),
-    prisma.customerService.count({ where: { tenantId, status: "SUSPENDED" } }),
-    prisma.payment.aggregate({ where: { tenantId, status: "COMPLETED", reversedAt: null, createdAt: { gte: new Date(now.getTime() - 30 * DAY) }, customerId: { not: null } }, _sum: { amountMinor: true } }),
+    prisma.customerService.count({ where: { tenantId, status: "ACTIVE", ...(branchId ? { customer: { branchId } } : {}) } }),
+    prisma.customerService.count({ where: { tenantId, status: "SUSPENDED", ...(branchId ? { customer: { branchId } } : {}) } }),
+    prisma.payment.aggregate({
+      where: { tenantId, status: "COMPLETED", reversedAt: null, createdAt: { gte: new Date(now.getTime() - 30 * DAY) }, ...(branchId ? { customer: { branchId } } : { customerId: { not: null } }) },
+      _sum: { amountMinor: true },
+    }),
   ]);
 
   return {
@@ -101,7 +111,7 @@ export async function getRevenueAnalytics(tenantId: string, monthsBack = 6): Pro
     ].sort((a, b) => b.revenueMinor - a.revenueMinor),
     byHour: Array.from({ length: 24 }, (_, hour) => ({ hour, payments: Number(hours.find((h) => h.hour === hour)?.payments ?? 0) })),
     byWeekday: Array.from({ length: 7 }, (_, weekday) => ({ weekday, payments: Number(weekdays.find((w) => w.weekday === weekday)?.payments ?? 0) })),
-    atRisk: await listCustomersAtRisk(tenantId),
+    atRisk: await listCustomersAtRisk(tenantId, 25, branchId),
   };
 }
 
@@ -109,7 +119,7 @@ export async function getRevenueAnalytics(tenantId: string, monthsBack = 6): Pro
  * Customers likely to leave, most urgent first: suspended right now, an overdue invoice, or a
  * paying customer who has gone quiet. Each gets one plain reason an operator can act on.
  */
-export async function listCustomersAtRisk(tenantId: string, limit = 25): Promise<RevenueAnalytics["atRisk"]> {
+export async function listCustomersAtRisk(tenantId: string, limit = 25, branchId?: string | null): Promise<RevenueAnalytics["atRisk"]> {
   const quietSince = new Date(Date.now() - 40 * DAY);
   const rows = await prisma.$queryRaw<
     { id: string; fullName: string; phone: string; suspended: boolean; overdueSince: Date | null; owed: bigint | null; lastPaid: Date | null }[]
@@ -122,7 +132,7 @@ export async function listCustomersAtRisk(tenantId: string, limit = 25): Promise
     FROM customers c
     JOIN customer_services cs ON cs."customerId" = c.id AND cs.status IN ('ACTIVE', 'SUSPENDED')
     LEFT JOIN invoices i ON i."customerId" = c.id
-    WHERE c."tenantId" = ${tenantId} AND c."deletedAt" IS NULL
+    WHERE c."tenantId" = ${tenantId} AND c."deletedAt" IS NULL ${branchId ? Prisma.sql`AND c."branchId" = ${branchId}` : Prisma.empty}
     GROUP BY c.id`);
 
   const scored = rows

@@ -7,6 +7,7 @@ import { apiFetch, ApiRequestError } from "@/lib/api-client";
 import { useLanguage } from "@/lib/language-context";
 import { pageStrings } from "@/lib/page-strings";
 import { downloadFromApi } from "@/lib/download";
+import { useBranches } from "@/lib/use-branches";
 import { Button, Card, ErrorText, Input, Label, Badge, StatusDot } from "@/components/ui";
 import { IconUsers, IconArrowRight } from "@/components/icons";
 
@@ -18,6 +19,7 @@ interface Customer {
   email: string | null;
   status: string;
   createdAt: string;
+  branchId?: string | null;
 }
 
 interface PaginatedCustomers {
@@ -39,16 +41,19 @@ export default function CustomersPage() {
   const [search, setSearch] = useState("");
   const [debounced, setDebounced] = useState("");
   const [status, setStatus] = useState("");
+  const [branch, setBranch] = useState("");
+  const { branches, nameOf } = useBranches();
   useEffect(() => {
     const timer = setTimeout(() => setDebounced(search.trim()), 300);
     return () => clearTimeout(timer);
   }, [search]);
   const { data, isLoading } = useQuery({
-    queryKey: ["customers", debounced, status],
+    queryKey: ["customers", debounced, status, branch],
     queryFn: () => {
       const params = new URLSearchParams({ limit: "50" });
       if (debounced) params.set("search", debounced);
       if (status) params.set("status", status);
+      if (branch) params.set("branchId", branch);
       return apiFetch<PaginatedCustomers>(`/api/v1/customers?${params.toString()}`);
     },
   });
@@ -154,6 +159,17 @@ export default function CustomersPage() {
           <option value="SUSPENDED">{t.statusSuspended}</option>
           <option value="INACTIVE">{t.statusInactive}</option>
         </select>
+        {branches.length > 0 && (
+          <select value={branch} onChange={(e) => setBranch(e.target.value)} className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm dark:border-obsidian-700 dark:bg-obsidian-950 dark:text-slate-200" aria-label={t.branch}>
+            <option value="">{t.allBranches}</option>
+            {branches.map((b) => (
+              <option key={b.id} value={b.id}>
+                {b.name}
+              </option>
+            ))}
+            <option value="none">{t.noBranch}</option>
+          </select>
+        )}
         {data && <span className="text-xs text-slate-500">{t.matching(data.pagination.total)}</span>}
       </div>
 
@@ -175,7 +191,7 @@ export default function CustomersPage() {
                     </span>
                   </p>
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    {customer.phone} {customer.email ? `· ${customer.email}` : ""} · {t.joined} {new Date(customer.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
+                    {customer.phone} {customer.email ? `· ${customer.email}` : ""} {nameOf(customer.branchId) ? `· ${nameOf(customer.branchId)}` : ""} · {t.joined} {new Date(customer.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}
                   </p>
                 </div>
               </div>

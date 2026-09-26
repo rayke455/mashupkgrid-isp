@@ -12,6 +12,7 @@ export interface CreateCustomerInput {
   gpsLng?: number | null;
   connectionType?: string | null;
   userId?: string | null;
+  branchId?: string | null;
 }
 
 async function generateCustomerNumber(tenantId: string, attempt: number): Promise<string> {
@@ -35,6 +36,7 @@ export async function createCustomer(tenantId: string, input: CreateCustomerInpu
           address: input.address ?? null,
           gpsLat: input.gpsLat ?? null,
           gpsLng: input.gpsLng ?? null,
+          branchId: input.branchId ?? null,
           connectionType: input.connectionType ?? null,
           userId: input.userId ?? null,
           status: "PENDING",

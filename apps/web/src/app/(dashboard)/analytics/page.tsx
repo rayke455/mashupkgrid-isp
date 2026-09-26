@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api-client";
+import { useBranches } from "@/lib/use-branches";
 import { formatMoney } from "@/lib/money";
 import { TrendChart } from "@/components/charts/trend-chart";
 import { BarList } from "@/components/charts/bar-list";
@@ -36,9 +37,11 @@ function monthLabel(key: string): string {
 
 export default function AnalyticsPage() {
   const [months, setMonths] = useState<6 | 12>(6);
+  const [branch, setBranch] = useState("");
+  const { branches } = useBranches();
   const { data, isLoading, error } = useQuery({
-    queryKey: ["analytics", months],
-    queryFn: () => apiFetch<Analytics>(`/api/v1/reports/analytics?months=${months}`),
+    queryKey: ["analytics", months, branch],
+    queryFn: () => apiFetch<Analytics>(`/api/v1/reports/analytics?months=${months}${branch ? `&branchId=${branch}` : ""}`),
   });
 
   const money = (minor: number) => formatMoney(minor, data?.currency ?? "KES");
@@ -61,6 +64,17 @@ export default function AnalyticsPage() {
         title="Analytics"
         description="Growth, what sells, when customers pay, and who is at risk of leaving."
         actions={
+          <div className="flex flex-wrap items-center gap-2">
+          {branches.length > 0 && (
+            <select value={branch} onChange={(e) => setBranch(e.target.value)} aria-label="Branch" className="rounded-lg border border-obsidian-700 bg-obsidian-950 px-2.5 py-1 text-xs text-slate-200">
+              <option value="">All branches</option>
+              {branches.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+          )}
           <Segmented
             label="Period"
             value={months}
@@ -70,6 +84,7 @@ export default function AnalyticsPage() {
               { value: 12, label: "12 months" },
             ]}
           />
+          </div>
         }
       />
 
@@ -115,7 +130,7 @@ export default function AnalyticsPage() {
           </Panel>
 
           <div className="grid gap-6 lg:grid-cols-2">
-            <Panel title="What sells" description={`Revenue by package, last ${months} months`}>
+            <Panel title="What sells" description={branch ? `Subscription revenue by package, last ${months} months. Hotspot sales have no branch.` : `Revenue by package, last ${months} months`}>
               {data.byPackage.length === 0 ? (
                 <p className="py-6 text-center text-sm text-slate-400">No package sales in this period.</p>
               ) : (
