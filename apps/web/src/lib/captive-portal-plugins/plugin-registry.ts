@@ -131,7 +131,7 @@ export const DEFAULT_PLUGINS_STATE: CaptivePortalPluginsState = {
     respectReducedMotion: true,
   },
   backgroundFx: {
-    enabled: true,
+    enabled: false,
     effectType: "particles",
     density: 35,
     speed: 1.2,
@@ -159,7 +159,7 @@ export const DEFAULT_PLUGINS_STATE: CaptivePortalPluginsState = {
   },
   loadingScreen: {
     enabled: true,
-    showMascot: true,
+    showMascot: false,
     mascotCharacterId: "speedy-cheetah",
     loadingTitle: "Authenticating Wi-Fi Session…",
     loadingSubtitle: "Contacting core RADIUS accounting engine",
@@ -183,21 +183,16 @@ export const DEFAULT_PLUGINS_STATE: CaptivePortalPluginsState = {
       },
     ],
   },
+  // Off until the operator writes one: a sample "fiber upgrades completed!" banner was shipping
+  // to real customers of ISPs that had never touched it.
   announcements: {
-    enabled: true,
+    enabled: false,
     style: "top-pill",
     scrollSpeedSec: 15,
-    items: [
-      {
-        id: "ann-1",
-        text: "⚡ High-speed fiber upgrades completed! Enjoy 4K streaming with zero buffering.",
-        type: "promo",
-        enabled: true,
-      },
-    ],
+    items: [],
   },
   sound: {
-    enabled: true,
+    enabled: false,
     masterVolume: 0.6,
     buttonClicks: true,
     successChime: true,
@@ -255,11 +250,12 @@ export const DEFAULT_PLUGINS_STATE: CaptivePortalPluginsState = {
     durationSec: 4,
     playAudioCue: true,
   },
+  // Off until the operator enters their own numbers: the placeholder ones below are not real.
   support: {
-    enabled: true,
-    whatsappNumber: "+254700000000",
+    enabled: false,
+    whatsappNumber: "",
     whatsappGreeting: "Hello! I need assistance with the Wi-Fi hotspot captive portal.",
-    phoneDialNumber: "+254700000000",
+    phoneDialNumber: "",
     showFaqModal: true,
     faqs: [
       {
@@ -277,13 +273,13 @@ export const DEFAULT_PLUGINS_STATE: CaptivePortalPluginsState = {
     ],
   },
   social: {
-    enabled: true,
+    enabled: false,
     position: "footer-inline",
-    facebook: "https://facebook.com",
-    instagram: "https://instagram.com",
-    tiktok: "https://tiktok.com",
-    xTwitter: "https://x.com",
-    youtube: "https://youtube.com",
+    facebook: "",
+    instagram: "",
+    tiktok: "",
+    xTwitter: "",
+    youtube: "",
   },
   analytics: {
     enabled: true,
