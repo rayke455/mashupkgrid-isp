@@ -65,6 +65,7 @@ async function notifyC2BPayment(
       customerName: customer.fullName,
       amountMinor: transaction.amountMinor,
       receiptNumber: transaction.transactionId,
+      tenantId,
     });
   }
   void emitWebhookEvent(tenantId, "payment.received", {
@@ -424,6 +425,7 @@ export async function mpesaRoutes(app: FastifyInstance): Promise<void> {
             customerName: stkRequest.customer.fullName,
             amountMinor: stkRequest.amountMinor,
             receiptNumber: stkRequest.mpesaReceiptNumber ?? "",
+            tenantId: stkRequest.tenantId ?? undefined,
           });
         }
         // A hotspot purchase has no Customer row at all (it's an anonymous walk-in buy), so the

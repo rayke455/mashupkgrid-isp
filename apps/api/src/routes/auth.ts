@@ -1,4 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { revokeSession } from "@mashupkgrid/auth";
+import { secondStepFor } from "../services/mfa.service.js";
 import { z } from "zod";
 import { prisma } from "@mashupkgrid/database";
 import { env, isProduction } from "@mashupkgrid/config";
@@ -26,7 +28,7 @@ import {
 const REFRESH_COOKIE = "refresh_token";
 const REFRESH_COOKIE_PATH = "/api/v1/auth/refresh";
 
-function setRefreshCookie(reply: FastifyReply, token: string): void {
+export function setRefreshCookie(reply: FastifyReply, token: string): void {
   reply.setCookie(REFRESH_COOKIE, token, {
     httpOnly: true,
     secure: isProduction,
@@ -112,6 +114,11 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
         { tenantSlug: body.tenantSlug ?? null, email: body.email, password: body.password },
         device
       );
+      // Two-step login: no session yet, just what the second step needs.
+      if (result.secondStep) {
+        reply.send(successResponse({ ...result.secondStep, suspiciousLogin: result.suspicious }, request.id));
+        return;
+      }
       setRefreshCookie(reply, result.refreshToken);
       reply.send(
         successResponse(
@@ -171,6 +178,14 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       const body = googleAuthSchema.parse(request.body);
       const device = deviceFromRequest(request);
       const { user, tokens } = await authService.loginOrRegisterWithGoogle(body, device);
+      // Google proves the password step only; two-step login still applies. The session Google
+      // sign-in just made is withdrawn until the code is given.
+      const secondStep = await secondStepFor(user, device);
+      if (secondStep) {
+        await revokeSession(tokens.session.id, "mfa_pending");
+        reply.send(successResponse(secondStep, request.id));
+        return;
+      }
       setRefreshCookie(reply, tokens.refreshToken);
       reply.send(
         successResponse(
@@ -491,9 +506,10 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     company: z.string().min(2, "Enter your ISP / company name"),
     slug: z.string().min(3).max(30).regex(/^[a-z0-9-]+$/, "Slug must only contain lowercase letters, numbers, and dashes"),
     email: z.string().email("Enter a valid email address"),
-    phone: z.string().min(8, "Enter a valid WhatsApp phone number"),
+    // Optional: registration is verified by email; a phone is only for notifications later.
+    phone: z.string().trim().min(8, "Enter a valid phone number").optional(),
     phoneVerificationTicket: z.string().min(1, "Verify your verification code before continuing"),
-    verificationType: z.enum(["whatsapp", "email"]).optional().default("whatsapp"),
+    verificationType: z.enum(["whatsapp", "email"]).optional().default("email"),
     country: z.string().optional().default("KE"),
     timezone: z.string().optional().default("Africa/Nairobi"),
     currency: z.string().optional().default("KES"),
@@ -513,6 +529,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       if (body.verificationType === "email") {
         await consumeEmailOtpTicket(body.email, WHATSAPP_OTP_PURPOSE, body.phoneVerificationTicket);
       } else {
+        if (!body.phone) throw new ValidationError("A phone number is required for WhatsApp verification");
         await consumeWhatsappOtpTicket(
           normalizePhoneForOtp(body.phone),
           WHATSAPP_OTP_PURPOSE,

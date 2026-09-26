@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth-context";
+import { useLanguage } from "@/lib/language-context";
+import { dashboardStrings } from "@/lib/dashboard-strings";
 import { apiFetch } from "@/lib/api-client";
 import { TrendChart } from "@/components/charts/trend-chart";
 import { StackedColumns } from "@/components/charts/stacked-columns";
@@ -11,6 +13,8 @@ import { BarList } from "@/components/charts/bar-list";
 import { ChartTable } from "@/components/charts/chart-table";
 import { formatMoney } from "@/lib/money";
 import { OnboardingChecklist } from "@/components/onboarding-checklist";
+import { CustomerPortal } from "@/components/customer-portal";
+import { useAgentRedirect } from "@/lib/use-agent-redirect";
 import {
   EmptyState,
   Metric,
@@ -25,6 +29,7 @@ import {
   td,
   th,
 } from "@/components/dashboard/surface";
+import { tr } from "@/lib/tr";
 
 interface OutstandingSummary {
   outstandingMinor: number;
@@ -97,7 +102,7 @@ interface PaginatedTenants {
 }
 
 interface MaintenanceStatus {
-  active: boolean;
+  enabled: boolean;
   message?: string | null;
 }
 
@@ -142,7 +147,7 @@ function friendlyNameFromEmail(email: string | null | undefined): string {
   return first.length > 0 ? first[0]!.toUpperCase() + first.slice(1) : "there";
 }
 
-function timeOfDayGreeting(): string {
+function timeOfDayGreeting(): "morning" | "afternoon" | "evening" {
   const hour = new Date().getHours();
   if (hour < 12) return "morning";
   if (hour < 17) return "afternoon";
@@ -181,8 +186,11 @@ const METHOD_LABEL: Record<string, string> = {
 
 export default function DashboardHomePage() {
   const { user } = useAuth();
+  const { lang } = useLanguage();
+  const t = dashboardStrings(lang);
   const isPlatform = user?.tenantId === null;
   const isStaff = !isPlatform && Boolean(user?.permissions.includes("reports.read"));
+  const checkingAgent = useAgentRedirect(Boolean(user) && !isPlatform && !isStaff);
   const [bandwidthRange, setBandwidthRange] = useState<number>(14);
   const [autoProvisionMsg, setAutoProvisionMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -204,7 +212,9 @@ export default function DashboardHomePage() {
 
   const { data: platformMaintenance } = useQuery({
     queryKey: ["platform-maintenance"],
-    queryFn: () => apiFetch<MaintenanceStatus>("/api/v1/maintenance", { skipAuth: true }),
+    // The public status endpoint; the old "/api/v1/maintenance" path never existed, so this tile
+    // showed "—" forever.
+    queryFn: () => apiFetch<MaintenanceStatus>("/api/v1/platform/maintenance/status", { skipAuth: true }),
     enabled: isPlatform,
   });
 
@@ -240,6 +250,14 @@ export default function DashboardHomePage() {
   });
 
   const canReadRouters = isStaff && Boolean(user?.permissions.includes("routers.read"));
+  const canReadTickets = isStaff && Boolean(user?.permissions.includes("tickets.read"));
+  const { data: openTickets } = useQuery({
+    queryKey: ["tickets", "open-dashboard"],
+    queryFn: () => apiFetch<{ id: string; responseOverdue?: boolean }[]>("/api/v1/tickets?status=OPEN"),
+    enabled: canReadTickets,
+    refetchInterval: 60_000,
+  });
+  const overdueTickets = openTickets?.filter((t) => t.responseOverdue).length ?? 0;
   const { data: routers } = useQuery({
     queryKey: ["routers"],
     queryFn: () => apiFetch<RouterRow[]>("/api/v1/routers"),
@@ -281,10 +299,10 @@ export default function DashboardHomePage() {
   const automationMetric = !automation
     ? { value: "—" as ReactNode, hint: undefined as string | undefined, tone: undefined as "good" | "warn" | "bad" | undefined }
     : !automation.worker.online
-    ? { value: "Stopped", hint: "Worker is not running", tone: "bad" as const }
+    ? { value: t.stopped, hint: t.workerNotRunning, tone: "bad" as const }
     : automationTrouble.length > 0
-    ? { value: "Needs attention", hint: `${automationTrouble.length} job${automationTrouble.length === 1 ? "" : "s"} failing or late`, tone: "warn" as const }
-    : { value: "Running", hint: `${automation.jobs.length} scheduled jobs healthy`, tone: "good" as const };
+    ? { value: t.needsAttention, hint: t.jobsFailing(automationTrouble.length), tone: "warn" as const }
+    : { value: t.running, hint: t.jobsHealthy(automation.jobs.length), tone: "good" as const };
 
   const autoProvision = useMutation({
     mutationFn: () => apiFetch<{ provisioned: number }>("/api/v1/vlans/auto-provision", { method: "POST" }),
@@ -318,46 +336,51 @@ export default function DashboardHomePage() {
   const routerHint = !routers
     ? undefined
     : totalRouters === 0
-    ? "No routers linked yet"
+    ? t.noRoutersYet
     : downRouters > 0
-    ? `${downRouters} offline`
+    ? t.offline(downRouters)
     : onlineRouters === totalRouters
-    ? "All online"
-    : `${totalRouters - onlineRouters} not reporting`;
+    ? t.allOnline
+    : t.notReporting(totalRouters - onlineRouters);
+
+  // A subscriber (tenant-scoped, no staff permissions) gets their own portal, not an empty
+  // operator dashboard: their service, bills, a pay button and support.
+  if (!isPlatform && !isStaff) return checkingAgent ? null : <CustomerPortal />;
 
   return (
     <div className="w-full min-w-0 space-y-6">
       {/* Header */}
       <PageHeader
-        title={isPlatform ? "Platform overview" : `Good ${timeOfDayGreeting()}, ${friendlyNameFromEmail(user?.email)}`}
-        description={
-          isPlatform
-            ? "ISPs on the platform, platform status and where to manage them."
-            : "Your customers, routers and payments at a glance."
-        }
+        title={isPlatform ? t.platformOverview : t.greeting(timeOfDayGreeting(), friendlyNameFromEmail(user?.email))}
+        description={isPlatform ? t.platformDescription : t.homeDescription}
         actions={
           isPlatform ? (
             <>
               <Link href="/tenants" className={darkButton("primary")}>
-                Manage tenants
+                {tr("Manage tenants")}
               </Link>
+              {user?.permissions.includes("tenants.update") && (
+                <Link href="/admin/notifications?alert=1" className={darkButton("secondary")}>
+                  {tr("Send alert")}
+                </Link>
+              )}
               <Link href="/admin/products" className={darkButton("secondary")}>
-                Store prices
+                {tr("Store prices")}
               </Link>
               <Link href="/admin/orders" className={darkButton("secondary")}>
-                Hardware orders
+                {tr("Hardware orders")}
               </Link>
             </>
           ) : (
             <>
               {user?.permissions.includes("customers.read") && (
                 <Link href="/customers" className={darkButton("primary")}>
-                  Add customer
+                  {tr("Add customer")}
                 </Link>
               )}
               {canReadRouters && (
                 <Link href="/routers/new" className={darkButton("secondary")}>
-                  Link router
+                  {tr("Link router")}
                 </Link>
               )}
             </>
@@ -370,36 +393,36 @@ export default function DashboardHomePage() {
         <>
           <MetricGrid columns={5}>
             <Metric
-              label="ISPs on the platform"
+              label={tr("ISPs on the platform")}
               value={platformTenants?.pagination.total ?? "—"}
               hint={platformTenants ? `${activeTenantsCount} active · ${trialTenantsCount} in trial` : undefined}
               href="/tenants"
             />
             <Metric
-              label="Platform status"
-              value={platformMaintenance ? (platformMaintenance.active ? "Maintenance" : "Normal") : "—"}
-              hint={platformMaintenance ? (platformMaintenance.active ? "Customers see the maintenance notice" : "No maintenance scheduled") : undefined}
-              tone={platformMaintenance?.active ? "warn" : undefined}
+              label={tr("Platform status")}
+              value={platformMaintenance ? (platformMaintenance.enabled ? "Maintenance" : "Normal") : "—"}
+              hint={platformMaintenance ? (platformMaintenance.enabled ? "Customers see the maintenance notice" : "No maintenance scheduled") : undefined}
+              tone={platformMaintenance?.enabled ? "warn" : undefined}
               href="/maintenance"
             />
             <Metric
-              label="Awaiting approval"
+              label={tr("Awaiting approval")}
               value={pendingTenants ? pendingTenants.pagination.total : "—"}
               hint={pendingTenants ? (pendingTenants.pagination.total > 0 ? "New ISPs waiting for you to approve them" : "No applications waiting") : undefined}
               tone={pendingTenants && pendingTenants.pagination.total > 0 ? "warn" : undefined}
               href="/tenants"
             />
-            <Metric label="Payments" value="Gateway" hint="Collections, settlements and reconciliation" href="/admin/payments" />
-            <Metric label="Automation" value={automationMetric.value} hint={automationMetric.hint} tone={automationMetric.tone} href="/automation" />
+            <Metric label={tr("Payments")} value="Gateway" hint={tr("Collections, settlements and reconciliation")} href="/admin/payments" />
+            <Metric label={tr("Automation")} value={automationMetric.value} hint={automationMetric.hint} tone={automationMetric.tone} href="/automation" />
           </MetricGrid>
 
           <Panel
-            title="ISPs"
-            description="The ten most recent tenants"
+            title={tr("ISPs")}
+            description={tr("The ten most recent tenants")}
             padded={false}
             actions={
               <Link href="/tenants" className={darkButton("secondary", "sm")}>
-                View all
+                {tr("View all")}
               </Link>
             }
           >
@@ -408,8 +431,8 @@ export default function DashboardHomePage() {
                 <tr>
                   <th className={th}>ISP</th>
                   <th className={th}>Slug</th>
-                  <th className={th}>Status</th>
-                  <th className={th}>Plan</th>
+                  <th className={th}>{tr("Status")}</th>
+                  <th className={th}>{tr("Plan")}</th>
                 </tr>
               </thead>
               <tbody>
@@ -430,7 +453,7 @@ export default function DashboardHomePage() {
                 })}
               </tbody>
             </TableShell>
-            {platformTenants && platformTenants.items.length === 0 && <EmptyState title="No ISPs yet" />}
+            {platformTenants && platformTenants.items.length === 0 && <EmptyState title={tr("No ISPs yet")} />}
           </Panel>
         </>
       )}
@@ -440,23 +463,23 @@ export default function DashboardHomePage() {
       {/* Tenant staff */}
       {isStaff && (
         <>
-          <MetricGrid columns={canReadVlans && canSeeAutomation ? 6 : canReadVlans || canSeeAutomation ? 5 : 4}>
+          <MetricGrid columns={[canReadVlans, canSeeAutomation, canReadTickets].filter(Boolean).length >= 2 ? 6 : [canReadVlans, canSeeAutomation, canReadTickets].some(Boolean) ? 5 : 4}>
             <Metric
-              label="Collected, last 30 days"
+              label={t.collected30}
               value={revenue30dMinor !== null ? formatMoney(revenue30dMinor) : "—"}
-              hint={revenue ? `${totalPaymentCount} payment${totalPaymentCount === 1 ? "" : "s"}` : undefined}
+              hint={revenue ? t.payments(totalPaymentCount) : undefined}
               href="/payments"
             />
             <Metric
-              label="Outstanding invoices"
+              label={t.outstandingInvoices}
               value={outstanding ? formatMoney(outstanding.outstandingMinor) : "—"}
-              hint={outstanding ? (outstanding.overdueCount > 0 ? `${outstanding.overdueCount} overdue` : `${outstanding.invoiceCount} open`) : undefined}
+              hint={outstanding ? (outstanding.overdueCount > 0 ? t.overdue(outstanding.overdueCount) : t.open(outstanding.invoiceCount)) : undefined}
               tone={outstanding && outstanding.overdueCount > 0 ? "warn" : undefined}
               href="/invoices"
             />
-            <Metric label="Customers" value={customers?.pagination.total ?? "—"} hint="PPPoE and hotspot" href="/customers" />
+            <Metric label={t.customers} value={customers?.pagination.total ?? "—"} hint={t.customersHint} href="/customers" />
             <Metric
-              label="Routers online"
+              label={t.routersOnline}
               value={routers ? `${onlineRouters} / ${totalRouters}` : "—"}
               hint={routerHint}
               tone={downRouters > 0 ? "bad" : totalRouters > 0 && onlineRouters === totalRouters ? "good" : undefined}
@@ -464,37 +487,40 @@ export default function DashboardHomePage() {
             />
             {canReadVlans && (
               <Metric
-                label="VLANs"
+                label={t.vlans}
                 value={vlanOverview ? vlanOverview.total : "—"}
-                hint={
-                  vlanOverview
-                    ? vlanOverview.provisioningFailed > 0
-                      ? `${vlanOverview.provisioningFailed} failed to provision`
-                      : `${vlanOverview.enabled} enabled`
-                    : undefined
-                }
+                hint={vlanOverview ? (vlanOverview.provisioningFailed > 0 ? t.failedToProvision(vlanOverview.provisioningFailed) : t.enabled(vlanOverview.enabled)) : undefined}
                 tone={vlanOverview && vlanOverview.provisioningFailed > 0 ? "bad" : undefined}
                 href="/vlans"
               />
             )}
+            {canReadTickets && (
+              <Metric
+                label={t.supportTickets}
+                value={openTickets ? openTickets.length : "—"}
+                hint={openTickets ? (overdueTickets > 0 ? t.ticketsOverdue(overdueTickets) : t.ticketsOnTime) : undefined}
+                tone={overdueTickets > 0 ? "bad" : undefined}
+                href="/tickets"
+              />
+            )}
             {canSeeAutomation && (
-              <Metric label="Automation" value={automationMetric.value} hint={automationMetric.hint} tone={automationMetric.tone} href="/automation" />
+              <Metric label={t.automation} value={automationMetric.value} hint={automationMetric.hint} tone={automationMetric.tone} href="/automation" />
             )}
           </MetricGrid>
 
           {/* Routers */}
           {canReadRouters && (
             <Panel
-              title="Routers"
-              description="Status as last reported by each router"
+              title={t.routers}
+              description={t.routersDescription}
               padded={false}
               actions={
                 <>
                   <Link href="/routers/new" className={darkButton("secondary", "sm")}>
-                    Link router
+                    {tr("Link router")}
                   </Link>
                   <Link href="/routers" className={darkButton("ghost", "sm")}>
-                    View all
+                    {tr("View all")}
                   </Link>
                 </>
               }
@@ -503,10 +529,10 @@ export default function DashboardHomePage() {
                 <TableShell minWidth={560}>
                   <thead>
                     <tr>
-                      <th className={th}>Name</th>
-                      <th className={th}>Address</th>
-                      <th className={th}>Model</th>
-                      <th className={th}>Status</th>
+                      <th className={th}>{tr("Name")}</th>
+                      <th className={th}>{tr("Address")}</th>
+                      <th className={th}>{tr("Model")}</th>
+                      <th className={th}>{tr("Status")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -531,14 +557,14 @@ export default function DashboardHomePage() {
                 </TableShell>
               ) : (
                 <EmptyState
-                  title="No routers linked yet"
+                  title={tr("No routers linked yet")}
                   action={
                     <Link href="/routers/new" className={darkButton("primary", "sm")}>
-                      Link your first MikroTik
+                      {tr("Link your first MikroTik")}
                     </Link>
                   }
                 >
-                  Linking a router generates a setup script for it, with its own RADIUS secret.
+                  {tr("Linking a router generates a setup script for it, with its own RADIUS secret.")}
                 </EmptyState>
               )}
             </Panel>
@@ -547,8 +573,8 @@ export default function DashboardHomePage() {
           {/* VLANs */}
           {canReadVlans && (
             <Panel
-              title="VLANs"
-              description="Tagged network segments and their provisioning status"
+              title={tr("VLANs")}
+              description={tr("Tagged network segments and their provisioning status")}
               padded={false}
               actions={
                 <>
@@ -556,7 +582,7 @@ export default function DashboardHomePage() {
                     {autoProvision.isPending ? "Setting up…" : "Set up standard VLANs"}
                   </button>
                   <Link href="/vlans" className={darkButton("ghost", "sm")}>
-                    Manage
+                    {tr("Manage")}
                   </Link>
                 </>
               }
@@ -571,11 +597,11 @@ export default function DashboardHomePage() {
                   <thead>
                     <tr>
                       <th className={th}>VLAN</th>
-                      <th className={th}>Name</th>
-                      <th className={th}>Type</th>
-                      <th className={th}>Router</th>
-                      <th className={th}>Subnet</th>
-                      <th className={th}>Provisioning</th>
+                      <th className={th}>{tr("Name")}</th>
+                      <th className={th}>{tr("Type")}</th>
+                      <th className={th}>{tr("Router")}</th>
+                      <th className={th}>{tr("Subnet")}</th>
+                      <th className={th}>{tr("Provisioning")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -597,7 +623,7 @@ export default function DashboardHomePage() {
                   </tbody>
                 </TableShell>
               ) : (
-                <EmptyState title="No VLANs yet">
+                <EmptyState title={tr("No VLANs yet")}>
                   VLANs keep PPPoE, hotspot and management traffic on separate networks. &ldquo;Set up standard VLANs&rdquo; creates 100 (PPPoE),
                   200 (hotspot) and 99 (management).
                 </EmptyState>
@@ -607,30 +633,30 @@ export default function DashboardHomePage() {
 
           {/* Revenue */}
           <Panel
-            title="Revenue"
-            description="Completed payments per day, last 30 days"
+            title={t.revenue}
+            description={t.revenueDescription}
             actions={
               <Link href="/payments" className={darkButton("ghost", "sm")}>
-                Payments
+                {t.paymentsWord}
               </Link>
             }
           >
             {!revenue || revenue.length === 0 ? (
-              <EmptyState title="No payments in the last 30 days">Payments will be charted here as they come in.</EmptyState>
+              <EmptyState title={t.noPayments30}>{t.paymentsWillChart}</EmptyState>
             ) : (
               <>
                 <TrendChart
                   points={revenue.map((day) => ({ date: day.date, value: day.totalMinor }))}
                   format={formatMoney}
-                  caption="Revenue per day, last 30 days"
+                  caption={tr("Revenue per day, last 30 days")}
                 />
                 <div className="mt-3 flex items-center justify-between border-t border-obsidian-800 pt-3 text-sm text-slate-400">
                   <span>
-                    {totalPaymentCount} payment{totalPaymentCount === 1 ? "" : "s"} over {revenue.length} day{revenue.length === 1 ? "" : "s"}
+                    {t.paymentsOverDays(totalPaymentCount, revenue.length)}
                   </span>
                   <span className="font-medium text-white">{revenue30dMinor !== null ? formatMoney(revenue30dMinor) : "—"}</span>
                 </div>
-                <ChartTable columns={["Date", "Revenue", "Payments"]} rows={revenue.map((day) => [day.date, formatMoney(day.totalMinor), day.paymentCount])} />
+                <ChartTable columns={[t.date, t.revenue, t.paymentsWord]} rows={revenue.map((day) => [day.date, formatMoney(day.totalMinor), day.paymentCount])} />
               </>
             )}
           </Panel>
@@ -639,36 +665,36 @@ export default function DashboardHomePage() {
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             <div className="min-w-0 lg:col-span-2">
               <Panel
-                title="Bandwidth"
-                description={`Download and upload from RADIUS accounting · ${formatBytes(totalBandwidthBytes)} in total`}
+                title={t.bandwidth}
+                description={t.bandwidthDescription(formatBytes(totalBandwidthBytes))}
                 actions={
                   <Segmented
-                    label="Range"
+                    label={t.range}
                     value={bandwidthRange}
                     onChange={setBandwidthRange}
                     options={[
-                      { value: 7, label: "7 days" },
-                      { value: 14, label: "14 days" },
-                      { value: 30, label: "30 days" },
+                      { value: 7, label: t.days(7) },
+                      { value: 14, label: t.days(14) },
+                      { value: 30, label: t.days(30) },
                     ]}
                   />
                 }
               >
                 {!bandwidth || bandwidth.length === 0 ? (
-                  <EmptyState title="No usage recorded yet">Usage appears once customers are online through a linked router.</EmptyState>
+                  <EmptyState title={t.noUsage}>{t.usageAppears}</EmptyState>
                 ) : (
                   <>
                     <StackedColumns
                       columns={bandwidth.map((day) => ({ date: day.date, primary: day.downloadBytes, secondary: day.uploadBytes }))}
-                      primaryLabel="Download"
-                      secondaryLabel="Upload"
+                      primaryLabel={t.download}
+                      secondaryLabel={t.upload}
                       format={formatBytes}
                     />
                     <div className="mt-3 flex items-center justify-between border-t border-obsidian-800 pt-3 text-sm text-slate-400">
                       <span>
                         {formatBytes(totalDownloadBytes)} down · {formatBytes(totalUploadBytes)} up
                       </span>
-                      <span>Busiest day {formatBytes(maxDailyBytes)}</span>
+                      <span>{t.busiestDay} {formatBytes(maxDailyBytes)}</span>
                     </div>
                   </>
                 )}
@@ -676,16 +702,16 @@ export default function DashboardHomePage() {
             </div>
 
             <Panel
-              title="Top users"
-              description="Most data used, last 30 days"
+              title={t.topUsers}
+              description={t.topUsersDescription}
               actions={
                 <Link href="/sessions" className={darkButton("ghost", "sm")}>
-                  Sessions
+                  {t.sessions}
                 </Link>
               }
             >
               {!topConsumers || topConsumers.length === 0 ? (
-                <p className="py-6 text-center text-sm text-slate-400">No usage recorded yet.</p>
+                <p className="py-6 text-center text-sm text-slate-400">{t.noUsage}.</p>
               ) : (
                 <BarList
                   items={topConsumers.map((consumer) => ({
@@ -702,22 +728,22 @@ export default function DashboardHomePage() {
           {/* Recent payments */}
           {recentPayments && recentPayments.items.length > 0 && (
             <Panel
-              title="Recent payments"
+              title={t.recentPayments}
               padded={false}
               actions={
                 <Link href="/invoices" className={darkButton("ghost", "sm")}>
-                  View all
+                  {t.viewAll}
                 </Link>
               }
             >
               <TableShell minWidth={560}>
                 <thead>
                   <tr>
-                    <th className={th}>Reference</th>
-                    <th className={th}>Method</th>
-                    <th className={`${th} text-right`}>Amount</th>
-                    <th className={th}>Date</th>
-                    <th className={th}>Status</th>
+                    <th className={th}>{t.reference}</th>
+                    <th className={th}>{t.method}</th>
+                    <th className={`${th} text-right`}>{t.amount}</th>
+                    <th className={th}>{t.date}</th>
+                    <th className={th}>{t.status}</th>
                   </tr>
                 </thead>
                 <tbody>

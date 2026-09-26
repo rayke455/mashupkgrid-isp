@@ -418,7 +418,7 @@ export function Drawer({ open, onClose, title, subtitle, children, footer }: { o
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative flex h-full w-full max-w-xl flex-col bg-obsidian-900 text-slate-100 shadow-2xl outline-none"
+        className="relative flex h-full w-full max-w-xl flex-col bg-obsidian-900 text-slate-100 shadow-lg outline-none"
       >
         <div className="flex items-start justify-between gap-4 border-b border-obsidian-800 px-5 py-4">
           <div className="min-w-0">
@@ -445,7 +445,7 @@ export function Dialog({ open, onClose, title, children, footer }: { open: boole
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
       <button type="button" aria-label="Close" className="absolute inset-0 bg-black/60" onClick={onClose} />
-      <div role="dialog" aria-modal="true" aria-labelledby={titleId} className="relative w-full max-w-md rounded-lg bg-obsidian-900 text-slate-100 shadow-2xl">
+      <div role="dialog" aria-modal="true" aria-labelledby={titleId} className="relative w-full max-w-md rounded-lg bg-obsidian-900 text-slate-100 shadow-lg">
         <div className="px-5 pt-5">
           <h2 id={titleId} className="text-base font-semibold text-white">
             {title}

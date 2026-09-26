@@ -10,6 +10,8 @@ import { useAuth } from "@/lib/auth-context";
 import { ApiRequestError } from "@/lib/api-client";
 import { ErrorText, Input, Label } from "@/components/ui";
 import { GoogleSignInButton } from "@/components/google-sign-in-button";
+import { TwoStepSignIn } from "@/components/auth/two-step";
+import type { SecondStep } from "@/lib/auth-context";
 import { IconArrowRight, IconCheck, IconEye, IconEyeOff } from "@/components/icons";
 import { Logo } from "@/components/marketing/brand";
 import { DashboardOverviewPreview } from "@/components/marketing/dashboard-preview";
@@ -38,9 +40,13 @@ function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const detectedTenant = searchParams.get("tenant");
+  // Where to go after signing in, e.g. the customer app. Only a path on this site, never "//evil".
+  const nextParam = searchParams.get("next");
+  const nextPath = nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//") && !nextParam.includes("\\") ? nextParam : "/dashboard";
   const [serverError, setServerError] = useState<string | null>(null);
   const [googlePending, setGooglePending] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [secondStep, setSecondStep] = useState<SecondStep | null>(null);
 
   const {
     register,
@@ -57,12 +63,13 @@ function LoginContent() {
   const onSubmit = async (values: LoginFormValues) => {
     setServerError(null);
     try {
-      await login({
+      const step = await login({
         tenantSlug: values.tenantSlug || undefined,
         email: values.email,
         password: values.password,
       });
-      router.push("/dashboard");
+      if (step) setSecondStep(step);
+      else router.push(nextPath);
     } catch (err) {
       if (err instanceof ApiRequestError) {
         setServerError(err.message);
@@ -76,8 +83,9 @@ function LoginContent() {
     setServerError(null);
     setGooglePending(true);
     try {
-      await loginWithGoogle({ tenantSlug: tenantSlug || "", credential });
-      router.push("/dashboard");
+      const step = await loginWithGoogle({ tenantSlug: tenantSlug || "", credential });
+      if (step) setSecondStep(step);
+      else router.push(nextPath);
     } catch (err) {
       setServerError(err instanceof ApiRequestError ? err.message : "Google sign-in failed — please try again.");
     } finally {
@@ -117,6 +125,10 @@ function LoginContent() {
               Manage your network, billing and subscribers.
             </p>
 
+            {secondStep ? (
+              <TwoStepSignIn step={secondStep} onDone={() => router.push(nextPath)} onCancel={() => setSecondStep(null)} />
+            ) : (
+              <>
             <form onSubmit={handleSubmit(onSubmit)} className="mt-8 space-y-5" noValidate>
               <input type="hidden" {...register("tenantSlug")} />
 
@@ -202,7 +214,7 @@ function LoginContent() {
                 <GoogleSignInButton onCredential={handleGoogleCredential} />
               ) : (
                 <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 text-center text-xs text-slate-500">
-                  Enter your organization above to sign in with Google.
+                  Google sign-in works on your ISP&rsquo;s own address (yourisp.mashuphost.tech). Use your email and password here.
                 </p>
               )}
               {googlePending && (
@@ -211,6 +223,9 @@ function LoginContent() {
                 </p>
               )}
             </div>
+
+              </>
+            )}
 
             <p className="mt-8 text-center text-sm text-slate-600">
               {detectedTenant ? (

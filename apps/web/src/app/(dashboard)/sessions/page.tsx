@@ -3,6 +3,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api-client";
 import { PageHeader, Panel, Pill, darkButton } from "@/components/dashboard/surface";
+import { RequireStaffTwoStep, TwoStepSettings } from "@/components/two-step-settings";
 
 interface SessionRow {
   id: string;
@@ -58,6 +59,9 @@ export default function SessionsPage() {
   return (
     <div className="max-w-3xl space-y-6">
       <PageHeader title="My sessions" description="Devices signed in to your account. Sign out any you don't recognise." />
+
+      <TwoStepSettings />
+      <RequireStaffTwoStep />
 
       <Panel padded={false}>
         {isLoading ? (

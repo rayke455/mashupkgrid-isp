@@ -59,7 +59,17 @@ export async function applySyncTask(task: NetworkSyncTask): Promise<void> {
     return;
   }
 
-  const adapter = createAdapterForRouter({ ...router, host: router.host });
+  let adapter: ReturnType<typeof createAdapterForRouter>;
+  try {
+    adapter = createAdapterForRouter({ ...router, host: router.host });
+  } catch (err) {
+    // Stored credentials that can't be decrypted won't fix themselves on a retry.
+    await prisma.networkSyncTask.update({
+      where: { id: task.id },
+      data: { status: "FAILED", attempts: { increment: 1 }, lastError: `Router credentials unreadable: ${err instanceof Error ? err.message : String(err)}` },
+    });
+    return;
+  }
   try {
     await adapter.connect();
     // DISCONNECT_USER is the only action there is (see the SyncTaskAction doc comment in

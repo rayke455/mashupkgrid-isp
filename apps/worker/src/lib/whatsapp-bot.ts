@@ -2,7 +2,7 @@ import { Redis } from "ioredis";
 import { prisma } from "@mashupkgrid/database";
 import { env } from "@mashupkgrid/config";
 import { listHotspotPackages } from "@mashupkgrid/radius";
-import { initiateHotspotPurchaseStkPush } from "@mashupkgrid/payments";
+import { initiateHotspotPurchaseStkPush, initiateStkPushForCustomer } from "@mashupkgrid/payments";
 import { createTicket } from "@mashupkgrid/support";
 import { sendWhatsAppMessage, type WASocket } from "@mashupkgrid/whatsapp";
 import { formatMoney, formatDuration } from "./format.js";
@@ -79,8 +79,10 @@ async function mainMenu(tenantName: string): Promise<string> {
     "2️⃣  Buy Wi-Fi voucher",
     "3️⃣  Report an outage",
     "4️⃣  Talk to support",
+    "5️⃣  Pay my bill with M-Pesa",
     "",
     'Reply with a number. Send "menu" anytime to start over.',
+    'You can also just type "balance" or "pay".',
   ].join("\n");
 }
 
@@ -119,12 +121,67 @@ async function handleBalance(tenantId: string, phone: string): Promise<string> {
     const currency = unpaid[0]?.currency ?? "KES";
     lines.push(`💰 Outstanding: *${formatMoney(outstandingMinor, currency)}* across ${unpaid.length} invoice(s).`);
     lines.push("");
-    lines.push("To pay, use our Paybill or reply \"4\" and support will send you a payment prompt.");
+    lines.push(`Reply "pay" and we'll send an M-Pesa prompt for ${formatMoney(unpaid[0]!.totalMinor - unpaid[0]!.amountPaidMinor, currency)} (invoice ${unpaid[0]!.invoiceNumber}) to this phone.`);
   } else {
     lines.push("✅ You have no outstanding balance. Thank you!");
   }
   lines.push("", 'Send "menu" to go back.');
   return lines.join("\n");
+}
+
+/** Words customers actually type instead of menu numbers, in English and Swahili. */
+const BALANCE_WORDS = new Set(["balance", "bal", "my balance", "check balance", "salio", "deni"]);
+const PAY_WORDS = new Set(["pay", "pay now", "pay bill", "lipa", "lipia", "renew", "mpesa", "m-pesa"]);
+
+/** At most one M-Pesa prompt per customer a minute: a second "pay" while the first prompt is
+ *  still on their screen would only make Safaricom reject one of them. */
+const PAY_COOLDOWN_SECONDS = 60;
+
+/**
+ * Sends an M-Pesa prompt to the customer's own phone for the oldest unpaid invoice. The amount
+ * and invoice come from the account, never from the message, so the only thing a sender can do
+ * is ask their own bill to be put in front of them.
+ */
+export async function handlePayInvoice(tenantId: string, phone: string): Promise<string> {
+  const customer = await prisma.customer.findFirst({
+    where: { tenantId, phone: { endsWith: subscriberDigits(phone) }, deletedAt: null },
+    select: { id: true, fullName: true },
+  });
+  if (!customer) {
+    return [
+      "We couldn't find a subscriber account for this number.",
+      "",
+      'If you use our Wi-Fi hotspot, reply "2" to buy a voucher instead.',
+    ].join("\n");
+  }
+  const invoice = await prisma.invoice.findFirst({
+    where: { tenantId, customerId: customer.id, status: { in: ["OVERDUE", "PARTIALLY_PAID", "PENDING"] } },
+    orderBy: { dueDate: "asc" },
+  });
+  const remaining = invoice ? invoice.totalMinor - invoice.amountPaidMinor : 0;
+  if (!invoice || remaining <= 0) return '✅ You have nothing to pay right now. Thank you!\n\nSend "menu" to go back.';
+
+  const claimed = await redis.set(`wa-bot:pay:${tenantId}:${customer.id}`, "1", "EX", PAY_COOLDOWN_SECONDS, "NX");
+  if (claimed !== "OK") return "An M-Pesa prompt was just sent to your phone. Please check it, or wait a minute and reply \"pay\" again.";
+
+  try {
+    await initiateStkPushForCustomer(tenantId, {
+      customerId: customer.id,
+      invoiceId: invoice.id,
+      phone,
+      amountMinor: remaining,
+      initiatedByUserId: null,
+    });
+  } catch (err) {
+    await redis.del(`wa-bot:pay:${tenantId}:${customer.id}`).catch(() => {});
+    console.error(`[whatsapp-bot] STK for invoice ${invoice.id} failed`, err);
+    return 'Sorry, we could not send the M-Pesa prompt right now. Please try again in a few minutes, or reply "4" to talk to support.';
+  }
+  return [
+    `📲 Check your phone: an M-Pesa prompt for *${formatMoney(remaining, invoice.currency)}* (invoice ${invoice.invoiceNumber}) is on its way.`,
+    "",
+    "Enter your M-Pesa PIN to pay. You'll get a confirmation, and your service is restored automatically if it was off.",
+  ].join("\n");
 }
 
 async function handleBuyList(tenantId: string, session: BotSession): Promise<string> {
@@ -288,6 +345,20 @@ export async function handleIncomingWhatsAppMessage(
       return;
     }
 
+    if (!isReset && (input === "5" || PAY_WORDS.has(lower))) {
+      const reply = phone ? await handlePayInvoice(tenantId, phone) : noPhoneReply;
+      session.state = "main";
+      await saveSession(tenantId, sessionId, session);
+      await sendWhatsAppMessage(sock, replyTarget, reply);
+      return;
+    }
+    if (!isReset && BALANCE_WORDS.has(lower)) {
+      const reply = phone ? await handleBalance(tenantId, phone) : noPhoneReply;
+      session.state = "main";
+      await saveSession(tenantId, sessionId, session);
+      await sendWhatsAppMessage(sock, replyTarget, reply);
+      return;
+    }
     if (!isReset && input === "1") {
       const reply = phone ? await handleBalance(tenantId, phone) : noPhoneReply;
       await saveSession(tenantId, sessionId, session);

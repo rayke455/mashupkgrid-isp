@@ -2,8 +2,13 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { IconCloudDownload } from "@/components/icons";
+import { tr } from "@/lib/tr";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
+import { useBranches } from "@/lib/use-branches";
+import { useLanguage } from "@/lib/language-context";
+import { pageStrings } from "@/lib/page-strings";
 import {
   CodeBlock,
   EmptyState,
@@ -21,6 +26,7 @@ import { IconRouter } from "@/components/icons";
 interface RouterRow {
   id: string;
   name: string;
+  branchId?: string | null;
   vendor: string;
   host: string | null;
   apiPort: number;
@@ -84,6 +90,12 @@ const STATUS: Record<RouterRow["status"], { tone: "good" | "warn" | "bad" | "neu
   DOWN: { tone: "bad", label: "Offline" },
   UNKNOWN: { tone: "neutral", label: "Not checked yet" },
 };
+const STATUS_LABEL = (t: ReturnType<typeof pageStrings>["routers"]): Record<RouterRow["status"], string> => ({
+  ONLINE: t.online,
+  WARNING: t.degraded,
+  DOWN: t.offline,
+  UNKNOWN: t.notChecked,
+});
 
 const DETECTED_BY: Record<ConnectedAccessPoint["detectionSource"], string> = {
   NEIGHBOR: "Neighbour discovery",
@@ -118,6 +130,10 @@ function vendorOf(ap: ConnectedAccessPoint): string {
 }
 
 export default function RoutersPage() {
+  const { lang } = useLanguage();
+  const { branches } = useBranches();
+  const t = pageStrings(lang).routers;
+  const c = pageStrings(lang).common;
   const queryClient = useQueryClient();
   // Re-render every second so "checked 12s ago" stays true between polls.
   const [, forceTick] = useState(0);
@@ -167,7 +183,7 @@ export default function RoutersPage() {
       flashSuccess("Router removed.");
       queryClient.invalidateQueries({ queryKey: ["routers"] });
     },
-    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Couldn't remove the router."),
+    onError: (err) => setError(err instanceof ApiRequestError ? err.message : t.couldNotRemove),
     onSettled: () => setDeletingId(null),
   });
 
@@ -178,7 +194,7 @@ export default function RoutersPage() {
       flashSuccess("Router address updated.");
       queryClient.invalidateQueries({ queryKey: ["routers"] });
     },
-    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Couldn't update the router address."),
+    onError: (err) => setError(err instanceof ApiRequestError ? err.message : t.couldNotUpdateAddress),
   });
 
   const { data: liveSessions, isFetching: sessionsLoading, error: sessionsError } = useQuery({
@@ -225,7 +241,7 @@ export default function RoutersPage() {
       flashSuccess(res?.message || "Applied to the router.");
       queryClient.invalidateQueries({ queryKey: ["routers"] });
     } catch (err) {
-      setError(err instanceof ApiRequestError ? err.message : "The router didn't accept the change.");
+      setError(err instanceof ApiRequestError ? err.message : t.notAccepted);
     } finally {
       setToolLoading(null);
     }
@@ -248,7 +264,7 @@ export default function RoutersPage() {
         flashSuccess("Tunnel blocking is already on.");
         return;
       }
-      setAntiTunnelNote(enabled ? "Applying on the router. Small routers take a minute or two." : "Removing from the router. This can take a minute.");
+      setAntiTunnelNote(enabled ? t.applyingNote : t.removingNote);
       const deadline = Date.now() + 5 * 60_000;
       while (Date.now() < deadline) {
         await new Promise((r) => setTimeout(r, 5000));
@@ -271,7 +287,7 @@ export default function RoutersPage() {
       }
       setError("The router hasn't confirmed the change after five minutes. Check it's online, then look at this again.");
     } catch (err) {
-      setError(err instanceof ApiRequestError ? err.message : "The router didn't accept the change.");
+      setError(err instanceof ApiRequestError ? err.message : t.notAccepted);
     } finally {
       setAntiTunnelNote(null);
       setToolLoading(null);
@@ -284,20 +300,25 @@ export default function RoutersPage() {
   const remoteWinboxProblem = !winboxAccessData
     ? null
     : !relay?.enabled
-    ? "Remote WinBox isn't switched on for this server yet (ENABLE_WINBOX_RELAY)."
+    ? t.relayOff
     : !relay.vpnConnected
-    ? "This router isn't connected to the MashupHost VPN yet. The VPN needs RouterOS 7: update the router, then run its setup command again."
-    : "The remote port is being assigned. Check again in a minute.";
+    ? t.vpnNotConnected
+    : t.portAssigning;
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Routers"
-        description="MikroTik routers linked to your account. Their status is refreshed automatically."
+        title={t.title}
+        description={t.description}
         actions={
-          <Link href="/routers/new" className={darkButton("primary")}>
-            Link router
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/routers/updates" className={darkButton("secondary")}>
+              <IconCloudDownload size={16} /> {tr("Router updates")}
+            </Link>
+            <Link href="/routers/new" className={darkButton("primary")}>
+              {t.linkRouter}
+            </Link>
+          </div>
         }
       />
 
@@ -305,7 +326,7 @@ export default function RoutersPage() {
         <Notice tone="bad">
           <div className="flex items-start justify-between gap-3">
             <span>{error}</span>
-            <button type="button" onClick={() => setError(null)} aria-label="Dismiss" className="text-rose-200/70 hover:text-white">
+            <button type="button" onClick={() => setError(null)} aria-label={c.dismiss} className="text-rose-200/70 hover:text-white">
               ✕
             </button>
           </div>
@@ -313,26 +334,26 @@ export default function RoutersPage() {
       )}
       {actionSuccess && <Notice tone="good">{actionSuccess}</Notice>}
 
-      {isLoading && <p className="py-8 text-center text-sm text-slate-400">Loading routers…</p>}
+      {isLoading && <p className="py-8 text-center text-sm text-slate-400">{t.loadingRouters}</p>}
 
       {routers && routers.length === 0 && (
         <div className="rounded-xl border border-dashed border-obsidian-700">
           <EmptyState
-            title="No routers linked yet"
+            title={t.noRouters}
             action={
               <Link href="/routers/new" className={darkButton("primary")}>
-                Link your first MikroTik
+                {t.linkFirst}
               </Link>
             }
           >
-            Linking gives you one command to paste into the router. It sets up RADIUS, the hotspot and the connection back to MashupHost.
+            {t.linkingExplain}
           </EmptyState>
         </div>
       )}
 
       <div className="space-y-4">
         {routers?.map((router) => {
-          const status = STATUS[router.status];
+          const status = { tone: STATUS[router.status].tone, label: STATUS_LABEL(t)[router.status] };
           const uptime = formatUptime(router.uptimeSeconds);
           const sessionsOpen = openSessionsFor === router.id;
           const apsOpen = openAccessPointsFor === router.id;
@@ -347,6 +368,25 @@ export default function RoutersPage() {
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="text-[15px] font-semibold text-white">{router.name}</h2>
                       <Pill tone={status.tone}>{status.label}</Pill>
+                      {branches.length > 0 && (
+                        <select
+                          aria-label="Branch"
+                          value={router.branchId ?? ""}
+                          onChange={(e) =>
+                            apiFetch(`/api/v1/routers/${router.id}`, { method: "PATCH", body: JSON.stringify({ branchId: e.target.value || null }) })
+                              .then(() => queryClient.invalidateQueries({ queryKey: ["routers"] }))
+                              .catch((err) => setError(err instanceof ApiRequestError ? err.message : String(err)))
+                          }
+                          className="rounded-md border border-obsidian-700 bg-obsidian-950 px-1.5 py-0.5 text-xs text-slate-300"
+                        >
+                          <option value="">No branch</option>
+                          {branches.map((b) => (
+                            <option key={b.id} value={b.id}>
+                              {b.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
                     </div>
                     <p className="mt-1 flex flex-wrap items-center gap-x-2 text-sm text-slate-400">
                       {router.host ? (
@@ -358,18 +398,18 @@ export default function RoutersPage() {
                           <button
                             type="button"
                             onClick={() => {
-                              const newHost = window.prompt("Router address (IP or hostname):", router.host || "");
+                              const newHost = window.prompt(t.addressPrompt, router.host || "");
                               if (newHost && newHost.trim() !== router.host) {
                                 updateRouterHost.mutate({ routerId: router.id, host: newHost.trim() });
                               }
                             }}
                             className="text-brand-400 hover:text-brand-300 hover:underline"
                           >
-                            Change
+                            {t.change}
                           </button>
                         </>
                       ) : (
-                        <span className="text-amber-300">Waiting for the router to check in</span>
+                        <span className="text-amber-300">{t.waitingCheckIn}</span>
                       )}
                     </p>
                     <p className="mt-0.5 text-xs text-slate-500">
@@ -393,7 +433,7 @@ export default function RoutersPage() {
                     onClick={() => testConnection.mutate(router.id)}
                     disabled={testingId === router.id || !router.host}
                   >
-                    {testingId === router.id ? "Testing…" : "Test connection"}
+                    {testingId === router.id ? t.testing : t.testConnection}
                   </button>
                   <button
                     type="button"
@@ -405,7 +445,7 @@ export default function RoutersPage() {
                     }}
                     disabled={!router.host}
                   >
-                    Sessions
+                    {t.sessions}
                   </button>
                   <button
                     type="button"
@@ -417,23 +457,23 @@ export default function RoutersPage() {
                     }}
                     disabled={!router.host}
                   >
-                    Access points
+                    {t.accessPoints}
                   </button>
                   <button type="button" className={darkButton("secondary", "sm")} onClick={() => setWinboxModalFor(router)}>
-                    WinBox access
+                    {t.winboxAccess}
                   </button>
                   <button type="button" className={darkButton("secondary", "sm")} onClick={() => setToolsModalFor(router)} disabled={!router.host}>
-                    Tools
+                    {t.tools}
                   </button>
                   <button
                     type="button"
                     className={`${darkButton("ghost", "sm")} text-rose-300 hover:bg-rose-500/10 hover:text-rose-200`}
                     onClick={() => {
-                      if (confirm(`Remove router "${router.name}"? Customers on it will stop being able to log in.`)) deleteRouter.mutate(router.id);
+                      if (confirm(t.confirmRemove(router.name))) deleteRouter.mutate(router.id);
                     }}
                     disabled={deletingId === router.id}
                   >
-                    {deletingId === router.id ? "Removing…" : "Remove"}
+                    {deletingId === router.id ? t.removing : t.remove}
                   </button>
                 </div>
               </div>
@@ -441,7 +481,7 @@ export default function RoutersPage() {
               {router.lastError && (
                 <div className="px-5 pb-4">
                   <Notice tone="bad">
-                    <span className="font-medium">Last error:</span> <span className="break-words font-mono text-xs">{router.lastError}</span>
+                    <span className="font-medium">{t.lastError}</span> <span className="break-words font-mono text-xs">{router.lastError}</span>
                   </Notice>
                 </div>
               )}
@@ -451,23 +491,22 @@ export default function RoutersPage() {
                 <div className="border-t border-obsidian-800 px-5 py-4">
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <h3 className="text-sm font-medium text-white">
-                      Access points
-                      {connectedAps && <span className="ml-2 font-normal text-slate-400">{connectedAps.length} found</span>}
+                      {t.accessPoints}
+                      {connectedAps && <span className="ml-2 font-normal text-slate-400">{t.found(connectedAps.length)}</span>}
                     </h3>
                     <button type="button" className={darkButton("ghost", "sm")} onClick={() => refetchAps()} disabled={apsLoading}>
-                      {apsLoading ? "Scanning…" : "Rescan"}
+                      {apsLoading ? t.scanning : t.rescan}
                     </button>
                   </div>
 
                   {apsError ? (
                     <Notice tone="warn">
-                      <p className="font-medium">Couldn&apos;t reach the router&apos;s API.</p>
+                      <p className="font-medium">{t.apiUnreachable}</p>
                       <p className="mt-1 break-words font-mono text-xs opacity-90">
-                        {apsError instanceof ApiRequestError ? apsError.message : "The access point list didn't load."}
+                        {apsError instanceof ApiRequestError ? apsError.message : t.apListFailed}
                       </p>
                       <p className="mt-2 text-amber-200/90">
-                        Check that the router is online and that its setup command finished, since it creates the API user and the connection back to
-                        MashupHost. Don&apos;t open the API port (8728) to the internet to work around this.
+                        {t.apiCheck}
                       </p>
                     </Notice>
                   ) : connectedAps && connectedAps.length > 0 ? (
@@ -477,7 +516,7 @@ export default function RoutersPage() {
                           <div className="flex items-start justify-between gap-2">
                             <div className="min-w-0">
                               <p className="truncate font-medium text-white" title={ap.identity}>
-                                {ap.identity || "Unnamed access point"}
+                                {ap.identity || t.unnamedAp}
                               </p>
                               <p className="truncate text-xs text-slate-500">
                                 {vendorOf(ap)}
@@ -499,13 +538,13 @@ export default function RoutersPage() {
                             </div>
                             {ap.uptime && (
                               <div className="flex justify-between gap-2">
-                                <dt className="text-slate-500">Uptime</dt>
+                                <dt className="text-slate-500">{c.uptime}</dt>
                                 <dd className="text-slate-300">{ap.uptime}</dd>
                               </div>
                             )}
                             {ap.signal && (
                               <div className="flex justify-between gap-2">
-                                <dt className="text-slate-500">Signal</dt>
+                                <dt className="text-slate-500">{t.signal}</dt>
                                 <dd className="text-slate-300">{ap.signal}</dd>
                               </div>
                             )}
@@ -514,7 +553,7 @@ export default function RoutersPage() {
                             <span className="text-slate-500">{DETECTED_BY[ap.detectionSource]}</span>
                             {ap.ipAddress && (
                               <a href={`http://${ap.ipAddress}`} target="_blank" rel="noopener noreferrer" className="text-brand-400 hover:underline">
-                                Open admin page ↗
+                                {t.openAdmin}
                               </a>
                             )}
                           </div>
@@ -524,8 +563,8 @@ export default function RoutersPage() {
                   ) : (
                     <p className="py-4 text-center text-sm text-slate-400">
                       {apsLoading
-                        ? "Scanning…"
-                        : "No access points found. Access points plugged into this router show up here through neighbour discovery and DHCP leases."}
+                        ? t.scanning
+                        : t.noAps}
                     </p>
                   )}
                 </div>
@@ -535,21 +574,21 @@ export default function RoutersPage() {
               {sessionsOpen && (
                 <div className="border-t border-obsidian-800">
                   <div className="flex items-center justify-between px-5 py-3">
-                    <h3 className="text-sm font-medium text-white">Active PPPoE sessions</h3>
-                    {sessionsLoading && <span className="text-xs text-slate-500">Refreshing…</span>}
+                    <h3 className="text-sm font-medium text-white">{t.activeSessions}</h3>
+                    {sessionsLoading && <span className="text-xs text-slate-500">{t.refreshing}</span>}
                   </div>
                   {sessionsError ? (
                     <div className="px-5 pb-4">
-                      <Notice tone="bad">{sessionsError instanceof ApiRequestError ? sessionsError.message : "Sessions didn't load."}</Notice>
+                      <Notice tone="bad">{sessionsError instanceof ApiRequestError ? sessionsError.message : t.sessionsFailed}</Notice>
                     </div>
                   ) : liveSessions && liveSessions.length > 0 ? (
                     <TableShell minWidth={520}>
                       <thead>
                         <tr>
-                          <th className={th}>Username</th>
-                          <th className={th}>IP address</th>
-                          <th className={th}>Uptime</th>
-                          <th className={th}>Caller ID</th>
+                          <th className={th}>{c.username}</th>
+                          <th className={th}>{c.ipAddress}</th>
+                          <th className={th}>{c.uptime}</th>
+                          <th className={th}>{t.callerId}</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -564,7 +603,7 @@ export default function RoutersPage() {
                       </tbody>
                     </TableShell>
                   ) : (
-                    <p className="px-5 pb-4 text-sm text-slate-400">{sessionsLoading ? "Loading…" : "No active sessions right now."}</p>
+                    <p className="px-5 pb-4 text-sm text-slate-400">{sessionsLoading ? c.loading : t.noSessions}</p>
                   )}
                 </div>
               )}
@@ -577,29 +616,29 @@ export default function RoutersPage() {
       <Modal
         open={winboxModalFor !== null}
         onClose={() => setWinboxModalFor(null)}
-        title="WinBox access"
-        description={winboxModalFor ? `Connect to ${winboxModalFor.name} with MikroTik's WinBox app.` : undefined}
+        title={t.winboxAccess}
+        description={winboxModalFor ? t.connectWith(winboxModalFor.name) : undefined}
         footer={
           <button type="button" className={darkButton("secondary")} onClick={() => setWinboxModalFor(null)}>
-            Close
+            {c.close}
           </button>
         }
       >
         {winboxModalFor && (
           <>
             <div className="rounded-lg border border-obsidian-800 bg-obsidian-950 p-4">
-              <p className="text-xs text-slate-400">Remote address, from anywhere</p>
+              <p className="text-xs text-slate-400">{t.remoteAddress}</p>
               {winboxLoading ? (
-                <p className="mt-1 text-sm text-slate-400">Loading…</p>
+                <p className="mt-1 text-sm text-slate-400">{c.loading}</p>
               ) : remoteWinbox ? (
                 <div className="mt-1 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <p className="font-mono text-base text-white">{remoteWinbox}</p>
                   <div className="flex gap-2">
                     <button type="button" className={darkButton("secondary", "sm")} onClick={() => void navigator.clipboard.writeText(remoteWinbox)}>
-                      Copy
+                      {c.copy}
                     </button>
                     <a href={`winbox://${remoteWinbox}`} className={darkButton("primary", "sm")}>
-                      Open in WinBox
+                      {t.openInWinbox}
                     </a>
                   </div>
                 </div>
@@ -607,26 +646,24 @@ export default function RoutersPage() {
                 <p className="mt-1 text-sm text-amber-300">{remoteWinboxProblem}</p>
               )}
               <p className="mt-3 text-xs leading-relaxed text-slate-500">
-                WinBox connects to the MashupHost server, which passes the connection to this router over its VPN. It works behind carrier NAT
-                (Safaricom, Airtel and Faiba SIMs) and never opens WinBox on the router to the internet. Log in with the router&apos;s own admin
-                account.
+                {t.relayExplain}
               </p>
             </div>
 
             <div className="text-sm text-slate-400">
-              <p className="font-medium text-slate-200">On the same network as the router</p>
+              <p className="font-medium text-slate-200">{t.sameNetwork}</p>
               <p className="mt-1">
-                Connect WinBox to <span className="font-mono text-slate-300">192.168.88.1</span>, or pick the router from WinBox&apos;s Neighbors tab.
+                {t.sameNetworkHint}
               </p>
             </div>
 
             <details>
-              <summary className="cursor-pointer select-none text-sm text-slate-400 hover:text-white">If remote WinBox won&apos;t connect</summary>
+              <summary className="cursor-pointer select-none text-sm text-slate-400 hover:text-white">{t.ifNoConnect}</summary>
               <div className="mt-2 space-y-2">
                 <p className="text-sm text-slate-400">
-                  Paste this into the router&apos;s terminal. It allows WinBox only from the MashupHost server, its VPN and the router&apos;s own LAN.
+                  {t.pasteScript}
                 </p>
-                <CodeBlock code={winboxLoading ? null : winboxAccessData?.script ?? null} label="WinBox access" maxHeight="10rem" />
+                <CodeBlock code={winboxLoading ? null : winboxAccessData?.script ?? null} label={t.winboxAccess} maxHeight="10rem" />
               </div>
             </details>
 
@@ -652,11 +689,11 @@ export default function RoutersPage() {
       <Modal
         open={toolsModalFor !== null}
         onClose={() => setToolsModalFor(null)}
-        title="Router tools"
-        description={toolsModalFor ? `Changes are applied to ${toolsModalFor.name} straight away.` : undefined}
+        title={t.routerTools}
+        description={toolsModalFor ? t.appliedTo(toolsModalFor.name) : undefined}
         footer={
           <button type="button" className={darkButton("secondary")} onClick={() => setToolsModalFor(null)}>
-            Close
+            {c.close}
           </button>
         }
       >
@@ -664,8 +701,8 @@ export default function RoutersPage() {
           <>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <Tool
-                title="Fair sharing (PCQ)"
-                description="Shares the available bandwidth evenly between active devices, so one heavy download doesn't slow everyone else down."
+                title={t.pcqTitle}
+                description={t.pcqDesc}
               >
                 <button
                   type="button"
@@ -673,12 +710,12 @@ export default function RoutersPage() {
                   onClick={() => runTool(toolsModalFor.id, "enable-pcq-shaper", {}, "pcq")}
                   disabled={toolLoading === "pcq" || !toolsModalFor.host}
                 >
-                  {toolLoading === "pcq" ? "Applying…" : "Enable"}
+                  {toolLoading === "pcq" ? t.applying : t.enable}
                 </button>
               </Tool>
               <Tool
-                title="Family-safe DNS"
-                description="Points customers at Cloudflare for Families (1.1.1.3), which blocks malware and adult sites. “Standard” switches back to 8.8.8.8."
+                title={t.dnsTitle}
+                description={t.dnsDesc}
               >
                 <button
                   type="button"
@@ -686,7 +723,7 @@ export default function RoutersPage() {
                   onClick={() => runTool(toolsModalFor.id, "apply-family-dns", { familyMode: true }, "dns-family")}
                   disabled={toolLoading === "dns-family" || !toolsModalFor.host}
                 >
-                  {toolLoading === "dns-family" ? "Applying…" : "Enable"}
+                  {toolLoading === "dns-family" ? t.applying : t.enable}
                 </button>
                 <button
                   type="button"
@@ -694,13 +731,13 @@ export default function RoutersPage() {
                   onClick={() => runTool(toolsModalFor.id, "apply-family-dns", { familyMode: false }, "dns-standard")}
                   disabled={toolLoading === "dns-standard" || !toolsModalFor.host}
                 >
-                  Standard
+                  {t.standard}
                 </button>
               </Tool>
               <Tool
-                title="Block tunnelling apps"
+                title={t.tunnelTitle}
                 note={antiTunnelNote}
-                description="Stops phones that haven't paid from getting online through SlowDNS, VPN and proxy tunnels before they log in. Customers who have logged in aren't affected. Tunnels hidden inside encrypted traffic (like HA Tunnel) can only be limited, not fully blocked."
+                description={t.tunnelDesc}
               >
                 <button
                   type="button"
@@ -708,7 +745,7 @@ export default function RoutersPage() {
                   onClick={() => void setAntiTunnel(toolsModalFor.id, true)}
                   disabled={toolLoading === "anti-vpn" || toolLoading === "anti-vpn-off" || !toolsModalFor.host}
                 >
-                  {toolLoading === "anti-vpn" ? "Applying…" : "Turn on"}
+                  {toolLoading === "anti-vpn" ? t.applying : t.turnOn}
                 </button>
                 <button
                   type="button"
@@ -716,12 +753,12 @@ export default function RoutersPage() {
                   onClick={() => void setAntiTunnel(toolsModalFor.id, false)}
                   disabled={toolLoading === "anti-vpn" || toolLoading === "anti-vpn-off" || !toolsModalFor.host}
                 >
-                  {toolLoading === "anti-vpn-off" ? "Removing…" : "Turn off"}
+                  {toolLoading === "anti-vpn-off" ? t.removing : t.turnOff}
                 </button>
               </Tool>
               <Tool
-                title="Speed-test priority"
-                description="Gives Ookla and Fast.com speed tests priority up to 100 Mbps. Test results can then be higher than everyday browsing speeds."
+                title={t.speedTitle}
+                description={t.speedDesc}
               >
                 <button
                   type="button"
@@ -729,29 +766,29 @@ export default function RoutersPage() {
                   onClick={() => runTool(toolsModalFor.id, "apply-speedtest-boost", {}, "speedtest")}
                   disabled={toolLoading === "speedtest" || !toolsModalFor.host}
                 >
-                  {toolLoading === "speedtest" ? "Applying…" : "Enable"}
+                  {toolLoading === "speedtest" ? t.applying : t.enable}
                 </button>
               </Tool>
             </div>
 
             <div className="rounded-lg border border-obsidian-800 bg-obsidian-950 p-4">
               <div className="flex items-center justify-between gap-3">
-                <p className="text-sm font-medium text-white">RouterOS version</p>
+                <p className="text-sm font-medium text-white">{t.routerOsVersion}</p>
                 <button type="button" className={darkButton("ghost", "sm")} onClick={() => refetchFirmware()} disabled={firmwareLoading}>
-                  {firmwareLoading ? "Checking…" : "Check for updates"}
+                  {firmwareLoading ? t.checking : t.checkUpdates}
                 </button>
               </div>
               <dl className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
                 <div>
-                  <dt className="text-xs text-slate-500">Installed</dt>
+                  <dt className="text-xs text-slate-500">{t.installed}</dt>
                   <dd className="text-slate-200">{firmwareData?.currentVersion || "—"}</dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-slate-500">Latest</dt>
+                  <dt className="text-xs text-slate-500">{t.latest}</dt>
                   <dd className="text-slate-200">{firmwareData?.latestVersion || "—"}</dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-slate-500">Status</dt>
+                  <dt className="text-xs text-slate-500">{c.status}</dt>
                   <dd className="text-slate-200">{firmwareData?.status || "—"}</dd>
                 </div>
               </dl>
@@ -760,16 +797,16 @@ export default function RoutersPage() {
                   type="button"
                   className={`${darkButton("primary")} mt-4 w-full`}
                   onClick={() => {
-                    if (confirm("The router will download the new RouterOS version and reboot. Customers will be offline for a few minutes. Continue?")) {
+                    if (confirm(t.confirmUpgrade)) {
                       runTool(toolsModalFor.id, "upgrade-firmware", {}, "firmware");
                     }
                   }}
                   disabled={toolLoading === "firmware" || !toolsModalFor.host}
                 >
-                  {toolLoading === "firmware" ? "Upgrading…" : `Upgrade to ${firmwareData.latestVersion} and reboot`}
+                  {toolLoading === "firmware" ? t.upgrading : t.upgradeTo(firmwareData.latestVersion)}
                 </button>
               ) : (
-                firmwareData && <p className="mt-3 text-xs text-slate-500">No newer stable version found.</p>
+                firmwareData && <p className="mt-3 text-xs text-slate-500">{t.noNewer}</p>
               )}
             </div>
           </>

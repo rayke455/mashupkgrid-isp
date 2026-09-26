@@ -31,6 +31,12 @@ interface CaptivePortalPluginContainerProps {
   /** "light" for light portal themes: light bars, no animated background (it's also the
    *  single heaviest thing a slow phone renders on this page). */
   appearance?: "light" | "dark";
+  /** The portal page owns the language so its themes and sheets can read it; the EN/SW switch
+   *  here only reports the tap. */
+  language?: "en" | "sw";
+  onLanguageChange?: (lang: "en" | "sw") => void;
+  /** The tenant's published default language, once the config has loaded. */
+  onPublishedDefaultLanguage?: (lang: "en" | "sw") => void;
 }
 
 export function CaptivePortalPluginContainer({
@@ -43,6 +49,9 @@ export function CaptivePortalPluginContainer({
   onVoucherCodeApplied,
   onDisconnect,
   appearance = "dark",
+  language,
+  onLanguageChange,
+  onPublishedDefaultLanguage,
 }: CaptivePortalPluginContainerProps) {
   const light = appearance === "light";
   // Synchronous local default for the first paint only — for a real customer this is always the
@@ -54,7 +63,12 @@ export function CaptivePortalPluginContainer({
   );
   const [showQrModal, setShowQrModal] = useState(false);
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
-  const [currentLang, setCurrentLang] = useState<"en" | "sw">(pluginsState.language.defaultLanguage || "en");
+  const [localLang, setLocalLang] = useState<"en" | "sw">(pluginsState.language.defaultLanguage || "en");
+  const currentLang = language ?? localLang;
+  const setCurrentLang = (lang: "en" | "sw") => {
+    setLocalLang(lang);
+    onLanguageChange?.(lang);
+  };
 
   useEffect(() => {
     // The authoritative fetch. This is the fix for the whole customizer: previously the only
@@ -64,7 +78,9 @@ export function CaptivePortalPluginContainer({
     // mid-provisioning), since a captive portal must still render when the API is unreachable.
     let cancelled = false;
     void fetchPublishedPluginsState(tenantSlug, apiFetch).then((published) => {
-      if (!cancelled) setPluginsState(published);
+      if (cancelled) return;
+      setPluginsState(published);
+      if (published.language?.enabled && published.language.defaultLanguage) onPublishedDefaultLanguage?.(published.language.defaultLanguage);
     });
     trackPortalEvent(tenantSlug, "impression", { tenantSlug });
 
@@ -79,6 +95,9 @@ export function CaptivePortalPluginContainer({
       cancelled = true;
       window.removeEventListener("mkg_portal_plugin_change" as unknown as keyof WindowEventMap, handlePluginChange as EventListener);
     };
+    // onPublishedDefaultLanguage is read once with the published config; re-running the fetch
+    // whenever the parent re-renders would refetch the config on every keystroke.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantSlug]);
 
   const addToast = (type: ToastMessage["type"], message: string) => {

@@ -7,6 +7,7 @@ import { apiFetch, ApiRequestError } from "@/lib/api-client";
 import { HintText, Input, Label } from "@/components/ui";
 import { Notice, Panel, darkButton } from "@/components/dashboard/surface";
 import { THEME_CATALOG, DEFAULT_THEME_ID, type ThemeId } from "@/components/hotspot/themes";
+import { tr } from "@/lib/tr";
 
 interface PortalConfig {
   activeThemeId?: string;
@@ -107,8 +108,8 @@ export function PortalTab({ tenantSlug }: { tenantSlug: string }) {
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
       <div className="min-w-0 space-y-6">
         <Panel
-          title="Your portal link"
-          description="Phones on your hotspot are sent here automatically. You can also share it."
+          title={tr("Your portal link")}
+          description={tr("Phones on your hotspot are sent here automatically. You can also share it.")}
         >
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <p className="min-w-0 flex-1 truncate rounded-lg border border-obsidian-800 bg-obsidian-950 px-3 py-2 font-mono text-[13px] text-slate-200">{portalUrl}</p>
@@ -125,56 +126,54 @@ export function PortalTab({ tenantSlug }: { tenantSlug: string }) {
                 {copied ? "Copied" : "Copy"}
               </button>
               <a href={portalUrl} target="_blank" rel="noopener noreferrer" className={darkButton("secondary", "sm")}>
-                Open ↗
+                {tr("Open")}
               </a>
             </div>
           </div>
         </Panel>
-
         <form onSubmit={save} className="space-y-6">
-          <Panel title="Branding and contact" description="Shown to every customer on the Wi-Fi sign-in page.">
+          <Panel title={tr("Branding and contact")} description={tr("Shown to every customer on the Wi-Fi sign-in page.")}>
             {isLoading ? (
-              <p className="text-sm text-slate-400">Loading…</p>
+              <p className="text-sm text-slate-400">{tr("Loading…")}</p>
             ) : (
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <Label htmlFor="p-brand">Name on the portal</Label>
-                  <Input id="p-brand" value={brandName} onChange={(e) => setBrandName(e.target.value)} placeholder="Your business name" />
+                  <Label htmlFor="p-brand">{tr("Name on the portal")}</Label>
+                  <Input id="p-brand" value={brandName} onChange={(e) => setBrandName(e.target.value)} placeholder={tr("Your business name")} />
                 </div>
                 <div>
-                  <Label htmlFor="p-support">Support number</Label>
+                  <Label htmlFor="p-support">{tr("Support number")}</Label>
                   <Input id="p-support" inputMode="tel" value={supportPhone} onChange={(e) => setSupportPhone(e.target.value)} placeholder="07XX XXX XXX" />
-                  <HintText>Customers can tap to call it.</HintText>
+                  <HintText>{tr("Customers can tap to call it.")}</HintText>
                 </div>
                 <div>
-                  <Label htmlFor="p-title">Heading</Label>
-                  <Input id="p-title" value={welcomeTitle} onChange={(e) => setWelcomeTitle(e.target.value)} placeholder="Fast, reliable Wi-Fi" maxLength={60} />
+                  <Label htmlFor="p-title">{tr("Heading")}</Label>
+                  <Input id="p-title" value={welcomeTitle} onChange={(e) => setWelcomeTitle(e.target.value)} placeholder={tr("Fast, reliable Wi-Fi")} maxLength={60} />
                 </div>
                 <div>
-                  <Label htmlFor="p-sub">Subheading</Label>
-                  <Input id="p-sub" value={bannerSubtitle} onChange={(e) => setBannerSubtitle(e.target.value)} placeholder="Pay with M-Pesa and connect instantly" maxLength={90} />
+                  <Label htmlFor="p-sub">{tr("Subheading")}</Label>
+                  <Input id="p-sub" value={bannerSubtitle} onChange={(e) => setBannerSubtitle(e.target.value)} placeholder={tr("Pay with M-Pesa and connect instantly")} maxLength={90} />
                 </div>
                 <div>
-                  <Label htmlFor="p-phone">Home internet sales number</Label>
+                  <Label htmlFor="p-phone">{tr("Home internet sales number")}</Label>
                   <Input id="p-phone" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="07XX XXX XXX" />
-                  <HintText>Shown with home internet (fibre) offers.</HintText>
+                  <HintText>{tr("Shown with home internet (fibre) offers.")}</HintText>
                 </div>
                 <div>
-                  <Label htmlFor="p-fee">Installation fee</Label>
-                  <Input id="p-fee" value={installationFee} onChange={(e) => setInstallationFee(e.target.value)} placeholder="e.g. KSh 1,500" />
+                  <Label htmlFor="p-fee">{tr("Installation fee")}</Label>
+                  <Input id="p-fee" value={installationFee} onChange={(e) => setInstallationFee(e.target.value)} placeholder={tr("e.g. KSh 1,500")} />
                 </div>
               </div>
             )}
             <p className="mt-4 text-sm text-slate-400">
               Your logo and brand colour come from{" "}
               <Link href="/settings" className="text-brand-400 hover:underline">
-                Settings
+                {tr("Settings")}
               </Link>
               .
             </p>
           </Panel>
-
-          <Panel title="Design" description="How the sign-in page looks. MashupHost Clean loads fastest on phones.">
+          <Panel title={tr("Design")} description={tr("How the sign-in page looks. MashupHost Clean loads fastest on phones.")}>
             <div className="grid gap-3 sm:grid-cols-2">
               {THEME_CATALOG.map((t) => {
                 const active = theme === t.id;
@@ -190,7 +189,7 @@ export function PortalTab({ tenantSlug }: { tenantSlug: string }) {
                   >
                     <span className="flex items-center justify-between gap-2">
                       <span className="text-sm font-medium text-white">{t.name.replace(/\s*\(.*\)$/, "")}</span>
-                      {t.id === DEFAULT_THEME_ID && <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-300">Recommended</span>}
+                      {t.id === DEFAULT_THEME_ID && <span className="rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs text-emerald-300">{tr("Recommended")}</span>}
                     </span>
                     <span className="mt-1 block text-xs leading-relaxed text-slate-400">{t.description}</span>
                   </button>
@@ -198,11 +197,10 @@ export function PortalTab({ tenantSlug }: { tenantSlug: string }) {
               })}
             </div>
           </Panel>
-
           {error && <Notice tone="bad">{error}</Notice>}
           <div className="sticky bottom-4 z-10 flex items-center justify-end gap-3 rounded-xl border border-obsidian-800 bg-obsidian-900/95 px-4 py-3">
             <span className="mr-auto text-sm text-slate-400">
-              {saved ? <span className="text-emerald-300">Published. Customers see it now.</span> : dirty ? "You have unpublished changes." : "Everything is published."}
+              {saved ? <span className="text-emerald-300">{tr("Published. Customers see it now.")}</span> : dirty ? "You have unpublished changes." : "Everything is published."}
             </span>
             <button type="submit" className={darkButton("primary")} disabled={saving || !dirty}>
               {saving ? "Publishing…" : "Publish"}
@@ -210,14 +208,13 @@ export function PortalTab({ tenantSlug }: { tenantSlug: string }) {
           </div>
         </form>
       </div>
-
       {/* Live phone preview of the real portal */}
       <div className="xl:sticky xl:top-20 xl:self-start">
         <p className="mb-2 text-sm text-slate-400">
           Preview{dirty ? " · text changes show after you publish" : ""}
         </p>
-        <div className="mx-auto w-[340px] max-w-full rounded-[2.2rem] border border-obsidian-700 bg-obsidian-950 p-2.5 shadow-2xl">
-          <iframe key={previewSrc} src={previewSrc} title="Portal preview" className="h-[640px] w-full rounded-[1.7rem] bg-white" />
+        <div className="mx-auto w-[340px] max-w-full rounded-2xl border border-obsidian-700 bg-obsidian-950 p-2.5 shadow-lg">
+          <iframe key={previewSrc} src={previewSrc} title={tr("Portal preview")} className="h-[640px] w-full rounded-[1.7rem] bg-white" />
         </div>
       </div>
     </div>

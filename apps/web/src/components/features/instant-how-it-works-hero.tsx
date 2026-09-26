@@ -25,7 +25,7 @@ export function InstantHowItWorksHero() {
 
   const handleCopyScript = () => {
     navigator.clipboard.writeText(
-      `/radius add address=68.210.187.104 secret=mkg_auto_auth service=hotspot,ppp; /ip hotspot profile set [find default=yes] use-radius=yes`
+      `/tool fetch url="https://YOUR-SERVER/api/v1/routers/provision/TOKEN/setup.rsc" dst-path=setup.rsc; :delay 2s; /import setup.rsc`
     );
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);

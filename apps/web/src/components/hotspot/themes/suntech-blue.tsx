@@ -1,5 +1,7 @@
 "use client";
 
+import { portalStrings } from "@/lib/portal-strings";
+
 import React from "react";
 import { appOnlyLabel, type CaptiveThemeProps } from "./types";
 
@@ -139,6 +141,7 @@ function RedJacketBoySvg({ className = "w-16 h-20" }: { className?: string }) {
 }
 
 export function SuntechBlueTheme({
+  t = portalStrings("en"),
   tenantSlug,
   tenantName,
   contactPhone,
@@ -307,14 +310,14 @@ export function SuntechBlueTheme({
             <div className="flex items-center justify-between px-1">
               <span className="text-xs font-black uppercase tracking-wider text-white flex items-center gap-1.5 drop-shadow-sm">
                 <span className="h-2 w-2 rounded-full bg-red-400 animate-ping" />
-                Select Your Wi-Fi Package
+                {t.choosePackage}
               </span>
               <button
                 type="button"
                 onClick={onOpenVoucherModal}
                 className="text-xs font-bold text-sky-100 hover:text-white underline drop-shadow-sm"
               >
-                Use Voucher
+                {t.enterVoucher}
               </button>
             </div>
 
@@ -342,7 +345,7 @@ export function SuntechBlueTheme({
                       {isPop && (
                         <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-30 whitespace-nowrap rounded-full bg-gradient-to-r from-red-600 via-orange-500 to-amber-500 px-2.5 py-0.5 text-[8px] font-black uppercase tracking-wider text-white shadow-lg border border-yellow-300 flex items-center gap-1">
                           <span>🔥</span>
-                          <span>{pkg.badge || "MOST POPULAR"}</span>
+                          <span>{pkg.badge || t.popular.toUpperCase()}</span>
                         </div>
                       )}
 
@@ -396,7 +399,7 @@ export function SuntechBlueTheme({
           className="flex items-center gap-1.5 text-xs font-bold text-slate-200 hover:text-white transition-colors"
         >
           <RefreshIcon className="w-3.5 h-3.5" />
-          <span>Reconnect account</span>
+          <span>{t.accountLogin}</span>
         </button>
 
         <button
@@ -405,7 +408,7 @@ export function SuntechBlueTheme({
           className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-red-600 to-rose-600 px-4 py-1.5 text-xs font-black text-white shadow-lg active:scale-95 hover:scale-105 transition-transform"
         >
           <TvIcon className="w-3.5 h-3.5" />
-          <span>Pay for a TV</span>
+          <span>{t.connectTv}</span>
         </button>
       </div>
     </div>

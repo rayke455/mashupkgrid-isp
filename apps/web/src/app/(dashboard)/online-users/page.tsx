@@ -7,6 +7,7 @@ import { apiFetch } from "@/lib/api-client";
 import { formatMoney } from "@/lib/money";
 import { timeAgo } from "@/components/notifications";
 import { EmptyState, Metric, MetricGrid, PageHeader, Panel, Pill, Segmented, TableShell, td, th } from "@/components/dashboard/surface";
+import { tr } from "@/lib/tr";
 
 /**
  * Everyone online right now, hotspot and PPPoE together, with who they are and whether they
@@ -62,6 +63,14 @@ function formatDuration(seconds: number): string {
   return `${Math.floor(hrs / 24)} d ${hrs % 24} h`;
 }
 
+function expiresIn(iso: string): string {
+  const mins = Math.round((new Date(iso).getTime() - Date.now()) / 60_000);
+  if (mins <= 0) return "expired";
+  if (mins < 60) return `${mins} min left`;
+  if (mins < 48 * 60) return `${Math.floor(mins / 60)} h ${mins % 60} min left`;
+  return `${Math.round(mins / 1440)} d left`;
+}
+
 const STATE: Record<TrackedSession["state"], { tone: "good" | "warn" | "neutral"; label: string }> = {
   ACTIVE: { tone: "good", label: "Online" },
   STALE: { tone: "warn", label: "No update" },
@@ -99,28 +108,28 @@ export default function OnlineUsersPage() {
   return (
     <div className="w-full min-w-0 space-y-6">
       <PageHeader
-        title="Online users"
-        description="Every hotspot and PPPoE session, with the customer and their last payment behind it. Updates every 20 seconds."
+        title={tr("Online users")}
+        description={tr("Every hotspot and PPPoE session, with the customer and their last payment behind it. Updates every 20 seconds.")}
         actions={dataUpdatedAt ? <span className="text-xs text-slate-500">Updated {timeAgo(new Date(dataUpdatedAt).toISOString())}</span> : undefined}
       />
 
       <MetricGrid columns={4}>
-        <Metric label="Hotspot online" value={summary ? summary.activeHotspot : "—"} hint="Voucher and account logins" />
-        <Metric label="PPPoE online" value={summary ? summary.activePppoe : "—"} hint="Home and business lines" />
+        <Metric label={tr("Hotspot online")} value={summary ? summary.activeHotspot : "—"} hint={tr("Voucher and account logins")} />
+        <Metric label={tr("PPPoE online")} value={summary ? summary.activePppoe : "—"} hint={tr("Home and business lines")} />
         <Metric
-          label="Online and paid"
+          label={tr("Online and paid")}
           value={summary ? summary.activePaid : "—"}
           hint={summary ? `${summary.activeHotspot + summary.activePppoe + summary.activeOther - summary.activePaid} with no payment on record` : undefined}
           tone={summary && summary.activeHotspot + summary.activePppoe + summary.activeOther - summary.activePaid > 0 ? "warn" : undefined}
         />
-        <Metric label="Other services" value={summary ? summary.activeOther : "—"} hint="Static IP and IPTV" />
+        <Metric label={tr("Other services")} value={summary ? summary.activeOther : "—"} hint={tr("Static IP and IPTV")} />
       </MetricGrid>
 
       <Panel padded={false}>
         <div className="flex flex-col gap-3 border-b border-obsidian-800 px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap items-center gap-2">
             <Segmented
-              label="Scope"
+              label={tr("Scope")}
               value={scope}
               onChange={setScope}
               options={[
@@ -129,7 +138,7 @@ export default function OnlineUsersPage() {
               ]}
             />
             <Segmented
-              label="Service"
+              label={tr("Service")}
               value={type}
               onChange={setType}
               options={[
@@ -142,7 +151,7 @@ export default function OnlineUsersPage() {
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Name, phone, voucher, IP or MAC"
+            placeholder={tr("Name, phone, voucher, IP or MAC")}
             className="w-full rounded-lg border border-obsidian-700 bg-obsidian-950 px-3 py-1.5 text-sm text-white outline-none placeholder:text-slate-500 focus:border-brand-500 sm:w-72"
           />
         </div>
@@ -150,23 +159,23 @@ export default function OnlineUsersPage() {
         {error ? (
           <p className="px-5 py-8 text-sm text-rose-300">Couldn&rsquo;t load sessions: {error instanceof Error ? error.message : String(error)}</p>
         ) : isLoading && !data ? (
-          <p className="px-5 py-8 text-sm text-slate-400">Loading…</p>
+          <p className="px-5 py-8 text-sm text-slate-400">{tr("Loading…")}</p>
         ) : items.length === 0 ? (
           <EmptyState title={scope === "active" ? "Nobody is online right now" : "No sessions in the last 7 days"}>
-            Sessions appear here as soon as a router reports them over RADIUS accounting.
+            {tr("Sessions appear here as soon as a router reports them over RADIUS accounting.")}
           </EmptyState>
         ) : (
           <TableShell minWidth={1080}>
             <thead>
               <tr>
-                <th className={th}>Who</th>
-                <th className={th}>Service</th>
-                <th className={th}>Status</th>
-                <th className={th}>Router</th>
-                <th className={th}>Address</th>
+                <th className={th}>{tr("Who")}</th>
+                <th className={th}>{tr("Service")}</th>
+                <th className={th}>{tr("Status")}</th>
+                <th className={th}>{tr("Router")}</th>
+                <th className={th}>{tr("Address")}</th>
                 <th className={th}>{scope === "active" ? "Online for" : "Duration"}</th>
-                <th className={th}>Data</th>
-                <th className={th}>Last payment</th>
+                <th className={th}>{tr("Data")}</th>
+                <th className={th}>{tr("Last payment")}</th>
               </tr>
             </thead>
             <tbody>
@@ -188,13 +197,13 @@ export default function OnlineUsersPage() {
                         <>
                           <span className="font-mono text-[13px] text-white">{s.voucher.code}</span>
                           <span className="block text-xs text-slate-500">
-                            Voucher{s.voucher.expiresAt ? ` · expires ${timeAgo(s.voucher.expiresAt).replace(" ago", "")}` : ""}
+                            Voucher{s.voucher.expiresAt ? ` · ${expiresIn(s.voucher.expiresAt)}` : ""}
                           </span>
                         </>
                       ) : (
                         <>
                           <span className="font-mono text-[13px] text-slate-200">{s.username}</span>
-                          <span className="block text-xs text-slate-500">Not a known customer or voucher</span>
+                          <span className="block text-xs text-slate-500">{tr("Not a known customer or voucher")}</span>
                         </>
                       )}
                     </td>
@@ -235,9 +244,9 @@ export default function OnlineUsersPage() {
                           <span className="block text-xs text-slate-500">{timeAgo(s.lastPayment.createdAt)}</span>
                         </>
                       ) : s.voucher ? (
-                        <span className="text-xs text-slate-400">Prepaid voucher</span>
+                        <span className="text-xs text-slate-400">{tr("Prepaid voucher")}</span>
                       ) : (
-                        <Pill tone="warn">None on record</Pill>
+                        <Pill tone="warn">{tr("None on record")}</Pill>
                       )}
                     </td>
                   </tr>
@@ -254,7 +263,7 @@ export default function OnlineUsersPage() {
             </span>
             <div className="flex gap-2">
               <button type="button" disabled={page <= 1} onClick={() => setPage((p) => p - 1)} className="rounded-lg border border-obsidian-700 px-3 py-1 disabled:opacity-40">
-                Previous
+                {tr("Previous")}
               </button>
               <button
                 type="button"
@@ -262,7 +271,7 @@ export default function OnlineUsersPage() {
                 onClick={() => setPage((p) => p + 1)}
                 className="rounded-lg border border-obsidian-700 px-3 py-1 disabled:opacity-40"
               >
-                Next
+                {tr("Next")}
               </button>
             </div>
           </div>

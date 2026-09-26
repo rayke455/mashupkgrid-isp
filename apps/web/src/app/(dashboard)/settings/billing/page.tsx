@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
 import { Card, Button, Input, Label, Badge, StatusDot, ErrorText, HintText } from "@/components/ui";
 import { IconLayers } from "@/components/icons";
+import { tr } from "@/lib/tr";
 
 interface TenantPlanSummary {
   id: string;
@@ -93,7 +94,7 @@ export default function BillingPage() {
   });
 
   if (isLoading) {
-    return <p className="text-sm text-slate-500">Loading subscription...</p>;
+    return <p className="text-sm text-slate-500">{tr("Loading subscription...")}</p>;
   }
   if (!data) {
     // A 404 here means the account simply has no plan yet, which is not an error to the reader.
@@ -120,17 +121,17 @@ export default function BillingPage() {
       <div>
         <h2 className="text-lg font-semibold text-slate-900 dark:text-white flex items-center gap-2">
           <IconLayers size={18} className="text-brand-600 dark:text-brand-400" />
-          My Subscription
+          {tr("My Subscription")}
         </h2>
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          Your current plan, usage, and renewal history.
+          {tr("Your current plan, usage, and renewal history.")}
         </p>
       </div>
 
       <Card className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Current Plan</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{tr("Current Plan")}</p>
             <p className="text-lg font-bold text-slate-900 dark:text-white">{subscription.plan.name}</p>
           </div>
           <Badge variant={meta.variant}>
@@ -140,7 +141,7 @@ export default function BillingPage() {
         </div>
         <div className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
           <div>
-            <p className="text-slate-400 text-xs">Price</p>
+            <p className="text-slate-400 text-xs">{tr("Price")}</p>
             <p className="font-medium text-slate-800 dark:text-slate-200">
               {formatMinor(price)} / {subscription.billingCycle === "ANNUAL" ? "year" : "month"}
             </p>
@@ -155,15 +156,15 @@ export default function BillingPage() {
           </div>
         </div>
         <div className="space-y-3 pt-2 border-t border-slate-100 dark:border-obsidian-800">
-          <UsageBar label="Customers" usage={usage.customers} />
-          <UsageBar label="Routers" usage={usage.routers} />
+          <UsageBar label={tr("Customers")} usage={usage.customers} />
+          <UsageBar label={tr("Routers")} usage={usage.routers} />
         </div>
       </Card>
 
       <Card className="space-y-3">
-        <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">Renew Now</p>
+        <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">{tr("Renew Now")}</p>
         <div>
-          <Label htmlFor="phone">M-Pesa Phone Number</Label>
+          <Label htmlFor="phone">{tr("M-Pesa Phone Number")}</Label>
           <Input
             id="phone"
             placeholder="0712345678"
@@ -186,10 +187,10 @@ export default function BillingPage() {
       </Card>
 
       <div>
-        <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">Payment History</p>
+        <p className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-2">{tr("Payment History")}</p>
         {payments.length === 0 ? (
           <div className="rounded-xl border border-dashed border-slate-300 dark:border-obsidian-800 p-6 text-center">
-            <p className="text-sm text-slate-500">No payments yet</p>
+            <p className="text-sm text-slate-500">{tr("No payments yet")}</p>
           </div>
         ) : (
           <div className="space-y-2">

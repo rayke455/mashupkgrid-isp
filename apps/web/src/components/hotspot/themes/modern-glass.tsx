@@ -1,3 +1,4 @@
+import { portalStrings } from "@/lib/portal-strings";
 import { type CaptiveThemeProps, getSocialAppMeta } from "./types";
 
 function formatDuration(minutes: number): string {
@@ -16,6 +17,7 @@ function formatPrice(priceMinor: number): string {
 }
 
 export function ModernGlassTheme({
+  t = portalStrings("en"),
   tenantSlug,
   tenantName,
   contactPhone,
@@ -65,7 +67,7 @@ export function ModernGlassTheme({
 
           <div className="mt-5 rounded-2xl bg-slate-900/60 border border-white/5 p-4">
             <div className="flex items-center justify-between text-xs text-slate-400">
-              <span>Customer Support</span>
+              <span>{t.contactSupport}</span>
               <a href={`tel:${contactPhone}`} className="font-mono text-purple-400 font-bold hover:underline">
                 {contactPhone}
               </a>
@@ -87,20 +89,20 @@ export function ModernGlassTheme({
                 <polyline points="20 6 9 17 4 12" />
               </svg>
             </div>
-            <h3 className="font-bold text-emerald-400 text-lg">Connected to Internet</h3>
+            <h3 className="font-bold text-emerald-400 text-lg">{t.youAreConnected}</h3>
             <p className="text-xs text-slate-300 mt-1">Your device is authorized and active.</p>
           </div>
         ) : (
           /* Glass Packages Cards */
           <div className="mt-6 space-y-4">
             <div className="flex items-center justify-between px-1">
-              <h2 className="text-sm font-bold text-slate-300">Choose Your Internet Pass</h2>
+              <h2 className="text-sm font-bold text-slate-300">{t.choosePackage}</h2>
               <button
                 type="button"
                 onClick={onOpenVoucherModal}
                 className="text-xs font-semibold text-purple-400 hover:text-purple-300"
               >
-                Have a Voucher?
+                {t.enterVoucher}
               </button>
             </div>
 
@@ -125,7 +127,7 @@ export function ModernGlassTheme({
                     >
                       {isPop && (
                         <span className="absolute -top-2.5 right-4 rounded-full bg-gradient-to-r from-purple-600 to-indigo-600 px-2.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-white shadow-md">
-                          {pkg.badge || "Most Popular"}
+                          {pkg.badge || t.popular}
                         </span>
                       )}
                       <div>
@@ -146,7 +148,7 @@ export function ModernGlassTheme({
                           {formatPrice(pkg.priceMinor)}
                         </span>
                         <span className="mt-1.5 inline-block rounded-full bg-purple-500/20 border border-purple-500/40 px-2.5 py-0.5 text-[10px] font-bold text-purple-300 group-hover:bg-purple-500 group-hover:text-white transition-colors">
-                          Buy Now
+                          {t.buy}
                         </span>
                       </div>
                     </button>
@@ -169,7 +171,7 @@ export function ModernGlassTheme({
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
             <circle cx="12" cy="7" r="4" />
           </svg>
-          Member Login
+          {t.accountLogin}
         </button>
 
         <button

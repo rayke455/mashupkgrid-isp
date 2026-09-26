@@ -133,7 +133,8 @@ export async function suspendOverdueSubscriptions(gracePeriodDays = 3): Promise<
 
 /** Reactivates SUSPENDED subscriptions once their customer has no remaining unpaid invoices. */
 export async function reactivateClearedSubscriptions(): Promise<JobResult> {
-  const suspended = await prisma.customerService.findMany({ where: { status: "SUSPENDED" } });
+  // A plan the customer paused stays off until its pause ends, even with nothing owing.
+  const suspended = await prisma.customerService.findMany({ where: { status: "SUSPENDED", OR: [{ pausedUntil: null }, { pausedUntil: { lte: new Date() } }] } });
 
   let affected = 0;
   for (const subscription of suspended) {
@@ -164,7 +165,7 @@ export async function reactivateCustomerIfCleared(tenantId: string, customerId: 
   if (unpaidCount > 0) return 0;
 
   const suspended = await prisma.customerService.findMany({
-    where: { tenantId, customerId, status: "SUSPENDED" },
+    where: { tenantId, customerId, status: "SUSPENDED", OR: [{ pausedUntil: null }, { pausedUntil: { lte: new Date() } }] },
   });
 
   for (const subscription of suspended) {

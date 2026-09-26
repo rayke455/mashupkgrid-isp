@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
-import { prisma, type Customer } from "@mashupkgrid/database";
+import { prisma } from "@mashupkgrid/database";
 import { getOrCreateWallet, listWalletTransactions } from "@mashupkgrid/billing";
 import {
   getRadiusUserByCustomerServiceOrThrow,
@@ -22,6 +22,9 @@ import { authenticate } from "../plugins/authenticate.js";
 import { resolveTenant } from "../plugins/tenant.js";
 import { checkMaintenance } from "../plugins/maintenance.js";
 import { writeAuditLog } from "../lib/audit.js";
+import { resolveAccountHolderOrThrow, resolveMyAccountOrThrow, resolveMyCustomerOrThrow, resolvePayingCustomerOrThrow } from "../lib/my-account.js";
+import { initiateStkPushForCustomer, getStkRequestOrThrow, queryAndReconcileStkRequest } from "@mashupkgrid/payments";
+import { getReferralSummary, getPauseAllowance, pauseSubscription, resumeSubscription, listAddOns, listPurchasesForCustomer, buyAddOn, activatePaidAddOns, cancelUnstartedPurchase } from "@mashupkgrid/billing";
 
 const preHandler = [authenticate, resolveTenant, checkMaintenance] as const;
 
@@ -30,32 +33,10 @@ const ticketIdParamsSchema = z.object({ ticketId: z.string().uuid() });
 const createMyTicketSchema = z.object({ subject: z.string().min(1).max(200), body: z.string().min(1).max(5000) });
 const replyToMyTicketSchema = z.object({ body: z.string().min(1).max(5000) });
 
-/**
- * Resolves the caller's own billing record by `userId`, never by a client-supplied id — that's
- * what makes every route in this file safe to expose to the CUSTOMER role with no extra
- * permission check: the scoping *is* the security boundary, not a permission flag. A user with
- * no linked Customer (self-registered but not yet onboarded by staff — see
- * linkCustomerToUserAccount) gets a clear, specific 404, not an empty list that looks like "you
- * have nothing" when the real answer is "you aren't linked to a billing account yet".
- */
-async function resolveMyCustomerOrThrow(request: FastifyRequest): Promise<Customer> {
-  const tenantId = request.user!.tenantId;
-  if (tenantId === null) throw new ConflictError("Platform accounts have no customer record");
-
-  const customer = await prisma.customer.findFirst({ where: { tenantId, userId: request.user!.id } });
-  if (!customer) {
-    // NotFoundError appends " was not found" itself — this reads as "A linked customer record
-    // was not found", not a full sentence; the fuller "contact support" guidance lives in the
-    // frontend's CustomerPortal component instead of here.
-    throw new NotFoundError("A linked customer record");
-  }
-  return customer;
-}
-
 export async function meRoutes(app: FastifyInstance): Promise<void> {
   app.get("/customer", { config: { audience: "customer" }, preHandler: [...preHandler] }, async (request, reply) => {
-    const customer = await resolveMyCustomerOrThrow(request);
-    reply.send(successResponse(customer, request.id));
+    const { customer, role, canPay, name } = await resolveMyAccountOrThrow(request);
+    reply.send(successResponse({ ...customer, access: { role, canPay, name } }, request.id));
   });
 
   app.get("/subscriptions", { config: { audience: "customer" }, preHandler: [...preHandler] }, async (request, reply) => {
@@ -78,6 +59,147 @@ export async function meRoutes(app: FastifyInstance): Promise<void> {
     reply.send(successResponse(invoices, request.id));
   });
 
+  /**
+   * Self-service payment: an M-Pesa prompt to the customer's phone for one of their own open
+   * invoices. The amount is always the invoice's remaining balance — never client-supplied —
+   * and the invoice must belong to the caller, so the only thing a customer can choose is which
+   * phone gets the prompt.
+   */
+  app.post(
+    "/invoices/:invoiceId/pay",
+    { config: { audience: "customer", maintenanceCategory: "payment" }, preHandler: [...preHandler] },
+    async (request, reply) => {
+      const customer = await resolvePayingCustomerOrThrow(request);
+      const { invoiceId } = z.object({ invoiceId: z.string().uuid() }).parse(request.params);
+      const { phone } = z.object({ phone: z.string().trim().min(9).max(15).optional() }).parse(request.body ?? {});
+      const invoice = await prisma.invoice.findFirst({ where: { id: invoiceId, customerId: customer.id, tenantId: customer.tenantId } });
+      if (!invoice) throw new NotFoundError("Invoice");
+      const remaining = invoice.totalMinor - invoice.amountPaidMinor;
+      if (!["PENDING", "PARTIALLY_PAID", "OVERDUE"].includes(invoice.status) || remaining <= 0) {
+        throw new ConflictError("This invoice has nothing left to pay");
+      }
+      const stkRequest = await initiateStkPushForCustomer(customer.tenantId, {
+        customerId: customer.id,
+        invoiceId: invoice.id,
+        phone: phone || customer.phone,
+        amountMinor: remaining,
+        initiatedByUserId: request.user!.id,
+      });
+      await writeAuditLog({
+        tenantId: customer.tenantId,
+        actorUserId: request.user!.id,
+        action: "mpesa.stk_push_initiated",
+        resourceType: "MpesaStkRequest",
+        resourceId: stkRequest.id,
+        after: { invoiceId: invoice.id, amountMinor: remaining, selfService: true },
+        ipAddress: request.ip,
+        userAgent: request.headers["user-agent"] ?? null,
+      });
+      reply.status(201).send(successResponse({ checkoutRequestId: stkRequest.checkoutRequestId, amountMinor: remaining }, request.id));
+    }
+  );
+
+  /** How many pause days the customer has left on a plan this year. */
+  app.get("/subscriptions/:subscriptionId/pause", { config: { audience: "customer" }, preHandler: [...preHandler] }, async (request, reply) => {
+    const customer = await resolveMyCustomerOrThrow(request);
+    const { subscriptionId } = subscriptionIdParamsSchema.parse(request.params);
+    if (!(await prisma.customerService.findFirst({ where: { id: subscriptionId, customerId: customer.id } }))) throw new NotFoundError("Subscription");
+    reply.send(successResponse(await getPauseAllowance(customer.tenantId, subscriptionId), request.id));
+  });
+
+  app.post("/subscriptions/:subscriptionId/pause", { config: { audience: "customer" }, preHandler: [...preHandler] }, async (request, reply) => {
+    const customer = await resolveAccountHolderOrThrow(request);
+    const { subscriptionId } = subscriptionIdParamsSchema.parse(request.params);
+    const { days } = z.object({ days: z.number().int().min(1).max(180) }).parse(request.body);
+    if (!(await prisma.customerService.findFirst({ where: { id: subscriptionId, customerId: customer.id } }))) throw new NotFoundError("Subscription");
+    const updated = await pauseSubscription(customer.tenantId, subscriptionId, days, "customer");
+    await writeAuditLog({ tenantId: customer.tenantId, actorUserId: request.user!.id, action: "subscription.paused", resourceType: "CustomerService", resourceId: subscriptionId, after: { days, until: updated.pausedUntil }, ipAddress: request.ip, userAgent: request.headers["user-agent"] ?? null });
+    reply.send(successResponse(updated, request.id));
+  });
+
+  app.post("/subscriptions/:subscriptionId/resume", { config: { audience: "customer" }, preHandler: [...preHandler] }, async (request, reply) => {
+    const customer = await resolveAccountHolderOrThrow(request);
+    const { subscriptionId } = subscriptionIdParamsSchema.parse(request.params);
+    if (!(await prisma.customerService.findFirst({ where: { id: subscriptionId, customerId: customer.id } }))) throw new NotFoundError("Subscription");
+    const updated = await resumeSubscription(customer.tenantId, subscriptionId);
+    await writeAuditLog({ tenantId: customer.tenantId, actorUserId: request.user!.id, action: "subscription.resumed", resourceType: "CustomerService", resourceId: subscriptionId, ipAddress: request.ip, userAgent: request.headers["user-agent"] ?? null });
+    reply.send(successResponse(updated, request.id));
+  });
+
+  /** Add-ons on offer, and the ones this account bought. Only PPPoE plans can take them. */
+  app.get("/addons", { config: { audience: "customer" }, preHandler: [...preHandler] }, async (request, reply) => {
+    const customer = await resolveMyCustomerOrThrow(request);
+    const eligible = await prisma.customerService.count({ where: { customerId: customer.id, status: "ACTIVE", radiusUser: { isNot: null } } });
+    const [catalog, purchases] = await Promise.all([eligible ? listAddOns(customer.tenantId, true) : [], listPurchasesForCustomer(customer.id)]);
+    reply.send(successResponse({ catalog, purchases }, request.id));
+  });
+
+  /** Buys an add-on for one of the account's plans: makes its invoice and sends the M-Pesa
+   *  prompt in one step. The add-on starts as soon as the payment lands. */
+  app.post(
+    "/subscriptions/:subscriptionId/addons",
+    { config: { audience: "customer", maintenanceCategory: "payment" }, preHandler: [...preHandler] },
+    async (request, reply) => {
+      const customer = await resolvePayingCustomerOrThrow(request);
+      const { subscriptionId } = subscriptionIdParamsSchema.parse(request.params);
+      const body = z.object({ addOnId: z.string().uuid(), phone: z.string().trim().min(9).max(15).optional() }).parse(request.body);
+      if (!(await prisma.customerService.findFirst({ where: { id: subscriptionId, customerId: customer.id } }))) throw new NotFoundError("Subscription");
+      const { purchase, invoice } = await buyAddOn(customer.tenantId, subscriptionId, body.addOnId, "customer");
+      const amountMinor = invoice.totalMinor - invoice.amountPaidMinor;
+      const stkRequest = await initiateStkPushForCustomer(customer.tenantId, {
+        customerId: customer.id,
+        invoiceId: invoice.id,
+        phone: body.phone || customer.phone,
+        amountMinor,
+        initiatedByUserId: request.user!.id,
+      }).catch(async (err) => {
+        await cancelUnstartedPurchase(purchase.id);
+        throw err;
+      });
+      await writeAuditLog({
+        tenantId: customer.tenantId,
+        actorUserId: request.user!.id,
+        action: "addon.purchase_started",
+        resourceType: "AddOnPurchase",
+        resourceId: purchase.id,
+        after: { addOnId: body.addOnId, invoiceId: invoice.id, amountMinor },
+        ipAddress: request.ip,
+        userAgent: request.headers["user-agent"] ?? null,
+      });
+      reply.status(201).send(successResponse({ purchaseId: purchase.id, checkoutRequestId: stkRequest.checkoutRequestId, amountMinor }, request.id));
+    }
+  );
+
+  /** The signed-in customer's own referral code and what it has earned them. */
+  app.get("/referral", { config: { audience: "customer" }, preHandler: [...preHandler] }, async (request, reply) => {
+    const customer = await resolveMyCustomerOrThrow(request);
+    const [summary, tenant] = await Promise.all([
+      getReferralSummary(customer.tenantId, customer.id),
+      prisma.tenant.findUnique({ where: { id: customer.tenantId }, select: { name: true } }),
+    ]);
+    // Names of people they referred stay first-name-only: the referrer knows who they are.
+    reply.send(
+      successResponse({ ...summary, isp: tenant?.name ?? "", referred: summary.referred.map((r) => ({ ...r, fullName: r.fullName.split(/\s+/)[0] ?? r.fullName, id: undefined })) }, request.id)
+    );
+  });
+
+  /** Where that prompt got to. Only the customer's own requests are visible. */
+  app.get("/payments/:checkoutRequestId", { config: { audience: "customer" }, preHandler: [...preHandler] }, async (request, reply) => {
+    const customer = await resolveMyCustomerOrThrow(request);
+    const { checkoutRequestId } = z.object({ checkoutRequestId: z.string().min(1) }).parse(request.params);
+    const current = await getStkRequestOrThrow(customer.tenantId, checkoutRequestId);
+    if (current.customerId !== customer.id) throw new NotFoundError("Payment request");
+    const latest = current.status === "PENDING" ? (await queryAndReconcileStkRequest(customer.tenantId, checkoutRequestId)).request : current;
+    // A paid add-on starts right away rather than waiting for the worker's next sweep.
+    if (latest.status === "COMPLETED") await activatePaidAddOns({ customerId: customer.id }).catch(() => []);
+    reply.send(
+      successResponse(
+        { checkoutRequestId, status: latest.status, resultDesc: latest.resultDesc, mpesaReceiptNumber: latest.mpesaReceiptNumber, amountMinor: latest.amountMinor },
+        request.id
+      )
+    );
+  });
+
   app.get("/wallet", { config: { audience: "customer" }, preHandler: [...preHandler] }, async (request, reply) => {
     const customer = await resolveMyCustomerOrThrow(request);
     const [wallet, transactions] = await Promise.all([
@@ -94,7 +216,7 @@ export async function meRoutes(app: FastifyInstance): Promise<void> {
     "/subscriptions/:subscriptionId/reveal-pppoe-password",
     { config: { audience: "customer" }, preHandler: [...preHandler] },
     async (request, reply) => {
-      const customer = await resolveMyCustomerOrThrow(request);
+      const customer = await resolveAccountHolderOrThrow(request);
       const { subscriptionId } = subscriptionIdParamsSchema.parse(request.params);
 
       const subscription = await prisma.customerService.findFirst({

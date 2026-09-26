@@ -82,7 +82,6 @@ function PlanManagePanel({ plan }: { plan: Plan }) {
           ))}
         </div>
       </div>
-
       <div className="flex flex-wrap items-center gap-2">
         {!plan.isDefault && (
           <Button variant="secondary" className="px-2.5 py-1 text-xs" disabled={setDefault.isPending} onClick={() => setDefault.mutate()}>
@@ -163,7 +162,6 @@ export default function PlansPage() {
           {showCreate ? "Close Form" : "+ New Plan"}
         </Button>
       </div>
-
       {showCreate && (
         <Card className="border-purple-500/40 space-y-4">
           <form
@@ -243,7 +241,7 @@ export default function PlansPage() {
                 </p>
               </div>
               <Button variant="secondary" className="text-xs py-1.5 self-start sm:self-auto" onClick={() => setExpandedId(expandedId === plan.id ? null : plan.id)}>
-                {expandedId === plan.id ? "Close" : "⚙️ Manage"}
+                {expandedId === plan.id ? "Close" : "Manage"}
               </Button>
             </div>
             {expandedId === plan.id && <PlanManagePanel plan={plan} />}

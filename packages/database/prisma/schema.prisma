@@ -28,6 +28,13 @@ enum UserStatus {
 
 model Tenant {
   id                     String                  @id @default(uuid())
+  servicePauses          ServicePause[]
+  routerBackups          RouterBackup[]
+  routerRollouts         RouterRollout[]
+  jobCards               JobCard[]
+  referralRewards        ReferralReward[]
+  networkMaintenance     NetworkMaintenance[]
+  upgradeSuggestions     UpgradeSuggestion[]
   name                   String
   slug                   String                  @unique
   status                 TenantStatus            @default(ACTIVE)
@@ -78,11 +85,15 @@ model Tenant {
   gatewayRefunds         GatewayRefund[]
   paymentWebhookEvents   PaymentWebhookEvent[]
   portalPaymentsDisabled String[]                @default([])
+  /// Operational preferences the ISP sets for itself: payment reminder schedule and message
+  /// templates, ticket response targets. Shape and defaults in packages/shared preferences.ts.
+  preferences            Json                    @default("{}")
   createdAt              DateTime                @default(now())
   updatedAt              DateTime                @updatedAt
   deletedAt              DateTime?
 
   users            User[]
+  branches         Branch[]
   roles            Role[]
   userRoles        UserRole[]
   sessions         Session[]
@@ -124,6 +135,15 @@ model Tenant {
   hotspotVouchers  HotspotVoucher[]
   networkSyncTasks NetworkSyncTask[]
   provisioningJobs ProvisioningJob[]
+  customerMembers  CustomerMember[]
+  addOns           AddOn[]
+  addOnPurchases   AddOnPurchase[]
+  winBackOffers    WinBackOffer[]
+  agents           Agent[]
+  agentSales       AgentSale[]
+  agentRemittances AgentRemittance[]
+  campaigns        Campaign[]
+  leads            Lead[]
 
   @@index([status])
   @@map("tenants")
@@ -131,16 +151,26 @@ model Tenant {
 
 model User {
   id                  String     @id @default(uuid())
+  assignedJobs        JobCard[]  @relation("JobCardAssignee")
   tenantId            String?
   tenant              Tenant?    @relation(fields: [tenantId], references: [id])
+  /// Staff member's home branch: the branch their lists open on. Null means all branches.
+  branchId            String?
+  branch              Branch?    @relation(fields: [branchId], references: [id], onDelete: SetNull)
   email               String
   phone               String?
   passwordHash        String
+  /// Two-step login: null when off. TOTP uses an authenticator app (secret in
+  /// totpSecretEncrypted); SMS sends a code to `phone`. totpEnabledAt is when it was turned on.
+  mfaMethod           MfaMethod?
+  /// SHA-256 hashes of the unused one-time recovery codes.
+  mfaRecoveryCodes    String[]   @default([])
   emailVerifiedAt     DateTime?
   status              UserStatus @default(PENDING_VERIFICATION)
   failedLoginCount    Int        @default(0)
   lockedUntil         DateTime?
   lastLoginAt         DateTime?
+  /// The authenticator secret, encrypted at rest. Set while setting up, before mfaMethod is.
   totpSecretEncrypted String?
   totpEnabledAt       DateTime?
   createdAt           DateTime   @default(now())
@@ -148,16 +178,19 @@ model User {
   deletedAt           DateTime?
 
   sessions                Session[]
+  pushSubscriptions       PushSubscription[]
   userRoles               UserRole[]
   emailVerificationTokens EmailVerificationToken[]
   passwordResetTokens     PasswordResetToken[]
   loginAttempts           LoginAttempt[]
   auditLogsAsActor        AuditLog[]               @relation("AuditLogActor")
   customerProfile         Customer?
+  customerMembership      CustomerMember?
   apiKeysCreated          ApiKey[]
   ticketsAssigned         Ticket[]                 @relation("TicketAssignee")
   ticketsCreated          Ticket[]                 @relation("TicketCreatedBy")
   ticketMessages          TicketMessage[]
+  agentProfile            Agent?
 
   // Composite-unique keeps email unique within a tenant. Super-admin rows (tenantId = null)
   // additionally get a partial unique index on `email` alone via raw SQL migration, since
@@ -411,32 +444,51 @@ enum CustomerStatus {
 }
 
 model Customer {
-  id               String         @id @default(uuid())
-  tenantId         String
-  tenant           Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  userId           String?        @unique
-  user             User?          @relation(fields: [userId], references: [id])
-  customerNumber   String
-  fullName         String
-  email            String?
-  phone            String
-  idNumber         String?
-  address          String?
-  gpsLat           Float?
-  gpsLng           Float?
-  connectionType   String?
-  installationDate DateTime?
-  status           CustomerStatus @default(PENDING)
-  notes            String?
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
-  deletedAt        DateTime?
+  id                    String              @id @default(uuid())
+  /// Secret on the printed install card: scanning its QR lets the customer set up their own
+  /// app login and see how to connect their router. Expires; replaced when a new card is printed.
+  installCode           String?             @unique
+  installCodeExpiresAt  DateTime?
+  installActivatedAt    DateTime?
+  jobCards              JobCard[]
+  /// Short code this customer shares with neighbours; created the first time it is shown.
+  referralCode          String?
+  /// Who referred this customer. Their reward is granted once this customer first pays.
+  referredById          String?
+  referredBy            Customer?           @relation("CustomerReferrals", fields: [referredById], references: [id], onDelete: SetNull)
+  referrals             Customer[]          @relation("CustomerReferrals")
+  referralRewardedAt    DateTime?
+  referralRewardsEarned ReferralReward[]    @relation("ReferralRewardReferrer")
+  referralRewardFor     ReferralReward?     @relation("ReferralRewardReferred")
+  upgradeSuggestions    UpgradeSuggestion[]
+  tenantId              String
+  tenant                Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branchId              String?
+  branch                Branch?             @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  userId                String?             @unique
+  user                  User?               @relation(fields: [userId], references: [id])
+  customerNumber        String
+  fullName              String
+  email                 String?
+  phone                 String
+  idNumber              String?
+  address               String?
+  gpsLat                Float?
+  gpsLng                Float?
+  connectionType        String?
+  installationDate      DateTime?
+  status                CustomerStatus      @default(PENDING)
+  notes                 String?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  deletedAt             DateTime?
 
   services CustomerService[]
   invoices Invoice[]
   payments Payment[]
   wallet   Wallet?
   tickets  Ticket[]
+  members  CustomerMember[]
 
   mpesaStkRequests     MpesaStkRequest[]
   mpesaC2BTransactions MpesaC2BTransaction[]
@@ -445,10 +497,15 @@ model Customer {
   gatewayTransactions GatewayTransaction[]
   paymentReferences   PaymentReference[]
 
-  radiusUsers      RadiusUser[]
-  provisioningJobs ProvisioningJob[]
+  radiusUsers        RadiusUser[]
+  provisioningJobs   ProvisioningJob[]
+  addOnPurchases     AddOnPurchase[]
+  winBackOffers      WinBackOffer[]
+  campaignRecipients CampaignRecipient[]
+  leads              Lead[]
 
   @@unique([tenantId, customerNumber])
+  @@unique([tenantId, referralCode])
   @@index([tenantId, status])
   @@map("customers")
 }
@@ -525,6 +582,11 @@ enum CustomerServiceStatus {
 /// thing that gets provisioned on network equipment.
 model CustomerService {
   id                 String                @id @default(uuid())
+  /// Set while the customer has paused the plan: it stays off until then, and the billing sweep
+  /// that turns cleared accounts back on leaves it alone.
+  pausedUntil        DateTime?
+  pauses             ServicePause[]
+  upgradeSuggestions UpgradeSuggestion[]
   tenantId           String
   tenant             Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   customerId         String
@@ -550,6 +612,7 @@ model CustomerService {
   invoices         Invoice[]
   radiusUser       RadiusUser?
   provisioningJobs ProvisioningJob[]
+  addOnPurchases   AddOnPurchase[]
 
   @@index([tenantId, status])
   @@index([nextBillingAt])
@@ -592,6 +655,10 @@ model Invoice {
   /// only ever moves forward, so the same invoice never gets the same notice emailed twice.
   dunningStage      Int              @default(0)
   lastDunningAt     DateTime?
+  /// When the invoice itself was emailed to the customer (the worker's send-pending-invoice-emails
+  /// job, or a staff "Email invoice" click). Null until then; set even when the transport is not
+  /// configured, so an unconfigured server never re-queues the same invoice every tick.
+  emailedAt         DateTime?
   createdAt         DateTime         @default(now())
   updatedAt         DateTime         @updatedAt
 
@@ -601,6 +668,7 @@ model Invoice {
   payments             Payment[]
   mpesaStkRequests     MpesaStkRequest[]
   paystackTransactions PaystackTransaction[]
+  addOnPurchase        AddOnPurchase?
 
   @@unique([tenantId, invoiceNumber])
   @@index([tenantId, status])
@@ -1881,37 +1949,52 @@ enum RouterStatus {
 /// Router credentials are AES-256-GCM encrypted at rest — decrypted only in-process by
 /// apps/api / apps/worker, never sent to apps/web (docs/architecture/06).
 model Router {
-  id                   String       @id @default(uuid())
+  id                   String                @id @default(uuid())
+  healthSamples        RouterHealthSample[]
+  backups              RouterBackup[]
+  /// Last seen by the Router updates page: RouterOS version, board model and bootloader firmware.
+  routerOsVersion      String?
+  boardName            String?
+  firmwareVersion      String?
+  versionCheckedAt     DateTime?
+  rolloutTargets       RouterRolloutTarget[]
   tenantId             String
-  tenant               Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant               Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   name                 String
-  vendor               RouterVendor @default(MIKROTIK)
+  vendor               RouterVendor          @default(MIKROTIK)
+  /// Where the router physically is: a site or branch name and, when known, coordinates for the
+  /// network map. All optional; nothing else depends on them.
+  siteName             String?
+  branchId             String?
+  branch               Branch?               @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  latitude             Float?
+  longitude            Float?
   /// Null until the router either calls home (see provisionTokenHash) or an admin fills it in
   /// manually — a row can exist "pending" with generated credentials but no known address yet.
   host                 String?
-  apiPort              Int          @default(8728)
-  useTls               Boolean      @default(false)
+  apiPort              Int                   @default(8728)
+  useTls               Boolean               @default(false)
   usernameEncrypted    String
   passwordEncrypted    String
   /// Hash of the one-time token embedded in the paste-and-run provisioning script — the router
   /// itself presents this token when it calls back to /routers/provision/:token/callback, which
   /// is how `host` above gets populated without an admin ever typing an IP. Null for routers
   /// linked the old manual-entry way (host/credentials filled in directly).
-  provisionTokenHash   String?      @unique
+  provisionTokenHash   String?               @unique
   provisionedAt        DateTime?
   /// WireGuard remote access — lets the platform reach this router's API even when it has no
   /// public IP / is behind NAT (the common case for a real customer-premises router), instead
   /// of requiring `host` to already be directly reachable. Once set, `host` is updated to this
   /// tunnel IP so every existing host-based feature (test-connection, hotspot script, live
   /// sessions) keeps working unchanged — nothing else in the app needs to know VPN exists.
-  vpnRegisterTokenHash String?      @unique
+  vpnRegisterTokenHash String?               @unique
   vpnPublicKey         String?
   vpnIp                String?
   vpnConfiguredAt      DateTime?
   /// Public TCP port on the platform server that the WinBox relay forwards, over this router's
   /// WireGuard tunnel, to its WinBox service (8291). Assigned once the router has a vpnIp.
-  winboxRelayPort      Int?         @unique
-  status               RouterStatus @default(UNKNOWN)
+  winboxRelayPort      Int?                  @unique
+  status               RouterStatus          @default(UNKNOWN)
   /// PPPoE server settings, per router because they are a network-design choice that differs by
   /// site: which port or VLAN faces the subscribers, and what addresses they are handed. Left
   /// null on a hotspot-only router, in which case the provisioning script emits no PPPoE section
@@ -1925,10 +2008,10 @@ model Router {
   /// Drop traffic that arrived via a customer's own phone hotspot or travel router, so one
   /// voucher cannot serve a whole room. Off by default because the detection is TTL-based and
   /// therefore imperfect — see buildAntiTetheringSection for exactly who it can wrongly block.
-  blockTethering       Boolean      @default(false)
+  blockTethering       Boolean               @default(false)
   /// Physical ports / interfaces running the Hotspot captive portal (e.g. ["ether2", "ether3"]).
   /// If empty, defaults to standard LAN bridge ports (ether2, ether3, ether4, wlan1).
-  hotspotPorts         String[]     @default([])
+  hotspotPorts         String[]              @default([])
   /// Dedicated direct LAN / non-hotspot port (e.g. "ether4" or "ether5") with no captive portal.
   lanPort              String?
   lastSeenAt           DateTime?
@@ -1937,8 +2020,8 @@ model Router {
   memoryUsedBytes      BigInt?
   memoryTotalBytes     BigInt?
   uptimeSeconds        Int?
-  createdAt            DateTime     @default(now())
-  updatedAt            DateTime     @updatedAt
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
   deletedAt            DateTime?
 
   vlans            Vlan[]
@@ -2193,6 +2276,10 @@ model HotspotVoucher {
   bytesIn          BigInt?
   bytesOut         BigInt?
   usageUpdatedAt   DateTime?
+  /// The shop agent holding this voucher to sell, if any.
+  agentId          String?
+  agent            Agent?          @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  agentSale        AgentSale?
   createdByUserId  String?
   createdAt        DateTime        @default(now())
 
@@ -2204,17 +2291,17 @@ model HotspotVoucher {
 /// Recorded by the RADIUS server on every successful voucher login; used to log the same phone
 /// straight back in ("login by MAC") while that voucher still has time and data left.
 model HotspotDevice {
-  id          String   @id @default(uuid())
-  tenantId    String
+  id               String   @id @default(uuid())
+  tenantId         String
   /// AA:BB:CC:DD:EE:FF, as the router reports it (Calling-Station-Id).
-  macAddress  String
-  voucherCode String
+  macAddress       String
+  voucherCode      String
   /// The voucher's recorded usage when this phone was last logged back in by MAC. A new session's
   /// counters start at zero, so the voucher's usage is this plus the session's own bytes.
-  baselineBytesIn  BigInt @default(0)
-  baselineBytesOut BigInt @default(0)
-  firstSeenAt DateTime @default(now())
-  lastSeenAt  DateTime @default(now())
+  baselineBytesIn  BigInt   @default(0)
+  baselineBytesOut BigInt   @default(0)
+  firstSeenAt      DateTime @default(now())
+  lastSeenAt       DateTime @default(now())
 
   @@unique([tenantId, macAddress])
   @@index([tenantId, voucherCode])
@@ -2466,4 +2553,667 @@ model NetworkSyncTask {
 
   @@index([tenantId, status])
   @@map("network_sync_tasks")
+}
+
+/// A branch or town an ISP operates in. Routers, customers and staff can belong to one; reports
+/// and lists filter by it. A staff member's branch is their default view, not an access boundary.
+model Branch {
+  id        String   @id @default(uuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String
+  location  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  routers   Router[]
+  customers Customer[]
+  users     User[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@map("branches")
+}
+
+/// One browser or installed dashboard that agreed to receive push alerts for a staff user.
+/// The endpoint is unique per device; a gone endpoint (404/410 from the push service) is deleted.
+model PushSubscription {
+  id            String    @id @default(uuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenantId      String?
+  endpoint      String    @unique
+  p256dh        String
+  auth          String
+  userAgent     String?
+  createdAt     DateTime  @default(now())
+  lastSuccessAt DateTime?
+
+  @@index([userId])
+  @@index([tenantId])
+  @@map("push_subscriptions")
+}
+
+enum UpgradeSuggestionStatus {
+  PENDING
+  APPLIED
+  DISMISSED
+}
+
+/// A subscriber who keeps running into their package's data cap, and the next plan up that would
+/// fit. Found by a worker job; staff apply it (which moves the subscription and re-provisions the
+/// router) or dismiss it. Package names and price are copied so the list still reads right after
+/// a package is renamed or repriced.
+model UpgradeSuggestion {
+  id                String                  @id @default(uuid())
+  tenantId          String
+  tenant            Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customerId        String
+  customer          Customer                @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customerServiceId String
+  customerService   CustomerService         @relation(fields: [customerServiceId], references: [id], onDelete: Cascade)
+  fromPackageId     String
+  fromPackageName   String
+  toPackageId       String
+  toPackageName     String
+  toPriceMinor      Int
+  currency          String                  @default("KES")
+  usedMb            Int
+  capMb             Int
+  status            UpgradeSuggestionStatus @default(PENDING)
+  smsSentAt         DateTime?
+  decidedByUserId   String?
+  decidedAt         DateTime?
+  createdAt         DateTime                @default(now())
+
+  @@index([tenantId, status])
+  @@index([customerServiceId, createdAt])
+  @@map("upgrade_suggestions")
+}
+
+enum MaintenanceScope {
+  ALL
+  ROUTERS
+  BRANCH
+}
+
+enum NetworkMaintenanceStatus {
+  SCHEDULED
+  CANCELLED
+}
+
+/// Planned work on the ISP's own network (not the platform's maintenance mode): customers on the
+/// affected routers or branch are texted before it starts and again when it is over.
+model NetworkMaintenance {
+  id                String                   @id @default(uuid())
+  tenantId          String
+  tenant            Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  title             String
+  /// Optional extra line added to the customer SMS.
+  message           String?
+  startsAt          DateTime
+  endsAt            DateTime
+  scope             MaintenanceScope         @default(ALL)
+  routerIds         String[]                 @default([])
+  branchId          String?
+  notifyHoursBefore Int                      @default(24)
+  status            NetworkMaintenanceStatus @default(SCHEDULED)
+  beforeSentAt      DateTime?
+  afterSentAt       DateTime?
+  /// Customers texted by the last notice that went out.
+  recipientCount    Int                      @default(0)
+  createdByUserId   String?
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+
+  @@index([tenantId, startsAt])
+  @@index([status, startsAt])
+  @@map("network_maintenance")
+}
+
+enum ReferralRewardType {
+  DAYS
+  CREDIT
+}
+
+/// A reward given to a customer because someone they referred paid for the first time.
+model ReferralReward {
+  id          String             @id @default(uuid())
+  tenantId    String
+  tenant      Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  referrerId  String
+  referrer    Customer           @relation("ReferralRewardReferrer", fields: [referrerId], references: [id], onDelete: Cascade)
+  referredId  String             @unique
+  referred    Customer           @relation("ReferralRewardReferred", fields: [referredId], references: [id], onDelete: Cascade)
+  type        ReferralRewardType
+  days        Int?
+  amountMinor Int?
+  createdAt   DateTime           @default(now())
+
+  @@index([tenantId, createdAt])
+  @@map("referral_rewards")
+}
+
+enum JobCardType {
+  INSTALLATION
+  REPAIR
+  SURVEY
+  RELOCATION
+  REMOVAL
+}
+
+enum JobCardStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+/// A visit by a field technician: an installation, a repair, a site survey. The technician
+/// starts it on site, adds photos and the equipment fitted, and closes it with the customer's
+/// signature, all from a phone.
+model JobCard {
+  id               String              @id @default(uuid())
+  tenantId         String
+  tenant           Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  number           String
+  type             JobCardType
+  status           JobCardStatus       @default(OPEN)
+  title            String
+  notes            String?
+  customerId       String?
+  customer         Customer?           @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  /// Where to go, for a job with no customer yet (a survey) or a different site.
+  address          String?
+  contactPhone     String?
+  assignedToUserId String?
+  assignedTo       User?               @relation("JobCardAssignee", fields: [assignedToUserId], references: [id], onDelete: SetNull)
+  scheduledFor     DateTime?
+  startedAt        DateTime?
+  completedAt      DateTime?
+  /// GPS where the technician started or closed the job.
+  latitude         Float?
+  longitude        Float?
+  equipment        String?
+  completionNotes  String?
+  signedByName     String?
+  createdByUserId  String?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  attachments      JobCardAttachment[]
+  leads            Lead[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, status])
+  @@index([assignedToUserId, status])
+  @@map("job_cards")
+}
+
+enum JobCardAttachmentKind {
+  PHOTO
+  SIGNATURE
+}
+
+/// A photo or the customer's signature, resized on the phone before upload and kept small.
+model JobCardAttachment {
+  id               String                @id @default(uuid())
+  jobCardId        String
+  jobCard          JobCard               @relation(fields: [jobCardId], references: [id], onDelete: Cascade)
+  kind             JobCardAttachmentKind
+  mimeType         String
+  sizeBytes        Int
+  data             Bytes
+  uploadedByUserId String?
+  createdAt        DateTime              @default(now())
+
+  @@index([jobCardId])
+  @@map("job_card_attachments")
+}
+
+enum RouterRolloutStatus {
+  SCHEDULED
+  RUNNING
+  COMPLETED
+  CANCELLED
+}
+
+enum RouterRolloutTargetStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  SKIPPED
+}
+
+/// An over-the-air change pushed to a set of routers: a RouterOS upgrade, a feature, a reboot or
+/// a script. The worker applies it one router at a time and records each router's result. With
+/// canaryFirst, the first router is done alone and the rest only follow if it succeeded.
+model RouterRollout {
+  id              String                @id @default(uuid())
+  tenantId        String
+  tenant          Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  action          String
+  /// Action options, e.g. the script for "custom-script".
+  params          Json?
+  status          RouterRolloutStatus   @default(RUNNING)
+  canaryFirst     Boolean               @default(true)
+  scheduledFor    DateTime?
+  createdByUserId String?
+  createdAt       DateTime              @default(now())
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  targets         RouterRolloutTarget[]
+
+  @@index([tenantId, createdAt])
+  @@index([status, scheduledFor])
+  @@map("router_rollouts")
+}
+
+model RouterRolloutTarget {
+  id         String                    @id @default(uuid())
+  rolloutId  String
+  rollout    RouterRollout             @relation(fields: [rolloutId], references: [id], onDelete: Cascade)
+  routerId   String?
+  router     Router?                   @relation(fields: [routerId], references: [id], onDelete: SetNull)
+  routerName String
+  position   Int
+  status     RouterRolloutTargetStatus @default(PENDING)
+  message    String?
+  startedAt  DateTime?
+  finishedAt DateTime?
+
+  @@index([rolloutId, position])
+  @@map("router_rollout_targets")
+}
+
+/// A router's full configuration export, taken before every over-the-air change and nightly.
+/// The export carries passwords and keys, so it is encrypted at rest and only owners can
+/// download or restore it. Restoring hands the router a one-time link to fetch it from.
+model RouterBackup {
+  id                    String    @id @default(uuid())
+  tenantId              String
+  tenant                Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  routerId              String
+  router                Router    @relation(fields: [routerId], references: [id], onDelete: Cascade)
+  reason                String
+  contentEncrypted      String
+  sizeBytes             Int
+  sha256                String
+  routerOsVersion       String?
+  createdByUserId       String?
+  createdAt             DateTime  @default(now())
+  restoreTokenHash      String?   @unique
+  restoreTokenExpiresAt DateTime?
+  restoredAt            DateTime?
+
+  @@index([routerId, createdAt])
+  @@index([tenantId, createdAt])
+  @@map("router_backups")
+}
+
+/// One reading of a router's health, kept every 5 minutes for 30 days so the dashboard can chart
+/// CPU, memory, temperature and availability over time.
+model RouterHealthSample {
+  id            BigInt   @id @default(autoincrement())
+  routerId      String
+  router        Router   @relation(fields: [routerId], references: [id], onDelete: Cascade)
+  at            DateTime @default(now())
+  reachable     Boolean
+  cpuPercent    Int?
+  memoryPercent Int?
+  temperatureC  Float?
+  uptimeSeconds Int?
+
+  @@index([routerId, at])
+  @@index([at])
+  @@map("router_health_samples")
+}
+
+/// A pause of a subscription (travel, a closed shop). Billing moves forward by the paused days;
+/// an early resume gives the unused days back. `days` is what was actually used.
+model ServicePause {
+  id                String          @id @default(uuid())
+  tenantId          String
+  tenant            Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customerServiceId String
+  customerService   CustomerService @relation(fields: [customerServiceId], references: [id], onDelete: Cascade)
+  startsAt          DateTime        @default(now())
+  endsAt            DateTime
+  days              Int
+  requestedBy       String
+  resumedAt         DateTime?
+
+  @@index([customerServiceId, startsAt])
+  @@map("service_pauses")
+}
+
+/// An extra login on a customer's account: a family member or a colleague at a business. They
+/// see the account's plans, bills and usage, and can open tickets. Paying is allowed only when
+/// canPay is set; pausing, the router password and managing members stay with the account
+/// holder. Invited by a link; userId is set once they accept it.
+model CustomerMember {
+  id              String    @id @default(uuid())
+  tenantId        String
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customerId      String
+  customer        Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  userId          String?   @unique
+  user            User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name            String
+  phone           String?
+  canPay          Boolean   @default(false)
+  inviteCode      String?   @unique
+  inviteExpiresAt DateTime?
+  acceptedAt      DateTime?
+  createdAt       DateTime  @default(now())
+
+  @@index([customerId])
+  @@map("customer_members")
+}
+
+enum AddOnKind {
+  /// A faster speed for a while, e.g. 20 Mbps for 24 hours.
+  SPEED
+  /// Extra data on top of the plan's data cap for a while.
+  DATA
+}
+
+/// Something a PPPoE customer can buy on top of their plan: a speed boost or extra data, for a
+/// set number of hours. Applied as soon as it is paid and removed when the time is up.
+model AddOn {
+  id            String          @id @default(uuid())
+  tenantId      String
+  tenant        Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name          String
+  kind          AddOnKind
+  downloadKbps  Int?
+  uploadKbps    Int?
+  dataMb        Int?
+  durationHours Int
+  priceMinor    Int
+  currency      String          @default("KES")
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  deletedAt     DateTime?
+  purchases     AddOnPurchase[]
+
+  @@index([tenantId])
+  @@map("addons")
+}
+
+enum AddOnPurchaseStatus {
+  AWAITING_PAYMENT
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+/// One purchase of an add-on for one plan. Copies what was bought so later catalogue edits don't
+/// change it. Its invoice is paid by M-Pesa; unpaid purchases are cancelled after a short while.
+model AddOnPurchase {
+  id                String              @id @default(uuid())
+  tenantId          String
+  tenant            Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customerId        String
+  customer          Customer            @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customerServiceId String
+  customerService   CustomerService     @relation(fields: [customerServiceId], references: [id], onDelete: Cascade)
+  addOnId           String?
+  addOn             AddOn?              @relation(fields: [addOnId], references: [id], onDelete: SetNull)
+  invoiceId         String?             @unique
+  invoice           Invoice?            @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  status            AddOnPurchaseStatus @default(AWAITING_PAYMENT)
+  name              String
+  kind              AddOnKind
+  downloadKbps      Int?
+  uploadKbps        Int?
+  dataMb            Int?
+  durationHours     Int
+  priceMinor        Int
+  currency          String              @default("KES")
+  requestedBy       String              @default("customer")
+  startsAt          DateTime?
+  endsAt            DateTime?
+  createdAt         DateTime            @default(now())
+
+  @@index([customerServiceId, status])
+  @@index([status, endsAt])
+  @@map("addon_purchases")
+}
+
+enum WinBackStatus {
+  /// Sent; waiting to see whether the customer pays before it expires.
+  SENT
+  /// They paid in time and got the discount back as credit.
+  REDEEMED
+  EXPIRED
+  /// The SMS could not be sent.
+  FAILED
+}
+
+/// A "we miss you" offer texted to a customer at risk of leaving: pay within the window and get
+/// a share of that payment back as account credit. Kept so the ISP can see which offers worked.
+model WinBackOffer {
+  id              String        @id @default(uuid())
+  tenantId        String
+  tenant          Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customerId      String
+  customer        Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  reason          String
+  owedMinor       Int           @default(0)
+  discountPercent Int
+  status          WinBackStatus @default(SENT)
+  message         String
+  sentByUserId    String?
+  sentAt          DateTime      @default(now())
+  expiresAt       DateTime
+  redeemedAt      DateTime?
+  /// What they paid inside the window, and the credit it earned them.
+  paidMinor       Int?
+  creditMinor     Int?
+
+  @@index([tenantId, sentAt])
+  @@index([status, expiresAt])
+  @@index([customerId, sentAt])
+  @@map("win_back_offers")
+}
+
+enum AgentStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+/// A shop or person who sells the ISP's hotspot vouchers and takes customers' bill payments in
+/// cash, for a commission. They sign in to a small app of their own (/agent), see their voucher
+/// stock, record sales and payments, and get a monthly statement of what they owe the ISP.
+model Agent {
+  id                          String            @id @default(uuid())
+  tenantId                    String
+  tenant                      Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId                      String?           @unique
+  user                        User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  name                        String
+  phone                       String
+  location                    String?
+  /// Commission on each voucher sold, in whole percent of its price.
+  voucherCommissionPercent    Int               @default(10)
+  /// Commission on each customer bill payment taken, in whole percent.
+  collectionCommissionPercent Int               @default(2)
+  status                      AgentStatus       @default(ACTIVE)
+  inviteCode                  String?           @unique
+  inviteExpiresAt             DateTime?
+  createdAt                   DateTime          @default(now())
+  updatedAt                   DateTime          @updatedAt
+  vouchers                    HotspotVoucher[]
+  sales                       AgentSale[]
+  remittances                 AgentRemittance[]
+
+  @@index([tenantId])
+  @@map("agents")
+}
+
+enum AgentSaleKind {
+  /// A hotspot voucher from the agent's stock.
+  VOUCHER
+  /// Cash taken from a customer toward their bill.
+  COLLECTION
+}
+
+/// Money an agent took: a voucher sold or a customer's bill payment. The agent keeps the
+/// commission and owes the ISP the rest.
+model AgentSale {
+  id              String          @id @default(uuid())
+  tenantId        String
+  tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  agentId         String
+  agent           Agent           @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  kind            AgentSaleKind
+  voucherId       String?         @unique
+  voucher         HotspotVoucher? @relation(fields: [voucherId], references: [id], onDelete: SetNull)
+  paymentId       String?         @unique
+  customerId      String?
+  description     String
+  amountMinor     Int
+  commissionMinor Int
+  buyerPhone      String?
+  createdAt       DateTime        @default(now())
+
+  @@index([agentId, createdAt])
+  @@index([tenantId, createdAt])
+  @@map("agent_sales")
+}
+
+/// Money an agent handed over to the ISP, recorded by staff.
+model AgentRemittance {
+  id               String   @id @default(uuid())
+  tenantId         String
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  agentId          String
+  agent            Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  amountMinor      Int
+  method           String
+  reference        String?
+  note             String?
+  recordedByUserId String?
+  createdAt        DateTime @default(now())
+
+  @@index([agentId, createdAt])
+  @@map("agent_remittances")
+}
+
+enum CampaignChannel {
+  SMS
+  WHATSAPP
+  BOTH
+}
+
+enum CampaignStatus {
+  SCHEDULED
+  SENDING
+  SENT
+  CANCELLED
+}
+
+/// A message sent to a group of customers at once (by SMS, WhatsApp or both), with a record of
+/// who got it and who paid in the days after, so the ISP can see whether it brought money in.
+model Campaign {
+  id              String              @id @default(uuid())
+  tenantId        String
+  tenant          Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name            String
+  /// Text with {firstName}, {accountNumber} and {amountDue} filled in per customer.
+  message         String
+  channel         CampaignChannel     @default(SMS)
+  /// Who gets it: { segment, branchId?, packageId?, inactiveDays? }.
+  audience        Json
+  status          CampaignStatus      @default(SCHEDULED)
+  scheduledAt     DateTime            @default(now())
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  /// Payments within this many days of the message count as the campaign's result.
+  trackDays       Int                 @default(7)
+  createdByUserId String?
+  createdAt       DateTime            @default(now())
+  recipients      CampaignRecipient[]
+
+  @@index([tenantId, createdAt])
+  @@index([status, scheduledAt])
+  @@map("campaigns")
+}
+
+enum CampaignRecipientStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+model CampaignRecipient {
+  id         String                  @id @default(uuid())
+  campaignId String
+  campaign   Campaign                @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  customerId String
+  customer   Customer                @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  phone      String
+  /// The message as this customer got it.
+  message    String
+  status     CampaignRecipientStatus @default(PENDING)
+  error      String?
+  sentAt     DateTime?
+  /// What they paid within the tracking window after the message, once they have.
+  paidMinor  Int?
+  paidAt     DateTime?
+
+  @@unique([campaignId, customerId])
+  @@index([campaignId, status])
+  @@map("campaign_recipients")
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  /// A site survey or installation job has been booked.
+  BOOKED
+  /// Now a customer.
+  WON
+  LOST
+}
+
+/// Someone who asked for a connection on the ISP's public signup page. The page checked their
+/// location against the ISP's coverage; staff call them, then turn them into a customer with an
+/// installation or survey job in one step.
+model Lead {
+  id          String     @id @default(uuid())
+  tenantId    String
+  tenant      Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  fullName    String
+  phone       String
+  email       String?
+  address     String
+  latitude    Float?
+  longitude   Float?
+  /// Null when no location was shared, so coverage couldn't be checked.
+  covered     Boolean?
+  distanceKm  Float?
+  nearestSite String?
+  packageId   String?
+  packageName String?
+  notes       String?
+  status      LeadStatus @default(NEW)
+  lostReason  String?
+  source      String     @default("web")
+  customerId  String?
+  customer    Customer?  @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  jobCardId   String?
+  jobCard     JobCard?   @relation(fields: [jobCardId], references: [id], onDelete: SetNull)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([tenantId, status, createdAt])
+  @@map("leads")
+}
+
+enum MfaMethod {
+  TOTP
+  SMS
 }

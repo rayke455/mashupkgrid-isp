@@ -7,6 +7,7 @@ import { apiFetch, ApiRequestError } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
 import { Button, Card, ErrorText, HintText, Input, Label } from "@/components/ui";
 import { IconLock, IconUser } from "@/components/icons";
+import { tr } from "@/lib/tr";
 
 interface Profile {
   id: string;
@@ -49,23 +50,23 @@ export default function AccountSettingsPage() {
   return (
     <div className="max-w-lg space-y-8">
       <div>
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-white">Account</h2>
-        <p className="text-sm text-slate-500 dark:text-slate-400">Your profile and sign-in security.</p>
+        <h2 className="text-lg font-semibold text-slate-900 dark:text-white">{tr("Account")}</h2>
+        <p className="text-sm text-slate-500 dark:text-slate-400">{tr("Your profile and sign-in security.")}</p>
       </div>
 
       <Card>
         <div className="mb-3 flex items-center gap-2">
           <IconUser className="text-brand-600 dark:text-brand-400" />
-          <h3 className="font-semibold text-slate-900 dark:text-white">Profile</h3>
+          <h3 className="font-semibold text-slate-900 dark:text-white">{tr("Profile")}</h3>
         </div>
         <dl className="space-y-2 text-sm">
           <div className="flex justify-between">
-            <dt className="text-slate-500">Email</dt>
+            <dt className="text-slate-500">{tr("Email")}</dt>
             <dd className="font-medium text-slate-900 dark:text-white">{profile?.email ?? "—"}</dd>
           </div>
           {profile?.phone && (
             <div className="flex justify-between">
-              <dt className="text-slate-500">Phone</dt>
+              <dt className="text-slate-500">{tr("Phone")}</dt>
               <dd className="font-medium text-slate-900 dark:text-white">{profile.phone}</dd>
             </div>
           )}
@@ -75,7 +76,7 @@ export default function AccountSettingsPage() {
       <Card>
         <div className="mb-3 flex items-center gap-2">
           <IconLock className="text-brand-600 dark:text-brand-400" />
-          <h3 className="font-semibold text-slate-900 dark:text-white">Password</h3>
+          <h3 className="font-semibold text-slate-900 dark:text-white">{tr("Password")}</h3>
         </div>
 
         {done ? (
@@ -96,7 +97,7 @@ export default function AccountSettingsPage() {
             className="space-y-4"
           >
             <div>
-              <Label htmlFor="currentPassword">Current password</Label>
+              <Label htmlFor="currentPassword">{tr("Current password")}</Label>
               <Input
                 id="currentPassword"
                 type="password"
@@ -106,7 +107,7 @@ export default function AccountSettingsPage() {
               />
             </div>
             <div>
-              <Label htmlFor="newPassword">New password</Label>
+              <Label htmlFor="newPassword">{tr("New password")}</Label>
               <Input
                 id="newPassword"
                 type="password"
@@ -115,10 +116,10 @@ export default function AccountSettingsPage() {
                 required
                 minLength={10}
               />
-              <HintText>At least 10 characters, with a letter and a digit or symbol.</HintText>
+              <HintText>{tr("At least 10 characters, with a letter and a digit or symbol.")}</HintText>
             </div>
             <div>
-              <Label htmlFor="confirmPassword">Confirm new password</Label>
+              <Label htmlFor="confirmPassword">{tr("Confirm new password")}</Label>
               <Input
                 id="confirmPassword"
                 type="password"

@@ -1,12 +1,28 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "@mashupkgrid/database";
-import { successResponse, NotFoundError } from "@mashupkgrid/shared";
+import { successResponse, NotFoundError, ConflictError } from "@mashupkgrid/shared";
 import { authenticate } from "../plugins/authenticate.js";
 import { resolveTenant } from "../plugins/tenant.js";
 import { checkMaintenance } from "../plugins/maintenance.js";
 import { requirePermission } from "../plugins/authorize.js";
 import { writeAuditLog } from "../lib/audit.js";
+import { isPushConfigured, pushToDevices } from "@mashupkgrid/push";
+
+/** Sends an announcement to the phones and computers of the ISP staff it is addressed to, on
+ *  the devices where they turned alerts on. A push failure never undoes the announcement. */
+async function pushAnnouncement(a: { id: string; tenantId: string | null; title: string; body: string }): Promise<number> {
+  if (!isPushConfigured()) return 0;
+  try {
+    return await pushToDevices(
+      { user: { status: "ACTIVE", deletedAt: null, tenantId: a.tenantId ?? { not: null } } },
+      { title: a.title, body: a.body.length > 240 ? `${a.body.slice(0, 237)}...` : a.body, url: "/notifications", tag: `announcement-${a.id}` }
+    );
+  } catch (err) {
+    console.error(`[announcements] push for ${a.id} failed`, err);
+    return 0;
+  }
+}
 
 const preHandler = [authenticate, resolveTenant, checkMaintenance] as const;
 
@@ -16,6 +32,8 @@ const createSchema = z.object({
   body: z.string().min(1).max(2000),
   severity: z.enum(["INFO", "WARNING", "CRITICAL"]).default("INFO"),
   expiresAt: z.string().datetime().nullable().optional(),
+  /** Also send it as a push alert to staff devices that turned alerts on. */
+  push: z.boolean().optional().default(false),
 });
 
 const idParamsSchema = z.object({ announcementId: z.string().uuid() });
@@ -64,12 +82,37 @@ export async function announcementRoutes(app: FastifyInstance): Promise<void> {
         action: "announcement.created",
         resourceType: "PlatformAnnouncement",
         resourceId: announcement.id,
-        after: { title: announcement.title, severity: announcement.severity, tenantId: body.tenantId },
+        after: { title: announcement.title, severity: announcement.severity, tenantId: body.tenantId, push: body.push },
         ipAddress: request.ip,
         userAgent: request.headers["user-agent"] ?? null,
       });
 
-      reply.status(201).send(successResponse(announcement, request.id));
+      const pushed = body.push ? await pushAnnouncement(announcement) : null;
+      reply.status(201).send(successResponse({ ...announcement, pushed }, request.id));
+    }
+  );
+
+  /** Sends an announcement that already exists as a push alert, e.g. a reminder on the day. */
+  app.post(
+    "/:announcementId/push",
+    { config: { audience: "platform" }, preHandler: [...preHandler, requirePermission("tenants.update")] },
+    async (request, reply) => {
+      const { announcementId } = idParamsSchema.parse(request.params);
+      const announcement = await prisma.platformAnnouncement.findUnique({ where: { id: announcementId } });
+      if (!announcement) throw new NotFoundError("Announcement");
+      if (!isPushConfigured()) throw new ConflictError("Push alerts are not set up on this server yet");
+      const pushed = await pushAnnouncement(announcement);
+      await writeAuditLog({
+        tenantId: announcement.tenantId,
+        actorUserId: request.user!.id,
+        action: "announcement.pushed",
+        resourceType: "PlatformAnnouncement",
+        resourceId: announcementId,
+        after: { devices: pushed },
+        ipAddress: request.ip,
+        userAgent: request.headers["user-agent"] ?? null,
+      });
+      reply.send(successResponse({ pushed }, request.id));
     }
   );
 

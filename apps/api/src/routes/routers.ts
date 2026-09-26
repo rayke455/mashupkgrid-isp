@@ -30,6 +30,7 @@ import {
   routerFacingApiBase,
   appFilterPortalHosts,
   routerRadiusHost,
+  platformPublicAddress,
   listPlatformWalledGardenHosts,
 } from "@mashupkgrid/network";
 import {
@@ -70,6 +71,10 @@ const createRouterSchema = z.object({
   useTls: z.boolean().optional(),
   username: z.string().min(1),
   password: z.string().min(1),
+  siteName: z.string().trim().max(80).nullable().optional(),
+  branchId: z.string().uuid().nullable().optional(),
+  latitude: z.number().min(-90).max(90).nullable().optional(),
+  longitude: z.number().min(-180).max(180).nullable().optional(),
 });
 
 const updateRouterSchema = createRouterSchema.partial();
@@ -341,7 +346,7 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
       }
 
       const { provisionToken } = provisioningScriptQuerySchema.parse(request.query);
-      const managementSource = env.ROUTER_MANAGEMENT_SOURCE || "68.210.187.104";
+      const managementSource = env.ROUTER_MANAGEMENT_SOURCE || (await platformPublicAddress());
       const vpnIp = await ensureRouterVpnIp(router.id);
 
       let serverPublicKey = env.WIREGUARD_SERVER_PUBLIC_KEY;
@@ -358,7 +363,7 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
 
       const serverHost = env.WIREGUARD_SERVER_ENDPOINT
         ? (env.WIREGUARD_SERVER_ENDPOINT.includes(":") ? env.WIREGUARD_SERVER_ENDPOINT.split(":")[0] : env.WIREGUARD_SERVER_ENDPOINT)
-        : "68.210.187.104";
+        : await platformPublicAddress();
 
       const credentials = await getGeneratedCredentials(tenantId, routerId);
       const callbackUrl = `${routerApiBase()}/api/v1/routers/provision/${provisionToken}/callback`;
@@ -373,7 +378,7 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
       const loginTemplateUrl = `${routerApiBase()}/api/v1/hotspot/${tenantSlug}/mikrotik-login-template`;
 
       const script = buildMikrotikProvisioningScript(router, credentials, callbackUrl, {
-        radiusHost: routerRadiusHost(),
+        radiusHost: await routerRadiusHost(),
         managementSource,
         vpnSubnet: env.WIREGUARD_SUBNET_CIDR,
         serverPublicKey,
@@ -565,7 +570,7 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
 
       const script = buildMikrotikVpnCompleteScript({
         serverPublicKey,
-        serverEndpoint: env.WIREGUARD_SERVER_ENDPOINT || "68.210.187.104:51820",
+        serverEndpoint: env.WIREGUARD_SERVER_ENDPOINT || `${await platformPublicAddress()}:${env.WIREGUARD_LISTEN_PORT || 51820}`,
         serverListenPort: env.WIREGUARD_LISTEN_PORT,
         assignedVpnIp: router.vpnIp,
         tunnelSubnetCidr: env.WIREGUARD_SUBNET_CIDR,
@@ -584,13 +589,13 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
       const router = await getRouterOrThrow(tenantId, routerId);
 
       const script = buildMikrotikWinboxScript(router.name, {
-        managementSource: env.ROUTER_MANAGEMENT_SOURCE || "68.210.187.104",
+        managementSource: env.ROUTER_MANAGEMENT_SOURCE || (await platformPublicAddress()),
         vpnSubnet: env.WIREGUARD_SUBNET_CIDR,
         apiPort: router.apiPort,
         useTls: router.useTls,
       });
-      const relayHost =
-        env.WINBOX_RELAY_PUBLIC_HOST || (env.WIREGUARD_SERVER_ENDPOINT || "68.210.187.104:51820").split(":")[0] || null;
+      const cloudHost = await platformPublicAddress();
+      const relayHost = env.WINBOX_RELAY_PUBLIC_HOST || (env.WIREGUARD_SERVER_ENDPOINT || cloudHost).split(":")[0] || null;
       reply.send(
         successResponse(
           {
@@ -604,7 +609,7 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
             connectionTargets: {
               direct: router.host ? `${router.host}:8291` : null,
               vpn: router.vpnIp ? `${router.vpnIp}:8291` : null,
-              cloudHost: "68.210.187.104",
+              cloudHost,
             },
             // Remote WinBox through this server (see packages/network winbox-relay.service.ts).
             relay: {
@@ -895,7 +900,7 @@ function getClientIp(request: { headers: Record<string, string | string[] | unde
       return;
     }
 
-    const managementSource = env.ROUTER_MANAGEMENT_SOURCE || "68.210.187.104";
+    const managementSource = env.ROUTER_MANAGEMENT_SOURCE || (await platformPublicAddress());
     const vpnIp = await ensureRouterVpnIp(router.id);
 
     let serverPublicKey = env.WIREGUARD_SERVER_PUBLIC_KEY;
@@ -912,7 +917,7 @@ function getClientIp(request: { headers: Record<string, string | string[] | unde
 
     const serverHost = env.WIREGUARD_SERVER_ENDPOINT
       ? (env.WIREGUARD_SERVER_ENDPOINT.includes(":") ? env.WIREGUARD_SERVER_ENDPOINT.split(":")[0] : env.WIREGUARD_SERVER_ENDPOINT)
-      : "68.210.187.104";
+      : await platformPublicAddress();
 
     const credentials = await getGeneratedCredentials(router.tenantId, router.id);
     const callbackUrl = `${routerApiBase()}/api/v1/routers/provision/${token}/callback`;
@@ -925,7 +930,7 @@ function getClientIp(request: { headers: Record<string, string | string[] | unde
     const loginTemplateUrl = `${routerApiBase()}/api/v1/hotspot/${tenantSlug}/mikrotik-login-template`;
 
     const script = buildMikrotikProvisioningScript(router, credentials, callbackUrl, {
-      radiusHost: routerRadiusHost(),
+      radiusHost: await routerRadiusHost(),
       managementSource,
       vpnSubnet: env.WIREGUARD_SUBNET_CIDR,
       serverPublicKey,

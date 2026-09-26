@@ -5,6 +5,8 @@ import {
   subscribeCustomerToPackage,
   cancelSubscription,
   suspendSubscription,
+  pauseSubscription,
+  resumeSubscription,
   reactivateSubscription,
   getSubscriptionOrThrow,
 } from "@mashupkgrid/billing";
@@ -27,6 +29,7 @@ const subscribeSchema = z.object({
 
 const idParamsSchema = z.object({ subscriptionId: z.string().uuid() });
 const listQuerySchema = z.object({ customerId: z.string().uuid().optional() });
+const extendSchema = z.object({ days: z.number().int().min(1).max(365), reason: z.string().trim().max(200).optional() });
 
 function requireTenant(tenantId: string | null): string {
   if (tenantId === null) throw new ConflictError("Subscription management is not available at the platform level");
@@ -97,6 +100,32 @@ export async function subscriptionRoutes(app: FastifyInstance): Promise<void> {
     }
   );
 
+  /** Staff pause a plan for a customer (no yearly allowance applies), or end a pause. */
+  app.post(
+    "/:subscriptionId/pause",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("customer_services.manage")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const { subscriptionId } = idParamsSchema.parse(request.params);
+      const { days } = z.object({ days: z.number().int().min(1).max(180) }).parse(request.body);
+      const after = await pauseSubscription(tenantId, subscriptionId, days, "staff");
+      await writeAuditLog({ tenantId, actorUserId: request.user!.id, action: "customer_service.paused", resourceType: "CustomerService", resourceId: subscriptionId, after: { days, until: after.pausedUntil }, ipAddress: request.ip, userAgent: request.headers["user-agent"] ?? null });
+      reply.send(successResponse(after, request.id));
+    }
+  );
+
+  app.post(
+    "/:subscriptionId/resume",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("customer_services.manage")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const { subscriptionId } = idParamsSchema.parse(request.params);
+      const after = await resumeSubscription(tenantId, subscriptionId);
+      await writeAuditLog({ tenantId, actorUserId: request.user!.id, action: "customer_service.resumed", resourceType: "CustomerService", resourceId: subscriptionId, ipAddress: request.ip, userAgent: request.headers["user-agent"] ?? null });
+      reply.send(successResponse(after, request.id));
+    }
+  );
+
   for (const [path, action, auditAction] of [
     ["cancel", cancelSubscription, "customer_service.cancelled"],
     ["suspend", suspendSubscription, "customer_service.suspended"],
@@ -130,4 +159,56 @@ export async function subscriptionRoutes(app: FastifyInstance): Promise<void> {
       }
     );
   }
+
+  /**
+   * Gives a customer extra days: an outage credit, a goodwill extension, "pay me on Friday".
+   * Pushes the next billing date out by that many days and, so the extension actually keeps
+   * them online, pushes the due date of every open invoice on the subscription by the same
+   * amount (an overdue invoice is what suspends a customer, not the billing date). A suspended
+   * subscription is reactivated as part of it — the whole point is that they get back online.
+   */
+  app.post(
+    "/:subscriptionId/extend",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("customer_services.manage")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const { subscriptionId } = idParamsSchema.parse(request.params);
+      const { days, reason } = extendSchema.parse(request.body);
+      const before = await getSubscriptionOrThrow(tenantId, subscriptionId);
+      if (before.status === "CANCELLED") throw new ConflictError("A cancelled subscription cannot be extended — subscribe the customer again instead");
+
+      const addDays = (d: Date) => new Date(d.getTime() + days * 24 * 60 * 60_000);
+      const { after, invoicesMoved } = await prisma.$transaction(async (tx) => {
+        const updated = await tx.customerService.update({
+          where: { id: subscriptionId },
+          data: { nextBillingAt: addDays(before.nextBillingAt < new Date() ? new Date() : before.nextBillingAt) },
+        });
+        const open = await tx.invoice.findMany({
+          where: { tenantId, customerServiceId: subscriptionId, status: { in: ["PENDING", "PARTIALLY_PAID", "OVERDUE"] } },
+          select: { id: true, dueDate: true },
+        });
+        for (const inv of open) {
+          const newDue = addDays(inv.dueDate < new Date() ? new Date() : inv.dueDate);
+          // Back to PENDING: it is no longer past due, and the suspension sweep only looks at OVERDUE.
+          await tx.invoice.update({ where: { id: inv.id }, data: { dueDate: newDue, status: "PENDING" } });
+        }
+        return { after: updated, invoicesMoved: open.length };
+      });
+
+      const reactivated = before.status === "SUSPENDED" ? await reactivateSubscription(tenantId, subscriptionId) : null;
+
+      await writeAuditLog({
+        tenantId,
+        actorUserId: request.user!.id,
+        action: "subscription.extended",
+        resourceType: "CustomerService",
+        resourceId: subscriptionId,
+        before: { nextBillingAt: before.nextBillingAt, status: before.status },
+        after: { nextBillingAt: after.nextBillingAt, status: reactivated?.status ?? after.status, days, reason: reason ?? null, invoicesMoved },
+        ipAddress: request.ip,
+        userAgent: request.headers["user-agent"] ?? null,
+      });
+      reply.send(successResponse({ ...(reactivated ?? after), invoicesMoved, reactivated: Boolean(reactivated) }, request.id));
+    }
+  );
 }

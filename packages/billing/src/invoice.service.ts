@@ -2,7 +2,7 @@ import { prisma, type Invoice, type CustomerService, type Package } from "@mashu
 import { ConflictError, NotFoundError } from "@mashupkgrid/shared";
 import type { Db } from "./db.js";
 import { withRetryOnNumberCollision } from "./sequence.js";
-import { addDays, cycleLengthDays, proRataAmountMinor, taxAmountMinor } from "./money.js";
+import { addDays, cycleLengthDays, netFromGrossMinor, proRataAmountMinor, taxAmountMinor } from "./money.js";
 
 async function generateInvoiceNumber(db: Db, tenantId: string, attempt: number): Promise<string> {
   const count = await db.invoice.count({ where: { tenantId } });
@@ -153,4 +153,23 @@ export async function voidInvoice(tenantId: string, invoiceId: string): Promise<
     );
   }
   return prisma.invoice.update({ where: { id: invoiceId }, data: { status: "VOID", voidedAt: new Date() } });
+}
+
+/** A one-off invoice for a prepaid add-on. Its price is quoted tax included, so the total is
+ *  what the customer was shown. Due tomorrow, but an unpaid add-on is cancelled (with its
+ *  invoice) long before then, so it never turns overdue and suspends anyone. */
+export async function createAddOnInvoice(
+  db: Db,
+  input: { tenantId: string; customerId: string; customerServiceId: string; description: string; priceMinor: number; currency: string; taxPercent: number | null }
+): Promise<Invoice> {
+  return createInvoice(
+    db,
+    input.tenantId,
+    input.customerId,
+    input.customerServiceId,
+    [{ description: input.description, quantity: 1, unitPriceMinor: netFromGrossMinor(input.priceMinor, input.taxPercent), totalMinor: netFromGrossMinor(input.priceMinor, input.taxPercent) }],
+    input.taxPercent,
+    new Date(Date.now() + 24 * 60 * 60 * 1000),
+    input.currency
+  );
 }

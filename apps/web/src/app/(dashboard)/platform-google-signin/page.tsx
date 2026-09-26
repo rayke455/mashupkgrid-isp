@@ -68,7 +68,6 @@ export default function PlatformGoogleSignInPage() {
           <span>{config?.enabled ? "Google Sign-In Active" : "OAuth Disabled"}</span>
         </Badge>
       </div>
-
       {/* Configuration Card */}
       <Card className="space-y-4">
         <div className="pb-3 border-b border-slate-100 dark:border-slate-800">
@@ -77,7 +76,6 @@ export default function PlatformGoogleSignInPage() {
             Only the Client ID is required (no secret needed on the frontend).
           </p>
         </div>
-
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -100,7 +98,6 @@ export default function PlatformGoogleSignInPage() {
               Get this from Google Cloud Console &rarr; Credentials &rarr; OAuth 2.0 Client ID (Web Application).
             </HintText>
           </div>
-
           <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 dark:bg-slate-950/60 border border-slate-200/60 dark:border-slate-800">
             <input
               id="isActive"
@@ -113,7 +110,6 @@ export default function PlatformGoogleSignInPage() {
               Enable &quot;Sign in with Google&quot; on Login and Registration Pages
             </label>
           </div>
-
           {error && <ErrorText>{error}</ErrorText>}
           {successMsg && (
             <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs font-bold">
@@ -126,14 +122,12 @@ export default function PlatformGoogleSignInPage() {
           </Button>
         </form>
       </Card>
-
       {/* Setup Step-by-Step Guide */}
       <Card className="space-y-4 border-slate-200/90 dark:border-slate-800">
         <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-          <span>📋</span>
+          
           Google Cloud Console Setup Checklist
         </h2>
-
         <div className="space-y-3 text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
           <div className="flex items-start gap-2.5">
             <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-cyan-500 text-white font-bold text-[10px]">1</span>
@@ -141,14 +135,12 @@ export default function PlatformGoogleSignInPage() {
               Open the <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noreferrer" className="text-cyan-600 dark:text-cyan-400 font-bold hover:underline">Google Cloud Console Credentials Page</a>.
             </p>
           </div>
-
           <div className="flex items-start gap-2.5">
             <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-cyan-500 text-white font-bold text-[10px]">2</span>
             <p>
               Click <strong>Create Credentials &rarr; OAuth Client ID</strong> and select Application type as <strong>Web application</strong>.
             </p>
           </div>
-
           <div className="flex items-start gap-2.5">
             <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-cyan-500 text-white font-bold text-[10px]">3</span>
             <div className="space-y-2 flex-1">
@@ -168,7 +160,6 @@ export default function PlatformGoogleSignInPage() {
               </div>
             </div>
           </div>
-
           <div className="flex items-start gap-2.5">
             <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-cyan-500 text-white font-bold text-[10px]">4</span>
             <p>

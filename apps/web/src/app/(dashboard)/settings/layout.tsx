@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
 import { useAuth } from "@/lib/auth-context";
+import { useLanguage } from "@/lib/language-context";
+import { pageStrings } from "@/lib/page-strings";
 import {
   IconMaintenance,
   IconPalette,
@@ -19,6 +21,7 @@ import {
   IconChat,
   IconGlobe,
   IconLayers,
+  IconBell,
 } from "@/components/icons";
 
 interface SettingsNavItem {
@@ -38,114 +41,144 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const { user } = useAuth();
   const has = (permission: string) => user?.permissions.includes(permission) ?? false;
+  const { lang } = useLanguage();
+  const t = pageStrings(lang).settings;
 
   const groups: SettingsNavGroup[] = [
     {
-      label: "General",
+      label: t.groupGeneral,
       items: [
         {
           href: "/settings",
-          label: "Branding",
-          hint: "Identity, logo, colors",
+          label: t.branding,
+          hint: t.brandingHint,
           icon: <IconPalette size={16} />,
           show: has("settings.manage"),
         },
         {
           href: "/settings/domains",
-          label: "Domain Management",
-          hint: "Subdomain & custom domain",
+          label: t.domains,
+          hint: t.domainsHint,
           icon: <IconGlobe size={16} />,
           show: has("settings.manage"),
         },
         {
+          href: "/settings/branches",
+          label: t.branches,
+          hint: t.branchesHint,
+          icon: <IconGlobe size={16} />,
+          show: has("settings.manage"),
+        },
+        {
+          href: "/settings/alerts",
+          label: t.alerts,
+          hint: t.alertsHint,
+          icon: <IconBell size={16} />,
+          show: true,
+        },
+        {
+          href: "/settings/reminders",
+          label: t.reminders,
+          hint: t.remindersHint,
+          icon: <IconMessage size={16} />,
+          show: has("settings.manage"),
+        },
+        {
+          href: "/settings/staff",
+          label: t.staff,
+          hint: t.staffHint,
+          icon: <IconLock size={16} />,
+          show: has("staff.manage"),
+        },
+        {
           href: "/settings/billing",
-          label: "My Subscription",
-          hint: "Plan, usage & renewal",
+          label: t.mySubscription,
+          hint: t.mySubscriptionHint,
           icon: <IconLayers size={16} />,
           show: has("settings.manage"),
         },
       ],
     },
     {
-      label: "Network",
+      label: t.groupNetwork,
       items: [
         {
           href: "/routers",
-          label: "Routers",
-          hint: "MikroTik NAS devices",
+          label: t.routers,
+          hint: t.routersHint,
           icon: <IconRouter size={16} />,
           show: has("routers.read"),
         },
         {
           href: "/vouchers",
-          label: "Hotspot",
-          hint: "Packages, vouchers, portal",
+          label: t.hotspot,
+          hint: t.hotspotHint,
           icon: <IconTicket size={16} />,
           show: has("radius.manage"),
         },
       ],
     },
     {
-      label: "Billing & messaging",
+      label: t.groupBilling,
       items: [
         {
           // One entry covering every way of getting paid — see the tabbed page for why these
           // stopped being three separate destinations.
           href: "/payments-setup",
-          label: "Getting paid",
-          hint: "Till, paybill, M-Pesa, cards",
+          label: t.gettingPaid,
+          hint: t.gettingPaidHint,
           icon: <IconMpesa size={16} />,
           show: has("settings.manage") || has("payments.reconcile"),
         },
         {
           href: "/sms",
-          label: "Communications",
-          hint: "SMS gateway",
+          label: t.communications,
+          hint: t.communicationsHint,
           icon: <IconMessage size={16} />,
           show: has("settings.manage"),
         },
       ],
     },
     {
-      label: "Integrations",
+      label: t.groupIntegrations,
       items: [
         {
           href: "/settings/ai-assistant",
-          label: "AI Assistant",
-          hint: "Provider & API key",
+          label: t.aiAssistant,
+          hint: t.aiAssistantHint,
           icon: <IconSparkles size={16} />,
           show: has("settings.manage"),
         },
         {
           href: "/settings/developer",
-          label: "Developer",
-          hint: "API tokens & webhooks",
+          label: t.developer,
+          hint: t.developerHint,
           icon: <IconWebhook size={16} />,
           show: has("settings.manage"),
         },
         {
           href: "/settings/whatsapp",
-          label: "WhatsApp",
-          hint: "Link your number",
+          label: t.whatsapp,
+          hint: t.whatsappHint,
           icon: <IconMessage size={16} />,
           show: has("settings.manage"),
         },
         {
           href: "/settings/live-chat",
-          label: "Live Chat",
-          hint: "Tawk.to widget",
+          label: t.liveChat,
+          hint: t.liveChatHint,
           icon: <IconChat size={16} />,
           show: has("settings.manage"),
         },
       ],
     },
     {
-      label: "Account",
+      label: t.groupAccount,
       items: [
         {
           href: "/settings/account",
-          label: "Password",
-          hint: "Sign-in security",
+          label: t.password,
+          hint: t.passwordHint,
           icon: <IconLock size={16} />,
           show: true,
         },
@@ -163,7 +196,7 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-500/15 text-brand-600 dark:text-brand-400">
               <IconMaintenance size={18} />
             </span>
-            Settings
+            {t.heading}
           </h1>
         </div>
         <nav className="space-y-5">

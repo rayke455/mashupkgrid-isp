@@ -12,6 +12,12 @@
 {
     email admin@mashuphost.tech
     acme_dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+    # Tenants' own domains (Settings → Domain management) get certificates on demand: before
+    # issuing one, Caddy asks the API whether the hostname is a verified custom domain, so an
+    # unknown name pointed at this server cannot trigger issuance.
+    on_demand_tls {
+        ask http://localhost:4000/api/v1/domains/tls-check
+    }
 }
 
 # For hosts reached DIRECTLY (Cloudflare grey cloud / DNS-only): api, captive, and the tenant wildcard.
@@ -112,5 +118,28 @@ api.mashuphost.tech {
     import hardening
     reverse_proxy localhost:3000 {
         import proxy_headers
+    }
+}
+
+# 6. Tenants' custom domains (wifi.acme.co.ke CNAMEd to acme.mashuphost.tech). No site block can
+# name them in advance, so this catch-all serves any HTTPS host the API vouches for (see
+# on_demand_tls above). The certificate comes over the HTTP-01 / TLS-ALPN challenge, not the
+# Cloudflare DNS challenge: the tenant's DNS zone is theirs, not ours. Port 80 must therefore be
+# reachable from the internet for these hosts. Listed last so every explicit host above wins.
+https:// {
+    import hardening
+    tls {
+        on_demand
+        issuer acme
+    }
+    handle /api/* {
+        reverse_proxy localhost:4000 {
+            import proxy_headers
+        }
+    }
+    handle {
+        reverse_proxy localhost:3000 {
+            import proxy_headers
+        }
     }
 }

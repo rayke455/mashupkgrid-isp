@@ -8,6 +8,8 @@ import {
   hashToken,
 } from "@mashupkgrid/shared";
 import { env } from "@mashupkgrid/config";
+import { isIP } from "node:net";
+import { lookup } from "node:dns/promises";
 import { createAdapterForRouter } from "./factory.js";
 import { MikroTikAdapter } from "./mikrotik/mikrotik.adapter.js";
 import type { DeviceHealth, DeviceSession, ConnectedAccessPoint } from "./adapter.interface.js";
@@ -34,6 +36,10 @@ export interface CreateRouterInput {
   useTls?: boolean;
   username: string;
   password: string;
+  siteName?: string | null;
+  branchId?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export type UpdateRouterInput = Partial<CreateRouterInput>;
@@ -59,6 +65,9 @@ export async function createRouter(tenantId: string, input: CreateRouterInput): 
       tenantId,
       name: input.name,
       vendor: input.vendor,
+      siteName: input.siteName ?? null,
+      latitude: input.latitude ?? null,
+      longitude: input.longitude ?? null,
       host: input.host,
       apiPort: input.apiPort ?? 8728,
       useTls: input.useTls ?? false,
@@ -424,6 +433,10 @@ export async function updateRouter(tenantId: string, routerId: string, patch: Up
       ...(patch.host !== undefined ? { host: patch.host } : {}),
       ...(patch.apiPort !== undefined ? { apiPort: patch.apiPort } : {}),
       ...(patch.useTls !== undefined ? { useTls: patch.useTls } : {}),
+      ...(patch.siteName !== undefined ? { siteName: patch.siteName || null } : {}),
+      ...(patch.branchId !== undefined ? { branchId: patch.branchId } : {}),
+      ...(patch.latitude !== undefined ? { latitude: patch.latitude } : {}),
+      ...(patch.longitude !== undefined ? { longitude: patch.longitude } : {}),
       ...(patch.username !== undefined
         ? { usernameEncrypted: encryptAtRest(patch.username, env.ENCRYPTION_KEY) }
         : {}),
@@ -497,9 +510,51 @@ export function routerFacingApiBase(): string {
 /** The platform's historical default RADIUS/management address, still baked into older scripts. */
 export const LEGACY_PLATFORM_ADDRESS = "68.210.187.104";
 
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "0.0.0.0", "::1"]);
+let resolvedPlatformAddress: { host: string; ip: string; at: number } | null = null;
+let warnedAboutFallback = false;
+
+/**
+ * The public IPv4 address routers reach this platform on. RADIUS packets go here, and it is the
+ * address allowed to manage a router's API and WinBox.
+ *
+ * RADIUS_SERVER_HOST when set (the right thing on any real deployment: RouterOS takes an IP, not
+ * a name, and a name behind a CDN proxy resolves to the CDN, which does not forward UDP).
+ * Otherwise the API's own host from routerFacingApiBase, resolved through DNS when it is a name.
+ * Only when neither gives a usable address does it fall back to the historical server, and it
+ * says so in the log: a router pointed at the wrong address fails every login with no error the
+ * customer or the operator can see.
+ */
+export async function platformPublicAddress(): Promise<string> {
+  const explicit = process.env["RADIUS_SERVER_HOST"]?.trim();
+  if (explicit) return explicit;
+
+  const host = hostOf(routerFacingApiBase());
+  if (isIP(host) === 4) return host;
+  if (host && !LOCAL_HOSTS.has(host)) {
+    const cached = resolvedPlatformAddress;
+    if (cached && cached.host === host && Date.now() - cached.at < 5 * 60_000) return cached.ip;
+    try {
+      const { address } = await lookup(host, { family: 4 });
+      resolvedPlatformAddress = { host, ip: address, at: Date.now() };
+      return address;
+    } catch (err) {
+      console.warn(`[routers] could not resolve ${host} to an IPv4 address:`, err instanceof Error ? err.message : err);
+    }
+  }
+  if (!warnedAboutFallback) {
+    warnedAboutFallback = true;
+    console.warn(
+      `[routers] RADIUS_SERVER_HOST is not set and the API URL (${host || "unset"}) gives no public IPv4 address. ` +
+        `Routers will be pointed at ${LEGACY_PLATFORM_ADDRESS}; set RADIUS_SERVER_HOST to this server's public IP.`
+    );
+  }
+  return LEGACY_PLATFORM_ADDRESS;
+}
+
 /** Where routers send RADIUS. */
-export function routerRadiusHost(): string {
-  return process.env["RADIUS_SERVER_HOST"] || LEGACY_PLATFORM_ADDRESS;
+export function routerRadiusHost(): Promise<string> {
+  return platformPublicAddress();
 }
 
 function hostOf(url: string): string {
@@ -536,7 +591,7 @@ export async function reconcileRouterProvisioning(routerId: string, options: { f
 
   const adapter = createAdapterForRouter({ ...router, host: router.host });
   if (!(adapter instanceof MikroTikAdapter)) return null;
-  const radiusHost = routerRadiusHost();
+  const radiusHost = await routerRadiusHost();
   try {
     await adapter.connect();
     // Phones online right now that the server doesn't know yet: remembered so they reconnect by MAC.

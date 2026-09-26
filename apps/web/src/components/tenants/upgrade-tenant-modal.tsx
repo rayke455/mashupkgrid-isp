@@ -132,8 +132,8 @@ export function UpgradeTenantModal({ tenant, onClose }: Props) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
-      <div className="relative w-full max-w-3xl rounded-3xl border border-slate-800 bg-slate-950 p-6 sm:p-8 space-y-6 shadow-2xl text-left font-sans max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80">
+      <div className="relative w-full max-w-3xl rounded-xl border border-slate-800 bg-slate-950 p-6 sm:p-8 space-y-6 shadow-lg text-left font-sans max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-slate-800">
           <div>
@@ -143,11 +143,10 @@ export function UpgradeTenantModal({ tenant, onClose }: Props) {
                 Tenant: <strong className="text-white">{tenant.name}</strong> ({tenant.slug})
               </span>
             </div>
-            <h3 className="text-xl sm:text-2xl font-black text-white mt-1">
+            <h3 className="text-xl sm:text-2xl font-bold text-white mt-1">
               Upgrade Operator Plan &amp; Quota
             </h3>
           </div>
-
           <button
             onClick={onClose}
             className="h-8 w-8 rounded-full bg-slate-900 border border-slate-800 hover:bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center text-sm"
@@ -155,7 +154,6 @@ export function UpgradeTenantModal({ tenant, onClose }: Props) {
             ✕
           </button>
         </div>
-
         {/* Billing Cycle Switcher */}
         <div className="flex items-center justify-center">
           <div className="inline-flex items-center gap-2 bg-slate-900 p-1.5 rounded-xl border border-slate-800 text-xs font-bold font-mono">
@@ -182,7 +180,6 @@ export function UpgradeTenantModal({ tenant, onClose }: Props) {
             </button>
           </div>
         </div>
-
         {/* 3 Tier Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {PLANS.map((plan) => {
@@ -207,22 +204,20 @@ export function UpgradeTenantModal({ tenant, onClose }: Props) {
 
                 <div className="space-y-2">
                   <div className="flex justify-between items-start">
-                    <span className="text-[10px] font-mono text-cyan-400 uppercase font-bold">{plan.badge}</span>
+                    <span className="text-[10px] font-mono text-white uppercase font-bold">{plan.badge}</span>
                   </div>
                   <h4 className="text-base font-bold text-white">{plan.name}</h4>
                   <div className="font-mono">
-                    <span className="text-2xl font-black text-white">KES {currentPrice.toLocaleString()}</span>
+                    <span className="text-2xl font-bold text-white">KES {currentPrice.toLocaleString()}</span>
                     <span className="text-[11px] text-slate-500"> /mo</span>
                   </div>
                   <div className="text-[11px] font-mono text-emerald-400 bg-slate-950 p-1.5 rounded border border-slate-800">
                     {plan.maxCustomers} · {plan.maxRouters}
                   </div>
                 </div>
-
                 <div className="space-y-1.5 pt-2 border-t border-slate-800/80 text-xs text-slate-300">
                   {plan.features.slice(0, 4).map((f, idx) => (
                     <div key={idx} className="flex items-start gap-1.5 text-[11px]">
-                      <span className="text-emerald-400 font-bold">✓</span>
                       <span className="leading-tight">{f}</span>
                     </div>
                   ))}
@@ -231,14 +226,12 @@ export function UpgradeTenantModal({ tenant, onClose }: Props) {
             );
           })}
         </div>
-
         {/* Upgrade Execution Methods */}
         <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-4 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-mono text-slate-400">
             <span>Selected Upgrade: <strong className="text-white">{selectedPlan.name}</strong> ({billingCycle})</span>
             <span>Total Payable: <strong className="text-emerald-400">KES {price.toLocaleString()}</strong></span>
           </div>
-
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
             <button
               type="button"
@@ -257,7 +250,6 @@ export function UpgradeTenantModal({ tenant, onClose }: Props) {
                 Assign plan now; invoice or collect payment later.
               </p>
             </button>
-
             <button
               type="button"
               onClick={() => setChargeMethod("mpesa")}
@@ -276,7 +268,6 @@ export function UpgradeTenantModal({ tenant, onClose }: Props) {
               </p>
             </button>
           </div>
-
           {chargeMethod === "mpesa" && (
             <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
               <Label htmlFor="owner-phone">Owner Safaricom M-Pesa Phone Number</Label>
@@ -292,7 +283,6 @@ export function UpgradeTenantModal({ tenant, onClose }: Props) {
             </div>
           )}
         </div>
-
         {error && <ErrorText>{error}</ErrorText>}
 
         {stkDispatched && (
@@ -311,7 +301,6 @@ export function UpgradeTenantModal({ tenant, onClose }: Props) {
           >
             Cancel
           </button>
-
           {chargeMethod === "instant" ? (
             <Button
               onClick={() => applyPlanChange.mutate()}

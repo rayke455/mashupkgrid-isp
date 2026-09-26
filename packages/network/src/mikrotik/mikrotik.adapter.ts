@@ -1,6 +1,7 @@
 import { RouterOSClient, assertNoTrap } from "./routeros-client.js";
 import { ANTI_TUNNEL_RESULT_VAR, ANTI_TUNNEL_TAG, antiTunnelRules, buildAntiTunnelScript } from "../anti-tunnel.js";
 import type {
+  DeviceInfo,
   NetworkDeviceAdapter,
   NetworkUserSpec,
   DeviceHealth,
@@ -64,6 +65,14 @@ export class MikroTikAdapter implements NetworkDeviceAdapter {
       const [resource] = await client.print(["/system/resource/print"]);
       const [identity] = await client.print(["/system/identity/print"]);
       if (!resource) return { reachable: false, error: "No response from /system/resource/print" };
+      // RouterOS 7 lists sensors as name/value rows; RouterOS 6 has one row of fields. Not every
+      // board has a sensor, and that is not an error.
+      const health = await client.print(["/system/health/print"]).catch(() => [] as Array<Record<string, string>>);
+      const tempRaw =
+        health.find((h) => h["name"] === "temperature" || h["name"] === "cpu-temperature" || h["name"] === "board-temperature1")?.["value"] ??
+        health[0]?.["temperature"] ??
+        health[0]?.["cpu-temperature"];
+      const temperatureC = tempRaw !== undefined && Number.isFinite(Number(tempRaw)) ? Number(tempRaw) : undefined;
 
       return {
         reachable: true,
@@ -74,6 +83,7 @@ export class MikroTikAdapter implements NetworkDeviceAdapter {
             : undefined,
         memoryTotalBytes: resource["total-memory"] ? BigInt(resource["total-memory"]) : undefined,
         uptimeSeconds: resource["uptime"] ? parseRouterOSUptime(resource["uptime"]) : undefined,
+        temperatureC,
         identity: identity?.["name"],
         version: resource["version"],
       };
@@ -701,6 +711,102 @@ export class MikroTikAdapter implements NetworkDeviceAdapter {
       message: "RouterOS Firmware update initiated! The router will download the latest package and reboot automatically.",
     };
   }
+  // --- Over-the-air updates ------------------------------------------------------------------
+
+  async getDeviceInfo(): Promise<DeviceInfo> {
+    const client = this.requireClient();
+    const [resource] = await client.print(["/system/resource/print"]);
+    // x86/CHR builds have no RouterBOARD menu; that is not an error.
+    const [board] = await client.print(["/system/routerboard/print"]).catch(() => [] as Array<Record<string, string>>);
+    return {
+      routerOsVersion: resource?.["version"] ?? null,
+      boardName: resource?.["board-name"] ?? board?.["model"] ?? null,
+      firmwareCurrent: board?.["current-firmware"] ?? null,
+      firmwareAvailable: board?.["upgrade-firmware"] ?? null,
+    };
+  }
+
+  async upgradeRouterboardFirmware(): Promise<{ changed: boolean; from: string; to: string }> {
+    const client = this.requireClient();
+    const [board] = await client.print(["/system/routerboard/print"]);
+    if (!board) throw new Error("This device has no RouterBOARD firmware to upgrade");
+    const from = board["current-firmware"] ?? "unknown";
+    const to = board["upgrade-firmware"] ?? from;
+    if (from === to) return { changed: false, from, to };
+    assertNoTrap(await client.talk(["/system/routerboard/upgrade"]), "/system/routerboard/upgrade");
+    // The new firmware is only used after a reboot.
+    await this.reboot();
+    return { changed: true, from, to };
+  }
+
+  async reboot(): Promise<void> {
+    // The router drops the API connection as it goes down; that is the expected outcome.
+    await this.requireClient()
+      .talk(["/system/reboot"])
+      .catch(() => undefined);
+  }
+
+  async runScript(source: string): Promise<string> {
+    const replies = await this.requireClient().talk(["/execute", `=script=${source}`, "=as-string="]);
+    assertNoTrap(replies, "/execute");
+    return replies.map((r) => r.attributes["ret"]).find((v) => v !== undefined) ?? "";
+  }
+
+  async exportConfig(): Promise<string> {
+    const client = this.requireClient();
+    const name = "mkg-backup.rsc";
+    await client.print(["/file/print", `?name=${name}`]).then((rows) => (rows[0]?.[".id"] ? client.talk(["/file/remove", `=.id=${rows[0][".id"]}`]) : null)).catch(() => undefined);
+    // RouterOS 7 hides passwords and keys in an export unless asked; a backup without them could
+    // not bring a router back. RouterOS 6 has no such flag and includes them anyway.
+    await client.talk(["/execute", `=script=:do {/export show-sensitive file=mkg-backup} on-error={/export file=mkg-backup}`]);
+    let size = 0;
+    for (let i = 0; i < 30; i++) {
+      const [file] = await client.print(["/file/print", `?name=${name}`]).catch(() => []);
+      const now = Number(file?.["size"] ?? 0);
+      if (file && now > 0 && now === size) break;
+      size = now;
+      await new Promise((r) => setTimeout(r, 500));
+    }
+    if (!size) throw new Error("The router did not produce an export file");
+    let content = "";
+    try {
+      // RouterOS 7.13+ reads a file in chunks; the only way to read a large export.
+      for (let offset = 0; offset < size; ) {
+        const replies = await client.talk(["/file/read", `=file=${name}`, "=chunk-size=32768", `=offset=${offset}`]);
+        const data = replies.map((r) => r.attributes["data"]).find((d) => d !== undefined) ?? "";
+        if (!data) break;
+        content += data;
+        offset += Buffer.byteLength(data);
+      }
+    } catch {
+      content = "";
+    }
+    if (!content) {
+      const [file] = await client.print(["/file/print", `?name=${name}`, "=.proplist=contents,size"]);
+      content = file?.["contents"] ?? "";
+      if (Buffer.byteLength(content) < size) throw new Error("This RouterOS version cannot hand over a large export; upgrade to RouterOS 7.13 or newer");
+    }
+    await client.print(["/file/print", `?name=${name}`]).then((rows) => (rows[0]?.[".id"] ? client.talk(["/file/remove", `=.id=${rows[0][".id"]}`]) : null)).catch(() => undefined);
+    return content;
+  }
+
+  async restoreConfigFromUrl(url: string): Promise<void> {
+    const client = this.requireClient();
+    const name = "mkg-restore.rsc";
+    // Download first and confirm the file arrived; only then reset. A failed download must never
+    // reach the reset, or the router would come back empty.
+    await client.talk(["/execute", `=script=/tool fetch url="${url}" dst-path=${name} check-certificate=no`]).catch(() => undefined);
+    let size = 0;
+    for (let i = 0; i < 40 && !size; i++) {
+      await new Promise((r) => setTimeout(r, 500));
+      const [file] = await client.print(["/file/print", `?name=${name}`]).catch(() => []);
+      size = Number(file?.["size"] ?? 0);
+    }
+    if (!size) throw new Error("The router could not download the backup, so nothing was changed");
+    // The reset reboots the router and drops this connection; that is the expected end.
+    await client.talk(["/execute", `=script=/system reset-configuration no-defaults=yes skip-backup=yes run-after-reset=${name}`]).catch(() => undefined);
+  }
+
   // --- VLAN and addressing (spec section 9) ---------------------------------------------------
   // Every method here reports what the DEVICE said. None of them assume a topology: the parent
   // interface a VLAN stacks on is always supplied by the caller, because it is the ISP's network

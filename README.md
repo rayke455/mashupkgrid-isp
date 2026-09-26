@@ -74,6 +74,11 @@ deployment) and the Phase 1/2/3 implementation plans this codebase follows.
   routers get them in their setup script, online routers through the hotspot self-repair pass.
 - **Online users** (`/online-users`): every hotspot and PPPoE session from RADIUS accounting,
   joined to the customer/voucher, router and last payment; live, searchable.
+- **Customer care.** Export every customer with what they have paid and every payment as CSV
+  (`/customers/export.csv`, `/payments/export.csv`); extend a subscription by N days (billing
+  date and open invoices move, a suspended line is reactivated) or add hours to a voucher;
+  message a customer by email/SMS from their profile; invoices are emailed automatically
+  when issued (`send-pending-invoice-emails`, every 5 min) and on demand.
 - **Housekeeping.** Failed/abandoned purchase attempts and failed payment records can be deleted
   (never completed ones, never anything linked to a gateway transaction); audit logs can be
   purged beyond 30 days. Every deletion is itself audited.
@@ -96,14 +101,13 @@ integrations pretending otherwise.
 
 ## Environment note
 
-This codebase was built and typechecked/tested in an environment without Docker, Postgres, or
-Redis available, so **the database migration, seed script, and full login/billing/M-Pesa flow
-have not been run end-to-end against a live database or Safaricom's sandbox**. Everything that
-could be verified without live infra was: all packages typecheck (`pnpm -r typecheck`), all apps
-build, and all 81 unit tests pass. Run the steps below in an environment with Docker (or local
-Postgres/Redis) to complete verification before relying on this in production. M-Pesa
-additionally needs a Safaricom Daraja sandbox account and an internet-reachable callback URL
-(e.g. an ngrok tunnel) — see `APP_API_PUBLIC_URL` in `.env.example`.
+The full stack (Postgres, Redis, API, worker with the embedded RADIUS server, and the web app)
+has been run end-to-end locally: migrations, the seed, staff and customer logins, the captive
+portal, and the dashboards were all exercised against a live database. What still needs a real
+environment: M-Pesa (a Safaricom Daraja account and an internet-reachable callback URL, see
+`APP_API_PUBLIC_URL` in `.env.example`) and a physical MikroTik router. For the router, set
+`RADIUS_SERVER_HOST` to this server's public IPv4 address before generating any setup script:
+RouterOS sends RADIUS to an IP, and a domain behind a CDN proxy does not carry UDP.
 
 ## Getting started
 
@@ -140,13 +144,15 @@ additionally needs a Safaricom Daraja sandbox account and an internet-reachable 
    Add that as its own migration (`prisma migrate dev --create-only`, paste the SQL, then
    `prisma migrate dev` again) rather than hand-editing the generated one.
 
-5. **Seed** system roles, the permission catalog, a super admin, a demo tenant, and two demo
-   packages:
+5. **Seed** system roles, the permission catalog and a super admin:
    ```bash
    pnpm db:seed
    ```
-   Prints the generated super-admin and demo-tenant-owner credentials (override with
-   `SEED_SUPER_ADMIN_PASSWORD` / `SEED_TENANT_OWNER_PASSWORD` env vars before seeding).
+   Prints the super-admin credentials (override with `SEED_SUPER_ADMIN_EMAIL` /
+   `SEED_SUPER_ADMIN_PASSWORD` before seeding). Outside production the seed also creates a
+   "Demo ISP" tenant with sample packages for local work; set `SEED_DEMO_TENANT=false` to skip
+   it, or `SEED_DEMO_TENANT=true` to force it. With `NODE_ENV=production` and no flag, a fresh
+   install has no tenants at all: real ISPs sign up and the super admin approves them.
 
 6. **Run everything**:
    ```bash

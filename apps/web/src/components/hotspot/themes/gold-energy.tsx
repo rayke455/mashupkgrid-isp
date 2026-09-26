@@ -1,5 +1,7 @@
 "use client";
 
+import { portalStrings } from "@/lib/portal-strings";
+
 import React, { useState } from "react";
 import { type CaptiveThemeProps, getSocialAppMeta } from "./types";
 import {
@@ -175,6 +177,7 @@ const CARTOON_3D_ROSTER: {
 ];
 
 export function GoldEnergyTheme({
+  t = portalStrings("en"),
   tenantSlug,
   tenantName,
   contactPhone,
@@ -410,7 +413,7 @@ export function GoldEnergyTheme({
             <div className="flex items-center justify-between mb-2 px-1">
               <span className="text-[11px] font-black uppercase tracking-wider text-amber-400 flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full bg-amber-400 animate-ping" />
-                Select a Package to Connect
+                {t.choosePackage}
               </span>
 
               {/* 3D Mascot Picker Trigger Button */}
@@ -539,7 +542,7 @@ export function GoldEnergyTheme({
                       {isPop && (
                         <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-30 whitespace-nowrap rounded-full bg-gradient-to-r from-red-600 via-orange-500 to-amber-500 px-2.5 py-0.5 text-[8.5px] font-black uppercase tracking-wider text-white shadow-lg border border-yellow-300 flex items-center gap-1">
                           <FlameIcon className="w-2.5 h-2.5 text-yellow-200" />
-                          <span>{pkg.badge || "MOST POPULAR"}</span>
+                          <span>{pkg.badge || t.popular.toUpperCase()}</span>
                         </div>
                       )}
 
@@ -611,7 +614,7 @@ export function GoldEnergyTheme({
           className="flex items-center gap-1.5 text-xs font-bold text-slate-300 hover:text-white transition-colors"
         >
           <RefreshIcon className="w-3.5 h-3.5" />
-          <span>Reconnect account</span>
+          <span>{t.accountLogin}</span>
         </button>
 
         <button
@@ -620,7 +623,7 @@ export function GoldEnergyTheme({
           className="flex items-center gap-1.5 rounded-full bg-gradient-to-r from-pink-600 to-rose-600 px-4 py-1.5 text-xs font-black text-white shadow-lg active:scale-95 hover:scale-105 transition-transform"
         >
           <TvIcon className="w-3.5 h-3.5" />
-          <span>Pay for a TV</span>
+          <span>{t.connectTv}</span>
         </button>
       </div>
     </div>

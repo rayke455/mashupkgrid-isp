@@ -68,9 +68,6 @@ export function DashboardBanners() {
           }`}
         >
           <div className="flex items-center gap-3 min-w-0">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 text-base">
-              {trial.expired ? "⛔" : "⏳"}
-            </span>
             <div className="min-w-0 flex-1">
               <p className="font-bold text-slate-900 dark:text-white tracking-tight break-words">
                 {trial.expired ? "Trial Expired" : `${trial.days} Days ${trial.hours} Hours Remaining`}

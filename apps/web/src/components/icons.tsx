@@ -1,123 +1,151 @@
-import { SVGProps } from "react";
+import type { SVGProps } from "react";
+import type { LucideIcon } from "lucide-react";
+import {
+  Activity,
+  Wallet,
+  ArrowRight,
+  Bell,
+  Building2,
+  Check,
+  ChevronRight,
+  CircleCheck,
+  CircleMinus,
+  CircleX,
+  Clock,
+  CloudDownload,
+  Copy,
+  Cpu,
+  Download,
+  Eye,
+  EyeOff,
+  FileCode,
+  FileText,
+  FlaskConical,
+  Gauge,
+  Gift,
+  Globe,
+  HardDriveDownload,
+  House,
+  KeyRound,
+  Layers,
+  LayoutDashboard,
+  LifeBuoy,
+  LoaderCircle,
+  Lock,
+  LogOut,
+  Menu,
+  MessageSquare,
+  MessagesSquare,
+  MonitorSmartphone,
+  Network,
+  Package,
+  Palette,
+  Power,
+  Printer,
+  Receipt,
+  RefreshCw,
+  Router,
+  Search,
+  Send,
+  ServerCog,
+  ShieldCheck,
+  ShieldOff,
+  Sparkles,
+  SquareTerminal,
+  Ticket,
+  Timer,
+  User,
+  UserRound,
+  Users,
+  Webhook,
+  Workflow,
+  Wrench,
+  X,
+  Zap,
+} from "lucide-react";
+
+/**
+ * The dashboard's icons. Everything here is drawn from Lucide (one consistent, modern outline
+ * set) through the same Icon* names the pages already use; only brand marks (M-Pesa, WhatsApp)
+ * are custom. Stroke width is set once here so every icon has the same weight.
+ */
 
 export type IconProps = SVGProps<SVGSVGElement> & {
   size?: number | string;
 };
 
-export function IconRouter({ size = 20, className = "", ...props }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      {...props}
-    >
-      <rect width="20" height="8" x="2" y="14" rx="2" />
-      <path d="M6 18h.01" />
-      <path d="M10 18h.01" />
-      <path d="M14 18h.01" />
-      <path d="M18 18h.01" />
-      <path d="m17 14 3-6" />
-      <path d="m7 14-3-6" />
-      <path d="M12 14V4" />
-    </svg>
-  );
+export const ICON_STROKE = 1.75;
+
+function fromLucide(Glyph: LucideIcon, displayName: string) {
+  function Icon({ size = 20, className = "", ...props }: IconProps) {
+    return <Glyph size={size} strokeWidth={ICON_STROKE} className={className} aria-hidden={props["aria-label"] ? undefined : true} {...(props as object)} />;
+  }
+  Icon.displayName = displayName;
+  return Icon;
 }
 
-export function IconDashboard({ size = 20, className = "", ...props }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      {...props}
-    >
-      <rect width="7" height="9" x="3" y="3" rx="1.5" />
-      <rect width="7" height="5" x="14" y="3" rx="1.5" />
-      <rect width="7" height="9" x="14" y="12" rx="1.5" />
-      <rect width="7" height="5" x="3" y="16" rx="1.5" />
-    </svg>
-  );
-}
-
-export function IconUsers({ size = 20, className = "", ...props }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      {...props}
-    >
-      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-      <circle cx="9" cy="7" r="4" />
-      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
-      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-    </svg>
-  );
-}
-
-export function IconPackage({ size = 20, className = "", ...props }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      {...props}
-    >
-      <path d="m7.5 4.27 9 5.15" />
-      <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
-      <path d="m3.3 7 8.7 5 8.7-5" />
-      <path d="M12 22V12" />
-    </svg>
-  );
-}
-
-export function IconInvoice({ size = 20, className = "", ...props }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      {...props}
-    >
-      <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
-      <path d="M14 2v4a2 2 0 0 0 2 2h4" />
-      <path d="M10 9H8" />
-      <path d="M16 13H8" />
-      <path d="M16 17H8" />
-    </svg>
-  );
-}
+export const IconRouter = fromLucide(Router, "IconRouter");
+export const IconDashboard = fromLucide(LayoutDashboard, "IconDashboard");
+export const IconUsers = fromLucide(Users, "IconUsers");
+export const IconPackage = fromLucide(Package, "IconPackage");
+export const IconInvoice = fromLucide(FileText, "IconInvoice");
+export const IconNetworkPool = fromLucide(Network, "IconNetworkPool");
+export const IconWallet = fromLucide(Wallet, "IconWallet");
+export const IconTicket = fromLucide(Ticket, "IconTicket");
+export const IconShield = fromLucide(ShieldCheck, "IconShield");
+export const IconTenants = fromLucide(Building2, "IconTenants");
+export const IconMaintenance = fromLucide(Wrench, "IconMaintenance");
+export const IconSession = fromLucide(MonitorSmartphone, "IconSession");
+export const IconSpeed = fromLucide(Gauge, "IconSpeed");
+export const IconCheck = fromLucide(Check, "IconCheck");
+export const IconArrowRight = fromLucide(ArrowRight, "IconArrowRight");
+export const IconTerminal = fromLucide(SquareTerminal, "IconTerminal");
+export const IconPulse = fromLucide(Activity, "IconPulse");
+export const IconLogOut = fromLucide(LogOut, "IconLogOut");
+export const IconCopy = fromLucide(Copy, "IconCopy");
+export const IconMessage = fromLucide(MessageSquare, "IconMessage");
+export const IconKey = fromLucide(KeyRound, "IconKey");
+export const IconWebhook = fromLucide(Webhook, "IconWebhook");
+export const IconPalette = fromLucide(Palette, "IconPalette");
+export const IconLock = fromLucide(Lock, "IconLock");
+export const IconEye = fromLucide(Eye, "IconEye");
+export const IconEyeOff = fromLucide(EyeOff, "IconEyeOff");
+export const IconUser = fromLucide(User, "IconUser");
+export const IconChevronRight = fromLucide(ChevronRight, "IconChevronRight");
+export const IconSparkles = fromLucide(Sparkles, "IconSparkles");
+export const IconSend = fromLucide(Send, "IconSend");
+export const IconLifeBuoy = fromLucide(LifeBuoy, "IconLifeBuoy");
+export const IconChat = fromLucide(MessagesSquare, "IconChat");
+export const IconGlobe = fromLucide(Globe, "IconGlobe");
+export const IconLayers = fromLucide(Layers, "IconLayers");
+export const IconMenu = fromLucide(Menu, "IconMenu");
+export const IconClose = fromLucide(X, "IconClose");
+export const IconBell = fromLucide(Bell, "IconBell");
+export const IconSearch = fromLucide(Search, "IconSearch");
+export const IconAutomation = fromLucide(Workflow, "IconAutomation");
+export const IconDownload = fromLucide(Download, "IconDownload");
+export const IconPrinter = fromLucide(Printer, "IconPrinter");
+export const IconCloudDownload = fromLucide(CloudDownload, "IconCloudDownload");
+export const IconRefresh = fromLucide(RefreshCw, "IconRefresh");
+export const IconPower = fromLucide(Power, "IconPower");
+export const IconFileCode = fromLucide(FileCode, "IconFileCode");
+export const IconServerCog = fromLucide(ServerCog, "IconServerCog");
+export const IconCpu = fromLucide(Cpu, "IconCpu");
+export const IconZap = fromLucide(Zap, "IconZap");
+export const IconTimer = fromLucide(Timer, "IconTimer");
+export const IconFlask = fromLucide(FlaskConical, "IconFlask");
+export const IconCircleCheck = fromLucide(CircleCheck, "IconCircleCheck");
+export const IconCircleX = fromLucide(CircleX, "IconCircleX");
+export const IconCircleMinus = fromLucide(CircleMinus, "IconCircleMinus");
+export const IconSpinner = fromLucide(LoaderCircle, "IconSpinner");
+export const IconClock = fromLucide(Clock, "IconClock");
+export const IconHome = fromLucide(House, "IconHome");
+export const IconReceipt = fromLucide(Receipt, "IconReceipt");
+export const IconGift = fromLucide(Gift, "IconGift");
+export const IconUserRound = fromLucide(UserRound, "IconUserRound");
+export const IconShieldOff = fromLucide(ShieldOff, "IconShieldOff");
+export const IconHardDriveDownload = fromLucide(HardDriveDownload, "IconHardDriveDownload");
+export const IconGauge = fromLucide(Gauge, "IconGauge");
 
 export function IconMpesa({ size = 20, className = "", ...props }: IconProps) {
   return (
@@ -137,618 +165,6 @@ export function IconMpesa({ size = 20, className = "", ...props }: IconProps) {
       <line x1="2" x2="22" y1="10" y2="10" />
       <path d="M6 15h2" />
       <path d="M10 15h4" />
-    </svg>
-  );
-}
-
-export function IconNetworkPool({ size = 20, className = "", ...props }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      {...props}
-    >
-      <rect width="6" height="6" x="9" y="2" rx="1" />
-      <rect width="6" height="6" x="2" y="16" rx="1" />
-      <rect width="6" height="6" x="16" y="16" rx="1" />
-      <path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3" />
-      <path d="M12 12V8" />
-    </svg>
-  );
-}
-
-export function IconTicket({ size = 20, className = "", ...props }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      {...props}
-    >
-      <path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z" />
-      <path d="M13 5v2" />
-      <path d="M13 11v2" />
-      <path d="M13 17v2" />
-    </svg>
-  );
-}
-
-export function IconShield({ size = 20, className = "", ...props }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      {...props}
-    >
-      <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
-    </svg>
-  );
-}
-
-export function IconTenants({ size = 20, className = "", ...props }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      {...props}
-    >
-      <rect width="18" height="18" x="3" y="3" rx="2" />
-      <path d="M3 9h18" />
-      <path d="M9 21V9" />
-    </svg>
-  );
-}
-
-export function IconMaintenance({ size = 20, className = "", ...props }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      {...props}
-    >
-      <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-    </svg>
-  );
-}
-
-export function IconSession({ size = 20, className = "", ...props }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      {...props}
-    >
-      <rect width="16" height="12" x="4" y="3" rx="2" />
-      <path d="M8 21h8" />
-      <path d="M12 17v4" />
-    </svg>
-  );
-}
-
-export function IconSpeed({ size = 20, className = "", ...props }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      {...props}
-    >
-      <path d="m12 14 4-4" />
-      <path d="M3.34 19a10 10 0 1 1 17.32 0" />
-    </svg>
-  );
-}
-
-export function IconCheck({ size = 18, className = "", ...props }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2.2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      {...props}
-    >
-      <path d="M20 6 9 17l-5-5" />
-    </svg>
-  );
-}
-
-export function IconArrowRight({ size = 18, className = "", ...props }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      {...props}
-    >
-      <path d="M5 12h14" />
-      <path d="m12 5 7 7-7 7" />
-    </svg>
-  );
-}
-
-export function IconTerminal({ size = 20, className = "", ...props }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      {...props}
-    >
-      <polyline points="4 17 10 11 4 5" />
-      <line x1="12" x2="20" y1="19" y2="19" />
-    </svg>
-  );
-}
-
-export function IconPulse({ size = 20, className = "", ...props }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      {...props}
-    >
-      <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-    </svg>
-  );
-}
-
-export function IconLogOut({ size = 18, className = "", ...props }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      {...props}
-    >
-      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-      <polyline points="16 17 21 12 16 7" />
-      <line x1="21" x2="9" y1="12" y2="12" />
-    </svg>
-  );
-}
-
-export function IconCopy({ size = 16, className = "", ...props }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      {...props}
-    >
-      <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
-      <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
-    </svg>
-  );
-}
-
-export function IconMessage({ size = 20, className = "", ...props }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      {...props}
-    >
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-    </svg>
-  );
-}
-
-export function IconKey({ size = 20, className = "", ...props }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      {...props}
-    >
-      <circle cx="7.5" cy="15.5" r="5.5" />
-      <path d="m21 2-9.6 9.6" />
-      <path d="m15.5 7.5 3 3L22 7l-3-3" />
-    </svg>
-  );
-}
-
-export function IconWebhook({ size = 20, className = "", ...props }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      {...props}
-    >
-      <path d="M18 16.98h-5.99c-1.1 0-1.95.94-2.48 1.9A4 4 0 0 1 2 17c.01-.7.2-1.4.57-2" />
-      <path d="m6 17 3.13-5.78c.53-.97.1-2.18-.5-3.1a4 4 0 1 1 6.89-4.06" />
-      <path d="m12 6 3.13 5.73C15.66 12.7 16.9 13 18 13a4 4 0 0 1 0 8" />
-    </svg>
-  );
-}
-
-export function IconPalette({ size = 20, className = "", ...props }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      {...props}
-    >
-      <circle cx="13.5" cy="6.5" r=".5" />
-      <circle cx="17.5" cy="10.5" r=".5" />
-      <circle cx="8.5" cy="7.5" r=".5" />
-      <circle cx="6.5" cy="12.5" r=".5" />
-      <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z" />
-    </svg>
-  );
-}
-
-export function IconLock({ size = 20, className = "", ...props }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      {...props}
-    >
-      <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
-      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-    </svg>
-  );
-}
-
-export function IconEye({ size = 20, className = "", ...props }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      {...props}
-    >
-      <path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z" />
-      <circle cx="12" cy="12" r="2.5" />
-    </svg>
-  );
-}
-
-export function IconEyeOff({ size = 20, className = "", ...props }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      {...props}
-    >
-      <path d="m3 3 18 18" />
-      <path d="M10.6 6.2A10.8 10.8 0 0 1 12 6c6.5 0 10 6 10 6a17.3 17.3 0 0 1-3.1 3.8" />
-      <path d="M6.2 6.3C3.5 8.1 2 12 2 12s3.5 6 10 6a10.8 10.8 0 0 0 2.2-.2" />
-      <path d="M9.9 9.9a3 3 0 0 0 4.2 4.2" />
-    </svg>
-  );
-}
-
-export function IconUser({ size = 20, className = "", ...props }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      {...props}
-    >
-      <circle cx="12" cy="8" r="4" />
-      <path d="M20 21a8 8 0 0 0-16 0" />
-    </svg>
-  );
-}
-
-export function IconChevronRight({ size = 16, className = "", ...props }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      {...props}
-    >
-      <polyline points="9 18 15 12 9 6" />
-    </svg>
-  );
-}
-
-export function IconSparkles({ size = 20, className = "", ...props }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      {...props}
-    >
-      <path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M5.6 18.4l2.1-2.1M16.3 7.7l2.1-2.1" />
-      <path d="M12 8a4 4 0 0 0 4 4 4 4 0 0 0-4 4 4 4 0 0 0-4-4 4 4 0 0 0 4-4z" />
-    </svg>
-  );
-}
-
-export function IconSend({ size = 18, className = "", ...props }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      {...props}
-    >
-      <path d="m22 2-7 20-4-9-9-4Z" />
-      <path d="M22 2 11 13" />
-    </svg>
-  );
-}
-
-export function IconLifeBuoy({ size = 20, className = "", ...props }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      {...props}
-    >
-      <circle cx="12" cy="12" r="10" />
-      <circle cx="12" cy="12" r="4" />
-      <path d="m4.93 4.93 4.24 4.24" />
-      <path d="m14.83 14.83 4.24 4.24" />
-      <path d="m14.83 9.17 4.24-4.24" />
-      <path d="m9.17 14.83-4.24 4.24" />
-    </svg>
-  );
-}
-
-export function IconChat({ size = 20, className = "", ...props }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      {...props}
-    >
-      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
-    </svg>
-  );
-}
-
-export function IconGlobe({ size = 20, className = "", ...props }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      {...props}
-    >
-      <circle cx="12" cy="12" r="10" />
-      <path d="M2 12h20" />
-      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-    </svg>
-  );
-}
-
-export function IconLayers({ size = 20, className = "", ...props }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      {...props}
-    >
-      <path d="M12 2 2 7l10 5 10-5-10-5z" />
-      <path d="M2 17l10 5 10-5" />
-      <path d="M2 12l10 5 10-5" />
-    </svg>
-  );
-}
-
-export function IconMenu({ size = 20, className = "", ...props }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2.2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      {...props}
-    >
-      <path d="M4 6h16M4 12h16M4 18h16" />
-    </svg>
-  );
-}
-
-export function IconClose({ size = 20, className = "", ...props }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2.2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      {...props}
-    >
-      <path d="M18 6 6 18M6 6l12 12" />
     </svg>
   );
 }
@@ -793,64 +209,3 @@ export function IconWhatsAppBrand({ size = 28, className = "", ...props }: IconP
   );
 }
 
-export function IconBell({ size = 20, className = "", ...props }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      {...props}
-    >
-      <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
-      <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
-    </svg>
-  );
-}
-
-export function IconSearch({ size = 20, className = "", ...props }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      {...props}
-    >
-      <circle cx="11" cy="11" r="7" />
-      <path d="m20 20-3.5-3.5" />
-    </svg>
-  );
-}
-
-/** A clock inside a refresh arc: something that happens on its own, on a schedule. */
-export function IconAutomation({ size = 20, className = "", ...props }: IconProps) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.75}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      {...props}
-    >
-      <path d="M21 12a9 9 0 1 1-2.64-6.36" />
-      <path d="M21 3v5h-5" />
-      <path d="M12 7v5l3 2" />
-    </svg>
-  );
-}

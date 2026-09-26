@@ -15,11 +15,18 @@ function getTransporter(): Transporter {
   return transporter;
 }
 
+export interface EmailAttachment {
+  filename: string;
+  content: Uint8Array;
+  contentType?: string;
+}
+
 export interface SendEmailParams {
   to: string;
   subject: string;
   html: string;
   text: string;
+  attachments?: EmailAttachment[];
 }
 
 /**
@@ -46,6 +53,9 @@ export async function sendEmail(params: SendEmailParams): Promise<{ delivered: b
           subject: params.subject,
           html: params.html,
           text: params.text,
+          ...(params.attachments?.length
+            ? { attachments: params.attachments.map((a) => ({ filename: a.filename, content: Buffer.from(a.content).toString("base64") })) }
+            : {}),
         }),
       });
 
@@ -72,6 +82,9 @@ export async function sendEmail(params: SendEmailParams): Promise<{ delivered: b
       subject: params.subject,
       html: params.html,
       text: params.text,
+      ...(params.attachments?.length
+        ? { attachments: params.attachments.map((a) => ({ filename: a.filename, content: Buffer.from(a.content), contentType: a.contentType ?? "application/pdf" })) }
+        : {}),
     });
     console.log(`[email] SMTP sent email to ${params.to}`);
     return { delivered: true };

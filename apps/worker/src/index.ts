@@ -7,6 +7,8 @@ import { handleSendPasswordResetEmail } from "./jobs/send-password-reset-email.j
 import { handleSendPaymentConfirmationEmail } from "./jobs/send-payment-confirmation-email.js";
 import { handleSendTenantWelcomeEmail } from "./jobs/send-tenant-welcome-email.js";
 import { handleSendEmailOtp } from "./jobs/send-email-otp.js";
+import { handleSendInvoiceEmail, handleSendPendingInvoiceEmails } from "./jobs/invoice-email.js";
+import { handleSendCustomerMessage } from "./jobs/customer-message.js";
 import { handleApplyScheduledMaintenance } from "./jobs/apply-scheduled-maintenance.js";
 import { handleCleanupExpiredTokens } from "./jobs/cleanup-expired-tokens.js";
 import {
@@ -28,6 +30,17 @@ import {
   handleSendFinalDunningNotices,
 } from "./jobs/dunning.js";
 import { handleDeliverWebhook } from "./jobs/deliver-webhook.js";
+import { handlePushLargePayments } from "./jobs/push-large-payments.js";
+import { handleSuggestUpgrades } from "./jobs/suggest-upgrades.js";
+import { handleReferralRewards } from "./jobs/referral-rewards.js";
+import { handleResumePausedPlans } from "./jobs/resume-paused-plans.js";
+import { handleSweepAddOns } from "./jobs/addons.js";
+import { handleWinBackOffers } from "./jobs/win-back.js";
+import { handleSendCampaigns } from "./jobs/campaigns.js";
+import { handleRouterRollouts } from "./jobs/router-rollouts.js";
+import { handleRouterBackups } from "./jobs/router-backups.js";
+import { handleAutoRouterUpdates } from "./jobs/auto-router-updates.js";
+import { handleNetworkMaintenanceNotices } from "./jobs/network-maintenance-notices.js";
 import { handleRunTenantPayouts } from "./jobs/tenant-payouts.js";
 import { handleSendWhatsappOtp } from "./jobs/send-whatsapp-otp.js";
 import {
@@ -67,6 +80,12 @@ async function main() {
           return handleSendTenantWelcomeEmail(job.data);
         case JOB_NAMES.sendEmailOtp:
           return handleSendEmailOtp(job.data);
+        case JOB_NAMES.sendInvoiceEmail:
+          return handleSendInvoiceEmail(job.data);
+        case JOB_NAMES.sendCustomerMessage:
+          return handleSendCustomerMessage(job.data);
+        case JOB_NAMES.sendPendingInvoiceEmails:
+          return scheduled(job.name, job.data, handleSendPendingInvoiceEmails);
         default:
           throw new Error(`Unknown job in queue "${QUEUE_NAMES.email}": ${job.name}`);
       }
@@ -119,6 +138,18 @@ async function main() {
           return run(handleRunTenantPayouts);
         case JOB_NAMES.expireTrials:
           return run(handleExpireTrials);
+        case JOB_NAMES.suggestUpgrades:
+          return run(handleSuggestUpgrades);
+        case JOB_NAMES.referralRewards:
+          return run(handleReferralRewards);
+        case JOB_NAMES.resumePausedPlans:
+          return run(handleResumePausedPlans);
+        case JOB_NAMES.sweepAddOns:
+          return run(handleSweepAddOns);
+        case JOB_NAMES.winBackOffers:
+          return run(handleWinBackOffers);
+        case JOB_NAMES.sendCampaigns:
+          return run(handleSendCampaigns);
         default:
           throw new Error(`Unknown job in queue "${QUEUE_NAMES.billing}": ${job.name}`);
       }
@@ -134,6 +165,9 @@ async function main() {
     async (job) => {
       if (job.name === JOB_NAMES.pollPendingStkRequests) {
         return scheduled(job.name, job.data, handlePollPendingStkRequests);
+      }
+      if (job.name === JOB_NAMES.pushLargePayments) {
+        return scheduled(job.name, job.data, handlePushLargePayments);
       }
       throw new Error(`Unknown job in queue "${QUEUE_NAMES.mpesa}": ${job.name}`);
     },
@@ -153,6 +187,14 @@ async function main() {
           return run(handleExpireOverdueVouchers);
         case JOB_NAMES.pollRouterHealth:
           return run(handlePollRouterHealth);
+        case JOB_NAMES.networkMaintenanceNotices:
+          return run(handleNetworkMaintenanceNotices);
+        case JOB_NAMES.routerRollouts:
+          return run(handleRouterRollouts);
+        case JOB_NAMES.routerBackups:
+          return run(handleRouterBackups);
+        case JOB_NAMES.autoRouterUpdates:
+          return run(handleAutoRouterUpdates);
         default:
           throw new Error(`Unknown job in queue "${QUEUE_NAMES.network}": ${job.name}`);
       }

@@ -2,6 +2,7 @@
 
 import type { CSSProperties } from "react";
 import { appOnlyLabel, type CaptiveThemeProps, type HotspotPackage } from "./types";
+import { portalStrings, type PortalStrings } from "@/lib/portal-strings";
 
 /**
  * The default captive portal. Built for the conditions a captive portal actually loads in: a
@@ -28,8 +29,8 @@ function formatDuration(minutes: number): string {
   return plural(Number.isInteger(h) ? h : +h.toFixed(1), "hour");
 }
 
-function formatData(mb: number | null): string {
-  if (!mb) return "Unlimited data";
+function formatData(mb: number | null, unlimited: string): string {
+  if (!mb) return unlimited;
   return mb >= 1024 ? `${+(mb / 1024).toFixed(1)} GB` : `${mb} MB`;
 }
 
@@ -44,10 +45,10 @@ function accentStyle(brandColor?: string | null): CSSProperties {
   return { ["--portal-accent" as string]: ok ? brandColor!.trim() : "#1d4ed8" };
 }
 
-function PackageRow({ pkg, onSelect }: { pkg: HotspotPackage; onSelect: () => void }) {
+function PackageRow({ pkg, onSelect, t }: { pkg: HotspotPackage; onSelect: () => void; t: PortalStrings }) {
   const speed = formatSpeed(pkg.downloadKbps);
   const appOnly = appOnlyLabel(pkg.appPolicy);
-  const flag = pkg.badge || (pkg.isPopular ? "Popular" : null);
+  const flag = pkg.badge || (pkg.isPopular ? t.popular : null);
   return (
     <li>
       <button
@@ -66,12 +67,12 @@ function PackageRow({ pkg, onSelect }: { pkg: HotspotPackage; onSelect: () => vo
             )}
           </span>
           <span className="mt-0.5 block text-[13px] text-slate-500">
-            {[formatDuration(pkg.durationMinutes), formatData(pkg.dataCapMb), speed].filter(Boolean).join(" · ")}
+            {[formatDuration(pkg.durationMinutes), formatData(pkg.dataCapMb, t.unlimitedData), speed].filter(Boolean).join(" · ")}
           </span>
         </span>
         <span className="shrink-0 text-right">
           <span className="block text-base font-semibold tabular-nums text-slate-900">{formatKes(pkg.priceMinor)}</span>
-          <span className="mt-0.5 block text-xs font-medium text-[var(--portal-accent)]">Buy</span>
+          <span className="mt-0.5 block text-xs font-medium text-[var(--portal-accent)]">{t.buy}</span>
         </span>
       </button>
     </li>
@@ -100,6 +101,7 @@ export function MashupHostCleanTheme(props: CaptiveThemeProps) {
     accountResult,
     completingRouterLogin,
   } = props;
+  const t = props.t ?? portalStrings("en");
 
   const sorted = [...(packages ?? [])].sort((a, b) => a.priceMinor - b.priceMinor);
   const helpPhone = supportPhone || contactPhone;
@@ -120,13 +122,13 @@ export function MashupHostCleanTheme(props: CaptiveThemeProps) {
           )}
           <div className="min-w-0">
             <p className="truncate text-base font-semibold text-slate-900">{name}</p>
-            <p className="text-sm text-slate-500">Wi-Fi hotspot</p>
+            <p className="text-sm text-slate-500">{t.hotspot}</p>
           </div>
         </header>
 
         <div className="mt-6">
-          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{welcomeTitle || "Fast, reliable Wi-Fi"}</h1>
-          <p className="mt-1 text-[15px] text-slate-600">{bannerSubtitle || "Pay with M-Pesa and connect instantly"}</p>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{welcomeTitle || t.defaultTitle}</h1>
+          <p className="mt-1 text-[15px] text-slate-600">{bannerSubtitle || t.defaultSubtitle}</p>
         </div>
 
         {/* Connection status */}
@@ -135,18 +137,18 @@ export function MashupHostCleanTheme(props: CaptiveThemeProps) {
             {completingRouterLogin ? (
               <p className="flex items-center gap-2 text-[15px] font-medium text-emerald-900">
                 <span className="h-4 w-4 animate-spin rounded-full border-2 border-emerald-600 border-t-transparent" aria-hidden="true" />
-                Connecting you…
+                {t.connectingYou}
               </p>
             ) : (
               <>
-                <p className="text-[15px] font-semibold text-emerald-900">You&apos;re connected</p>
+                <p className="text-[15px] font-semibold text-emerald-900">{t.youAreConnected}</p>
                 {voucherResult?.expiresAt && (
                   <p className="mt-0.5 text-sm text-emerald-800">
-                    Access until{" "}
+                    {t.accessUntil}{" "}
                     {new Date(voucherResult.expiresAt).toLocaleString("en-KE", { weekday: "short", hour: "2-digit", minute: "2-digit" })}
                   </p>
                 )}
-                {accountResult && <p className="mt-0.5 text-sm text-emerald-800">Signed in as {accountResult.username}</p>}
+                {accountResult && <p className="mt-0.5 text-sm text-emerald-800">{t.signedInAs} {accountResult.username}</p>}
               </>
             )}
           </div>
@@ -155,7 +157,7 @@ export function MashupHostCleanTheme(props: CaptiveThemeProps) {
         {/* Packages */}
         <section className="mt-6" aria-labelledby="packages-heading">
           <h2 id="packages-heading" className="text-sm font-semibold text-slate-900">
-            Choose a package
+            {t.choosePackage}
           </h2>
           {loadingPackages ? (
             <ul className="mt-3 space-y-2.5" aria-hidden="true">
@@ -165,12 +167,12 @@ export function MashupHostCleanTheme(props: CaptiveThemeProps) {
             </ul>
           ) : sorted.length === 0 ? (
             <p className="mt-3 rounded-2xl border border-dashed border-slate-300 bg-white px-4 py-6 text-center text-sm text-slate-500">
-              No packages are on sale right now.{helpPhone ? ` Call ${helpPhone} for help.` : ""}
+              {t.noPackages}{helpPhone ? t.callForHelp(helpPhone) : ""}
             </p>
           ) : (
             <ul className="mt-3 space-y-2.5">
               {sorted.map((pkg) => (
-                <PackageRow key={pkg.id} pkg={pkg} onSelect={() => onSelectPackage(pkg)} />
+                <PackageRow key={pkg.id} pkg={pkg} onSelect={() => onSelectPackage(pkg)} t={t} />
               ))}
             </ul>
           )}
@@ -179,7 +181,7 @@ export function MashupHostCleanTheme(props: CaptiveThemeProps) {
         {/* Already have access */}
         <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-4" aria-labelledby="access-heading">
           <h2 id="access-heading" className="text-sm font-semibold text-slate-900">
-            Already have access?
+            {t.alreadyHaveAccess}
           </h2>
           <div className="mt-3 grid grid-cols-2 gap-2">
             <button
@@ -187,19 +189,19 @@ export function MashupHostCleanTheme(props: CaptiveThemeProps) {
               onClick={onOpenVoucherModal}
               className="rounded-xl bg-[var(--portal-accent)] px-3 py-2.5 text-sm font-semibold text-white hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--portal-accent)] focus-visible:ring-offset-2"
             >
-              Enter voucher
+              {t.enterVoucher}
             </button>
             <button
               type="button"
               onClick={onOpenAccountModal}
               className="rounded-xl border border-slate-300 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--portal-accent)]"
             >
-              Account login
+              {t.accountLogin}
             </button>
           </div>
           {onOpenRecover && (
             <button type="button" onClick={onOpenRecover} className="mt-3 w-full text-center text-sm font-medium text-[var(--portal-accent)] hover:underline">
-              Paid but not connected? Get connected
+              {t.paidNotConnected}
             </button>
           )}
         </section>
@@ -208,7 +210,7 @@ export function MashupHostCleanTheme(props: CaptiveThemeProps) {
         {fiberRates && fiberRates.length > 0 && (
           <section className="mt-6 rounded-2xl border border-slate-200 bg-white p-4" aria-labelledby="fibre-heading">
             <h2 id="fibre-heading" className="text-sm font-semibold text-slate-900">
-              Home internet
+              {t.homeInternet}
             </h2>
             <ul className="mt-2 divide-y divide-slate-100">
               {fiberRates.map((rate) => (
@@ -223,14 +225,14 @@ export function MashupHostCleanTheme(props: CaptiveThemeProps) {
             </ul>
             {(installationFee || contactPhone) && (
               <p className="mt-2 text-sm text-slate-500">
-                {installationFee ? `Installation ${installationFee}. ` : ""}
+                {installationFee ? t.installation(installationFee) : ""}
                 {contactPhone ? (
                   <>
                     Call{" "}
                     <a href={`tel:${contactPhone}`} className="font-medium text-[var(--portal-accent)]">
                       {contactPhone}
                     </a>{" "}
-                    to connect.
+                    {t.callToConnect}
                   </>
                 ) : null}
               </p>
@@ -241,7 +243,7 @@ export function MashupHostCleanTheme(props: CaptiveThemeProps) {
         {/* Help */}
         <footer className="mt-6 flex flex-wrap items-center justify-between gap-2 text-sm text-slate-500">
           <span>
-            Need help?{" "}
+            {t.needHelp}{" "}
             {helpPhone && (
               <a href={`tel:${helpPhone}`} className="font-medium text-slate-800">
                 {helpPhone}
@@ -250,7 +252,7 @@ export function MashupHostCleanTheme(props: CaptiveThemeProps) {
           </span>
           {onOpenSupport && (
             <button type="button" onClick={onOpenSupport} className="font-medium text-[var(--portal-accent)] hover:underline">
-              Send us a message
+              {t.sendMessage}
             </button>
           )}
         </footer>

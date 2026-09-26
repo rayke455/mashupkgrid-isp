@@ -171,6 +171,15 @@ input[type="range"] {
   --viz-series-2: #059669;
 }
 
+/* Dashboard light mode (see tailwind.config.ts): charts take the light tokens even though the
+   root keeps its `dark` class. Declared after the dark rule so it wins at equal specificity. */
+.theme-light .viz {
+  --viz-surface: #ffffff;
+  --viz-grid: #e2e8f0;
+  --viz-series-1: #0284c7;
+  --viz-series-2: #10b981;
+}
+
 /* ========================================================================= */
 /* ADMIN DASHBOARD MODERN MICRO-ANIMATIONS & GLASSMORPHIC STYLES            */
 /* ========================================================================= */
@@ -289,4 +298,20 @@ input[type="range"] {
    navy band on iOS overscroll and on any page shorter than the viewport. */
 body:has(.force-light) {
   background-color: #ffffff;
+}
+
+/* The self-install card prints on its own, without the dashboard around it. */
+@media print {
+  body:has(#install-card) * {
+    visibility: hidden;
+  }
+  #install-card,
+  #install-card * {
+    visibility: visible;
+  }
+  #install-card {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+  }
 }

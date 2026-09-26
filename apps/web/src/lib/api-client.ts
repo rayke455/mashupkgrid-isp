@@ -90,11 +90,21 @@ async function doFetch<T>(path: string, options: RequestInit & { skipAuth?: bool
   }
 
   const baseUrl = getApiBaseUrl();
-  const response = await fetch(`${baseUrl}${path}`, {
-    ...options,
-    headers,
-    credentials: "include",
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}${path}`, {
+      ...options,
+      headers,
+      credentials: "include",
+    });
+  } catch {
+    // The browser never reached the server: offline, DNS, a blocked origin. Say that plainly
+    // instead of leaking "Failed to fetch" into every form on the page.
+    throw new ApiRequestError(0, {
+      success: false,
+      error: { code: "NETWORK_ERROR", message: "Can't reach the server. Check your internet connection and try again.", requestId: "offline" },
+    });
+  }
 
   if (response.status === 204) {
     return {} as T;

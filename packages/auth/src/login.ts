@@ -33,6 +33,14 @@ export interface LoginResult extends IssuedTokens {
  * and returns the same generic UnauthorizedError so account existence is never leaked.
  */
 export async function attemptLogin(params: LoginParams): Promise<LoginResult> {
+  const user = await verifyLoginCredentials(params);
+  const issued = await createSession(user.id, user.tenantId, params.device);
+  return { ...issued, user };
+}
+
+/** Everything attemptLogin checks, without starting a session: for callers that need a second
+ *  step (two-step login) before one is issued. */
+export async function verifyLoginCredentials(params: LoginParams): Promise<User> {
   const { tenantId, email, password, device } = params;
   const normalizedEmail = email.trim().toLowerCase();
 
@@ -116,8 +124,7 @@ export async function attemptLogin(params: LoginParams): Promise<LoginResult> {
     recordAttempt(true),
   ]);
 
-  const issued = await createSession(user.id, user.tenantId, device);
-  return { ...issued, user };
+  return user;
 }
 
 /**

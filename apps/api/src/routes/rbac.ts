@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "@mashupkgrid/database";
 import { assertNoPrivilegeEscalation } from "@mashupkgrid/auth";
-import { successResponse, NotFoundError, ConflictError, type PermissionKey } from "@mashupkgrid/shared";
+import { successResponse, NotFoundError, ConflictError, ValidationError, hashPassword, type PermissionKey } from "@mashupkgrid/shared";
 import { authenticate } from "../plugins/authenticate.js";
 import { resolveTenant } from "../plugins/tenant.js";
 import { checkMaintenance } from "../plugins/maintenance.js";
@@ -24,6 +24,15 @@ const createRoleSchema = z.object({
 const attachPermissionsSchema = z.object({ permissionKeys: z.array(z.string()).min(1) });
 
 const assignRoleSchema = z.object({ userId: z.string().uuid(), roleId: z.string().uuid() });
+
+const createStaffSchema = z.object({
+  email: z.string().email().max(254).transform((v) => v.trim().toLowerCase()),
+  password: z.string().min(8).max(200),
+  phone: z.string().max(32).optional(),
+  roleId: z.string().uuid(),
+  branchId: z.string().uuid().nullable().optional(),
+});
+const staffStatusSchema = z.object({ status: z.enum(["ACTIVE", "SUSPENDED"]) });
 
 export async function rbacRoutes(app: FastifyInstance): Promise<void> {
   app.get(
@@ -140,6 +149,111 @@ export async function rbacRoutes(app: FastifyInstance): Promise<void> {
       });
 
       reply.send(successResponse({ attached: body.permissionKeys as PermissionKey[] }, request.id));
+    }
+  );
+
+  /** Everyone who can sign in to this ISP's dashboard, with their roles. Customers (CUSTOMER
+   *  role only) are not staff and are left out. */
+  app.get(
+    "/staff",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("staff.manage")] },
+    async (request, reply) => {
+      const tenantId = request.user!.tenantId;
+      if (tenantId === null) throw new ConflictError("Staff belong to an ISP account");
+      const users = await prisma.user.findMany({
+        where: { tenantId, deletedAt: null, userRoles: { some: { role: { name: { not: "CUSTOMER" } } } } },
+        include: { userRoles: { include: { role: { select: { id: true, name: true } } } }, branch: { select: { id: true, name: true } } },
+        orderBy: { createdAt: "asc" },
+      });
+      reply.send(
+        successResponse(
+          users.map((u) => ({
+            id: u.id,
+            email: u.email,
+            phone: u.phone,
+            status: u.status,
+            lastLoginAt: u.lastLoginAt,
+            branch: u.branch,
+            createdAt: u.createdAt,
+            roles: u.userRoles.map((ur) => ({ userRoleId: ur.id, id: ur.role.id, name: ur.role.name })),
+          })),
+          request.id
+        )
+      );
+    }
+  );
+
+  /** Adds a staff member with a role. The password is set by whoever adds them and should be
+   *  changed at first sign-in (Settings → Password). */
+  app.post(
+    "/staff",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("staff.manage")] },
+    async (request, reply) => {
+      const tenantId = request.user!.tenantId;
+      if (tenantId === null) throw new ConflictError("Staff belong to an ISP account");
+      const body = createStaffSchema.parse(request.body);
+
+      const role = await prisma.role.findUnique({ where: { id: body.roleId }, include: { rolePermissions: { include: { permission: true } } } });
+      if (!role || (role.tenantId !== null && role.tenantId !== tenantId)) throw new NotFoundError("Role");
+      if (role.name === "CUSTOMER" || role.name === "SUPER_ADMIN") throw new ValidationError("Choose a staff role");
+      const grantorPermissions = await getCachedPermissions(request.user!.id, tenantId);
+      assertNoPrivilegeEscalation(grantorPermissions, role.rolePermissions.map((rp) => rp.permission.key));
+
+      const existing = await prisma.user.findFirst({ where: { tenantId, email: body.email, deletedAt: null } });
+      if (existing) throw new ConflictError(`${body.email} already has a login on this account`);
+
+      const user = await prisma.user.create({
+        data: {
+          tenantId,
+          email: body.email,
+          phone: body.phone ?? null,
+          branchId: body.branchId ? (await prisma.branch.findFirst({ where: { id: body.branchId, tenantId } }))?.id ?? null : null,
+          passwordHash: await hashPassword(body.password),
+          status: "ACTIVE",
+          emailVerifiedAt: new Date(),
+          userRoles: { create: { roleId: role.id, tenantId } },
+        },
+      });
+      await writeAuditLog({
+        tenantId,
+        actorUserId: request.user!.id,
+        action: "staff.added",
+        resourceType: "User",
+        resourceId: user.id,
+        after: { email: user.email, role: role.name },
+        ipAddress: request.ip,
+        userAgent: request.headers["user-agent"] ?? null,
+      });
+      reply.status(201).send(successResponse({ id: user.id, email: user.email, role: role.name }, request.id));
+    }
+  );
+
+  app.patch(
+    "/staff/:userId",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("staff.manage")] },
+    async (request, reply) => {
+      const tenantId = request.user!.tenantId;
+      const { userId } = z.object({ userId: z.string().uuid() }).parse(request.params);
+      const body = staffStatusSchema.parse(request.body);
+      if (userId === request.user!.id) throw new ConflictError("You cannot change your own access");
+      const user = await prisma.user.findFirst({ where: { id: userId, tenantId: tenantId ?? undefined, deletedAt: null } });
+      if (!user || user.tenantId !== tenantId) throw new NotFoundError("User");
+      const updated = await prisma.user.update({ where: { id: userId }, data: { status: body.status } });
+      if (body.status === "SUSPENDED") {
+        await prisma.session.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: new Date() } });
+      }
+      await writeAuditLog({
+        tenantId,
+        actorUserId: request.user!.id,
+        action: body.status === "SUSPENDED" ? "staff.suspended" : "staff.reactivated",
+        resourceType: "User",
+        resourceId: userId,
+        before: { status: user.status },
+        after: { status: updated.status },
+        ipAddress: request.ip,
+        userAgent: request.headers["user-agent"] ?? null,
+      });
+      reply.send(successResponse({ id: updated.id, status: updated.status }, request.id));
     }
   );
 

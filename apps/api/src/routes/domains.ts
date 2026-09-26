@@ -219,6 +219,43 @@ export async function domainRoutes(app: FastifyInstance): Promise<void> {
   );
 
   /**
+   * Public — Caddy's on-demand TLS "ask" endpoint (infrastructure/caddy/Caddyfile). Caddy calls
+   * this before requesting a certificate for a hostname it has no site block for, and only
+   * issues one when it gets a 200. Answering 200 for anything but a verified custom domain (or a
+   * real tenant's platform subdomain) would let anyone point a name at this server and burn
+   * through the certificate authority's rate limits in this platform's name.
+   */
+  app.get(
+    "/tls-check",
+    { config: { audience: "system-critical" } },
+    async (request, reply) => {
+      const { domain: raw } = z.object({ domain: z.string().min(1).max(253) }).parse(request.query);
+      const hostname = normalizeHostname(raw.split(":")[0]!);
+
+      const suffix = `.${env.PLATFORM_BASE_DOMAIN.toLowerCase()}`;
+      if (hostname === env.PLATFORM_BASE_DOMAIN.toLowerCase() || (hostname.endsWith(suffix) && !hostname.slice(0, -suffix.length).includes("."))) {
+        reply.status(200).send({ ok: true });
+        return;
+      }
+
+      const domain = await prisma.domain.findFirst({
+        where: { hostname, status: { in: ["VERIFIED", "SSL_PENDING", "SSL_ACTIVE"] } },
+        include: { tenant: { select: { deletedAt: true, status: true } } },
+      });
+      if (!domain || domain.tenant.deletedAt || domain.tenant.status === "SUSPENDED") {
+        reply.status(404).send({ ok: false });
+        return;
+      }
+      // Caddy asking means it is about to issue (or has issued) the certificate: the domain is
+      // now live on HTTPS, which is what the dashboard shows the tenant.
+      if (domain.status !== "SSL_ACTIVE") {
+        await prisma.domain.update({ where: { id: domain.id }, data: { status: "SSL_ACTIVE", lastCheckedAt: new Date() } });
+      }
+      reply.status(200).send({ ok: true });
+    }
+  );
+
+  /**
    * Public — no auth, called by apps/web's middleware on every request to a login/register/root
    * page to figure out which tenant a hostname belongs to. Deliberately does not check tenant
    * status (suspended/trial-expired): this is a pre-fill convenience, not an authorization

@@ -11,6 +11,7 @@ import { VouchersTab } from "@/components/hotspot-admin/vouchers-tab";
 import { SalesTab } from "@/components/hotspot-admin/sales-tab";
 import { PortalTab } from "@/components/hotspot-admin/portal-tab";
 import { AdvancedTab } from "@/components/hotspot-admin/advanced-tab";
+import { tr } from "@/lib/tr";
 
 const TABS = [
   { id: "packages", label: "Packages" },
@@ -43,11 +44,11 @@ function HotspotSection() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Hotspot"
-        description="Packages customers buy with M-Pesa, cash vouchers, and the Wi-Fi sign-in page they see."
+        title={tr("Hotspot")}
+        description={tr("Packages customers buy with M-Pesa, cash vouchers, and the Wi-Fi sign-in page they see.")}
       />
 
-      <div role="tablist" aria-label="Hotspot sections" className="-mx-1 flex gap-1 overflow-x-auto border-b border-obsidian-800 px-1">
+      <div role="tablist" aria-label={tr("Hotspot sections")} className="-mx-1 flex gap-1 overflow-x-auto border-b border-obsidian-800 px-1">
         {TABS.map((t) => {
           const active = t.id === tab;
           return (
@@ -72,7 +73,7 @@ function HotspotSection() {
         {tab === "vouchers" && <VouchersTab brand={brand} />}
         {tab === "sales" && <SalesTab />}
         {tab === "portal" &&
-          (tenantSlug ? <PortalTab tenantSlug={tenantSlug} /> : <p className="text-sm text-slate-400">Sign in to an ISP account to edit its portal.</p>)}
+          (tenantSlug ? <PortalTab tenantSlug={tenantSlug} /> : <p className="text-sm text-slate-400">{tr("Sign in to an ISP account to edit its portal.")}</p>)}
         {tab === "advanced" && <AdvancedTab />}
       </div>
     </div>

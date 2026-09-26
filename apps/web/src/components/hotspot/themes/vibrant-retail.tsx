@@ -1,5 +1,7 @@
 "use client";
 
+import { portalStrings } from "@/lib/portal-strings";
+
 import { appOnlyLabel, type CaptiveThemeProps } from "./types";
 
 function formatDuration(minutes: number): string {
@@ -18,6 +20,7 @@ function formatPrice(priceMinor: number): string {
 }
 
 export function VibrantRetailTheme({
+  t = portalStrings("en"),
   tenantSlug,
   tenantName,
   contactPhone,
@@ -90,13 +93,13 @@ export function VibrantRetailTheme({
           /* Retail Packages Grid */
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-sm font-black uppercase tracking-wider text-slate-700">Select Internet Plan</h2>
+              <h2 className="text-sm font-black uppercase tracking-wider text-slate-700">{t.choosePackage}</h2>
               <button
                 type="button"
                 onClick={onOpenVoucherModal}
                 className="text-xs font-bold text-blue-600 hover:text-blue-800 underline"
               >
-                Redeem Voucher
+                {t.enterVoucher}
               </button>
             </div>
 
@@ -119,7 +122,7 @@ export function VibrantRetailTheme({
                     >
                       {isPop && (
                         <div className="absolute -top-2.5 right-2 rounded-full bg-gradient-to-r from-orange-500 to-amber-500 px-2 py-0.5 text-[8.5px] font-black uppercase text-white shadow-xs">
-                          {pkg.badge || "MOST POPULAR"}
+                          {pkg.badge || t.popular.toUpperCase()}
                         </div>
                       )}
                       <div>
@@ -159,7 +162,7 @@ export function VibrantRetailTheme({
             <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
             <circle cx="12" cy="7" r="4" />
           </svg>
-          Account Login
+          {t.accountLogin}
         </button>
 
         <button
@@ -171,7 +174,7 @@ export function VibrantRetailTheme({
             <rect x="2" y="7" width="20" height="15" rx="2" ry="2" />
             <polyline points="17 2 12 7 7 2" />
           </svg>
-          Connect TV
+          {t.connectTv}
         </button>
       </div>
     </div>

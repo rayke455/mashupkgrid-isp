@@ -1,5 +1,7 @@
 "use client";
 
+import { portalStrings } from "@/lib/portal-strings";
+
 import { appOnlyLabel, type CaptiveThemeProps } from "./types";
 
 function formatDuration(minutes: number): string {
@@ -18,6 +20,7 @@ function formatPrice(priceMinor: number): string {
 }
 
 export function HospitalityCleanTheme({
+  t = portalStrings("en"),
   tenantSlug,
   tenantName,
   contactPhone,
@@ -67,20 +70,20 @@ export function HospitalityCleanTheme({
                 <polyline points="20 6 9 17 4 12" />
               </svg>
             </div>
-            <h3 className="font-medium text-emerald-300 text-base">Connected to Guest Wi-Fi</h3>
+            <h3 className="font-medium text-emerald-300 text-base">{t.youAreConnected}</h3>
             <p className="text-xs text-slate-400 mt-1">Your session is now active.</p>
           </div>
         ) : (
           /* Clean Hospitality Packages List */
           <div className="space-y-3">
             <div className="flex items-center justify-between pb-1">
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Available Passes</span>
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">{t.choosePackage}</span>
               <button
                 type="button"
                 onClick={onOpenVoucherModal}
                 className="text-xs text-slate-300 hover:text-white underline"
               >
-                Enter Guest Code
+                {t.enterVoucher}
               </button>
             </div>
 
@@ -153,7 +156,7 @@ export function HospitalityCleanTheme({
           onClick={onOpenTvModal}
           className="text-xs text-slate-400 hover:text-white"
         >
-          In-Room TV Setup
+          {t.connectTv}
         </button>
       </div>
     </div>

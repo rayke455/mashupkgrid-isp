@@ -8,6 +8,7 @@ import {
   topUpWallet,
   refundPaymentWithDb,
   getStampedPaymentReceipt,
+  renderReceiptPdf,
 } from "@mashupkgrid/billing";
 import {
   listPurchaseAttempts,
@@ -19,9 +20,11 @@ import {
 import {
   successResponse,
   ConflictError,
+  NotFoundError,
   paginationQuerySchema,
   paginate,
   toSkipTake,
+  toCsv,
 } from "@mashupkgrid/shared";
 import { authenticate } from "../plugins/authenticate.js";
 import { resolveTenant } from "../plugins/tenant.js";
@@ -91,6 +94,134 @@ export async function paymentRoutes(app: FastifyInstance): Promise<void> {
         prisma.payment.count({ where }),
       ]);
       reply.send(successResponse(paginate(items, total, query), request.id));
+    }
+  );
+
+  app.get(
+    "/:paymentId/receipt.pdf",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("payments.read")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const { paymentId } = idParamsSchema.parse(request.params);
+      const pdf = await renderReceiptPdf(tenantId, paymentId);
+      reply
+        .header("content-type", "application/pdf")
+        .header("content-disposition", `attachment; filename="${pdf.filename}"`)
+        .send(Buffer.from(pdf.bytes));
+    }
+  );
+
+  /** Money that arrived without an invoice to land on: a gateway payment whose account number
+   *  matched nobody, or a top-up nobody assigned. The row an operator reconciles by hand. */
+  app.get(
+    "/unmatched",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("payments.read")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const items = await prisma.payment.findMany({
+        where: { tenantId, status: "COMPLETED", invoiceId: null, reversedAt: null, method: { not: "WALLET" } },
+        include: { customer: { select: { id: true, fullName: true, phone: true, customerNumber: true } } },
+        orderBy: { createdAt: "desc" },
+        take: 200,
+      });
+      const totalMinor = items.reduce((sum, p) => sum + p.amountMinor, 0);
+      reply.send(successResponse({ items, summary: { count: items.length, totalMinor } }, request.id));
+    }
+  );
+
+  /** Applies an unmatched payment to an invoice. The invoice's balance moves by the payment's
+   *  amount and service is restored if that clears it, exactly as if the money had matched. */
+  app.post(
+    "/:paymentId/match",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("payments.reconcile")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const { paymentId } = idParamsSchema.parse(request.params);
+      const { invoiceId } = z.object({ invoiceId: z.string().uuid() }).parse(request.body);
+
+      const result = await prisma.$transaction(async (tx) => {
+        const payment = await tx.payment.findFirst({ where: { id: paymentId, tenantId } });
+        if (!payment) throw new NotFoundError("Payment");
+        if (payment.invoiceId) throw new ConflictError("This payment is already applied to an invoice");
+        if (payment.status !== "COMPLETED" || payment.reversedAt) throw new ConflictError("Only a completed payment can be applied");
+        const invoice = await tx.invoice.findFirst({ where: { id: invoiceId, tenantId } });
+        if (!invoice) throw new NotFoundError("Invoice");
+        if (invoice.status === "PAID" || invoice.status === "CANCELLED") throw new ConflictError(`Invoice ${invoice.invoiceNumber} is ${invoice.status.toLowerCase()}`);
+        const paid = invoice.amountPaidMinor + payment.amountMinor;
+        const status = paid >= invoice.totalMinor ? "PAID" : "PARTIALLY_PAID";
+        const updatedInvoice = await tx.invoice.update({
+          where: { id: invoice.id },
+          data: { amountPaidMinor: paid, status, ...(status === "PAID" ? { paidAt: new Date() } : {}) },
+        });
+        const updatedPayment = await tx.payment.update({ where: { id: payment.id }, data: { invoiceId: invoice.id, customerId: invoice.customerId } });
+        return { payment: updatedPayment, invoice: updatedInvoice };
+      });
+
+      if (result.invoice.status === "PAID" && result.invoice.customerId) {
+        await restoreServiceAfterPayment(tenantId, result.invoice.customerId);
+      }
+      await writeAuditLog({
+        tenantId,
+        actorUserId: request.user!.id,
+        action: "payment.matched",
+        resourceType: "Payment",
+        resourceId: paymentId,
+        after: { invoiceId, invoiceNumber: result.invoice.invoiceNumber, amountMinor: result.payment.amountMinor },
+        ipAddress: request.ip,
+        userAgent: request.headers["user-agent"] ?? null,
+      });
+      reply.send(successResponse(result, request.id));
+    }
+  );
+
+  /** Every coin, as a spreadsheet: one row per payment with who paid, for what, how, and the
+   *  receipt reference. Optional ?from=&to= (ISO dates) to bound it. */
+  app.get(
+    "/export.csv",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("payments.read")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const { from, to } = z.object({ from: z.string().datetime().optional(), to: z.string().datetime().optional() }).parse(request.query);
+      const payments = await prisma.payment.findMany({
+        where: {
+          tenantId,
+          ...(from || to ? { createdAt: { ...(from ? { gte: new Date(from) } : {}), ...(to ? { lte: new Date(to) } : {}) } } : {}),
+        },
+        orderBy: { createdAt: "asc" },
+        include: {
+          customer: { select: { customerNumber: true, fullName: true, phone: true } },
+          invoice: { select: { invoiceNumber: true } },
+          receipt: { select: { receiptNumber: true } },
+        },
+      });
+      const csv = toCsv(payments, [
+        { header: "Date", value: (p) => p.createdAt },
+        { header: "Amount", value: (p) => (p.amountMinor / 100).toFixed(2) },
+        { header: "Currency", value: (p) => p.currency },
+        { header: "Status", value: (p) => p.status },
+        { header: "Method", value: (p) => p.method },
+        { header: "Reference", value: (p) => p.reference },
+        { header: "Receipt", value: (p) => p.receipt?.receiptNumber ?? "" },
+        { header: "Invoice", value: (p) => p.invoice?.invoiceNumber ?? "" },
+        { header: "Customer number", value: (p) => p.customer?.customerNumber ?? "" },
+        { header: "Customer", value: (p) => p.customer?.fullName ?? "Hotspot guest" },
+        { header: "Phone", value: (p) => p.customer?.phone ?? "" },
+        { header: "Reversed", value: (p) => p.reversedAt },
+        { header: "Reversal reason", value: (p) => p.reversalReason },
+      ]);
+      await writeAuditLog({
+        tenantId,
+        actorUserId: request.user!.id,
+        action: "payments.exported",
+        resourceType: "Payment",
+        after: { rows: payments.length, from: from ?? null, to: to ?? null },
+        ipAddress: request.ip,
+        userAgent: request.headers["user-agent"] ?? null,
+      });
+      reply
+        .header("content-type", "text/csv; charset=utf-8")
+        .header("content-disposition", `attachment; filename="payments-${new Date().toISOString().slice(0, 10)}.csv"`)
+        .send(csv);
     }
   );
 

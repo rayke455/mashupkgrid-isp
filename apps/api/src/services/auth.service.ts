@@ -1,6 +1,6 @@
 import { prisma, type User, type Tenant } from "@mashupkgrid/database";
 import {
-  attemptLogin,
+  verifyLoginCredentials,
   isSuspiciousLogin,
   registerUser,
   verifyEmailToken,
@@ -27,6 +27,7 @@ import {
 } from "@mashupkgrid/shared";
 import { env } from "@mashupkgrid/config";
 import { getPlatformGoogleAuthConfig } from "./google-auth-config.service.js";
+import { secondStepFor, type SecondStep } from "./mfa.service.js";
 import {
   enqueueSendVerificationEmail,
   enqueueSendPasswordResetEmail,
@@ -51,9 +52,25 @@ export async function resolveTenantBySlug(slug: string): Promise<Tenant> {
 
 /** Every new self-registered account starts as a tenant-scoped CUSTOMER — never anything with
  *  broader permissions, regardless of what the request claims. */
-async function assignDefaultCustomerRole(userId: string, tenantId: string): Promise<void> {
+export async function assignDefaultCustomerRole(userId: string, tenantId: string): Promise<void> {
   const role = await prisma.role.findFirst({ where: { tenantId: null, name: "CUSTOMER" } });
   if (!role) return;
+  await prisma.userRole.upsert({
+    where: { userId_roleId_tenantId: { userId, roleId: role.id, tenantId } },
+    update: {},
+    create: { userId, roleId: role.id, tenantId },
+  });
+}
+
+/** Gives a shop agent's login the AGENT role, creating the role first on a database seeded
+ *  before agents existed. */
+export async function assignAgentRole(userId: string, tenantId: string): Promise<void> {
+  let role = await prisma.role.findFirst({ where: { tenantId: null, name: "AGENT" } });
+  if (!role) {
+    role = await prisma.role.create({ data: { name: "AGENT", isSystem: true, tenantId: null } });
+    const perms = await prisma.permission.findMany({ where: { key: { in: ["sessions.manage_own"] } } });
+    await prisma.rolePermission.createMany({ data: perms.map((p) => ({ roleId: role!.id, permissionId: p.id })), skipDuplicates: true });
+  }
   await prisma.userRole.upsert({
     where: { userId_roleId_tenantId: { userId, roleId: role.id, tenantId } },
     update: {},
@@ -109,10 +126,11 @@ const NONEXISTENT_TENANT_ID = "00000000-0000-0000-0000-000000000000";
  * detail — the same "authenticated callers only" rule the resolveTenant plugin already applies
  * post-login.
  */
-export async function login(
-  body: LoginBody,
-  device: DeviceContext
-): Promise<IssuedTokens & { user: User; suspicious: boolean }> {
+export type LoginOutcome =
+  | (IssuedTokens & { user: User; suspicious: boolean; secondStep?: undefined })
+  | { user: User; suspicious: boolean; secondStep: SecondStep };
+
+export async function login(body: LoginBody, device: DeviceContext): Promise<LoginOutcome> {
   let tenant: Tenant | null = null;
   let tenantId: string | null = null;
   if (body.tenantSlug) {
@@ -136,14 +154,18 @@ export async function login(
     }
   }
 
-  const result = await attemptLogin({ tenantId, email: body.email, password: body.password, device });
+  const user = await verifyLoginCredentials({ tenantId, email: body.email, password: body.password, device });
 
   if (tenant?.status === "SUSPENDED") throw new TenantSuspendedError();
   if (tenant?.status === "CANCELLED") throw new UnauthorizedError("This tenant account has been cancelled");
   if (tenant?.status === "PENDING_APPROVAL") throw new TenantPendingApprovalError();
 
-  const suspicious = await isSuspiciousLogin(result.user.id, device);
-  return { ...result, suspicious };
+  const suspicious = await isSuspiciousLogin(user.id, device);
+  // Two-step login: a code comes before the session.
+  const secondStep = await secondStepFor(user, device);
+  if (secondStep) return { user, suspicious, secondStep };
+  const issued = await createSession(user.id, user.tenantId, device);
+  return { ...issued, user, suspicious };
 }
 
 export interface GoogleAuthBody {
@@ -336,7 +358,7 @@ export interface RegisterIspTenantBody {
   company: string;
   slug: string;
   email: string;
-  phone: string;
+  phone?: string;
   country?: string;
   timezone?: string;
   currency?: string;
@@ -414,7 +436,7 @@ export async function registerIspTenant(
     data: {
       tenantId: tenant.id,
       email: cleanEmail,
-      phone: body.phone.trim(),
+      phone: body.phone?.trim() || null,
       passwordHash,
       status: "ACTIVE",
       emailVerifiedAt: new Date(),
@@ -448,7 +470,7 @@ export async function registerIspTenant(
   // Welcome the new ISP owner on the WhatsApp number they just verified during registration.
   // Enqueued (not awaited inline) so a WhatsApp hiccup can never fail a registration whose
   // account, tenant, and session are already committed — the job retries on its own.
-  await enqueueSendWhatsappTenantWelcome({
+  if (body.phone) await enqueueSendWhatsappTenantWelcome({
     // Sent on the platform line: this ISP has not had the chance to link its own WhatsApp
     // account yet — the message it's about to receive is what tells them they can.
     tenantId: null,

@@ -162,7 +162,7 @@ export function StatusDot({
   return (
     <span className="relative flex h-2 w-2 shrink-0">
       {pulse && isGood && (
-        <span className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-75 ${color}`} />
+        <span className={`absolute inline-flex h-full w-full rounded-full opacity-75 ${color}`} />
       )}
       <span className={`relative inline-flex h-2 w-2 rounded-full ${color}`} />
     </span>

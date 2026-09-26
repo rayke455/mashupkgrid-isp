@@ -11,6 +11,7 @@ import { Logo } from "./brand";
 const NAV_LINKS = [
   { href: "/", label: "Home" },
   { href: "/#features", label: "Features" },
+  { href: "/#customers", label: "For customers" },
   { href: "/#pricing", label: "Pricing" },
   { href: "/#integrations", label: "Integrations" },
   { href: "/#support", label: "Support" },

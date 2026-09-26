@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api-client";
 import { Card } from "@/components/ui";
 import { IconCheck, IconChevronRight } from "@/components/icons";
+import { tr } from "@/lib/tr";
 
 interface OnboardingStep {
   key: string;
@@ -33,7 +34,7 @@ export function OnboardingChecklist() {
   return (
     <Card>
       <div className="mb-3 flex items-center justify-between">
-        <h2 className="text-[15px] font-semibold text-slate-900 dark:text-white">Set up your account</h2>
+        <h2 className="text-[15px] font-semibold text-slate-900 dark:text-white">{tr("Set up your account")}</h2>
         <span className="text-xs font-medium text-slate-400">
           {doneCount} of {steps.length} done · {steps.length - doneCount} steps left
         </span>
@@ -49,7 +50,7 @@ export function OnboardingChecklist() {
           className="group mb-3 flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 transition-colors hover:border-brand-500/60 dark:border-obsidian-700 dark:bg-obsidian-950 dark:text-white"
         >
           <div>
-            <p className="text-xs text-slate-500 dark:text-slate-400">Next step</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">{tr("Next step")}</p>
             <p className="text-sm font-semibold">{nextStep.label}</p>
           </div>
           <IconChevronRight size={18} className="shrink-0 transition-transform group-hover:translate-x-0.5" />
@@ -58,7 +59,7 @@ export function OnboardingChecklist() {
 
       {doneCount > 0 && (
         <div className="flex flex-wrap gap-1.5">
-          <span className="text-[11px] font-medium text-slate-400">Already done:</span>
+          <span className="text-[11px] font-medium text-slate-400">{tr("Already done:")}</span>
           {steps
             .filter((s) => s.done)
             .map((s) => (

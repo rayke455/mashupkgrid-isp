@@ -105,21 +105,22 @@ const envSchema = z.object({
    *  by an endpoint — a router only ever needs WIREGUARD_SERVER_PUBLIC_KEY. */
   WIREGUARD_SERVER_PRIVATE_KEY: z.string().optional().default(""),
   /** Host:port other peers (routers) dial to reach this server — must be a real, internet- or
-   *  LAN-reachable address once WireGuard is actually enabled. */
-  WIREGUARD_SERVER_ENDPOINT: z.string().optional().default("68.210.187.104:51820"),
+   *  LAN-reachable address once WireGuard is actually enabled. Empty means "this server's public
+   *  address" as the router routes work it out (see platformPublicAddress in @mashupkgrid/network). */
+  WIREGUARD_SERVER_ENDPOINT: z.string().optional().default(""),
   WIREGUARD_LISTEN_PORT: z.coerce.number().int().positive().default(51820),
   /** Pool routers' tunnel IPs are allocated from — .1 is reserved for the server itself. */
   WIREGUARD_SUBNET_CIDR: z.string().default("10.90.0.0/16"),
 
-  /** The fixed public IP/CIDR from which the platform manages RouterOS devices. Production
-   * provisioning refuses to generate an internet-open API rule when this is unset. */
+  /** The fixed public IP/CIDR from which the platform manages RouterOS devices. Empty means
+   *  this server's own public address (RADIUS_SERVER_HOST, else the API host resolved). */
   ROUTER_MANAGEMENT_SOURCE: z
     .union([
       z.literal(""),
       z.string().regex(/^\d{1,3}(?:\.\d{1,3}){3}(?:\/\d{1,2})?$/, "ROUTER_MANAGEMENT_SOURCE must be an IPv4 address or CIDR"),
     ])
     .optional()
-    .default("68.210.187.104"),
+    .default(""),
 
   /** Base URL routers use to reach this API (setup script, check-ins, hotspot login page).
    *  Defaults to APP_API_PUBLIC_URL. Set it when routers should use a different address from
@@ -155,6 +156,14 @@ const envSchema = z.object({
   /** Resend API integration for high-deliverability transactional email (resend.com) */
   RESEND_API_KEY: z.string().optional().default(""),
   RESEND_FROM: z.string().optional().default(""),
+
+  /** Web push (alerts to staff phones and computers). Generate a pair once with
+   *  `npx web-push generate-vapid-keys`; changing them later makes every device turn alerts on
+   *  again. Empty means push is off and the dashboard says so. */
+  VAPID_PUBLIC_KEY: z.string().optional().default(""),
+  VAPID_PRIVATE_KEY: z.string().optional().default(""),
+  /** Contact the push services can reach if the alerts misbehave: a mailto: or https: URL. */
+  VAPID_SUBJECT: z.string().optional().default("mailto:alerts@mashuphost.tech"),
 
   // M-Pesa credentials are configured per-tenant, encrypted, in the PaymentProviderConfig
   // table (docs/architecture/10-phase3-plan.md) — set via the admin UI/API, not here. These

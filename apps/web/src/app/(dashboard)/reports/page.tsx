@@ -1,11 +1,13 @@
 "use client";
 
+import { IconDownload, IconPrinter } from "@/components/icons";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api-client";
 import { Card, Input, Badge, Button } from "@/components/ui";
 import { StampedReceiptModal } from "@/components/reports/stamped-receipt-modal";
 import { downloadCsv, generateRevenueCsv, generateClientsCsv } from "@/lib/export-csv";
+import { tr } from "@/lib/tr";
 
 // ---------------------------------------------------------------------------------------------
 // Interfaces
@@ -267,13 +269,12 @@ export default function ReportsPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 print:hidden">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
-            Reports & Financial Center
+            {tr("Reports")}
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            Track client registrations, spending history, generated receipts, and export verified financial revenue.
+            {tr("Revenue, customer spending and bandwidth, with receipts and exports.")}
           </p>
         </div>
-
         {/* Tab Navigation */}
         <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-obsidian-900 p-1.5 rounded-xl border border-slate-200 dark:border-obsidian-800 text-xs font-semibold">
           <button
@@ -285,7 +286,7 @@ export default function ReportsPage() {
                 : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
             }`}
           >
-            <span>💰</span> Revenue & Financials
+            {tr("Revenue & Financials")}
           </button>
           <button
             type="button"
@@ -296,7 +297,7 @@ export default function ReportsPage() {
                 : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
             }`}
           >
-            <span>👥</span> Clients & Spends
+            {tr("Clients & Spends")}
           </button>
           <button
             type="button"
@@ -307,11 +308,10 @@ export default function ReportsPage() {
                 : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
             }`}
           >
-            <span>📶</span> Bandwidth Usage
+            {tr("Bandwidth Usage")}
           </button>
         </div>
       </div>
-
       {/* ========================================================================= */}
       {/* TAB 1: REVENUE & FINANCIALS */}
       {/* ========================================================================= */}
@@ -321,7 +321,7 @@ export default function ReportsPage() {
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-4 rounded-2xl bg-white dark:bg-obsidian-900 border border-slate-200 dark:border-obsidian-800 shadow-sm print:hidden">
             {/* Period Filters */}
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 mr-1">Period:</span>
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 mr-1">{tr("Period:")}</span>
               <button
                 type="button"
                 onClick={() => setRevenuePeriod("day")}
@@ -331,7 +331,7 @@ export default function ReportsPage() {
                     : "bg-slate-100 dark:bg-obsidian-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200"
                 }`}
               >
-                Today (Day)
+                {tr("Today (Day)")}
               </button>
               <button
                 type="button"
@@ -342,7 +342,7 @@ export default function ReportsPage() {
                     : "bg-slate-100 dark:bg-obsidian-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200"
                 }`}
               >
-                This Week
+                {tr("This Week")}
               </button>
               <button
                 type="button"
@@ -353,7 +353,7 @@ export default function ReportsPage() {
                     : "bg-slate-100 dark:bg-obsidian-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200"
                 }`}
               >
-                This Month
+                {tr("This Month")}
               </button>
               <button
                 type="button"
@@ -364,9 +364,8 @@ export default function ReportsPage() {
                     : "bg-slate-100 dark:bg-obsidian-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200"
                 }`}
               >
-                Custom Range
+                {tr("Custom Range")}
               </button>
-
               {revenuePeriod === "custom" && (
                 <div className="flex items-center gap-1.5 ml-2">
                   <input
@@ -375,7 +374,7 @@ export default function ReportsPage() {
                     onChange={(e) => setCustomStart(e.target.value)}
                     className="px-2.5 py-1 text-xs rounded-lg border border-slate-200 dark:border-obsidian-800 bg-white dark:bg-obsidian-950 text-slate-900 dark:text-white"
                   />
-                  <span className="text-slate-400 text-xs">to</span>
+                  <span className="text-slate-400 text-xs">{tr("to")}</span>
                   <input
                     type="date"
                     value={customEnd}
@@ -385,19 +384,16 @@ export default function ReportsPage() {
                 </div>
               )}
             </div>
-
             {/* Action Buttons: Export CSV & Print PDF */}
             <div className="flex items-center gap-2.5">
               <Button
                 size="sm"
                 onClick={handleExportRevenueCsv}
                 disabled={revLoading || !revData}
-                className="gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-sm shadow-emerald-600/20"
+                className="gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg"
               >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                </svg>
-                Export CSV
+                <IconDownload size={16} />
+                {tr("Export CSV")}
               </Button>
               <Button
                 size="sm"
@@ -405,14 +401,11 @@ export default function ReportsPage() {
                 disabled={revLoading || !revData}
                 className="gap-1.5 bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-sm shadow-brand-600/20"
               >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                </svg>
-                Print / PDF Report
+                <IconPrinter size={16} />
+                {tr("Print / PDF Report")}
               </Button>
             </div>
           </div>
-
           {/* Stamped Banner (Visible in UI & Printed PDF) */}
           {revData && (
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border border-brand-500/30 bg-brand-50/20 dark:bg-brand-950/20 text-xs">
@@ -423,7 +416,7 @@ export default function ReportsPage() {
                     {revData.tenant.name} — {revData.periodLabel}
                   </p>
                   <p className="text-slate-500 dark:text-slate-400">
-                    Official Revenue Report · Certified by {revData.certifiedBy}
+                    Revenue report · Prepared by {revData.certifiedBy}
                   </p>
                 </div>
               </div>
@@ -433,7 +426,7 @@ export default function ReportsPage() {
                     Stamped: {revData.stampedAt}
                   </p>
                   <p className="font-mono text-[10px] text-slate-400">
-                    Verification Seal: {revData.stampHash}
+                    Reference: {revData.stampHash}
                   </p>
                 </div>
               </div>
@@ -443,51 +436,47 @@ export default function ReportsPage() {
           {/* 4 Revenue Metric Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <Card className="p-5 space-y-1">
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Revenue</span>
-              <div className="text-2xl font-bold tabular-nums text-emerald-400 font-mono">
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">{tr("Total Revenue")}</span>
+              <div className="text-2xl font-semibold tabular-nums text-white">
                 {revLoading
                   ? "..."
                   : `KES ${(revData?.summary.totalRevenueMinor ?? 0 / 100).toLocaleString("en-KE", {
                       minimumFractionDigits: 2,
                     })}`}
               </div>
-              <span className="text-[11px] text-slate-400">Gross completed payments</span>
+              <span className="text-[11px] text-slate-400">{tr("Gross completed payments")}</span>
             </Card>
-
             <Card className="p-5 space-y-1">
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Transactions</span>
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">{tr("Transactions")}</span>
               <div className="text-2xl font-bold tabular-nums text-white">
                 {revLoading ? "..." : revData?.summary.paymentCount ?? 0}
               </div>
-              <span className="text-[11px] text-slate-400">Receipts generated</span>
+              <span className="text-[11px] text-slate-400">{tr("Receipts generated")}</span>
             </Card>
-
             <Card className="p-5 space-y-1">
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Paying Clients</span>
-              <div className="text-2xl font-bold tabular-nums text-cyan-400">
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">{tr("Paying Clients")}</span>
+              <div className="text-2xl font-semibold tabular-nums text-white">
                 {revLoading ? "..." : revData?.summary.uniqueClientsCount ?? 0}
               </div>
-              <span className="text-[11px] text-slate-400">Unique subscribers & guests</span>
+              <span className="text-[11px] text-slate-400">{tr("Unique subscribers & guests")}</span>
             </Card>
-
             <Card className="p-5 space-y-1">
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Avg Spend / Client</span>
-              <div className="text-2xl font-bold tabular-nums text-amber-400 font-mono">
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">{tr("Avg Spend / Client")}</span>
+              <div className="text-2xl font-semibold tabular-nums text-white">
                 {revLoading
                   ? "..."
                   : `KES ${(revData?.summary.averageSpendMinor ?? 0 / 100).toLocaleString("en-KE", {
                       minimumFractionDigits: 2,
                     })}`}
               </div>
-              <span className="text-[11px] text-slate-400">Average spend in period</span>
+              <span className="text-[11px] text-slate-400">{tr("Average spend in period")}</span>
             </Card>
           </div>
-
           {/* Payment Methods Breakdown */}
           {revData && Object.keys(revData.summary.byMethod).length > 0 && (
             <Card className="p-5 border-slate-200 dark:border-obsidian-800 space-y-3">
               <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                Revenue Breakdown by Payment Channel
+                {tr("Revenue Breakdown by Payment Channel")}
               </h3>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {Object.entries(revData.summary.byMethod).map(([method, info]) => (
@@ -513,37 +502,35 @@ export default function ReportsPage() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-obsidian-800">
               <div>
                 <h2 className="text-base font-semibold text-slate-900 dark:text-white">
-                  Transactions & Stamped Receipts
+                  {tr("Transactions & Stamped Receipts")}
                 </h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Detailed payment records with receipt numbers, client details, and M-Pesa references.
+                  {tr("Detailed payment records with receipt numbers, client details, and M-Pesa references.")}
                 </p>
               </div>
-
               <div className="w-full sm:w-72 print:hidden">
                 <Input
-                  placeholder="Search receipt, client or M-Pesa ref..."
+                  placeholder={tr("Search receipt, client or M-Pesa ref...")}
                   value={searchTxn}
                   onChange={(e) => setSearchTxn(e.target.value)}
                   className="text-xs py-1.5"
                 />
               </div>
             </div>
-
-            {revLoading && <p className="text-xs text-slate-400 py-6 text-center">Loading transactions ledger...</p>}
+            {revLoading && <p className="text-xs text-slate-400 py-6 text-center">{tr("Loading transactions ledger...")}</p>}
 
             {filteredRecords.length > 0 && (
               <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-obsidian-800">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-50 dark:bg-obsidian-950/80 text-slate-500 dark:text-slate-400 uppercase text-[10px] tracking-wider font-semibold border-b border-slate-200 dark:border-obsidian-800">
                     <tr>
-                      <th className="px-4 py-3">Receipt #</th>
-                      <th className="px-4 py-3">Client</th>
-                      <th className="px-4 py-3">Date & Time</th>
-                      <th className="px-4 py-3">Service / Description</th>
-                      <th className="px-4 py-3">Method & Ref</th>
-                      <th className="px-4 py-3 text-right">Amount (KES)</th>
-                      <th className="px-4 py-3 text-center print:hidden">Action</th>
+                      <th className="px-4 py-3">{tr("Receipt #")}</th>
+                      <th className="px-4 py-3">{tr("Client")}</th>
+                      <th className="px-4 py-3">{tr("Date & Time")}</th>
+                      <th className="px-4 py-3">{tr("Service / Description")}</th>
+                      <th className="px-4 py-3">{tr("Method & Ref")}</th>
+                      <th className="px-4 py-3 text-right">{tr("Amount (KES)")}</th>
+                      <th className="px-4 py-3 text-center print:hidden">{tr("Action")}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-obsidian-800">
@@ -579,7 +566,7 @@ export default function ReportsPage() {
                             onClick={() => setSelectedPaymentId(r.id)}
                             className="text-[11px] py-1 px-2.5 rounded-lg border-slate-200 dark:border-obsidian-700 hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-brand-950/30"
                           >
-                            Receipt
+                            {tr("Receipt")}
                           </Button>
                         </td>
                       </tr>
@@ -591,7 +578,7 @@ export default function ReportsPage() {
 
             {filteredRecords.length === 0 && !revLoading && (
               <div className="py-12 text-center text-xs text-slate-500">
-                No revenue records found for this period or search criteria.
+                {tr("No revenue records found for this period or search criteria.")}
               </div>
             )}
           </Card>
@@ -607,7 +594,7 @@ export default function ReportsPage() {
           <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 p-4 rounded-2xl bg-white dark:bg-obsidian-900 border border-slate-200 dark:border-obsidian-800 shadow-sm print:hidden">
             {/* Joined Filter */}
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 mr-1">Joined:</span>
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400 mr-1">{tr("Joined:")}</span>
               <button
                 type="button"
                 onClick={() => setJoinedPeriod("all")}
@@ -617,7 +604,7 @@ export default function ReportsPage() {
                     : "bg-slate-100 dark:bg-obsidian-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200"
                 }`}
               >
-                All Time
+                {tr("All Time")}
               </button>
               <button
                 type="button"
@@ -628,7 +615,7 @@ export default function ReportsPage() {
                     : "bg-slate-100 dark:bg-obsidian-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200"
                 }`}
               >
-                Joined Today
+                {tr("Joined Today")}
               </button>
               <button
                 type="button"
@@ -639,7 +626,7 @@ export default function ReportsPage() {
                     : "bg-slate-100 dark:bg-obsidian-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200"
                 }`}
               >
-                Joined This Week
+                {tr("Joined This Week")}
               </button>
               <button
                 type="button"
@@ -650,22 +637,19 @@ export default function ReportsPage() {
                     : "bg-slate-100 dark:bg-obsidian-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200"
                 }`}
               >
-                Joined This Month
+                {tr("Joined This Month")}
               </button>
             </div>
-
             {/* Actions: Export Clients CSV */}
             <div className="flex items-center gap-2.5">
               <Button
                 size="sm"
                 onClick={handleExportClientsCsv}
                 disabled={clientsLoading || !clientsData}
-                className="gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-sm shadow-emerald-600/20"
+                className="gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg"
               >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                </svg>
-                Export Clients CSV
+                <IconDownload size={16} />
+                {tr("Export Clients CSV")}
               </Button>
               <Button
                 size="sm"
@@ -673,93 +657,84 @@ export default function ReportsPage() {
                 disabled={clientsLoading || !clientsData}
                 className="gap-1.5 bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-sm shadow-brand-600/20"
               >
-                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                </svg>
-                Print / Save PDF
+                <IconPrinter size={16} />
+                {tr("Print / Save PDF")}
               </Button>
             </div>
           </div>
-
           {/* 4 Clients KPI Summary Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <Card className="p-5 space-y-1">
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Clients</span>
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">{tr("Total Clients")}</span>
               <div className="text-2xl font-bold tabular-nums text-white">
                 {clientsLoading ? "..." : clientsData?.summary.totalClients ?? 0}
               </div>
-              <span className="text-[11px] text-slate-400">Subscribers in view</span>
+              <span className="text-[11px] text-slate-400">{tr("Subscribers in view")}</span>
             </Card>
-
             <Card className="p-5 space-y-1">
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Active Subscribers</span>
-              <div className="text-2xl font-bold tabular-nums text-emerald-400">
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">{tr("Active Subscribers")}</span>
+              <div className="text-2xl font-semibold tabular-nums text-white">
                 {clientsLoading ? "..." : clientsData?.summary.activeClients ?? 0}
               </div>
-              <span className="text-[11px] text-slate-400">Active internet access</span>
+              <span className="text-[11px] text-slate-400">{tr("Active internet access")}</span>
             </Card>
-
             <Card className="p-5 space-y-1">
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Client Spend</span>
-              <div className="text-2xl font-bold tabular-nums text-emerald-400 font-mono">
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">{tr("Total Client Spend")}</span>
+              <div className="text-2xl font-semibold tabular-nums text-white">
                 {clientsLoading
                   ? "..."
                   : `KES ${(clientsData?.summary.totalSpendAllClientsMinor ?? 0 / 100).toLocaleString("en-KE", {
                       minimumFractionDigits: 2,
                     })}`}
               </div>
-              <span className="text-[11px] text-slate-400">Cumulative customer LTV</span>
+              <span className="text-[11px] text-slate-400">{tr("Cumulative customer LTV")}</span>
             </Card>
-
             <Card className="p-5 space-y-1">
-              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Average Spend / User</span>
-              <div className="text-2xl font-bold tabular-nums text-amber-400 font-mono">
+              <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">{tr("Average Spend / User")}</span>
+              <div className="text-2xl font-semibold tabular-nums text-white">
                 {clientsLoading
                   ? "..."
                   : `KES ${(clientsData?.summary.averageSpendPerClientMinor ?? 0 / 100).toLocaleString("en-KE", {
                       minimumFractionDigits: 2,
                     })}`}
               </div>
-              <span className="text-[11px] text-slate-400">Average lifetime spend</span>
+              <span className="text-[11px] text-slate-400">{tr("Average lifetime spend")}</span>
             </Card>
           </div>
-
           {/* Clients List & Spends Table */}
           <Card className="p-6 border-slate-200 dark:border-obsidian-800 space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-obsidian-800">
               <div>
                 <h2 className="text-base font-semibold text-slate-900 dark:text-white">
-                  Client Directory & Spend History
+                  {tr("Client Directory & Spend History")}
                 </h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Track when subscribers joined, their lifetime spending, and view receipts.
+                  {tr("Track when subscribers joined, their lifetime spending, and view receipts.")}
                 </p>
               </div>
-
               <div className="w-full sm:w-72 print:hidden">
                 <Input
-                  placeholder="Search client name, phone or #..."
+                  placeholder={tr("Search client name, phone or #...")}
                   value={searchClient}
                   onChange={(e) => setSearchClient(e.target.value)}
                   className="text-xs py-1.5"
                 />
               </div>
             </div>
-
-            {clientsLoading && <p className="text-xs text-slate-400 py-6 text-center">Loading client tracker...</p>}
+            {clientsLoading && <p className="text-xs text-slate-400 py-6 text-center">{tr("Loading client tracker...")}</p>}
 
             {clientsData && clientsData.clients.length > 0 && (
               <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-obsidian-800">
                 <table className="w-full text-left text-xs">
                   <thead className="bg-slate-50 dark:bg-obsidian-950/80 text-slate-500 dark:text-slate-400 uppercase text-[10px] tracking-wider font-semibold border-b border-slate-200 dark:border-obsidian-800">
                     <tr>
-                      <th className="px-4 py-3">Client Name</th>
-                      <th className="px-4 py-3">Joined When</th>
-                      <th className="px-4 py-3">Active Services</th>
-                      <th className="px-4 py-3 text-right">Total Spends (KES)</th>
-                      <th className="px-4 py-3 text-center">Payments</th>
-                      <th className="px-4 py-3">Latest Receipt</th>
-                      <th className="px-4 py-3 text-center print:hidden">Action</th>
+                      <th className="px-4 py-3">{tr("Client Name")}</th>
+                      <th className="px-4 py-3">{tr("Joined When")}</th>
+                      <th className="px-4 py-3">{tr("Active Services")}</th>
+                      <th className="px-4 py-3 text-right">{tr("Total Spends (KES)")}</th>
+                      <th className="px-4 py-3 text-center">{tr("Payments")}</th>
+                      <th className="px-4 py-3">{tr("Latest Receipt")}</th>
+                      <th className="px-4 py-3 text-center print:hidden">{tr("Action")}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-obsidian-800">
@@ -789,7 +764,7 @@ export default function ReportsPage() {
                         <td className="px-4 py-3 text-slate-600 dark:text-slate-400 max-w-xs truncate">
                           {c.activePackages}
                         </td>
-                        <td className="px-4 py-3 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                        <td className="px-4 py-3 text-right font-semibold text-slate-900 dark:text-white">
                           KES {(c.totalSpendMinor / 100).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
                         </td>
                         <td className="px-4 py-3 text-center font-mono text-slate-600 dark:text-slate-300">
@@ -801,7 +776,7 @@ export default function ReportsPage() {
                               {c.latestReceiptNumber}
                             </span>
                           ) : (
-                            <span className="text-slate-400 italic">None yet</span>
+                            <span className="text-slate-400 italic">{tr("None yet")}</span>
                           )}
                         </td>
                         <td className="px-4 py-3 text-center print:hidden">
@@ -812,7 +787,7 @@ export default function ReportsPage() {
                               onClick={() => setSelectedPaymentId(c.latestPaymentId)}
                               className="text-[11px] py-1 px-2.5 rounded-lg border-slate-200 dark:border-obsidian-700 hover:bg-brand-50 hover:text-brand-600 dark:hover:bg-brand-950/30"
                             >
-                              Receipt
+                              {tr("Receipt")}
                             </Button>
                           ) : (
                             <span className="text-slate-400 text-[11px]">—</span>
@@ -827,7 +802,7 @@ export default function ReportsPage() {
 
             {clientsData && clientsData.clients.length === 0 && !clientsLoading && (
               <div className="py-12 text-center text-xs text-slate-500">
-                No clients found matching the selected timeframe or search criteria.
+                {tr("No clients found matching the selected timeframe or search criteria.")}
               </div>
             )}
           </Card>
@@ -842,8 +817,8 @@ export default function ReportsPage() {
           {/* Header Controls */}
           <div className="flex items-center justify-between gap-4 p-4 rounded-2xl bg-white dark:bg-obsidian-900 border border-slate-200 dark:border-obsidian-800 shadow-sm print:hidden">
             <div>
-              <h2 className="text-sm font-semibold text-slate-900 dark:text-white">RADIUS Data Accounting</h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Bandwidth telemetry recorded across your routers.</p>
+              <h2 className="text-sm font-semibold text-slate-900 dark:text-white">{tr("RADIUS Data Accounting")}</h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">{tr("Bandwidth telemetry recorded across your routers.")}</p>
             </div>
             <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-obsidian-800 p-1 rounded-xl text-xs font-medium">
               <button
@@ -853,7 +828,7 @@ export default function ReportsPage() {
                   bandwidthDays === 7 ? "bg-brand-600 text-white shadow-sm" : "text-slate-500 hover:text-white"
                 }`}
               >
-                Last 7 Days
+                {tr("Last 7 Days")}
               </button>
               <button
                 type="button"
@@ -862,7 +837,7 @@ export default function ReportsPage() {
                   bandwidthDays === 14 ? "bg-brand-600 text-white shadow-sm" : "text-slate-500 hover:text-white"
                 }`}
               >
-                Last 14 Days
+                {tr("Last 14 Days")}
               </button>
               <button
                 type="button"
@@ -871,55 +846,49 @@ export default function ReportsPage() {
                   bandwidthDays === 30 ? "bg-brand-600 text-white shadow-sm" : "text-slate-500 hover:text-white"
                 }`}
               >
-                Last 30 Days
+                {tr("Last 30 Days")}
               </button>
             </div>
           </div>
-
           {/* 4 KPI SUMMARY CARDS */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
             <Card className="p-4 space-y-1 bg-slate-900/60 border-slate-800">
-              <span className="block text-sm text-slate-400">Total data</span>
+              <span className="block text-sm text-slate-400">{tr("Total data")}</span>
               <div className="text-xl font-semibold tabular-nums text-white sm:text-2xl">{formatBytes(totalBytes)}</div>
-              <span className="text-xs text-slate-500">Download and upload</span>
+              <span className="text-xs text-slate-500">{tr("Download and upload")}</span>
             </Card>
-
             <Card className="p-4 space-y-1 bg-slate-900/60 border-slate-800">
-              <span className="block text-sm text-slate-400">Downloaded</span>
+              <span className="block text-sm text-slate-400">{tr("Downloaded")}</span>
               <div className="text-xl font-semibold tabular-nums text-white sm:text-2xl">{formatBytes(totalDownload)}</div>
               <span className="text-xs text-slate-500">
                 {totalBytes > 0 ? `${Math.round((totalDownload / totalBytes) * 100)}% of total` : "0%"}
               </span>
             </Card>
-
             <Card className="p-4 space-y-1 bg-slate-900/60 border-slate-800">
-              <span className="block text-sm text-slate-400">Uploaded</span>
+              <span className="block text-sm text-slate-400">{tr("Uploaded")}</span>
               <div className="text-xl font-semibold tabular-nums text-white sm:text-2xl">{formatBytes(totalUpload)}</div>
               <span className="text-xs text-slate-500">
                 {totalBytes > 0 ? `${Math.round((totalUpload / totalBytes) * 100)}% of total` : "0%"}
               </span>
             </Card>
-
             <Card className="p-4 space-y-1 bg-slate-900/60 border-slate-800">
-              <span className="block text-sm text-slate-400">Sessions</span>
+              <span className="block text-sm text-slate-400">{tr("Sessions")}</span>
               <div className="text-xl font-semibold tabular-nums text-white sm:text-2xl">{totalSessions.toLocaleString()}</div>
-              <span className="text-xs text-slate-500">Recorded by RADIUS</span>
+              <span className="text-xs text-slate-500">{tr("Recorded by RADIUS")}</span>
             </Card>
           </div>
-
           {/* DAILY TRAFFIC HISTOGRAM */}
           <Card className="p-6 space-y-4 border-slate-800">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-800">
               <div>
-                <h2 className="text-[15px] font-semibold text-slate-900 dark:text-white">Data used per day</h2>
-                <p className="text-xs text-slate-400">Download and upload across all your routers.</p>
+                <h2 className="text-[15px] font-semibold text-slate-900 dark:text-white">{tr("Data used per day")}</h2>
+                <p className="text-xs text-slate-400">{tr("Download and upload across all your routers.")}</p>
               </div>
               <span className="text-xs text-slate-400">
                 Average: {formatBytes(totalBytes / (bwDays?.length || 1))} / day
               </span>
             </div>
-
-            {bwDaysLoading && <p className="text-xs text-slate-400 py-4">Loading daily telemetry...</p>}
+            {bwDaysLoading && <p className="text-xs text-slate-400 py-4">{tr("Loading daily telemetry...")}</p>}
 
             {bwDays && bwDays.length > 0 && (
               <div className="space-y-2.5 pt-2">
@@ -938,7 +907,7 @@ export default function ReportsPage() {
                           title={`Download: ${formatBytes(day.downloadBytes)}`}
                         />
                         <div
-                          className="h-full bg-cyan-400 opacity-90"
+                          className="h-full bg-brand-500"
                           style={{ width: `${widthPct * ((100 - dlPct) / 100)}%` }}
                           title={`Upload: ${formatBytes(day.uploadBytes)}`}
                         />
@@ -950,7 +919,6 @@ export default function ReportsPage() {
               </div>
             )}
           </Card>
-
           {/* TOP CONSUMERS TABLE */}
           <Card className="p-6 space-y-4 border-slate-800">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-800">
@@ -958,32 +926,30 @@ export default function ReportsPage() {
                 <h2 className="text-[15px] font-semibold text-slate-900 dark:text-white">
                   Top users (last {bandwidthDays} days)
                 </h2>
-                <p className="text-xs text-slate-400">Subscribers who used the most data, PPPoE and hotspot.</p>
+                <p className="text-xs text-slate-400">{tr("Subscribers who used the most data, PPPoE and hotspot.")}</p>
               </div>
-
               <div className="w-full sm:w-64">
                 <Input
-                  placeholder="Search subscriber username..."
+                  placeholder={tr("Search subscriber username...")}
                   value={searchSubscriber}
                   onChange={(e) => setSearchSubscriber(e.target.value)}
                   className="text-xs py-1.5"
                 />
               </div>
             </div>
-
-            {topLoading && <p className="text-xs text-slate-400 py-4">Querying top consumers...</p>}
+            {topLoading && <p className="text-xs text-slate-400 py-4">{tr("Querying top consumers...")}</p>}
 
             {filteredConsumers.length > 0 && (
               <div className="overflow-x-auto rounded-xl border border-slate-800">
                 <table className="w-full text-left text-sm">
                   <thead className="bg-slate-900/90 text-slate-400 uppercase text-[10px] tracking-wider">
                     <tr>
-                      <th className="px-4 py-3">Subscriber Username</th>
-                      <th className="px-4 py-3">Download (Rx)</th>
-                      <th className="px-4 py-3">Upload (Tx)</th>
-                      <th className="px-4 py-3">Total Data</th>
-                      <th className="px-4 py-3">Sessions</th>
-                      <th className="px-4 py-3">FUP Status</th>
+                      <th className="px-4 py-3">{tr("Subscriber Username")}</th>
+                      <th className="px-4 py-3">{tr("Download (Rx)")}</th>
+                      <th className="px-4 py-3">{tr("Upload (Tx)")}</th>
+                      <th className="px-4 py-3">{tr("Total Data")}</th>
+                      <th className="px-4 py-3">{tr("Sessions")}</th>
+                      <th className="px-4 py-3">{tr("FUP Status")}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800">
@@ -993,8 +959,8 @@ export default function ReportsPage() {
                           <span className="h-2 w-2 rounded-full bg-emerald-400" />
                           <span>{c.username}</span>
                         </td>
-                        <td className="px-4 py-3 text-emerald-400">{formatBytes(c.uploadBytes)}</td>
-                        <td className="px-4 py-3 text-cyan-400">{formatBytes(c.downloadBytes)}</td>
+                        <td className="px-4 py-3 text-slate-300">{formatBytes(c.uploadBytes)}</td>
+                        <td className="px-4 py-3 text-slate-300">{formatBytes(c.downloadBytes)}</td>
                         <td className="px-4 py-3 font-medium text-white">{formatBytes(c.totalBytes)}</td>
                         <td className="px-4 py-3 text-slate-400">{c.sessionCount}</td>
                         <td className="px-4 py-3">

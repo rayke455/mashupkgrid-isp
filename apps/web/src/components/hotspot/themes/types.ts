@@ -1,3 +1,4 @@
+import type { PortalStrings } from "@/lib/portal-strings";
 export interface HotspotPackage {
   id: string;
   name: string;
@@ -159,6 +160,8 @@ export interface CaptiveThemeProps {
   voucherResult: VoucherLoginResult | null;
   accountResult: AccountLoginResult | null;
   completingRouterLogin: boolean;
+  /** The customer's language (EN/SW switch). Absent means English. */
+  t?: PortalStrings;
 }
 
 export type ThemeId =
@@ -168,7 +171,16 @@ export type ThemeId =
   | "modern-glass"
   | "vibrant-retail"
   | "hospitality-clean"
-  | "cyberpunk-neon";
+  | "cyberpunk-neon"
+  // Palette themes (palette-theme.tsx): one layout, eight looks.
+  | "green-line"
+  | "sunset"
+  | "ocean"
+  | "midnight"
+  | "campus"
+  | "warm-sand"
+  | "royal"
+  | "brand-classic";
 
 export interface ThemeMeta {
   id: ThemeId;

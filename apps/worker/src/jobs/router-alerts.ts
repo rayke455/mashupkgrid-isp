@@ -1,5 +1,7 @@
 import { prisma } from "@mashupkgrid/database";
 import { sendTenantSms } from "@mashupkgrid/sms";
+import { pushToTenantStaff } from "@mashupkgrid/push";
+import { resolveTenantPreferences } from "@mashupkgrid/shared";
 import { sendEmail } from "../lib/email.js";
 
 /**
@@ -66,6 +68,18 @@ async function notify(tenantId: string, sms: string, subject: string, body: stri
   return reached;
 }
 
+/** Also alerts the phones and computers where staff who manage routers turned alerts on, unless
+ *  the ISP switched router alerts off. A push failure never stops the SMS and email. */
+async function pushRouterAlert(tenantId: string, title: string, body: string, tag: string): Promise<void> {
+  try {
+    const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { preferences: true } });
+    if (!resolveTenantPreferences(tenant?.preferences).alerts.routerDown) return;
+    await pushToTenantStaff(tenantId, "routers.manage", { title, body, url: "/routers", tag });
+  } catch (err) {
+    console.error(`[router-alerts] push for tenant ${tenantId} failed`, err);
+  }
+}
+
 function escapeHtml(s: string): string {
   return s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
 }
@@ -78,10 +92,12 @@ export async function notifyRouterWentDown(tenantId: string, routerName: string,
   const body =
     `Router "${routerName}" stopped responding${reason}. Customers connected through it cannot get online.\n\n` +
     `Check its power and internet connection. You'll get another message when it's back.`;
+  await pushRouterAlert(tenantId, `Router "${routerName}" is down`, `It stopped reporting${reason}. Customers on it cannot get online.`, `router-${routerName}`);
   return notify(tenantId, sms, `Router "${routerName}" is down`, body);
 }
 
 export async function notifyRouterRecovered(tenantId: string, routerName: string): Promise<number> {
   const sms = `OK: router "${routerName}" is back online.`;
+  await pushRouterAlert(tenantId, `Router "${routerName}" is back online`, "It is responding again.", `router-${routerName}`);
   return notify(tenantId, sms, `Router "${routerName}" is back online`, `Router "${routerName}" is responding again.`);
 }
