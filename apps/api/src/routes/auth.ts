@@ -1,4 +1,6 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { revokeSession } from "@mashupkgrid/auth";
+import { secondStepFor } from "../services/mfa.service.js";
 import { z } from "zod";
 import { prisma } from "@mashupkgrid/database";
 import { env, isProduction } from "@mashupkgrid/config";
@@ -112,6 +114,11 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
         { tenantSlug: body.tenantSlug ?? null, email: body.email, password: body.password },
         device
       );
+      // Two-step login: no session yet, just what the second step needs.
+      if (result.secondStep) {
+        reply.send(successResponse({ ...result.secondStep, suspiciousLogin: result.suspicious }, request.id));
+        return;
+      }
       setRefreshCookie(reply, result.refreshToken);
       reply.send(
         successResponse(
@@ -171,6 +178,14 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       const body = googleAuthSchema.parse(request.body);
       const device = deviceFromRequest(request);
       const { user, tokens } = await authService.loginOrRegisterWithGoogle(body, device);
+      // Google proves the password step only; two-step login still applies. The session Google
+      // sign-in just made is withdrawn until the code is given.
+      const secondStep = await secondStepFor(user, device);
+      if (secondStep) {
+        await revokeSession(tokens.session.id, "mfa_pending");
+        reply.send(successResponse(secondStep, request.id));
+        return;
+      }
       setRefreshCookie(reply, tokens.refreshToken);
       reply.send(
         successResponse(

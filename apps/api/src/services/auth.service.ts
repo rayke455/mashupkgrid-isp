@@ -1,6 +1,6 @@
 import { prisma, type User, type Tenant } from "@mashupkgrid/database";
 import {
-  attemptLogin,
+  verifyLoginCredentials,
   isSuspiciousLogin,
   registerUser,
   verifyEmailToken,
@@ -27,6 +27,7 @@ import {
 } from "@mashupkgrid/shared";
 import { env } from "@mashupkgrid/config";
 import { getPlatformGoogleAuthConfig } from "./google-auth-config.service.js";
+import { secondStepFor, type SecondStep } from "./mfa.service.js";
 import {
   enqueueSendVerificationEmail,
   enqueueSendPasswordResetEmail,
@@ -125,10 +126,11 @@ const NONEXISTENT_TENANT_ID = "00000000-0000-0000-0000-000000000000";
  * detail — the same "authenticated callers only" rule the resolveTenant plugin already applies
  * post-login.
  */
-export async function login(
-  body: LoginBody,
-  device: DeviceContext
-): Promise<IssuedTokens & { user: User; suspicious: boolean }> {
+export type LoginOutcome =
+  | (IssuedTokens & { user: User; suspicious: boolean; secondStep?: undefined })
+  | { user: User; suspicious: boolean; secondStep: SecondStep };
+
+export async function login(body: LoginBody, device: DeviceContext): Promise<LoginOutcome> {
   let tenant: Tenant | null = null;
   let tenantId: string | null = null;
   if (body.tenantSlug) {
@@ -152,14 +154,18 @@ export async function login(
     }
   }
 
-  const result = await attemptLogin({ tenantId, email: body.email, password: body.password, device });
+  const user = await verifyLoginCredentials({ tenantId, email: body.email, password: body.password, device });
 
   if (tenant?.status === "SUSPENDED") throw new TenantSuspendedError();
   if (tenant?.status === "CANCELLED") throw new UnauthorizedError("This tenant account has been cancelled");
   if (tenant?.status === "PENDING_APPROVAL") throw new TenantPendingApprovalError();
 
-  const suspicious = await isSuspiciousLogin(result.user.id, device);
-  return { ...result, suspicious };
+  const suspicious = await isSuspiciousLogin(user.id, device);
+  // Two-step login: a code comes before the session.
+  const secondStep = await secondStepFor(user, device);
+  if (secondStep) return { user, suspicious, secondStep };
+  const issued = await createSession(user.id, user.tenantId, device);
+  return { ...issued, user, suspicious };
 }
 
 export interface GoogleAuthBody {

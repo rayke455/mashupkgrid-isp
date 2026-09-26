@@ -160,11 +160,17 @@ model User {
   email               String
   phone               String?
   passwordHash        String
+  /// Two-step login: null when off. TOTP uses an authenticator app (secret in
+  /// totpSecretEncrypted); SMS sends a code to `phone`. totpEnabledAt is when it was turned on.
+  mfaMethod           MfaMethod?
+  /// SHA-256 hashes of the unused one-time recovery codes.
+  mfaRecoveryCodes    String[]   @default([])
   emailVerifiedAt     DateTime?
   status              UserStatus @default(PENDING_VERIFICATION)
   failedLoginCount    Int        @default(0)
   lockedUntil         DateTime?
   lastLoginAt         DateTime?
+  /// The authenticator secret, encrypted at rest. Set while setting up, before mfaMethod is.
   totpSecretEncrypted String?
   totpEnabledAt       DateTime?
   createdAt           DateTime   @default(now())
@@ -3205,4 +3211,9 @@ model Lead {
 
   @@index([tenantId, status, createdAt])
   @@map("leads")
+}
+
+enum MfaMethod {
+  TOTP
+  SMS
 }

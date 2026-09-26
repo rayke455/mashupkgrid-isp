@@ -19,11 +19,21 @@ export interface CurrentUser {
   permissions: string[];
 }
 
+/** What the password step returns when two-step login needs a code (or setting up) first. */
+export type SecondStep =
+  | { mfaRequired: true; challengeToken: string; method: "TOTP" | "SMS"; phoneHint: string | null }
+  | { mfaSetupRequired: true; setupToken: string; smsAvailable: boolean };
+
+type SignInResponse = { accessToken?: string } & Partial<{ mfaRequired: true; mfaSetupRequired: true }>;
+
 interface AuthState {
   user: CurrentUser | null;
   loading: boolean;
-  login: (params: { tenantSlug?: string; email: string; password: string }) => Promise<void>;
-  loginWithGoogle: (params: { tenantSlug: string; credential: string }) => Promise<void>;
+  /** Resolves to null when signed in, or to the second step two-step login asks for. */
+  login: (params: { tenantSlug?: string; email: string; password: string }) => Promise<SecondStep | null>;
+  loginWithGoogle: (params: { tenantSlug: string; credential: string }) => Promise<SecondStep | null>;
+  /** Finishes a sign-in once the second step hands back an access token. */
+  completeSignIn: (accessToken: string) => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<CurrentUser | null>;
 }
@@ -154,26 +164,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(
     async (params: { tenantSlug?: string; email: string; password: string }) => {
-      const result = await apiFetch<{ accessToken: string }>("/api/v1/auth/login", {
+      const result = await apiFetch<SignInResponse>("/api/v1/auth/login", {
         method: "POST",
         skipAuth: true,
         body: JSON.stringify(params),
       });
-      setAccessToken(result.accessToken);
+      if (result.mfaRequired || result.mfaSetupRequired) return result as unknown as SecondStep;
+      setAccessToken(result.accessToken!);
       await hydrateUser();
       markHadSession();
+      return null;
     },
     [hydrateUser]
   );
 
   const loginWithGoogle = useCallback(
     async (params: { tenantSlug: string; credential: string }) => {
-      const result = await apiFetch<{ accessToken: string }>("/api/v1/auth/google", {
+      const result = await apiFetch<SignInResponse>("/api/v1/auth/google", {
         method: "POST",
         skipAuth: true,
         body: JSON.stringify(params),
       });
-      setAccessToken(result.accessToken);
+      if (result.mfaRequired || result.mfaSetupRequired) return result as unknown as SecondStep;
+      setAccessToken(result.accessToken!);
+      await hydrateUser();
+      markHadSession();
+      return null;
+    },
+    [hydrateUser]
+  );
+
+  const completeSignIn = useCallback(
+    async (accessToken: string) => {
+      setAccessToken(accessToken);
       await hydrateUser();
       markHadSession();
     },
@@ -193,7 +216,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, loginWithGoogle, logout, refresh }}>
+    <AuthContext.Provider value={{ user, loading, login, loginWithGoogle, completeSignIn, logout, refresh }}>
       {children}
     </AuthContext.Provider>
   );

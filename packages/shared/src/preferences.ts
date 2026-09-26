@@ -89,6 +89,11 @@ export const tenantPreferencesSchema = z.object({
     /** How far from a router with a known location counts as covered. */
     radiusKm: z.number().min(0.1).max(50),
   }),
+  /** Sign-in rules for the ISP's staff. */
+  security: z.object({
+    /** Staff must use two-step login; those who haven't set it up do so at their next sign-in. */
+    requireStaffMfa: z.boolean(),
+  }),
   /** VAT details for the monthly tax report. */
   tax: z.object({
     vatRegistered: z.boolean(),
@@ -153,6 +158,7 @@ export const DEFAULT_TENANT_PREFERENCES: TenantPreferences = {
   pauses: { enabled: true, maxDaysPerYear: 30, minDays: 3 },
   winBack: { enabled: false, discountPercent: 20, validDays: 7, minDaysBetween: 60 },
   coverage: { enabled: true, radiusKm: 3 },
+  security: { requireStaffMfa: false },
 };
 
 /** Merges whatever is stored with the defaults, so a partial or old record never breaks a job. */
@@ -166,6 +172,7 @@ export function resolveTenantPreferences(stored: unknown): TenantPreferences {
   const tax = (raw.tax && typeof raw.tax === "object" ? raw.tax : {}) as Record<string, unknown>;
   const referrals = (raw.referrals && typeof raw.referrals === "object" ? raw.referrals : {}) as Record<string, unknown>;
   const upgrades = (raw.upgrades && typeof raw.upgrades === "object" ? raw.upgrades : {}) as Record<string, unknown>;
+  const security = (raw.security && typeof raw.security === "object" ? raw.security : {}) as Record<string, unknown>;
   const coverage = (raw.coverage && typeof raw.coverage === "object" ? raw.coverage : {}) as Record<string, unknown>;
   const winBack = (raw.winBack && typeof raw.winBack === "object" ? raw.winBack : {}) as Record<string, unknown>;
   const merged = {
@@ -185,6 +192,7 @@ export function resolveTenantPreferences(stored: unknown): TenantPreferences {
     pauses: { ...DEFAULT_TENANT_PREFERENCES.pauses, ...pauses },
     winBack: { ...DEFAULT_TENANT_PREFERENCES.winBack, ...winBack },
     coverage: { ...DEFAULT_TENANT_PREFERENCES.coverage, ...coverage },
+    security: { ...DEFAULT_TENANT_PREFERENCES.security, ...security },
   };
   const parsed = tenantPreferencesSchema.safeParse(merged);
   return parsed.success ? parsed.data : DEFAULT_TENANT_PREFERENCES;
