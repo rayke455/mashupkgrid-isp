@@ -72,6 +72,17 @@ export const tenantPreferencesSchema = z.object({
     /** Account credit for the referrer, and the fallback when they have no active plan to extend. */
     rewardCreditMinor: z.number().int().min(0).max(100_000_000),
   }),
+  /** "We miss you" offers texted to customers at risk of leaving. Off until the owner turns it on,
+   *  since every offer is an SMS. */
+  winBack: z.object({
+    enabled: z.boolean(),
+    /** Share of what they pay inside the window that comes back as account credit. */
+    discountPercent: z.number().int().min(1).max(100),
+    /** How long the offer lasts. */
+    validDays: z.number().int().min(1).max(30),
+    /** Never offer the same customer again sooner than this. */
+    minDaysBetween: z.number().int().min(7).max(365),
+  }),
   /** VAT details for the monthly tax report. */
   tax: z.object({
     vatRegistered: z.boolean(),
@@ -134,6 +145,7 @@ export const DEFAULT_TENANT_PREFERENCES: TenantPreferences = {
   tax: { vatRegistered: false, kraPin: "", vatRatePercent: 16 },
   autoUpdate: { enabled: false, dayOfMonth: 5, hour: 3, includeFirmware: true },
   pauses: { enabled: true, maxDaysPerYear: 30, minDays: 3 },
+  winBack: { enabled: false, discountPercent: 20, validDays: 7, minDaysBetween: 60 },
 };
 
 /** Merges whatever is stored with the defaults, so a partial or old record never breaks a job. */
@@ -147,6 +159,7 @@ export function resolveTenantPreferences(stored: unknown): TenantPreferences {
   const tax = (raw.tax && typeof raw.tax === "object" ? raw.tax : {}) as Record<string, unknown>;
   const referrals = (raw.referrals && typeof raw.referrals === "object" ? raw.referrals : {}) as Record<string, unknown>;
   const upgrades = (raw.upgrades && typeof raw.upgrades === "object" ? raw.upgrades : {}) as Record<string, unknown>;
+  const winBack = (raw.winBack && typeof raw.winBack === "object" ? raw.winBack : {}) as Record<string, unknown>;
   const merged = {
     reminders: {
       ...DEFAULT_TENANT_PREFERENCES.reminders,
@@ -162,6 +175,7 @@ export function resolveTenantPreferences(stored: unknown): TenantPreferences {
     tax: { ...DEFAULT_TENANT_PREFERENCES.tax, ...tax },
     autoUpdate: { ...DEFAULT_TENANT_PREFERENCES.autoUpdate, ...autoUpdate },
     pauses: { ...DEFAULT_TENANT_PREFERENCES.pauses, ...pauses },
+    winBack: { ...DEFAULT_TENANT_PREFERENCES.winBack, ...winBack },
   };
   const parsed = tenantPreferencesSchema.safeParse(merged);
   return parsed.success ? parsed.data : DEFAULT_TENANT_PREFERENCES;

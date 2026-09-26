@@ -138,6 +138,7 @@ model Tenant {
   customerMembers  CustomerMember[]
   addOns           AddOn[]
   addOnPurchases   AddOnPurchase[]
+  winBackOffers    WinBackOffer[]
 
   @@index([status])
   @@map("tenants")
@@ -487,6 +488,7 @@ model Customer {
   radiusUsers      RadiusUser[]
   provisioningJobs ProvisioningJob[]
   addOnPurchases   AddOnPurchase[]
+  winBackOffers    WinBackOffer[]
 
   @@unique([tenantId, customerNumber])
   @@unique([tenantId, referralCode])
@@ -2959,4 +2961,41 @@ model AddOnPurchase {
   @@index([customerServiceId, status])
   @@index([status, endsAt])
   @@map("addon_purchases")
+}
+
+enum WinBackStatus {
+  /// Sent; waiting to see whether the customer pays before it expires.
+  SENT
+  /// They paid in time and got the discount back as credit.
+  REDEEMED
+  EXPIRED
+  /// The SMS could not be sent.
+  FAILED
+}
+
+/// A "we miss you" offer texted to a customer at risk of leaving: pay within the window and get
+/// a share of that payment back as account credit. Kept so the ISP can see which offers worked.
+model WinBackOffer {
+  id              String        @id @default(uuid())
+  tenantId        String
+  tenant          Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customerId      String
+  customer        Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  reason          String
+  owedMinor       Int           @default(0)
+  discountPercent Int
+  status          WinBackStatus @default(SENT)
+  message         String
+  sentByUserId    String?
+  sentAt          DateTime      @default(now())
+  expiresAt       DateTime
+  redeemedAt      DateTime?
+  /// What they paid inside the window, and the credit it earned them.
+  paidMinor       Int?
+  creditMinor     Int?
+
+  @@index([tenantId, sentAt])
+  @@index([status, expiresAt])
+  @@index([customerId, sentAt])
+  @@map("win_back_offers")
 }

@@ -227,6 +227,7 @@ export const JOB_NAMES = {
   autoRouterUpdates: "auto-router-updates",
   resumePausedPlans: "resume-paused-plans",
   sweepAddOns: "sweep-addons",
+  winBackOffers: "win-back-offers",
   expireOverdueVouchers: "expire-overdue-vouchers",
   // Dunning — escalating payment reminders ahead of suspendOverdueCustomers, not just the
   // status flip itself.

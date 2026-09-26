@@ -234,6 +234,16 @@ export const AUTOMATION_JOBS: readonly AutomationJobDefinition[] = [
     tenantVisible: true,
   },
   {
+    name: JOB_NAMES.winBackOffers,
+    queue: QUEUE_NAMES.billing,
+    category: "billing",
+    label: "Win-back offers",
+    description: "Texts customers at risk of leaving an offer to come back, in the daytime, and credits the ones who pay in time.",
+    everyMs: 60 * MINUTE,
+    counters: { sent: "Offers sent", failed: "Could not send", redeemed: "Came back", expired: "Expired" },
+    tenantVisible: true,
+  },
+  {
     name: JOB_NAMES.referralRewards,
     queue: QUEUE_NAMES.billing,
     category: "billing",

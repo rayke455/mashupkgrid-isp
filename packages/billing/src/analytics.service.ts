@@ -89,7 +89,7 @@ export async function getRevenueAnalytics(tenantId: string, monthsBack = 6, bran
 
   const [active, suspended, last30] = await Promise.all([
     prisma.customerService.count({ where: { tenantId, status: "ACTIVE", ...(branchId ? { customer: { branchId } } : {}) } }),
-    prisma.customerService.count({ where: { tenantId, status: "SUSPENDED", ...(branchId ? { customer: { branchId } } : {}) } }),
+    prisma.customerService.count({ where: { tenantId, status: "SUSPENDED", pausedUntil: null, ...(branchId ? { customer: { branchId } } : {}) } }),
     prisma.payment.aggregate({
       where: { tenantId, status: "COMPLETED", reversedAt: null, createdAt: { gte: new Date(now.getTime() - 30 * DAY) }, ...(branchId ? { customer: { branchId } } : { customerId: { not: null } }) },
       _sum: { amountMinor: true },
@@ -125,7 +125,7 @@ export async function listCustomersAtRisk(tenantId: string, limit = 25, branchId
     { id: string; fullName: string; phone: string; suspended: boolean; overdueSince: Date | null; owed: bigint | null; lastPaid: Date | null }[]
   >(Prisma.sql`
     SELECT c.id, c."fullName", c.phone,
-           bool_or(cs.status = 'SUSPENDED') AS suspended,
+           bool_or(cs.status = 'SUSPENDED' AND cs."pausedUntil" IS NULL) AS suspended,
            MIN(i."dueDate") FILTER (WHERE i.status = 'OVERDUE') AS "overdueSince",
            SUM(i."totalMinor" - i."amountPaidMinor") FILTER (WHERE i.status IN ('OVERDUE', 'PENDING', 'PARTIALLY_PAID'))::bigint AS owed,
            (SELECT MAX(p."createdAt") FROM payments p WHERE p."customerId" = c.id AND p.status = 'COMPLETED') AS "lastPaid"
