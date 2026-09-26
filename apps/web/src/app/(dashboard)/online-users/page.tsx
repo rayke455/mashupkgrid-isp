@@ -62,6 +62,14 @@ function formatDuration(seconds: number): string {
   return `${Math.floor(hrs / 24)} d ${hrs % 24} h`;
 }
 
+function expiresIn(iso: string): string {
+  const mins = Math.round((new Date(iso).getTime() - Date.now()) / 60_000);
+  if (mins <= 0) return "expired";
+  if (mins < 60) return `${mins} min left`;
+  if (mins < 48 * 60) return `${Math.floor(mins / 60)} h ${mins % 60} min left`;
+  return `${Math.round(mins / 1440)} d left`;
+}
+
 const STATE: Record<TrackedSession["state"], { tone: "good" | "warn" | "neutral"; label: string }> = {
   ACTIVE: { tone: "good", label: "Online" },
   STALE: { tone: "warn", label: "No update" },
@@ -188,7 +196,7 @@ export default function OnlineUsersPage() {
                         <>
                           <span className="font-mono text-[13px] text-white">{s.voucher.code}</span>
                           <span className="block text-xs text-slate-500">
-                            Voucher{s.voucher.expiresAt ? ` · expires ${timeAgo(s.voucher.expiresAt).replace(" ago", "")}` : ""}
+                            Voucher{s.voucher.expiresAt ? ` · ${expiresIn(s.voucher.expiresAt)}` : ""}
                           </span>
                         </>
                       ) : (

@@ -491,9 +491,10 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
     company: z.string().min(2, "Enter your ISP / company name"),
     slug: z.string().min(3).max(30).regex(/^[a-z0-9-]+$/, "Slug must only contain lowercase letters, numbers, and dashes"),
     email: z.string().email("Enter a valid email address"),
-    phone: z.string().min(8, "Enter a valid WhatsApp phone number"),
+    // Optional: registration is verified by email; a phone is only for notifications later.
+    phone: z.string().trim().min(8, "Enter a valid phone number").optional(),
     phoneVerificationTicket: z.string().min(1, "Verify your verification code before continuing"),
-    verificationType: z.enum(["whatsapp", "email"]).optional().default("whatsapp"),
+    verificationType: z.enum(["whatsapp", "email"]).optional().default("email"),
     country: z.string().optional().default("KE"),
     timezone: z.string().optional().default("Africa/Nairobi"),
     currency: z.string().optional().default("KES"),
@@ -513,6 +514,7 @@ export async function authRoutes(app: FastifyInstance): Promise<void> {
       if (body.verificationType === "email") {
         await consumeEmailOtpTicket(body.email, WHATSAPP_OTP_PURPOSE, body.phoneVerificationTicket);
       } else {
+        if (!body.phone) throw new ValidationError("A phone number is required for WhatsApp verification");
         await consumeWhatsappOtpTicket(
           normalizePhoneForOtp(body.phone),
           WHATSAPP_OTP_PURPOSE,

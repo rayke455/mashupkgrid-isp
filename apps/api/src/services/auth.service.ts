@@ -336,7 +336,7 @@ export interface RegisterIspTenantBody {
   company: string;
   slug: string;
   email: string;
-  phone: string;
+  phone?: string;
   country?: string;
   timezone?: string;
   currency?: string;
@@ -414,7 +414,7 @@ export async function registerIspTenant(
     data: {
       tenantId: tenant.id,
       email: cleanEmail,
-      phone: body.phone.trim(),
+      phone: body.phone?.trim() || null,
       passwordHash,
       status: "ACTIVE",
       emailVerifiedAt: new Date(),
@@ -448,7 +448,7 @@ export async function registerIspTenant(
   // Welcome the new ISP owner on the WhatsApp number they just verified during registration.
   // Enqueued (not awaited inline) so a WhatsApp hiccup can never fail a registration whose
   // account, tenant, and session are already committed — the job retries on its own.
-  await enqueueSendWhatsappTenantWelcome({
+  if (body.phone) await enqueueSendWhatsappTenantWelcome({
     // Sent on the platform line: this ISP has not had the chance to link its own WhatsApp
     // account yet — the message it's about to receive is what tells them they can.
     tenantId: null,

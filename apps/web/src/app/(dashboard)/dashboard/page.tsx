@@ -98,7 +98,7 @@ interface PaginatedTenants {
 }
 
 interface MaintenanceStatus {
-  active: boolean;
+  enabled: boolean;
   message?: string | null;
 }
 
@@ -205,7 +205,9 @@ export default function DashboardHomePage() {
 
   const { data: platformMaintenance } = useQuery({
     queryKey: ["platform-maintenance"],
-    queryFn: () => apiFetch<MaintenanceStatus>("/api/v1/maintenance", { skipAuth: true }),
+    // The public status endpoint; the old "/api/v1/maintenance" path never existed, so this tile
+    // showed "—" forever.
+    queryFn: () => apiFetch<MaintenanceStatus>("/api/v1/platform/maintenance/status", { skipAuth: true }),
     enabled: isPlatform,
   });
 
@@ -382,9 +384,9 @@ export default function DashboardHomePage() {
             />
             <Metric
               label="Platform status"
-              value={platformMaintenance ? (platformMaintenance.active ? "Maintenance" : "Normal") : "—"}
-              hint={platformMaintenance ? (platformMaintenance.active ? "Customers see the maintenance notice" : "No maintenance scheduled") : undefined}
-              tone={platformMaintenance?.active ? "warn" : undefined}
+              value={platformMaintenance ? (platformMaintenance.enabled ? "Maintenance" : "Normal") : "—"}
+              hint={platformMaintenance ? (platformMaintenance.enabled ? "Customers see the maintenance notice" : "No maintenance scheduled") : undefined}
+              tone={platformMaintenance?.enabled ? "warn" : undefined}
               href="/maintenance"
             />
             <Metric
