@@ -26,7 +26,7 @@ import {
 const REFRESH_COOKIE = "refresh_token";
 const REFRESH_COOKIE_PATH = "/api/v1/auth/refresh";
 
-function setRefreshCookie(reply: FastifyReply, token: string): void {
+export function setRefreshCookie(reply: FastifyReply, token: string): void {
   reply.setCookie(REFRESH_COOKIE, token, {
     httpOnly: true,
     secure: isProduction,

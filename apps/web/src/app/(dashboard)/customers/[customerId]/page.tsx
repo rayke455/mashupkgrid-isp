@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useParams } from "next/navigation";
+import { tr } from "@/lib/tr";
 import { ReferralCard } from "@/components/referral-card";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -254,6 +255,11 @@ export default function CustomerDetailPage() {
           <Link href={`/customers/${customer.id}/statement`}>
             <Button variant="secondary" className="px-3 py-1.5 text-xs">
               Statement
+            </Button>
+          </Link>
+          <Link href={`/customers/${customer.id}/install-card`}>
+            <Button variant="secondary" className="px-3 py-1.5 text-xs">
+              {tr("Install card")}
             </Button>
           </Link>
           {customer.userId ? (

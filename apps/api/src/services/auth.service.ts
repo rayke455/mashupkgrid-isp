@@ -51,7 +51,7 @@ export async function resolveTenantBySlug(slug: string): Promise<Tenant> {
 
 /** Every new self-registered account starts as a tenant-scoped CUSTOMER — never anything with
  *  broader permissions, regardless of what the request claims. */
-async function assignDefaultCustomerRole(userId: string, tenantId: string): Promise<void> {
+export async function assignDefaultCustomerRole(userId: string, tenantId: string): Promise<void> {
   const role = await prisma.role.findFirst({ where: { tenantId: null, name: "CUSTOMER" } });
   if (!role) return;
   await prisma.userRole.upsert({

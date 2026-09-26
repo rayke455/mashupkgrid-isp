@@ -299,3 +299,19 @@ input[type="range"] {
 body:has(.force-light) {
   background-color: #ffffff;
 }
+
+/* The self-install card prints on its own, without the dashboard around it. */
+@media print {
+  body:has(#install-card) * {
+    visibility: hidden;
+  }
+  #install-card,
+  #install-card * {
+    visibility: visible;
+  }
+  #install-card {
+    position: absolute;
+    inset: 0 auto auto 0;
+    width: 100%;
+  }
+}

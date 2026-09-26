@@ -51,6 +51,7 @@ import { jobRoutes } from "./routes/jobs.js";
 import { routerUpdateRoutes } from "./routes/router-updates.js";
 import { routerBackupRoutes } from "./routes/router-backups.js";
 import { routerHealthRoutes } from "./routes/router-health.js";
+import { activationRoutes } from "./routes/activation.js";
 import { planRoutes } from "./routes/plans.js";
 import { tenantBillingRoutes } from "./routes/tenant-billing.js";
 import { landingContentRoutes } from "./routes/landing-content.js";
@@ -144,6 +145,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(routerUpdateRoutes, { prefix: "/api/v1/router-updates" });
   await app.register(routerBackupRoutes, { prefix: "/api/v1/router-backups" });
   await app.register(routerHealthRoutes, { prefix: "/api/v1/router-health" });
+  await app.register(activationRoutes, { prefix: "/api/v1" });
   await app.register(planRoutes, { prefix: "/api/v1/platform/plans" });
   await app.register(tenantBillingRoutes, { prefix: "/api/v1/billing" });
   await app.register(landingContentRoutes, { prefix: "/api/v1/landing-content" });

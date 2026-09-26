@@ -427,6 +427,11 @@ enum CustomerStatus {
 
 model Customer {
   id                    String              @id @default(uuid())
+  /// Secret on the printed install card: scanning its QR lets the customer set up their own
+  /// app login and see how to connect their router. Expires; replaced when a new card is printed.
+  installCode           String?             @unique
+  installCodeExpiresAt  DateTime?
+  installActivatedAt    DateTime?
   jobCards              JobCard[]
   /// Short code this customer shares with neighbours; created the first time it is shown.
   referralCode          String?
