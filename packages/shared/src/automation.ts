@@ -174,6 +174,16 @@ export const AUTOMATION_JOBS: readonly AutomationJobDefinition[] = [
     tenantVisible: true,
   },
   {
+    name: JOB_NAMES.networkMaintenanceNotices,
+    queue: QUEUE_NAMES.network,
+    category: "network",
+    label: "Maintenance notices",
+    description: "Texts customers on the affected routers before planned network work starts, and again when it is over.",
+    everyMs: 5 * MINUTE,
+    counters: { checked: "Windows checked", notices: "Notices sent", texted: "Customers texted", failed: "Texts not delivered" },
+    tenantVisible: true,
+  },
+  {
     name: JOB_NAMES.suggestUpgrades,
     queue: QUEUE_NAMES.billing,
     category: "billing",

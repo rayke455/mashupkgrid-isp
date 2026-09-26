@@ -32,6 +32,7 @@ import {
 import { handleDeliverWebhook } from "./jobs/deliver-webhook.js";
 import { handlePushLargePayments } from "./jobs/push-large-payments.js";
 import { handleSuggestUpgrades } from "./jobs/suggest-upgrades.js";
+import { handleNetworkMaintenanceNotices } from "./jobs/network-maintenance-notices.js";
 import { handleRunTenantPayouts } from "./jobs/tenant-payouts.js";
 import { handleSendWhatsappOtp } from "./jobs/send-whatsapp-otp.js";
 import {
@@ -168,6 +169,8 @@ async function main() {
           return run(handleExpireOverdueVouchers);
         case JOB_NAMES.pollRouterHealth:
           return run(handlePollRouterHealth);
+        case JOB_NAMES.networkMaintenanceNotices:
+          return run(handleNetworkMaintenanceNotices);
         default:
           throw new Error(`Unknown job in queue "${QUEUE_NAMES.network}": ${job.name}`);
       }

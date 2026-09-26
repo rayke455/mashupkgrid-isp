@@ -28,6 +28,7 @@ enum UserStatus {
 
 model Tenant {
   id                     String                  @id @default(uuid())
+  networkMaintenance     NetworkMaintenance[]
   upgradeSuggestions     UpgradeSuggestion[]
   name                   String
   slug                   String                  @unique
@@ -2566,4 +2567,44 @@ model UpgradeSuggestion {
   @@index([tenantId, status])
   @@index([customerServiceId, createdAt])
   @@map("upgrade_suggestions")
+}
+
+enum MaintenanceScope {
+  ALL
+  ROUTERS
+  BRANCH
+}
+
+enum NetworkMaintenanceStatus {
+  SCHEDULED
+  CANCELLED
+}
+
+/// Planned work on the ISP's own network (not the platform's maintenance mode): customers on the
+/// affected routers or branch are texted before it starts and again when it is over.
+model NetworkMaintenance {
+  id                String                   @id @default(uuid())
+  tenantId          String
+  tenant            Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  title             String
+  /// Optional extra line added to the customer SMS.
+  message           String?
+  startsAt          DateTime
+  endsAt            DateTime
+  scope             MaintenanceScope         @default(ALL)
+  routerIds         String[]                 @default([])
+  branchId          String?
+  notifyHoursBefore Int                      @default(24)
+  status            NetworkMaintenanceStatus @default(SCHEDULED)
+  beforeSentAt      DateTime?
+  afterSentAt       DateTime?
+  /// Customers texted by the last notice that went out.
+  recipientCount    Int                      @default(0)
+  createdByUserId   String?
+  createdAt         DateTime                 @default(now())
+  updatedAt         DateTime                 @updatedAt
+
+  @@index([tenantId, startsAt])
+  @@index([status, startsAt])
+  @@map("network_maintenance")
 }
