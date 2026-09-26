@@ -174,6 +174,16 @@ export const AUTOMATION_JOBS: readonly AutomationJobDefinition[] = [
     tenantVisible: true,
   },
   {
+    name: JOB_NAMES.routerRollouts,
+    queue: QUEUE_NAMES.network,
+    category: "network",
+    label: "Router updates",
+    description: "Applies over-the-air updates, features and scripts from the Router updates page, one router at a time.",
+    everyMs: 30 * 1000,
+    counters: { rollouts: "Rollouts running", updated: "Routers updated", failed: "Routers failed", interrupted: "Interrupted" },
+    tenantVisible: true,
+  },
+  {
     name: JOB_NAMES.networkMaintenanceNotices,
     queue: QUEUE_NAMES.network,
     category: "network",

@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { IconCloudDownload } from "@/components/icons";
+import { tr } from "@/lib/tr";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
 import { useBranches } from "@/lib/use-branches";
@@ -309,9 +311,14 @@ export default function RoutersPage() {
         title={t.title}
         description={t.description}
         actions={
-          <Link href="/routers/new" className={darkButton("primary")}>
-            {t.linkRouter}
-          </Link>
+          <div className="flex flex-wrap gap-2">
+            <Link href="/routers/updates" className={darkButton("secondary")}>
+              <IconCloudDownload size={16} /> {tr("Router updates")}
+            </Link>
+            <Link href="/routers/new" className={darkButton("primary")}>
+              {t.linkRouter}
+            </Link>
+          </div>
         }
       />
 

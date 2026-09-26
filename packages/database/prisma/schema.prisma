@@ -28,6 +28,7 @@ enum UserStatus {
 
 model Tenant {
   id                     String                  @id @default(uuid())
+  routerRollouts         RouterRollout[]
   jobCards               JobCard[]
   referralRewards        ReferralReward[]
   networkMaintenance     NetworkMaintenance[]
@@ -1913,44 +1914,50 @@ enum RouterStatus {
 /// Router credentials are AES-256-GCM encrypted at rest — decrypted only in-process by
 /// apps/api / apps/worker, never sent to apps/web (docs/architecture/06).
 model Router {
-  id                   String       @id @default(uuid())
+  id                   String                @id @default(uuid())
+  /// Last seen by the Router updates page: RouterOS version, board model and bootloader firmware.
+  routerOsVersion      String?
+  boardName            String?
+  firmwareVersion      String?
+  versionCheckedAt     DateTime?
+  rolloutTargets       RouterRolloutTarget[]
   tenantId             String
-  tenant               Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant               Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   name                 String
-  vendor               RouterVendor @default(MIKROTIK)
+  vendor               RouterVendor          @default(MIKROTIK)
   /// Where the router physically is: a site or branch name and, when known, coordinates for the
   /// network map. All optional; nothing else depends on them.
   siteName             String?
   branchId             String?
-  branch               Branch?      @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  branch               Branch?               @relation(fields: [branchId], references: [id], onDelete: SetNull)
   latitude             Float?
   longitude            Float?
   /// Null until the router either calls home (see provisionTokenHash) or an admin fills it in
   /// manually — a row can exist "pending" with generated credentials but no known address yet.
   host                 String?
-  apiPort              Int          @default(8728)
-  useTls               Boolean      @default(false)
+  apiPort              Int                   @default(8728)
+  useTls               Boolean               @default(false)
   usernameEncrypted    String
   passwordEncrypted    String
   /// Hash of the one-time token embedded in the paste-and-run provisioning script — the router
   /// itself presents this token when it calls back to /routers/provision/:token/callback, which
   /// is how `host` above gets populated without an admin ever typing an IP. Null for routers
   /// linked the old manual-entry way (host/credentials filled in directly).
-  provisionTokenHash   String?      @unique
+  provisionTokenHash   String?               @unique
   provisionedAt        DateTime?
   /// WireGuard remote access — lets the platform reach this router's API even when it has no
   /// public IP / is behind NAT (the common case for a real customer-premises router), instead
   /// of requiring `host` to already be directly reachable. Once set, `host` is updated to this
   /// tunnel IP so every existing host-based feature (test-connection, hotspot script, live
   /// sessions) keeps working unchanged — nothing else in the app needs to know VPN exists.
-  vpnRegisterTokenHash String?      @unique
+  vpnRegisterTokenHash String?               @unique
   vpnPublicKey         String?
   vpnIp                String?
   vpnConfiguredAt      DateTime?
   /// Public TCP port on the platform server that the WinBox relay forwards, over this router's
   /// WireGuard tunnel, to its WinBox service (8291). Assigned once the router has a vpnIp.
-  winboxRelayPort      Int?         @unique
-  status               RouterStatus @default(UNKNOWN)
+  winboxRelayPort      Int?                  @unique
+  status               RouterStatus          @default(UNKNOWN)
   /// PPPoE server settings, per router because they are a network-design choice that differs by
   /// site: which port or VLAN faces the subscribers, and what addresses they are handed. Left
   /// null on a hotspot-only router, in which case the provisioning script emits no PPPoE section
@@ -1964,10 +1971,10 @@ model Router {
   /// Drop traffic that arrived via a customer's own phone hotspot or travel router, so one
   /// voucher cannot serve a whole room. Off by default because the detection is TTL-based and
   /// therefore imperfect — see buildAntiTetheringSection for exactly who it can wrongly block.
-  blockTethering       Boolean      @default(false)
+  blockTethering       Boolean               @default(false)
   /// Physical ports / interfaces running the Hotspot captive portal (e.g. ["ether2", "ether3"]).
   /// If empty, defaults to standard LAN bridge ports (ether2, ether3, ether4, wlan1).
-  hotspotPorts         String[]     @default([])
+  hotspotPorts         String[]              @default([])
   /// Dedicated direct LAN / non-hotspot port (e.g. "ether4" or "ether5") with no captive portal.
   lanPort              String?
   lastSeenAt           DateTime?
@@ -1976,8 +1983,8 @@ model Router {
   memoryUsedBytes      BigInt?
   memoryTotalBytes     BigInt?
   uptimeSeconds        Int?
-  createdAt            DateTime     @default(now())
-  updatedAt            DateTime     @updatedAt
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
   deletedAt            DateTime?
 
   vlans            Vlan[]
@@ -2719,4 +2726,60 @@ model JobCardAttachment {
 
   @@index([jobCardId])
   @@map("job_card_attachments")
+}
+
+enum RouterRolloutStatus {
+  SCHEDULED
+  RUNNING
+  COMPLETED
+  CANCELLED
+}
+
+enum RouterRolloutTargetStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  SKIPPED
+}
+
+/// An over-the-air change pushed to a set of routers: a RouterOS upgrade, a feature, a reboot or
+/// a script. The worker applies it one router at a time and records each router's result. With
+/// canaryFirst, the first router is done alone and the rest only follow if it succeeded.
+model RouterRollout {
+  id              String                @id @default(uuid())
+  tenantId        String
+  tenant          Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  action          String
+  /// Action options, e.g. the script for "custom-script".
+  params          Json?
+  status          RouterRolloutStatus   @default(RUNNING)
+  canaryFirst     Boolean               @default(true)
+  scheduledFor    DateTime?
+  createdByUserId String?
+  createdAt       DateTime              @default(now())
+  startedAt       DateTime?
+  finishedAt      DateTime?
+  targets         RouterRolloutTarget[]
+
+  @@index([tenantId, createdAt])
+  @@index([status, scheduledFor])
+  @@map("router_rollouts")
+}
+
+model RouterRolloutTarget {
+  id         String                    @id @default(uuid())
+  rolloutId  String
+  rollout    RouterRollout             @relation(fields: [rolloutId], references: [id], onDelete: Cascade)
+  routerId   String?
+  router     Router?                   @relation(fields: [routerId], references: [id], onDelete: SetNull)
+  routerName String
+  position   Int
+  status     RouterRolloutTargetStatus @default(PENDING)
+  message    String?
+  startedAt  DateTime?
+  finishedAt DateTime?
+
+  @@index([rolloutId, position])
+  @@map("router_rollout_targets")
 }

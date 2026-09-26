@@ -1,6 +1,7 @@
 import { RouterOSClient, assertNoTrap } from "./routeros-client.js";
 import { ANTI_TUNNEL_RESULT_VAR, ANTI_TUNNEL_TAG, antiTunnelRules, buildAntiTunnelScript } from "../anti-tunnel.js";
 import type {
+  DeviceInfo,
   NetworkDeviceAdapter,
   NetworkUserSpec,
   DeviceHealth,
@@ -701,6 +702,47 @@ export class MikroTikAdapter implements NetworkDeviceAdapter {
       message: "RouterOS Firmware update initiated! The router will download the latest package and reboot automatically.",
     };
   }
+  // --- Over-the-air updates ------------------------------------------------------------------
+
+  async getDeviceInfo(): Promise<DeviceInfo> {
+    const client = this.requireClient();
+    const [resource] = await client.print(["/system/resource/print"]);
+    // x86/CHR builds have no RouterBOARD menu; that is not an error.
+    const [board] = await client.print(["/system/routerboard/print"]).catch(() => [] as Array<Record<string, string>>);
+    return {
+      routerOsVersion: resource?.["version"] ?? null,
+      boardName: resource?.["board-name"] ?? board?.["model"] ?? null,
+      firmwareCurrent: board?.["current-firmware"] ?? null,
+      firmwareAvailable: board?.["upgrade-firmware"] ?? null,
+    };
+  }
+
+  async upgradeRouterboardFirmware(): Promise<{ changed: boolean; from: string; to: string }> {
+    const client = this.requireClient();
+    const [board] = await client.print(["/system/routerboard/print"]);
+    if (!board) throw new Error("This device has no RouterBOARD firmware to upgrade");
+    const from = board["current-firmware"] ?? "unknown";
+    const to = board["upgrade-firmware"] ?? from;
+    if (from === to) return { changed: false, from, to };
+    assertNoTrap(await client.talk(["/system/routerboard/upgrade"]), "/system/routerboard/upgrade");
+    // The new firmware is only used after a reboot.
+    await this.reboot();
+    return { changed: true, from, to };
+  }
+
+  async reboot(): Promise<void> {
+    // The router drops the API connection as it goes down; that is the expected outcome.
+    await this.requireClient()
+      .talk(["/system/reboot"])
+      .catch(() => undefined);
+  }
+
+  async runScript(source: string): Promise<string> {
+    const replies = await this.requireClient().talk(["/execute", `=script=${source}`, "=as-string="]);
+    assertNoTrap(replies, "/execute");
+    return replies.map((r) => r.attributes["ret"]).find((v) => v !== undefined) ?? "";
+  }
+
   // --- VLAN and addressing (spec section 9) ---------------------------------------------------
   // Every method here reports what the DEVICE said. None of them assume a topology: the parent
   // interface a VLAN stacks on is always supplied by the caller, because it is the ISP's network

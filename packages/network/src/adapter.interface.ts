@@ -88,6 +88,14 @@ export interface DeviceProfile {
   rateLimit?: string;
 }
 
+export interface DeviceInfo {
+  routerOsVersion: string | null;
+  boardName: string | null;
+  /** Bootloader firmware in use, and the one bundled with the installed RouterOS. */
+  firmwareCurrent: string | null;
+  firmwareAvailable: string | null;
+}
+
 export interface NetworkDeviceAdapter {
   connect(): Promise<void>;
   disconnect(): Promise<void>;
@@ -141,6 +149,15 @@ export interface NetworkDeviceAdapter {
   enableSafeFamilyDns?(familyMode?: boolean): Promise<{ success: boolean; message: string; servers: string }>;
   checkFirmwareUpdate?(): Promise<{ currentVersion: string; latestVersion: string; status: string; upgradeAvailable: boolean }>;
   installFirmwareUpdate?(): Promise<{ success: boolean; message: string }>;
+  // --- Over-the-air updates (the Router updates page) ---------------------------------------
+  /** RouterOS version, board model and bootloader firmware, as the device reports them. */
+  getDeviceInfo?(): Promise<DeviceInfo>;
+  /** Upgrades the RouterBOARD bootloader to match RouterOS, then reboots. `changed: false` when
+   *  it was already current (nothing is rebooted then). */
+  upgradeRouterboardFirmware?(): Promise<{ changed: boolean; from: string; to: string }>;
+  reboot?(): Promise<void>;
+  /** Runs a RouterOS script and returns what it printed. */
+  runScript?(source: string): Promise<string>;
 }
 
 /** Thrown by every not-yet-implemented vendor adapter — never pretend an unsupported
