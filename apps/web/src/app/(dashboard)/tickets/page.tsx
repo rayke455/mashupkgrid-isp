@@ -20,6 +20,9 @@ interface TicketRow {
   customer: { id: string; fullName: string; phone: string } | null;
   assignedToUser: { id: string; email: string } | null;
   updatedAt: string;
+  responseDueAt?: string;
+  firstRepliedAt?: string | null;
+  responseOverdue?: boolean;
 }
 
 const STATUS_TABS: { value: TicketStatus | "ALL"; label: string }[] = [
@@ -99,6 +102,7 @@ export default function TicketsPage() {
                 <th className="px-4 py-2.5">Source</th>
                 <th className="px-4 py-2.5">Priority</th>
                 <th className="px-4 py-2.5">Status</th>
+                <th className="px-4 py-2.5">Response</th>
                 <th className="px-4 py-2.5">Assigned</th>
                 <th className="px-4 py-2.5">Updated</th>
               </tr>
@@ -120,6 +124,19 @@ export default function TicketsPage() {
                   </td>
                   <td className="px-4 py-2.5">
                     <Badge variant={statusVariant(ticket.status)}>{ticket.status.replace("_", " ")}</Badge>
+                  </td>
+                  <td className="px-4 py-2.5 text-xs">
+                    {ticket.firstRepliedAt ? (
+                      <span className="text-slate-500">Replied</span>
+                    ) : ticket.status === "OPEN" || ticket.status === "IN_PROGRESS" ? (
+                      ticket.responseOverdue ? (
+                        <Badge variant="danger">Overdue</Badge>
+                      ) : ticket.responseDueAt ? (
+                        <span className="text-slate-500">by {new Date(ticket.responseDueAt).toLocaleString([], { weekday: "short", hour: "2-digit", minute: "2-digit" })}</span>
+                      ) : null
+                    ) : (
+                      <span className="text-slate-500">—</span>
+                    )}
                   </td>
                   <td className="px-4 py-2.5 text-xs">{ticket.assignedToUser?.email ?? "Unassigned"}</td>
                   <td className="px-4 py-2.5 whitespace-nowrap text-xs text-slate-500">

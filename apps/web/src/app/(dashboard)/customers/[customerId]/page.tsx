@@ -228,6 +228,11 @@ export default function CustomerDetailPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <Link href={`/customers/${customer.id}/statement`}>
+            <Button variant="secondary" className="px-3 py-1.5 text-xs">
+              Statement
+            </Button>
+          </Link>
           {customer.userId ? (
             <Badge variant="success">
               <StatusDot status="ACTIVE" pulse={false} />

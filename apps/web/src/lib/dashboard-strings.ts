@@ -41,6 +41,9 @@ export interface DashboardStrings {
   failedToProvision: (n: number) => string;
   enabled: (n: number) => string;
   automation: string;
+  supportTickets: string;
+  ticketsOverdue: (n: number) => string;
+  ticketsOnTime: string;
   stopped: string;
   workerNotRunning: string;
   needsAttention: string;
@@ -114,6 +117,9 @@ const EN: DashboardStrings = {
   failedToProvision: (n) => `${n} failed to provision`,
   enabled: (n) => `${n} enabled`,
   automation: "Automation",
+  supportTickets: "Open tickets",
+  ticketsOverdue: (n) => `${n} waiting too long for a reply`,
+  ticketsOnTime: "All within response targets",
   stopped: "Stopped",
   workerNotRunning: "Worker is not running",
   needsAttention: "Needs attention",
@@ -187,6 +193,9 @@ const SW: DashboardStrings = {
   failedToProvision: (n) => `${n} zimeshindwa kusanidiwa`,
   enabled: (n) => `${n} zimewashwa`,
   automation: "Otomatiki",
+  supportTickets: "Tiketi zilizo wazi",
+  ticketsOverdue: (n) => `${n} zimesubiri jibu kwa muda mrefu`,
+  ticketsOnTime: "Zote ndani ya muda wa majibu",
   stopped: "Imesimama",
   workerNotRunning: "Mfanyakazi wa nyuma haufanyi kazi",
   needsAttention: "Inahitaji uangalizi",

@@ -62,6 +62,20 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
           show: has("settings.manage"),
         },
         {
+          href: "/settings/reminders",
+          label: t.reminders,
+          hint: t.remindersHint,
+          icon: <IconMessage size={16} />,
+          show: has("settings.manage"),
+        },
+        {
+          href: "/settings/staff",
+          label: t.staff,
+          hint: t.staffHint,
+          icon: <IconLock size={16} />,
+          show: has("staff.manage"),
+        },
+        {
           href: "/settings/billing",
           label: t.mySubscription,
           hint: t.mySubscriptionHint,

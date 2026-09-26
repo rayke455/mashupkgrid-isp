@@ -5,9 +5,10 @@ import {
   markDunningStage,
   type DunningCandidate,
 } from "@mashupkgrid/billing";
+import { prisma } from "@mashupkgrid/database";
 import { sendTenantSms } from "@mashupkgrid/sms";
 import { sendEmail } from "../lib/email.js";
-import type { AutomationSummary } from "@mashupkgrid/shared";
+import { renderReminderTemplate, resolveTenantPreferences, type AutomationSummary, type TenantPreferences } from "@mashupkgrid/shared";
 
 function formatMoney(minorUnits: number, currency: string): string {
   return `${currency} ${(minorUnits / 100).toFixed(2)}`;
@@ -17,66 +18,105 @@ function balanceDue(invoice: DunningCandidate): number {
   return invoice.totalMinor - invoice.amountPaidMinor;
 }
 
-interface DunningMessages {
-  email: { subject: string; text: string; html: string };
-  sms: string;
+type Stage = "dueSoon" | "overdue" | "final";
+
+interface TenantContext {
+  name: string;
+  prefs: TenantPreferences;
+}
+
+/** Each ISP's own reminder settings (Settings → Reminders and tickets), read once per run. */
+async function loadTenantContexts(candidates: DunningCandidate[]): Promise<Map<string, TenantContext>> {
+  const ids = [...new Set(candidates.map((c) => c.tenantId))];
+  if (ids.length === 0) return new Map();
+  const tenants = await prisma.tenant.findMany({ where: { id: { in: ids } }, select: { id: true, name: true, preferences: true } });
+  return new Map(tenants.map((t) => [t.id, { name: t.name, prefs: resolveTenantPreferences(t.preferences) }]));
+}
+
+function buildMessages(invoice: DunningCandidate, ctx: TenantContext, stage: Stage) {
+  const t = ctx.prefs.reminders.templates;
+  const values = {
+    name: invoice.customer.fullName,
+    invoice: invoice.invoiceNumber,
+    amount: formatMoney(balanceDue(invoice), invoice.currency),
+    due: invoice.dueDate.toLocaleDateString("en-KE", { day: "numeric", month: "short", year: "numeric" }),
+    isp: ctx.name,
+  };
+  const pick = {
+    dueSoon: { sms: t.dueSoonSms, subject: t.dueSoonEmailSubject, body: t.dueSoonEmailBody },
+    overdue: { sms: t.overdueSms, subject: t.overdueEmailSubject, body: t.overdueEmailBody },
+    final: { sms: t.finalSms, subject: t.finalEmailSubject, body: t.finalEmailBody },
+  }[stage];
+  const text = renderReminderTemplate(pick.body, values);
+  return {
+    sms: renderReminderTemplate(pick.sms, values),
+    email: {
+      subject: renderReminderTemplate(pick.subject, values),
+      text,
+      html: text
+        .split("\n\n")
+        .map((para) => `<p>${para.replace(/\n/g, "<br>")}</p>`)
+        .join(""),
+    },
+  };
 }
 
 /**
- * Every dunning stage shares the same shape: try both channels for a candidate — email if one's
- * on file, SMS always (Customer.phone is required, unlike email) — and mark the stage once,
- * regardless of whether either channel actually delivered. That mirrors sendEmail's own "log,
- * don't fail" posture for an unconfigured transport (see lib/email.ts) and sendTenantSms's
- * matching one for an unconfigured/misbehaving SMS gateway: a delivery failure must not re-send
- * the same notice on every future tick forever, and one tenant's broken gateway must not stop
- * this batch from reaching every other tenant's candidates.
+ * Every dunning stage shares the same shape: try the channels the ISP turned on — email if one is
+ * on file, SMS (Customer.phone is required, unlike email) — and mark the stage once, regardless
+ * of whether either channel actually delivered. That mirrors sendEmail's own "log, don't fail"
+ * posture for an unconfigured transport (see lib/email.ts) and sendTenantSms's matching one: a
+ * delivery failure must not re-send the same notice on every future tick forever, and one
+ * tenant's broken gateway must not stop this batch from reaching every other tenant's customers.
  */
 async function processCandidates(
   candidates: DunningCandidate[],
-  stage: 1 | 2 | 3,
-  buildMessages: (invoice: DunningCandidate) => DunningMessages
+  stageNumber: 1 | 2 | 3,
+  stage: Stage
 ): Promise<{ processed: number; emailSent: number; smsSent: number; smsFailed: number }> {
   let emailSent = 0;
   let smsSent = 0;
   let smsFailed = 0;
+  const contexts = await loadTenantContexts(candidates);
 
   for (const invoice of candidates) {
-    const { email, sms } = buildMessages(invoice);
+    const ctx = contexts.get(invoice.tenantId);
+    if (!ctx) continue;
+    const { email, sms } = buildMessages(invoice, ctx, stage);
 
-    if (invoice.customer.email) {
+    if (ctx.prefs.reminders.email && invoice.customer.email) {
       await sendEmail({ to: invoice.customer.email, ...email });
       emailSent += 1;
     }
 
-    try {
-      const result = await sendTenantSms(invoice.tenantId, invoice.customer.phone, sms);
-      if (result.delivered) smsSent += 1;
-      else smsFailed += 1;
-    } catch (err) {
-      smsFailed += 1;
-      console.error(`[dunning] SMS send failed for invoice ${invoice.id}`, err);
+    if (ctx.prefs.reminders.sms) {
+      try {
+        const result = await sendTenantSms(invoice.tenantId, invoice.customer.phone, sms);
+        if (result.delivered) smsSent += 1;
+        else smsFailed += 1;
+      } catch (err) {
+        smsFailed += 1;
+        console.error(`[dunning] SMS send failed for invoice ${invoice.id}`, err);
+      }
     }
 
-    await markDunningStage(invoice.id, stage);
+    await markDunningStage(invoice.id, stageNumber);
   }
 
   return { processed: candidates.length, emailSent, smsSent, smsFailed };
 }
 
 export async function handleSendDueSoonReminders(): Promise<AutomationSummary> {
-  const candidates = await listInvoicesDueSoon();
-  const result = await processCandidates(candidates, 1, (invoice) => {
-    const amount = formatMoney(balanceDue(invoice), invoice.currency);
-    const due = invoice.dueDate.toLocaleDateString();
-    return {
-      email: {
-        subject: `Payment reminder — ${invoice.invoiceNumber} due ${due}`,
-        text: `Hi ${invoice.customer.fullName},\n\nA friendly reminder that invoice ${invoice.invoiceNumber} for ${amount} is due on ${due}. Pay before then to keep your service uninterrupted.`,
-        html: `<p>Hi ${invoice.customer.fullName},</p><p>A friendly reminder that invoice <strong>${invoice.invoiceNumber}</strong> for <strong>${amount}</strong> is due on ${due}. Pay before then to keep your service uninterrupted.</p>`,
-      },
-      sms: `Reminder: invoice ${invoice.invoiceNumber} for ${amount} is due ${due}. Pay before then to avoid interruption.`,
-    };
+  // Fetch the widest window any ISP may ask for, then keep each invoice only once it is inside
+  // its own ISP's window (0 days means that ISP sends no due-soon reminder).
+  const all = await listInvoicesDueSoon(14);
+  const contexts = await loadTenantContexts(all);
+  const now = Date.now();
+  const candidates = all.filter((invoice) => {
+    const days = contexts.get(invoice.tenantId)?.prefs.reminders.daysBeforeDue ?? 0;
+    return days > 0 && invoice.dueDate.getTime() - now <= days * 86_400_000;
   });
+  const result = await processCandidates(candidates, 1, "dueSoon");
   console.log(
     `[dunning] due-soon-reminders: processed=${result.processed} emailSent=${result.emailSent} smsSent=${result.smsSent} smsFailed=${result.smsFailed}`
   );
@@ -85,18 +125,7 @@ export async function handleSendDueSoonReminders(): Promise<AutomationSummary> {
 
 export async function handleSendOverdueNotices(): Promise<AutomationSummary> {
   const candidates = await listOverdueInvoicesNeedingNotice();
-  const result = await processCandidates(candidates, 2, (invoice) => {
-    const amount = formatMoney(balanceDue(invoice), invoice.currency);
-    const due = invoice.dueDate.toLocaleDateString();
-    return {
-      email: {
-        subject: `Overdue — ${invoice.invoiceNumber} needs payment`,
-        text: `Hi ${invoice.customer.fullName},\n\nInvoice ${invoice.invoiceNumber} for ${amount} was due on ${due} and is now overdue. Please pay as soon as possible to avoid your service being suspended.`,
-        html: `<p>Hi ${invoice.customer.fullName},</p><p>Invoice <strong>${invoice.invoiceNumber}</strong> for <strong>${amount}</strong> was due on ${due} and is now overdue. Please pay as soon as possible to avoid your service being suspended.</p>`,
-      },
-      sms: `Overdue: invoice ${invoice.invoiceNumber} for ${amount} was due ${due}. Pay now to avoid suspension.`,
-    };
-  });
+  const result = await processCandidates(candidates, 2, "overdue");
   console.log(
     `[dunning] overdue-notices: processed=${result.processed} emailSent=${result.emailSent} smsSent=${result.smsSent} smsFailed=${result.smsFailed}`
   );
@@ -105,17 +134,7 @@ export async function handleSendOverdueNotices(): Promise<AutomationSummary> {
 
 export async function handleSendFinalDunningNotices(): Promise<AutomationSummary> {
   const candidates = await listInvoicesNeedingFinalNotice();
-  const result = await processCandidates(candidates, 3, (invoice) => {
-    const amount = formatMoney(balanceDue(invoice), invoice.currency);
-    return {
-      email: {
-        subject: `Final notice — ${invoice.invoiceNumber} will suspend your service tomorrow`,
-        text: `Hi ${invoice.customer.fullName},\n\nThis is a final notice: invoice ${invoice.invoiceNumber} for ${amount} remains unpaid, and your internet service will be suspended tomorrow if it isn't settled. Please pay now to avoid interruption.`,
-        html: `<p>Hi ${invoice.customer.fullName},</p><p>This is a <strong>final notice</strong>: invoice <strong>${invoice.invoiceNumber}</strong> for <strong>${amount}</strong> remains unpaid, and your internet service will be suspended tomorrow if it isn't settled. Please pay now to avoid interruption.</p>`,
-      },
-      sms: `FINAL NOTICE: invoice ${invoice.invoiceNumber} for ${amount} is unpaid. Your service will be suspended tomorrow unless you pay now.`,
-    };
-  });
+  const result = await processCandidates(candidates, 3, "final");
   console.log(
     `[dunning] final-notices: processed=${result.processed} emailSent=${result.emailSent} smsSent=${result.smsSent} smsFailed=${result.smsFailed}`
   );

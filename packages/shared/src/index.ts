@@ -11,3 +11,4 @@ export * from "./url-safety.js";
 export * from "./reporting-dates.js";
 export * from "./automation.js";
 export * from "./csv.js";
+export * from "./preferences.js";

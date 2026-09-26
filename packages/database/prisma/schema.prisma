@@ -78,6 +78,9 @@ model Tenant {
   gatewayRefunds         GatewayRefund[]
   paymentWebhookEvents   PaymentWebhookEvent[]
   portalPaymentsDisabled String[]                @default([])
+  /// Operational preferences the ISP sets for itself: payment reminder schedule and message
+  /// templates, ticket response targets. Shape and defaults in packages/shared preferences.ts.
+  preferences            Json                    @default("{}")
   createdAt              DateTime                @default(now())
   updatedAt              DateTime                @updatedAt
   deletedAt              DateTime?
@@ -1890,6 +1893,11 @@ model Router {
   tenant               Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   name                 String
   vendor               RouterVendor @default(MIKROTIK)
+  /// Where the router physically is: a site or branch name and, when known, coordinates for the
+  /// network map. All optional; nothing else depends on them.
+  siteName             String?
+  latitude             Float?
+  longitude            Float?
   /// Null until the router either calls home (see provisionTokenHash) or an admin fills it in
   /// manually — a row can exist "pending" with generated credentials but no known address yet.
   host                 String?

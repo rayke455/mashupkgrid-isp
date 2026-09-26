@@ -19,6 +19,7 @@ import {
 import {
   successResponse,
   ConflictError,
+  NotFoundError,
   paginationQuerySchema,
   paginate,
   toSkipTake,
@@ -92,6 +93,69 @@ export async function paymentRoutes(app: FastifyInstance): Promise<void> {
         prisma.payment.count({ where }),
       ]);
       reply.send(successResponse(paginate(items, total, query), request.id));
+    }
+  );
+
+  /** Money that arrived without an invoice to land on: a gateway payment whose account number
+   *  matched nobody, or a top-up nobody assigned. The row an operator reconciles by hand. */
+  app.get(
+    "/unmatched",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("payments.read")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const items = await prisma.payment.findMany({
+        where: { tenantId, status: "COMPLETED", invoiceId: null, reversedAt: null, method: { not: "WALLET" } },
+        include: { customer: { select: { id: true, fullName: true, phone: true, customerNumber: true } } },
+        orderBy: { createdAt: "desc" },
+        take: 200,
+      });
+      const totalMinor = items.reduce((sum, p) => sum + p.amountMinor, 0);
+      reply.send(successResponse({ items, summary: { count: items.length, totalMinor } }, request.id));
+    }
+  );
+
+  /** Applies an unmatched payment to an invoice. The invoice's balance moves by the payment's
+   *  amount and service is restored if that clears it, exactly as if the money had matched. */
+  app.post(
+    "/:paymentId/match",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("payments.reconcile")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const { paymentId } = idParamsSchema.parse(request.params);
+      const { invoiceId } = z.object({ invoiceId: z.string().uuid() }).parse(request.body);
+
+      const result = await prisma.$transaction(async (tx) => {
+        const payment = await tx.payment.findFirst({ where: { id: paymentId, tenantId } });
+        if (!payment) throw new NotFoundError("Payment");
+        if (payment.invoiceId) throw new ConflictError("This payment is already applied to an invoice");
+        if (payment.status !== "COMPLETED" || payment.reversedAt) throw new ConflictError("Only a completed payment can be applied");
+        const invoice = await tx.invoice.findFirst({ where: { id: invoiceId, tenantId } });
+        if (!invoice) throw new NotFoundError("Invoice");
+        if (invoice.status === "PAID" || invoice.status === "CANCELLED") throw new ConflictError(`Invoice ${invoice.invoiceNumber} is ${invoice.status.toLowerCase()}`);
+        const paid = invoice.amountPaidMinor + payment.amountMinor;
+        const status = paid >= invoice.totalMinor ? "PAID" : "PARTIALLY_PAID";
+        const updatedInvoice = await tx.invoice.update({
+          where: { id: invoice.id },
+          data: { amountPaidMinor: paid, status, ...(status === "PAID" ? { paidAt: new Date() } : {}) },
+        });
+        const updatedPayment = await tx.payment.update({ where: { id: payment.id }, data: { invoiceId: invoice.id, customerId: invoice.customerId } });
+        return { payment: updatedPayment, invoice: updatedInvoice };
+      });
+
+      if (result.invoice.status === "PAID" && result.invoice.customerId) {
+        await restoreServiceAfterPayment(tenantId, result.invoice.customerId);
+      }
+      await writeAuditLog({
+        tenantId,
+        actorUserId: request.user!.id,
+        action: "payment.matched",
+        resourceType: "Payment",
+        resourceId: paymentId,
+        after: { invoiceId, invoiceNumber: result.invoice.invoiceNumber, amountMinor: result.payment.amountMinor },
+        ipAddress: request.ip,
+        userAgent: request.headers["user-agent"] ?? null,
+      });
+      reply.send(successResponse(result, request.id));
     }
   );
 

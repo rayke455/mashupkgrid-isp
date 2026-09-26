@@ -40,6 +40,7 @@ export default function CaptiveCustomizerPage() {
   // never the value this page trusts once loaded. See the effect for why.
   const [state, setState] = useState<CaptivePortalPluginsState>(() => getCaptivePortalPluginsState(tenantSlug));
   const [activeTab, setActiveTab] = useState<TabId>("appearance");
+  const [previewKey, setPreviewKey] = useState(0);
   const [savedToast, setSavedToast] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -272,6 +273,31 @@ export default function CaptiveCustomizerPage() {
           </button>
         ))}
       </div>
+      {/* Live preview of the real sign-in page at phone width; reloads after each publish. */}
+      {activeTab === "appearance" && (
+        <div className="rounded-2xl border border-slate-800 bg-slate-950 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-semibold text-white">Live preview</p>
+              <p className="text-xs text-slate-500">The page customers see, at phone size. Reload after you save and publish.</p>
+            </div>
+            <button type="button" onClick={() => setPreviewKey((k) => k + 1)} className="rounded-lg border border-slate-700 px-3 py-1.5 text-xs font-medium text-slate-200 hover:bg-slate-900">
+              Reload preview
+            </button>
+          </div>
+          <div className="mt-3 flex justify-center">
+            <div className="w-[375px] max-w-full overflow-hidden rounded-[1.5rem] border border-slate-700 bg-black p-1.5">
+              <iframe
+                key={previewKey}
+                title="Portal preview"
+                src={`/hotspot/${tenantSlug}?theme=${encodeURIComponent(activeThemeId)}&preview=1`}
+                className="h-[640px] w-full rounded-[1.2rem] bg-white"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* TAB 1: APPEARANCE & THEME */}
       {activeTab === "appearance" && (
         <div className="space-y-6">

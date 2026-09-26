@@ -42,6 +42,12 @@ export interface PageStrings {
     addFirst: string;
     createFailed: string;
     exportFailed: string;
+    searchPlaceholder: string;
+    allStatuses: string;
+    statusActive: string;
+    statusSuspended: string;
+    statusInactive: string;
+    matching: (n: number) => string;
     // detail
     loadingDetails: string;
     account: string;
@@ -84,6 +90,17 @@ export interface PageStrings {
     loadingInvoices: string;
     noInvoices: string;
     noInvoicesHint: string;
+    exportCsv: string;
+    searchPlaceholder: string;
+    allStatuses: string;
+    statusPending: string;
+    statusPartlyPaid: string;
+    statusOverdue: string;
+    statusPaid: string;
+    statusCancelled: string;
+    sortNewest: string;
+    sortDueSoonest: string;
+    sortLargest: string;
     loadingInvoice: string;
     emailInvoice: string;
     billedItems: string;
@@ -226,6 +243,10 @@ export interface PageStrings {
     liveChat: string;
     liveChatHint: string;
     groupAccount: string;
+    reminders: string;
+    remindersHint: string;
+    staff: string;
+    staffHint: string;
     password: string;
     passwordHint: string;
     // organization page
@@ -319,6 +340,12 @@ const EN: PageStrings = {
     addFirst: "Add your first subscriber using the button above.",
     createFailed: "Failed to create customer",
     exportFailed: "Export failed",
+    searchPlaceholder: "Name, phone, email or account number",
+    allStatuses: "All statuses",
+    statusActive: "Active",
+    statusSuspended: "Suspended",
+    statusInactive: "Inactive",
+    matching: (n) => `${n} matching`,
     loadingDetails: "Loading subscriber details…",
     account: "Account",
     portalLinked: "Self-service portal linked",
@@ -360,6 +387,17 @@ const EN: PageStrings = {
     loadingInvoices: "Loading invoices…",
     noInvoices: "No invoices found",
     noInvoicesHint: "Invoices will appear when subscribers are billed.",
+    exportCsv: "Export CSV",
+    searchPlaceholder: "Invoice number, customer or phone",
+    allStatuses: "All statuses",
+    statusPending: "Pending",
+    statusPartlyPaid: "Partly paid",
+    statusOverdue: "Overdue",
+    statusPaid: "Paid",
+    statusCancelled: "Cancelled",
+    sortNewest: "Newest first",
+    sortDueSoonest: "Due soonest",
+    sortLargest: "Largest first",
     loadingInvoice: "Loading invoice…",
     emailInvoice: "Email invoice to customer",
     billedItems: "Billed items",
@@ -502,6 +540,10 @@ const EN: PageStrings = {
     liveChat: "Live chat",
     liveChatHint: "Tawk.to widget",
     groupAccount: "Account",
+    reminders: "Reminders and tickets",
+    remindersHint: "Payment reminders, response targets",
+    staff: "Staff and roles",
+    staffHint: "Who can sign in, and what they may do",
     password: "Password",
     passwordHint: "Sign-in security",
     loadingSettings: "Loading settings…",
@@ -594,6 +636,12 @@ const SW: PageStrings = {
     addFirst: "Ongeza mteja wako wa kwanza kwa kitufe kilicho hapo juu.",
     createFailed: "Imeshindwa kuunda mteja",
     exportFailed: "Upakuaji umeshindwa",
+    searchPlaceholder: "Jina, simu, barua pepe au nambari ya akaunti",
+    allStatuses: "Hali zote",
+    statusActive: "Inatumika",
+    statusSuspended: "Imesimamishwa",
+    statusInactive: "Haitumiki",
+    matching: (n) => `${n} zinalingana`,
     loadingDetails: "Inapakia maelezo ya mteja…",
     account: "Akaunti",
     portalLinked: "Akaunti ya kujihudumia imeunganishwa",
@@ -635,6 +683,17 @@ const SW: PageStrings = {
     loadingInvoices: "Inapakia ankara…",
     noInvoices: "Hakuna ankara",
     noInvoicesHint: "Ankara zitaonekana wateja wanapotozwa.",
+    exportCsv: "Pakua CSV",
+    searchPlaceholder: "Nambari ya ankara, mteja au simu",
+    allStatuses: "Hali zote",
+    statusPending: "Inasubiri",
+    statusPartlyPaid: "Imelipwa kiasi",
+    statusOverdue: "Imechelewa",
+    statusPaid: "Imelipwa",
+    statusCancelled: "Imeghairiwa",
+    sortNewest: "Mpya kwanza",
+    sortDueSoonest: "Zinazodaiwa hivi karibuni",
+    sortLargest: "Kubwa kwanza",
     loadingInvoice: "Inapakia ankara…",
     emailInvoice: "Tuma ankara kwa barua pepe",
     billedItems: "Vipengee vilivyotozwa",
@@ -777,6 +836,10 @@ const SW: PageStrings = {
     liveChat: "Gumzo la moja kwa moja",
     liveChatHint: "Wijeti ya Tawk.to",
     groupAccount: "Akaunti",
+    reminders: "Vikumbusho na tiketi",
+    remindersHint: "Vikumbusho vya malipo, muda wa majibu",
+    staff: "Wafanyakazi na majukumu",
+    staffHint: "Nani anaweza kuingia, na anaruhusiwa nini",
     password: "Nenosiri",
     passwordHint: "Usalama wa kuingia",
     loadingSettings: "Inapakia mipangilio…",

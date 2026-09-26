@@ -91,6 +91,7 @@ function tenantSections(has: Has): NavSection[] {
         ...(has("routers.read") ? [{ href: "/routers", label: "Routers", icon: "router", keywords: "mikrotik nas" } as NavItem] : []),
         ...(has("vlans.read") ? [{ href: "/vlans", label: "VLANs", icon: "layers", keywords: "segments tagging" } as NavItem] : []),
         ...(has("routers.read") ? [{ href: "/ip-pools", label: "IP pools", icon: "pool", keywords: "addresses dhcp" } as NavItem] : []),
+        ...(has("routers.read") ? [{ href: "/network-map", label: "Network map", icon: "router", keywords: "sites map coverage where routers are" } as NavItem] : []),
         ...(has("reports.read") ? [{ href: "/reports", label: "Bandwidth usage", icon: "speed", keywords: "reports traffic revenue export" } as NavItem] : []),
       ],
     },
@@ -107,6 +108,7 @@ function tenantSections(has: Has): NavSection[] {
               { href: "/payments/settlements", label: "Settlements", icon: "layers", keywords: "payouts withdraw" },
             ] as NavItem[])
           : []),
+        ...(has("payments.reconcile") ? [{ href: "/payments/reconciliation", label: "Reconciliation", icon: "shield", keywords: "unmatched payments apply invoice m-pesa" } as NavItem] : []),
         ...(has("settings.manage") || has("payments.reconcile")
           ? // One entry, not four: M-Pesa, Paystack and Pesapal answer one question for an operator.
             [{ href: "/payments-setup", label: "Getting paid", icon: "mpesa", keywords: "m-pesa paystack pesapal till paybill" } as NavItem]
@@ -119,6 +121,7 @@ function tenantSections(has: Has): NavSection[] {
         ...(has("settings.manage") ? [{ href: "/settings", label: "Settings", icon: "maintenance", keywords: "branding domain billing" } as NavItem] : []),
         ...(has("settings.manage") ? [{ href: "/automation", label: "Automation", icon: "automation", keywords: "jobs scheduler worker billing cycle dunning" } as NavItem] : []),
         ...(has("settings.manage") ? [{ href: "/sms", label: "SMS gateway", icon: "message", keywords: "communications" } as NavItem] : []),
+        ...(has("customers.read") ? [{ href: "/field", label: "Field work", icon: "pulse", keywords: "technician installer installs visits phone" } as NavItem] : []),
         { href: "/app", label: "Customer mobile app", icon: "layers", keywords: "fiberconnect android" },
         { href: "/shop", label: "Hardware store", icon: "package", keywords: "buy routers antennas", external: true },
         ...(has("audit_logs.read") ? [{ href: "/audit-log", label: "Audit log", icon: "shield", keywords: "history who changed" } as NavItem] : []),

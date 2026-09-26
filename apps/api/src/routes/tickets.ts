@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { prisma } from "@mashupkgrid/database";
 import {
   createTicket,
   listTickets,
@@ -7,7 +8,7 @@ import {
   addTicketMessage,
   updateTicket,
 } from "@mashupkgrid/support";
-import { successResponse, ConflictError } from "@mashupkgrid/shared";
+import { successResponse, ConflictError, resolveTenantPreferences } from "@mashupkgrid/shared";
 import { authenticate } from "../plugins/authenticate.js";
 import { resolveTenant } from "../plugins/tenant.js";
 import { checkMaintenance } from "../plugins/maintenance.js";
@@ -60,7 +61,24 @@ export async function ticketRoutes(app: FastifyInstance): Promise<void> {
       const tenantId = requireTenant(request.user!.tenantId);
       const query = listQuerySchema.parse(request.query);
       const tickets = await listTickets(tenantId, query);
-      reply.send(successResponse(tickets, request.id));
+      // Response target: an open ticket with no staff reply inside the hours set for its
+      // priority (Settings → Reminders and tickets) counts as overdue.
+      const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { preferences: true } });
+      const hours = resolveTenantPreferences(tenant?.preferences).tickets.responseHours;
+      const openIds = tickets.filter((t) => t.status === "OPEN" || t.status === "IN_PROGRESS").map((t) => t.id);
+      const replies = openIds.length
+        ? await prisma.ticketMessage.groupBy({ by: ["ticketId"], where: { ticketId: { in: openIds }, authorUserId: { not: null }, isInternalNote: false }, _min: { createdAt: true } })
+        : [];
+      const firstReply = new Map(replies.map((r) => [r.ticketId, r._min.createdAt]));
+      const now = Date.now();
+      const rows = tickets.map((t) => {
+        const target = hours[t.priority as keyof typeof hours] ?? hours.NORMAL;
+        const responseDueAt = new Date(t.createdAt.getTime() + target * 3_600_000);
+        const isOpen = t.status === "OPEN" || t.status === "IN_PROGRESS";
+        const replied = firstReply.get(t.id) ?? null;
+        return { ...t, responseDueAt, firstRepliedAt: replied, responseOverdue: isOpen && !replied && responseDueAt.getTime() < now };
+      });
+      reply.send(successResponse(rows, request.id));
     }
   );
 

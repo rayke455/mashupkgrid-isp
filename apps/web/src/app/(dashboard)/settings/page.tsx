@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
+import { downloadFromApi } from "@/lib/download";
 import { useLanguage } from "@/lib/language-context";
 import { pageStrings } from "@/lib/page-strings";
 import { useAuth } from "@/lib/auth-context";
@@ -299,6 +300,24 @@ export default function SettingsPage() {
           .
         </p>
       </Card>
+      <Card className="space-y-3 p-6">
+        <div>
+          <p className="text-sm font-medium text-slate-900 dark:text-white">Your data</p>
+          <p className="text-xs text-slate-500">Download everything as spreadsheets whenever you like. Your data is yours; the platform keeps daily backups on its side.</p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" size="sm" onClick={() => downloadFromApi("/api/v1/customers/export.csv", "customers.csv").catch(() => {})}>
+            Customers (CSV)
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => downloadFromApi("/api/v1/invoices/export.csv", "invoices.csv").catch(() => {})}>
+            Invoices (CSV)
+          </Button>
+          <Button variant="secondary" size="sm" onClick={() => downloadFromApi("/api/v1/payments/export.csv", "payments.csv").catch(() => {})}>
+            Payments (CSV)
+          </Button>
+        </div>
+      </Card>
+
       {/* 3. BUSINESS BRANDING FORM */}
       <Card className="p-6">
         <form

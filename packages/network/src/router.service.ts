@@ -36,6 +36,9 @@ export interface CreateRouterInput {
   useTls?: boolean;
   username: string;
   password: string;
+  siteName?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export type UpdateRouterInput = Partial<CreateRouterInput>;
@@ -61,6 +64,9 @@ export async function createRouter(tenantId: string, input: CreateRouterInput): 
       tenantId,
       name: input.name,
       vendor: input.vendor,
+      siteName: input.siteName ?? null,
+      latitude: input.latitude ?? null,
+      longitude: input.longitude ?? null,
       host: input.host,
       apiPort: input.apiPort ?? 8728,
       useTls: input.useTls ?? false,
@@ -426,6 +432,9 @@ export async function updateRouter(tenantId: string, routerId: string, patch: Up
       ...(patch.host !== undefined ? { host: patch.host } : {}),
       ...(patch.apiPort !== undefined ? { apiPort: patch.apiPort } : {}),
       ...(patch.useTls !== undefined ? { useTls: patch.useTls } : {}),
+      ...(patch.siteName !== undefined ? { siteName: patch.siteName || null } : {}),
+      ...(patch.latitude !== undefined ? { latitude: patch.latitude } : {}),
+      ...(patch.longitude !== undefined ? { longitude: patch.longitude } : {}),
       ...(patch.username !== undefined
         ? { usernameEncrypted: encryptAtRest(patch.username, env.ENCRYPTION_KEY) }
         : {}),

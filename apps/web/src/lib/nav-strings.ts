@@ -23,6 +23,8 @@ const LABELS_SW: Record<string, string> = {
   VLANs: "VLAN",
   "IP pools": "Hifadhi za IP",
   "Bandwidth usage": "Matumizi ya data",
+  "Network map": "Ramani ya mtandao",
+  "Field work": "Kazi za uwanjani",
   Money: "Fedha",
   Payments: "Malipo",
   Transactions: "Miamala",

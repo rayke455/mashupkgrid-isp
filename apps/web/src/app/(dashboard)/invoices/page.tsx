@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api-client";
+import { downloadFromApi } from "@/lib/download";
 import { useLanguage } from "@/lib/language-context";
 import { pageStrings } from "@/lib/page-strings";
 import { formatMoney } from "@/lib/money";
@@ -27,9 +29,23 @@ export default function InvoicesPage() {
   const { lang } = useLanguage();
   const t = pageStrings(lang).invoices;
   const c = pageStrings(lang).common;
+  const [search, setSearch] = useState("");
+  const [debounced, setDebounced] = useState("");
+  const [status, setStatus] = useState("");
+  const [sort, setSort] = useState<"createdAt:desc" | "dueDate:asc" | "totalMinor:desc">("createdAt:desc");
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(search.trim()), 300);
+    return () => clearTimeout(t);
+  }, [search]);
   const { data, isLoading } = useQuery({
-    queryKey: ["invoices", "all"],
-    queryFn: () => apiFetch<PaginatedInvoices>("/api/v1/invoices?limit=50&sortBy=createdAt&sortOrder=desc"),
+    queryKey: ["invoices", "all", debounced, status, sort],
+    queryFn: () => {
+      const [sortBy, sortOrder] = sort.split(":");
+      const params = new URLSearchParams({ limit: "50", sortBy: sortBy!, sortOrder: sortOrder! });
+      if (debounced) params.set("search", debounced);
+      if (status) params.set("status", status);
+      return apiFetch<PaginatedInvoices>(`/api/v1/invoices?${params.toString()}`);
+    },
   });
 
   return (
@@ -43,6 +59,35 @@ export default function InvoicesPage() {
             {t.description}
           </p>
         </div>
+        <button
+          type="button"
+          onClick={() => downloadFromApi("/api/v1/invoices/export.csv", "invoices.csv").catch(() => {})}
+          className="rounded-lg border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 dark:border-obsidian-700 dark:text-slate-200 dark:hover:bg-obsidian-900"
+        >
+          {t.exportCsv}
+        </button>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder={t.searchPlaceholder}
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-900 outline-none focus:border-brand-500 dark:border-obsidian-700 dark:bg-obsidian-950 dark:text-white sm:w-72"
+        />
+        <select value={status} onChange={(e) => setStatus(e.target.value)} className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm dark:border-obsidian-700 dark:bg-obsidian-950 dark:text-slate-200">
+          <option value="">{t.allStatuses}</option>
+          <option value="PENDING">{t.statusPending}</option>
+          <option value="PARTIALLY_PAID">{t.statusPartlyPaid}</option>
+          <option value="OVERDUE">{t.statusOverdue}</option>
+          <option value="PAID">{t.statusPaid}</option>
+          <option value="CANCELLED">{t.statusCancelled}</option>
+        </select>
+        <select value={sort} onChange={(e) => setSort(e.target.value as typeof sort)} className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm dark:border-obsidian-700 dark:bg-obsidian-950 dark:text-slate-200">
+          <option value="createdAt:desc">{t.sortNewest}</option>
+          <option value="dueDate:asc">{t.sortDueSoonest}</option>
+          <option value="totalMinor:desc">{t.sortLargest}</option>
+        </select>
       </div>
 
       {isLoading && <p className="text-sm text-slate-500">{t.loadingInvoices}</p>}

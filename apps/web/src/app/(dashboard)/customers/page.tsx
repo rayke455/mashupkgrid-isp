@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
@@ -36,9 +36,21 @@ export default function CustomersPage() {
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
 
+  const [search, setSearch] = useState("");
+  const [debounced, setDebounced] = useState("");
+  const [status, setStatus] = useState("");
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(search.trim()), 300);
+    return () => clearTimeout(timer);
+  }, [search]);
   const { data, isLoading } = useQuery({
-    queryKey: ["customers"],
-    queryFn: () => apiFetch<PaginatedCustomers>("/api/v1/customers?limit=50"),
+    queryKey: ["customers", debounced, status],
+    queryFn: () => {
+      const params = new URLSearchParams({ limit: "50" });
+      if (debounced) params.set("search", debounced);
+      if (status) params.set("status", status);
+      return apiFetch<PaginatedCustomers>(`/api/v1/customers?${params.toString()}`);
+    },
   });
 
   const createCustomer = useMutation({
@@ -128,6 +140,22 @@ export default function CustomersPage() {
           {error && <ErrorText>{error}</ErrorText>}
         </Card>
       )}
+
+      <div className="flex flex-wrap items-center gap-2">
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder={t.searchPlaceholder}
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-900 outline-none focus:border-brand-500 dark:border-obsidian-700 dark:bg-obsidian-950 dark:text-white sm:w-72"
+        />
+        <select value={status} onChange={(e) => setStatus(e.target.value)} className="rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm dark:border-obsidian-700 dark:bg-obsidian-950 dark:text-slate-200">
+          <option value="">{t.allStatuses}</option>
+          <option value="ACTIVE">{t.statusActive}</option>
+          <option value="SUSPENDED">{t.statusSuspended}</option>
+          <option value="INACTIVE">{t.statusInactive}</option>
+        </select>
+        {data && <span className="text-xs text-slate-500">{t.matching(data.pagination.total)}</span>}
+      </div>
 
       {isLoading && <p className="text-sm text-slate-500">{t.loadingSubscribers}</p>}
 

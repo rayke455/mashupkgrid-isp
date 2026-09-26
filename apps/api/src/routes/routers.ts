@@ -71,6 +71,9 @@ const createRouterSchema = z.object({
   useTls: z.boolean().optional(),
   username: z.string().min(1),
   password: z.string().min(1),
+  siteName: z.string().trim().max(80).nullable().optional(),
+  latitude: z.number().min(-90).max(90).nullable().optional(),
+  longitude: z.number().min(-180).max(180).nullable().optional(),
 });
 
 const updateRouterSchema = createRouterSchema.partial();

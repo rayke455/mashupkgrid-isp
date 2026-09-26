@@ -10,6 +10,7 @@ import {
   paginate,
   toSkipTake,
   buildSafeOrderBy,
+  toCsv,
 } from "@mashupkgrid/shared";
 import { authenticate } from "../plugins/authenticate.js";
 import { resolveTenant } from "../plugins/tenant.js";
@@ -22,6 +23,7 @@ const preHandler = [authenticate, resolveTenant, checkMaintenance] as const;
 
 const listQuerySchema = paginationQuerySchema.extend({
   customerId: z.string().uuid().optional(),
+  search: z.string().max(100).optional(),
   status: z.string().optional(),
   sortBy: z.string().optional(),
   sortOrder: z.enum(["asc", "desc"]).optional(),
@@ -36,6 +38,40 @@ function requireTenant(tenantId: string | null): string {
 }
 
 export async function invoiceRoutes(app: FastifyInstance): Promise<void> {
+  /** Every invoice as a spreadsheet, for the ISP's own accounts. */
+  app.get(
+    "/export.csv",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("billing.read")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const invoices = await prisma.invoice.findMany({
+        where: { tenantId },
+        orderBy: { createdAt: "asc" },
+        include: { customer: { select: { customerNumber: true, fullName: true, phone: true } } },
+      });
+      const csv = toCsv(invoices, [
+        { header: "Invoice", value: (i) => i.invoiceNumber },
+        { header: "Customer number", value: (i) => i.customer?.customerNumber ?? "" },
+        { header: "Customer", value: (i) => i.customer?.fullName ?? "" },
+        { header: "Phone", value: (i) => i.customer?.phone ?? "" },
+        { header: "Issued", value: (i) => i.issuedAt },
+        { header: "Due", value: (i) => i.dueDate },
+        { header: "Status", value: (i) => i.status },
+        { header: "Subtotal", value: (i) => (i.subtotalMinor / 100).toFixed(2) },
+        { header: "Tax", value: (i) => (i.taxMinor / 100).toFixed(2) },
+        { header: "Total", value: (i) => (i.totalMinor / 100).toFixed(2) },
+        { header: "Paid", value: (i) => (i.amountPaidMinor / 100).toFixed(2) },
+        { header: "Balance", value: (i) => ((i.totalMinor - i.amountPaidMinor) / 100).toFixed(2) },
+        { header: "Currency", value: (i) => i.currency },
+        { header: "Paid at", value: (i) => i.paidAt },
+      ]);
+      reply
+        .header("content-type", "text/csv; charset=utf-8")
+        .header("content-disposition", `attachment; filename="invoices-${new Date().toISOString().slice(0, 10)}.csv"`)
+        .send(csv);
+    }
+  );
+
   app.get(
     "/",
     { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("billing.read")] },
@@ -46,11 +82,20 @@ export async function invoiceRoutes(app: FastifyInstance): Promise<void> {
         tenantId,
         ...(query.customerId ? { customerId: query.customerId } : {}),
         ...(query.status ? { status: query.status as never } : {}),
+        ...(query.search?.trim()
+          ? {
+              OR: [
+                { invoiceNumber: { contains: query.search.trim(), mode: "insensitive" as const } },
+                { customer: { fullName: { contains: query.search.trim(), mode: "insensitive" as const } } },
+                { customer: { phone: { contains: query.search.trim() } } },
+              ],
+            }
+          : {}),
       };
       const [items, total] = await Promise.all([
         prisma.invoice.findMany({
           where,
-          include: { items: true },
+          include: { items: true, customer: { select: { id: true, fullName: true, phone: true, customerNumber: true } } },
           ...toSkipTake(query),
           orderBy: buildSafeOrderBy(query.sortBy, query.sortOrder, SORTABLE_FIELDS, "createdAt"),
         }),

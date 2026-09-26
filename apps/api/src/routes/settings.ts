@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "@mashupkgrid/database";
 import { env } from "@mashupkgrid/config";
-import { successResponse, ConflictError, NotFoundError } from "@mashupkgrid/shared";
+import { successResponse, ConflictError, NotFoundError, tenantPreferencesSchema, resolveTenantPreferences } from "@mashupkgrid/shared";
 import { authenticate } from "../plugins/authenticate.js";
 import { resolveTenant } from "../plugins/tenant.js";
 import { checkMaintenance } from "../plugins/maintenance.js";
@@ -58,6 +58,42 @@ export async function settingsRoutes(app: FastifyInstance): Promise<void> {
       reply.send(
         successResponse({ ...tenant, platformUrl: `https://${tenant.slug}.${env.PLATFORM_BASE_DOMAIN}` }, request.id)
       );
+    }
+  );
+
+  /** Payment reminder schedule and templates, ticket response targets. */
+  app.get(
+    "/preferences",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("settings.manage")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { preferences: true } });
+      if (!tenant) throw new NotFoundError("Tenant");
+      reply.send(successResponse(resolveTenantPreferences(tenant.preferences), request.id));
+    }
+  );
+
+  app.put(
+    "/preferences",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("settings.manage")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const body = tenantPreferencesSchema.parse(request.body);
+      const before = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { preferences: true } });
+      if (!before) throw new NotFoundError("Tenant");
+      await prisma.tenant.update({ where: { id: tenantId }, data: { preferences: body } });
+      await writeAuditLog({
+        tenantId,
+        actorUserId: request.user!.id,
+        action: "settings.preferences_updated",
+        resourceType: "Tenant",
+        resourceId: tenantId,
+        before: { reminders: resolveTenantPreferences(before.preferences).reminders.daysBeforeDue },
+        after: { reminders: body.reminders.daysBeforeDue, tickets: body.tickets.responseHours },
+        ipAddress: request.ip,
+        userAgent: request.headers["user-agent"] ?? null,
+      });
+      reply.send(successResponse(body, request.id));
     }
   );
 

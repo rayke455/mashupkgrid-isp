@@ -247,6 +247,14 @@ export default function DashboardHomePage() {
   });
 
   const canReadRouters = isStaff && Boolean(user?.permissions.includes("routers.read"));
+  const canReadTickets = isStaff && Boolean(user?.permissions.includes("tickets.read"));
+  const { data: openTickets } = useQuery({
+    queryKey: ["tickets", "open-dashboard"],
+    queryFn: () => apiFetch<{ id: string; responseOverdue?: boolean }[]>("/api/v1/tickets?status=OPEN"),
+    enabled: canReadTickets,
+    refetchInterval: 60_000,
+  });
+  const overdueTickets = openTickets?.filter((t) => t.responseOverdue).length ?? 0;
   const { data: routers } = useQuery({
     queryKey: ["routers"],
     queryFn: () => apiFetch<RouterRow[]>("/api/v1/routers"),
@@ -447,7 +455,7 @@ export default function DashboardHomePage() {
       {/* Tenant staff */}
       {isStaff && (
         <>
-          <MetricGrid columns={canReadVlans && canSeeAutomation ? 6 : canReadVlans || canSeeAutomation ? 5 : 4}>
+          <MetricGrid columns={[canReadVlans, canSeeAutomation, canReadTickets].filter(Boolean).length >= 2 ? 6 : [canReadVlans, canSeeAutomation, canReadTickets].some(Boolean) ? 5 : 4}>
             <Metric
               label={t.collected30}
               value={revenue30dMinor !== null ? formatMoney(revenue30dMinor) : "—"}
@@ -476,6 +484,15 @@ export default function DashboardHomePage() {
                 hint={vlanOverview ? (vlanOverview.provisioningFailed > 0 ? t.failedToProvision(vlanOverview.provisioningFailed) : t.enabled(vlanOverview.enabled)) : undefined}
                 tone={vlanOverview && vlanOverview.provisioningFailed > 0 ? "bad" : undefined}
                 href="/vlans"
+              />
+            )}
+            {canReadTickets && (
+              <Metric
+                label={t.supportTickets}
+                value={openTickets ? openTickets.length : "—"}
+                hint={openTickets ? (overdueTickets > 0 ? t.ticketsOverdue(overdueTickets) : t.ticketsOnTime) : undefined}
+                tone={overdueTickets > 0 ? "bad" : undefined}
+                href="/tickets"
               />
             )}
             {canSeeAutomation && (
