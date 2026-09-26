@@ -7,6 +7,7 @@ import { ModernGlassTheme } from "./modern-glass";
 import { VibrantRetailTheme } from "./vibrant-retail";
 import { HospitalityCleanTheme } from "./hospitality-clean";
 import { CyberpunkNeonTheme } from "./cyberpunk-neon";
+import { PALETTE_PRESETS, createPaletteTheme, paletteThemeMeta, type PaletteThemeId } from "./palette-theme";
 
 export * from "./types";
 export {
@@ -78,7 +79,10 @@ export const THEME_CATALOG: ThemeMeta[] = [
     badgeColor: "bg-cyan-500 text-black",
     accentColor: "border-cyan-500",
   },
+  ...PALETTE_PRESETS.map(({ badgeColor, accentColor, ...preset }) => paletteThemeMeta(preset, { badgeColor, accentColor })),
 ];
+
+const PALETTE_COMPONENTS = Object.fromEntries(PALETTE_PRESETS.map((p) => [p.id, createPaletteTheme(p)])) as Record<PaletteThemeId, ComponentType<CaptiveThemeProps>>;
 
 export const THEME_COMPONENTS: Record<ThemeId, ComponentType<CaptiveThemeProps>> = {
   "mashuphost-clean": MashupHostCleanTheme,
@@ -88,6 +92,7 @@ export const THEME_COMPONENTS: Record<ThemeId, ComponentType<CaptiveThemeProps>>
   "vibrant-retail": VibrantRetailTheme,
   "hospitality-clean": HospitalityCleanTheme,
   "cyberpunk-neon": CyberpunkNeonTheme,
+  ...PALETTE_COMPONENTS,
 };
 
 export function getThemeComponent(themeId?: string | null): ComponentType<CaptiveThemeProps> {

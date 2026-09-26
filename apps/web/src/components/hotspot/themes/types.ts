@@ -168,7 +168,16 @@ export type ThemeId =
   | "modern-glass"
   | "vibrant-retail"
   | "hospitality-clean"
-  | "cyberpunk-neon";
+  | "cyberpunk-neon"
+  // Palette themes (palette-theme.tsx): one layout, eight looks.
+  | "green-line"
+  | "sunset"
+  | "ocean"
+  | "midnight"
+  | "campus"
+  | "warm-sand"
+  | "royal"
+  | "brand-classic";
 
 export interface ThemeMeta {
   id: ThemeId;

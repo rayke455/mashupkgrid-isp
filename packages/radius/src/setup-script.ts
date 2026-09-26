@@ -408,7 +408,9 @@ ${buildManagementAccessSection(managementSources({ managementSource, vpnSubnet }
 :do {/radius remove [find address="${radiusHost}"]} on-error={}
 :do {/radius add service=ppp,hotspot address=${radiusHost} secret="${radiusSecret}" authentication-port=1812 accounting-port=1813 timeout=3s comment="MASHUPKGRID"} on-error={}
 :do {/ppp aaa set use-radius=yes accounting=yes interim-update=1m} on-error={}
-:do {/ip hotspot profile set [find default=yes] use-radius=yes login-by=http-chap,http-pap,cookie trial=no radius-accounting=yes radius-interim-update=1m html-directory=hotspot} on-error={}
+# login-by=mac first: a phone that has paid is logged straight back in by the RADIUS server
+# (findMacLogin) when it reconnects, without seeing the sign-in page at all.
+:do {/ip hotspot profile set [find default=yes] use-radius=yes login-by=mac,http-chap,http-pap,cookie mac-auth-mode=mac-as-username trial=no radius-accounting=yes radius-interim-update=1m html-directory=hotspot} on-error={}
 :do {/ip hotspot user profile set [find default=yes] shared-users=1} on-error={}
 :do {/ip hotspot remove [find name=mkg-hotspot]} on-error={}
 :do {/ip hotspot add name=mkg-hotspot interface=bridge address-pool=default-dhcp profile=default disabled=no} on-error={}

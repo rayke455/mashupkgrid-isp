@@ -530,6 +530,7 @@ export default function HotspotCaptivePortalPage() {
   });
 
   const [reconnectDismissed, setReconnectDismissed] = useState(false);
+  const macReconnectAttempted = useRef(false);
 
   /** Asks the router to log this phone in by its MAC; the server accepts only this same phone. */
   const reconnectByMac = () => {
@@ -540,6 +541,18 @@ export default function HotspotCaptivePortalPage() {
       setError("This phone couldn't be reconnected automatically. Enter your code, or use “Paid but not connected?”.")
     );
   };
+
+  // A phone the server recognises (it paid before, time or data left) is logged straight back in
+  // the moment the portal opens — no tap. The router only puts a MAC in the sign-in link when it
+  // is the one showing this page, so a plain browser preview never triggers a hand-off. The
+  // "Welcome back" sheet below stays as the fallback for the case where the hand-off stalls.
+  useEffect(() => {
+    if (!deviceStatus?.canReconnect || rememberedVoucher || !phoneMac) return;
+    if (macReconnectAttempted.current) return;
+    macReconnectAttempted.current = true;
+    reconnectByMac();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deviceStatus?.canReconnect, rememberedVoucher, phoneMac]);
 
   /**
    * Recovers a purchase the customer already paid for but never got connected on.
@@ -911,7 +924,7 @@ export default function HotspotCaptivePortalPage() {
         )}
 
         {/* Back online in one tap: this phone has paid before and still has time left. */}
-        {deviceStatus?.canReconnect && !rememberedVoucher && !completingRouterLogin && !reconnectDismissed && (
+        {deviceStatus?.canReconnect && !rememberedVoucher && !completingRouterLogin && !reconnectDismissed && macReconnectAttempted.current && (
           <PortalSheet
             title="Welcome back"
             description={
