@@ -38,6 +38,9 @@ function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const detectedTenant = searchParams.get("tenant");
+  // Where to go after signing in, e.g. the customer app. Only a path on this site, never "//evil".
+  const nextParam = searchParams.get("next");
+  const nextPath = nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//") && !nextParam.includes("\\") ? nextParam : "/dashboard";
   const [serverError, setServerError] = useState<string | null>(null);
   const [googlePending, setGooglePending] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -62,7 +65,7 @@ function LoginContent() {
         email: values.email,
         password: values.password,
       });
-      router.push("/dashboard");
+      router.push(nextPath);
     } catch (err) {
       if (err instanceof ApiRequestError) {
         setServerError(err.message);
@@ -77,7 +80,7 @@ function LoginContent() {
     setGooglePending(true);
     try {
       await loginWithGoogle({ tenantSlug: tenantSlug || "", credential });
-      router.push("/dashboard");
+      router.push(nextPath);
     } catch (err) {
       setServerError(err instanceof ApiRequestError ? err.message : "Google sign-in failed — please try again.");
     } finally {

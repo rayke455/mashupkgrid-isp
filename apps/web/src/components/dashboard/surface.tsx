@@ -75,7 +75,7 @@ export function Metric({
   const body = (
     <>
       <p className="text-sm text-slate-400">{label}</p>
-      <p className="mt-1.5 break-words text-xl font-semibold tabular-nums tracking-tight text-white sm:text-2xl">{value}</p>
+      <p className="mt-1.5 break-words text-lg font-semibold tabular-nums tracking-tight text-white sm:text-2xl">{value}</p>
       {hint && <p className={`mt-1 text-xs ${hintColour}`}>{hint}</p>}
     </>
   );

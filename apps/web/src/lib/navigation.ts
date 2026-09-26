@@ -127,7 +127,7 @@ function tenantSections(has: Has): NavSection[] {
         ...(has("settings.manage") ? [{ href: "/automation", label: "Automation", icon: "automation", keywords: "jobs scheduler worker billing cycle dunning" } as NavItem] : []),
         ...(has("settings.manage") ? [{ href: "/sms", label: "SMS gateway", icon: "message", keywords: "communications" } as NavItem] : []),
         ...(has("customers.read") ? [{ href: "/field", label: "Field work", icon: "pulse", keywords: "technician installer installs visits phone" } as NavItem] : []),
-        { href: "/app", label: "Customer mobile app", icon: "layers", keywords: "fiberconnect android" },
+        { href: "/app", label: "Customer mobile app", icon: "layers", keywords: "phone app install home screen pay bills" },
         { href: "/shop", label: "Hardware store", icon: "package", keywords: "buy routers antennas", external: true },
         ...(has("audit_logs.read") ? [{ href: "/audit-log", label: "Audit log", icon: "shield", keywords: "history who changed" } as NavItem] : []),
         { href: "/sessions", label: "My sessions", icon: "session", keywords: "devices sign out" },

@@ -98,7 +98,11 @@ function daysUntil(iso: string): number {
   return Math.ceil((new Date(iso).getTime() - Date.now()) / 86_400_000);
 }
 
-export function CustomerPortal() {
+/** Which part to show. The dashboard shows everything; the customer app shows one tab at a time. */
+export type PortalView = "all" | "home" | "bills" | "support" | "account" | "refer";
+
+export function CustomerPortal({ view = "all", onPay }: { view?: PortalView; onPay?: () => void } = {}) {
+  const show = (...views: PortalView[]) => view === "all" || views.includes(view);
   const { lang } = useLanguage();
   const t = customerStrings(lang);
   const queryClient = useQueryClient();
@@ -212,7 +216,7 @@ export function CustomerPortal() {
 
   return (
     <div className="w-full min-w-0 space-y-6">
-      <PageHeader
+      {show("home", "bills") && <PageHeader
         title={t.hello(customer.fullName.split(" ")[0] ?? "")}
         description={t.account(customer.customerNumber)}
         actions={
@@ -222,7 +226,7 @@ export function CustomerPortal() {
             </button>
           )
         }
-      />
+      />}
 
       {error && <ErrorText>{error}</ErrorText>}
 
@@ -234,7 +238,7 @@ export function CustomerPortal() {
         </Notice>
       )}
 
-      <MetricGrid columns={4}>
+      {show("home") && <MetricGrid columns={4}>
         <Metric
           label={t.internet}
           value={primary ? (serviceOn ? t.on : primary.status === "SUSPENDED" ? t.suspended : primary.status) : t.noPlan}
@@ -254,7 +258,7 @@ export function CustomerPortal() {
           tone={owedMinor > 0 ? (openInvoices.some((i) => i.status === "OVERDUE") ? "bad" : "warn") : "good"}
         />
         <Metric label={t.wallet} value={walletData ? formatMoney(walletData.wallet.balanceMinor, walletData.wallet.currency) : "—"} hint={t.walletHint} />
-      </MetricGrid>
+      </MetricGrid>}
 
       {/* Pay sheet: the phone to prompt and the live result of the push. */}
       {payingInvoice && (
@@ -306,10 +310,39 @@ export function CustomerPortal() {
       )}
 
       {/* Invoices */}
-      <Panel title={t.invoices} padded={false}>
+      {show("bills") && <Panel title={t.invoices} padded={false}>
         {!invoices || invoices.length === 0 ? (
           <EmptyState title={t.noInvoices} />
         ) : (
+          <>
+          {/* On a phone: one card per invoice, with the Pay button in reach. */}
+          <ul className="divide-y divide-obsidian-800 sm:hidden">
+            {invoices.slice(0, 12).map((inv) => {
+              const balance = inv.totalMinor - inv.amountPaidMinor;
+              return (
+                <li key={inv.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                  <div className="min-w-0">
+                    <p className="font-mono text-[13px] text-white">{inv.invoiceNumber}</p>
+                    <p className="text-xs text-slate-400">
+                      {t.dueHeader} {new Date(inv.dueDate).toLocaleDateString()}
+                    </p>
+                    <div className="mt-1">
+                      <Pill tone={invoiceTone(inv.status)}>{inv.status.replace("_", " ").toLowerCase()}</Pill>
+                    </div>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="tabular-nums text-white">{formatMoney(balance > 0 && OPEN.has(inv.status) ? balance : inv.totalMinor, inv.currency)}</p>
+                    {OPEN.has(inv.status) && (
+                      <button type="button" className={`${darkButton("primary", "sm")} mt-1`} onClick={() => { setCheckoutRequestId(null); setPayingInvoiceId(inv.id); window.scrollTo({ top: 0, behavior: "smooth" }); }}>
+                        {t.pay}
+                      </button>
+                    )}
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="hidden sm:block">
           <TableShell minWidth={560}>
             <thead>
               <tr>
@@ -348,10 +381,12 @@ export function CustomerPortal() {
               })}
             </tbody>
           </TableShell>
+          </div>
+          </>
         )}
-      </Panel>
+      </Panel>}
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      {show("account") && <div className="grid gap-6 lg:grid-cols-2">
         {/* Plan + PPPoE login */}
         <Panel title={t.myPlan}>
           {!subscriptions || subscriptions.length === 0 ? (
@@ -405,12 +440,12 @@ export function CustomerPortal() {
             </ul>
           )}
         </Panel>
-      </div>
+      </div>}
 
-      <MyReferralPanel />
+      {show("refer") && <MyReferralPanel />}
 
       {/* Support */}
-      <Panel
+      {show("support") && <Panel
         title={t.support}
         description={t.supportDesc}
         actions={
@@ -494,7 +529,7 @@ export function CustomerPortal() {
             ))}
           </div>
         )}
-      </Panel>
+      </Panel>}
     </div>
   );
 }
