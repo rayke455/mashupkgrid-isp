@@ -7,6 +7,7 @@ import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
 import { useLanguage } from "@/lib/language-context";
+import { useAgentRedirect } from "@/lib/use-agent-redirect";
 import { CustomerPortal, type PortalView } from "@/components/customer-portal";
 import { IconChat, IconGift, IconHome, IconReceipt, IconUserRound } from "@/components/icons";
 
@@ -66,6 +67,7 @@ export function CustomerMobileApp({ tenantSlug }: { tenantSlug?: string }) {
   const [isIos, setIsIos] = useState(false);
 
   const isStaff = Boolean(user?.permissions.includes("customers.read"));
+  const checkingAgent = useAgentRedirect(Boolean(user) && !isStaff);
   const { data: me } = useQuery({
     queryKey: ["me-referral"],
     queryFn: () => apiFetch<{ isp: string }>("/api/v1/me/referral"),
@@ -102,7 +104,7 @@ export function CustomerMobileApp({ tenantSlug }: { tenantSlug?: string }) {
     return () => window.removeEventListener("hashchange", onHash);
   }, []);
 
-  if (loading || !user) {
+  if (loading || !user || checkingAgent) {
     return <div className="flex min-h-screen items-center justify-center text-sm text-slate-400">{t.loading}</div>;
   }
 

@@ -2,6 +2,7 @@ import type { SVGProps } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
   Activity,
+  Wallet,
   ArrowRight,
   Bell,
   Building2,
@@ -89,6 +90,7 @@ export const IconUsers = fromLucide(Users, "IconUsers");
 export const IconPackage = fromLucide(Package, "IconPackage");
 export const IconInvoice = fromLucide(FileText, "IconInvoice");
 export const IconNetworkPool = fromLucide(Network, "IconNetworkPool");
+export const IconWallet = fromLucide(Wallet, "IconWallet");
 export const IconTicket = fromLucide(Ticket, "IconTicket");
 export const IconShield = fromLucide(ShieldCheck, "IconShield");
 export const IconTenants = fromLucide(Building2, "IconTenants");

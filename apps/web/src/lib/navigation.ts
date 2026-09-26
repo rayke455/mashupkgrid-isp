@@ -24,6 +24,7 @@ export type NavIcon =
   | "dashboard"
   | "file-text"
   | "gauge"
+  | "handshake"
   | "zap"
   | "gift"
   | "globe"
@@ -147,6 +148,7 @@ function tenantSections(has: Has): NavSection[] {
               { href: "/payments/settlements", label: "Settlements", icon: "landmark", keywords: "payouts withdraw" },
             ] as NavItem[])
           : []),
+        ...(has("payments.read") ? [{ href: "/agents", label: "Agents", icon: "handshake", keywords: "shops resellers vouchers commission cash collect" } as NavItem] : []),
         ...(has("payments.reconcile") ? [{ href: "/payments/reconciliation", label: "Reconciliation", icon: "scale", keywords: "unmatched payments apply invoice m-pesa" } as NavItem] : []),
         ...(has("settings.manage") || has("payments.reconcile")
           ? // One entry, not four: M-Pesa, Paystack and Pesapal answer one question for an operator.

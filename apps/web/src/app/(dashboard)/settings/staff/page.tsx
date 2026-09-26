@@ -63,7 +63,7 @@ export default function StaffSettingsPage() {
 
   const { data: staff, isLoading } = useQuery({ queryKey: ["staff"], queryFn: () => apiFetch<StaffRow[]>("/api/v1/rbac/staff") });
   const { data: roles } = useQuery({ queryKey: ["roles"], queryFn: () => apiFetch<Role[]>("/api/v1/rbac/roles") });
-  const assignable = (roles ?? []).filter((r) => r.name !== "CUSTOMER" && r.name !== "SUPER_ADMIN");
+  const assignable = (roles ?? []).filter((r) => r.name !== "CUSTOMER" && r.name !== "AGENT" && r.name !== "SUPER_ADMIN");
 
   const invalidate = () => queryClient.invalidateQueries({ queryKey: ["staff"] });
   const add = useMutation({

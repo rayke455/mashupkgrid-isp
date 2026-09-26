@@ -61,6 +61,22 @@ export async function assignDefaultCustomerRole(userId: string, tenantId: string
   });
 }
 
+/** Gives a shop agent's login the AGENT role, creating the role first on a database seeded
+ *  before agents existed. */
+export async function assignAgentRole(userId: string, tenantId: string): Promise<void> {
+  let role = await prisma.role.findFirst({ where: { tenantId: null, name: "AGENT" } });
+  if (!role) {
+    role = await prisma.role.create({ data: { name: "AGENT", isSystem: true, tenantId: null } });
+    const perms = await prisma.permission.findMany({ where: { key: { in: ["sessions.manage_own"] } } });
+    await prisma.rolePermission.createMany({ data: perms.map((p) => ({ roleId: role!.id, permissionId: p.id })), skipDuplicates: true });
+  }
+  await prisma.userRole.upsert({
+    where: { userId_roleId_tenantId: { userId, roleId: role.id, tenantId } },
+    update: {},
+    create: { userId, roleId: role.id, tenantId },
+  });
+}
+
 export interface RegisterCustomerBody {
   tenantSlug: string;
   email: string;

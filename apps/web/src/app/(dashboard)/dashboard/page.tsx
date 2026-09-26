@@ -14,6 +14,7 @@ import { ChartTable } from "@/components/charts/chart-table";
 import { formatMoney } from "@/lib/money";
 import { OnboardingChecklist } from "@/components/onboarding-checklist";
 import { CustomerPortal } from "@/components/customer-portal";
+import { useAgentRedirect } from "@/lib/use-agent-redirect";
 import {
   EmptyState,
   Metric,
@@ -189,6 +190,7 @@ export default function DashboardHomePage() {
   const t = dashboardStrings(lang);
   const isPlatform = user?.tenantId === null;
   const isStaff = !isPlatform && Boolean(user?.permissions.includes("reports.read"));
+  const checkingAgent = useAgentRedirect(Boolean(user) && !isPlatform && !isStaff);
   const [bandwidthRange, setBandwidthRange] = useState<number>(14);
   const [autoProvisionMsg, setAutoProvisionMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -343,7 +345,7 @@ export default function DashboardHomePage() {
 
   // A subscriber (tenant-scoped, no staff permissions) gets their own portal, not an empty
   // operator dashboard: their service, bills, a pay button and support.
-  if (!isPlatform && !isStaff) return <CustomerPortal />;
+  if (!isPlatform && !isStaff) return checkingAgent ? null : <CustomerPortal />;
 
   return (
     <div className="w-full min-w-0 space-y-6">

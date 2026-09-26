@@ -139,6 +139,9 @@ model Tenant {
   addOns           AddOn[]
   addOnPurchases   AddOnPurchase[]
   winBackOffers    WinBackOffer[]
+  agents           Agent[]
+  agentSales       AgentSale[]
+  agentRemittances AgentRemittance[]
 
   @@index([status])
   @@map("tenants")
@@ -179,6 +182,7 @@ model User {
   ticketsAssigned         Ticket[]                 @relation("TicketAssignee")
   ticketsCreated          Ticket[]                 @relation("TicketCreatedBy")
   ticketMessages          TicketMessage[]
+  agentProfile            Agent?
 
   // Composite-unique keeps email unique within a tenant. Super-admin rows (tenantId = null)
   // additionally get a partial unique index on `email` alone via raw SQL migration, since
@@ -2262,6 +2266,10 @@ model HotspotVoucher {
   bytesIn          BigInt?
   bytesOut         BigInt?
   usageUpdatedAt   DateTime?
+  /// The shop agent holding this voucher to sell, if any.
+  agentId          String?
+  agent            Agent?          @relation(fields: [agentId], references: [id], onDelete: SetNull)
+  agentSale        AgentSale?
   createdByUserId  String?
   createdAt        DateTime        @default(now())
 
@@ -2998,4 +3006,87 @@ model WinBackOffer {
   @@index([status, expiresAt])
   @@index([customerId, sentAt])
   @@map("win_back_offers")
+}
+
+enum AgentStatus {
+  ACTIVE
+  SUSPENDED
+}
+
+/// A shop or person who sells the ISP's hotspot vouchers and takes customers' bill payments in
+/// cash, for a commission. They sign in to a small app of their own (/agent), see their voucher
+/// stock, record sales and payments, and get a monthly statement of what they owe the ISP.
+model Agent {
+  id                          String            @id @default(uuid())
+  tenantId                    String
+  tenant                      Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId                      String?           @unique
+  user                        User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+  name                        String
+  phone                       String
+  location                    String?
+  /// Commission on each voucher sold, in whole percent of its price.
+  voucherCommissionPercent    Int               @default(10)
+  /// Commission on each customer bill payment taken, in whole percent.
+  collectionCommissionPercent Int               @default(2)
+  status                      AgentStatus       @default(ACTIVE)
+  inviteCode                  String?           @unique
+  inviteExpiresAt             DateTime?
+  createdAt                   DateTime          @default(now())
+  updatedAt                   DateTime          @updatedAt
+  vouchers                    HotspotVoucher[]
+  sales                       AgentSale[]
+  remittances                 AgentRemittance[]
+
+  @@index([tenantId])
+  @@map("agents")
+}
+
+enum AgentSaleKind {
+  /// A hotspot voucher from the agent's stock.
+  VOUCHER
+  /// Cash taken from a customer toward their bill.
+  COLLECTION
+}
+
+/// Money an agent took: a voucher sold or a customer's bill payment. The agent keeps the
+/// commission and owes the ISP the rest.
+model AgentSale {
+  id              String          @id @default(uuid())
+  tenantId        String
+  tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  agentId         String
+  agent           Agent           @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  kind            AgentSaleKind
+  voucherId       String?         @unique
+  voucher         HotspotVoucher? @relation(fields: [voucherId], references: [id], onDelete: SetNull)
+  paymentId       String?         @unique
+  customerId      String?
+  description     String
+  amountMinor     Int
+  commissionMinor Int
+  buyerPhone      String?
+  createdAt       DateTime        @default(now())
+
+  @@index([agentId, createdAt])
+  @@index([tenantId, createdAt])
+  @@map("agent_sales")
+}
+
+/// Money an agent handed over to the ISP, recorded by staff.
+model AgentRemittance {
+  id               String   @id @default(uuid())
+  tenantId         String
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  agentId          String
+  agent            Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  amountMinor      Int
+  method           String
+  reference        String?
+  note             String?
+  recordedByUserId String?
+  createdAt        DateTime @default(now())
+
+  @@index([agentId, createdAt])
+  @@map("agent_remittances")
 }

@@ -263,6 +263,9 @@ export const SYSTEM_ROLE_PERMISSIONS: Record<string, readonly PermissionKey[]> =
   // Granting those permissions here without first building "my own records" customer-scoped
   // endpoints would be a real horizontal-privilege-escalation bug, not a future nice-to-have.
   CUSTOMER: ["packages.read", "tickets.read", "sessions.manage_own"],
+  // A shop agent's own routes (/api/v1/agent/*) are scoped to their Agent record by user id, the
+  // same way /me is for customers, so the role itself needs nothing tenant-wide.
+  AGENT: ["sessions.manage_own"],
   READ_ONLY: [
     "customers.read",
     "billing.read",
