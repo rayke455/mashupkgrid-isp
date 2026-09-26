@@ -92,12 +92,12 @@ export default function PlatformWhatsappPage() {
         skipAuth: true,
         body: JSON.stringify({ phone: testPhone.trim() }),
       });
-      setTestStatus("✅ Test OTP sent successfully via Platform WhatsApp!");
+      setTestStatus("Test OTP sent successfully via Platform WhatsApp!");
     } catch (err) {
       setTestStatus(
         err instanceof ApiRequestError
-          ? `❌ Error: ${err.message}`
-          : "❌ Failed to send test OTP. Ensure Platform WhatsApp is connected."
+          ? `Error: ${err.message}`
+          : "Failed to send test OTP. Ensure Platform WhatsApp is connected."
       );
     } finally {
       setIsSendingTest(false);
@@ -125,7 +125,6 @@ export default function PlatformWhatsappPage() {
           <span>{meta.label}</span>
         </Badge>
       </div>
-
       {connection?.lastError && (
         <Card className="border-amber-500/40 bg-amber-50/40 dark:bg-amber-950/20">
           <p className="text-sm text-amber-800 dark:text-amber-300">{connection.lastError}</p>
@@ -154,7 +153,6 @@ export default function PlatformWhatsappPage() {
               <span>Live &amp; Ready for Tenant OTPs</span>
             </span>
           </div>
-
           <div className="rounded-lg bg-slate-50 p-4 dark:bg-obsidian-800/60 border border-slate-200/80 dark:border-obsidian-700 space-y-2">
             <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">
               Automated Platform Roles:
@@ -165,7 +163,6 @@ export default function PlatformWhatsappPage() {
               <li>Provides automated fallbacks if email SMTP is unconfigured.</li>
             </ul>
           </div>
-
           {/* Test Sender */}
           <div className="border-t border-slate-200 dark:border-obsidian-800 pt-5">
             <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-2">
@@ -184,7 +181,6 @@ export default function PlatformWhatsappPage() {
             </form>
             {testStatus && <p className="mt-2 text-xs font-medium">{testStatus}</p>}
           </div>
-
           <div className="border-t border-slate-200 dark:border-obsidian-800 pt-4 flex justify-end">
             <Button
               variant="outline"
@@ -208,7 +204,6 @@ export default function PlatformWhatsappPage() {
               <strong className="text-slate-700 dark:text-slate-300">Settings &gt; Linked Devices &gt; Link a Device</strong>, and scan the QR code below.
             </p>
           </div>
-
           {isPairing ? (
             <div className="flex flex-col items-center gap-4 rounded-xl border border-slate-200/80 bg-slate-50 p-6 dark:border-obsidian-800 dark:bg-obsidian-950/60">
               {connection?.pairingCode ? (
@@ -262,7 +257,6 @@ export default function PlatformWhatsappPage() {
               <HintText>
                 Requires the backend worker container (<code className="font-mono">worker</code>) to be running.
               </HintText>
-
               <div className="w-full border-t border-slate-200 pt-4 dark:border-obsidian-800">
                 <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
                   Or link with a phone number

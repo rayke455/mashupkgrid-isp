@@ -73,17 +73,16 @@ export function ThemePackExporter() {
   };
 
   return (
-    <Card className="p-6 lg:p-8 space-y-6 border-slate-800 bg-slate-950/90 shadow-2xl font-sans text-left">
+    <Card className="p-6 lg:p-8 space-y-6 border-slate-800 bg-slate-950/90 shadow-lg font-sans text-left">
       <div className="space-y-2">
         <Badge variant="info">MikroTik Captive Portal Studio</Badge>
-        <h3 className="text-xl sm:text-2xl font-black text-white">
+        <h3 className="text-xl sm:text-2xl font-bold text-white">
           Hotspot Theme Pack Exporter (5 Carrier Layouts)
         </h3>
         <p className="text-xs sm:text-sm text-slate-400">
           Customize and generate production-ready MikroTik RouterOS <code className="text-brand-400 font-mono">login.html</code> files for all 5 branded hotspot themes with zero manual HTML editing.
         </p>
       </div>
-
       {/* Theme Selection Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {THEME_CATALOG.map((theme) => (
@@ -108,7 +107,6 @@ export function ThemePackExporter() {
           </button>
         ))}
       </div>
-
       {/* Customization Inputs */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2">
         <div>
@@ -139,7 +137,6 @@ export function ThemePackExporter() {
           />
         </div>
       </div>
-
       {/* 1-Click Actions & Command */}
       <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 space-y-3 font-mono text-xs">
         <div className="flex items-center justify-between text-slate-400 pb-2 border-b border-slate-800">
@@ -149,11 +146,9 @@ export function ThemePackExporter() {
           </span>
           <span className="text-slate-500">RouterOS v7 &amp; v6</span>
         </div>
-
         <div className="p-2.5 rounded bg-black/60 text-cyan-300 text-[11px] break-all">
           {routerOsInstallScript}
         </div>
-
         <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
           <button
             type="button"
@@ -163,12 +158,11 @@ export function ThemePackExporter() {
             {copiedScript ? <IconCheck size={13} className="text-emerald-400" /> : <IconCopy size={13} />}
             <span>{copiedScript ? "Copied to Clipboard!" : "Copy RouterOS Terminal Command"}</span>
           </button>
-
           <Button
             onClick={handleDownload}
             className="px-5 py-2 font-bold shadow-glow gap-1.5 text-xs"
           >
-            {downloaded ? <IconCheck size={14} className="text-emerald-300" /> : <span>📥</span>}
+            {downloaded ? <IconCheck size={14} className="text-emerald-300" /> : null}
             <span>{downloaded ? "Downloaded login.html!" : `Download ${selectedMeta?.name ?? ""} login.html`}</span>
           </Button>
         </div>

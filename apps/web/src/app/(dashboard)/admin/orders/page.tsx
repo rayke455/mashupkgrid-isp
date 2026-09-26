@@ -48,18 +48,15 @@ export default function AdminOrdersPage() {
   if (!isSuperAdmin) {
     return (
       <div className="max-w-3xl mx-auto py-12 px-4 text-center space-y-4">
-        <div className="w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-2xl flex items-center justify-center mx-auto">
-          🔒
-        </div>
         <h2 className="text-2xl font-bold text-white">Super Administrator Access Required</h2>
         <p className="text-sm text-slate-400 max-w-lg mx-auto">
           Hardware order fulfillment is restricted to platform Super Administrators.
         </p>
         <Link
           href="/shop"
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-sm transition-colors"
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-slate-950 font-bold text-sm transition-colors"
         >
-          <span>🛒</span> Go to Hardware Store
+          Go to Hardware Store
         </Link>
       </div>
     );
@@ -70,7 +67,7 @@ export default function AdminOrdersPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-800">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="px-2 py-0.5 rounded text-[11px] font-extrabold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+            <span className="px-2 py-0.5 rounded text-[11px] font-semibold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
               Fulfillment NOC
             </span>
             <span className="text-xs text-slate-400">• Customer M-Pesa Dispatches</span>
@@ -82,23 +79,21 @@ export default function AdminOrdersPage() {
             Monitor incoming customer purchases, verify M-Pesa transaction receipts, and manage parcel dispatches.
           </p>
         </div>
-
         <div className="flex items-center gap-2.5">
           <button
             onClick={loadOrders}
             className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-semibold transition-colors flex items-center gap-1.5"
           >
-            <span>🔄</span> Refresh Orders
+            Refresh Orders
           </button>
           <Link
             href="/admin/products"
-            className="px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs transition-colors flex items-center gap-1.5"
+            className="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-slate-950 font-bold text-xs transition-colors flex items-center gap-1.5"
           >
-            <span>⚙️</span> Manage Products & Prices
+            Manage Products & Prices
           </Link>
         </div>
       </div>
-
       {errorMsg && (
         <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs">
           {errorMsg}
@@ -115,7 +110,7 @@ export default function AdminOrdersPage() {
                 <th className="py-3.5 px-4">Recipient & Phone</th>
                 <th className="py-3.5 px-4">Destination</th>
                 <th className="py-3.5 px-4">Items</th>
-                <th className="py-3.5 px-4 font-bold text-cyan-300">Total (KES)</th>
+                <th className="py-3.5 px-4 font-bold text-white">Total (KES)</th>
                 <th className="py-3.5 px-4">M-Pesa Receipt</th>
                 <th className="py-3.5 px-4">Status</th>
               </tr>
@@ -137,7 +132,7 @@ export default function AdminOrdersPage() {
                 orders.map((order) => (
                   <tr key={order.id} className="hover:bg-slate-900/40 transition-colors">
                     <td className="py-3.5 px-4 font-mono">
-                      <p className="font-bold text-cyan-400">{order.id}</p>
+                      <p className="font-bold text-white">{order.id}</p>
                       <p className="text-[10px] text-slate-500">
                         {new Date(order.createdAt).toLocaleDateString("en-KE", {
                           month: "short",
@@ -147,31 +142,26 @@ export default function AdminOrdersPage() {
                         })}
                       </p>
                     </td>
-
                     <td className="py-3.5 px-4">
                       <p className="font-semibold text-white">{order.customerName}</p>
-                      <p className="text-cyan-400 font-mono text-[11px]">{order.phone}</p>
+                      <p className="text-white font-mono text-[11px]">{order.phone}</p>
                     </td>
-
                     <td className="py-3.5 px-4">
                       <p className="font-semibold text-slate-200">{order.county}</p>
                       <p className="text-slate-400 text-[11px] truncate max-w-xs">{order.deliveryAddress}</p>
                     </td>
-
                     <td className="py-3.5 px-4">
                       <div className="space-y-0.5">
                         {order.items.map((it, idx) => (
                           <div key={idx} className="text-[11px] text-slate-300">
-                            <span className="text-cyan-400 font-bold">{it.quantity}x</span> {it.name}
+                            <span className="text-white font-bold">{it.quantity}x</span> {it.name}
                           </div>
                         ))}
                       </div>
                     </td>
-
-                    <td className="py-3.5 px-4 font-mono font-bold text-cyan-300">
+                    <td className="py-3.5 px-4 font-mono font-bold text-white">
                       KES {order.totalAmount.toLocaleString()}
                     </td>
-
                     <td className="py-3.5 px-4 font-mono">
                       {order.mpesaReceiptNumber ? (
                         <span className="px-2 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-bold text-[11px]">
@@ -181,7 +171,6 @@ export default function AdminOrdersPage() {
                         <span className="text-slate-500 text-[11px]">Unpaid</span>
                       )}
                     </td>
-
                     <td className="py-3.5 px-4">
                       <select
                         value={order.status}
@@ -193,7 +182,7 @@ export default function AdminOrdersPage() {
                           order.status === "DELIVERED"
                             ? "text-emerald-400 border-emerald-500/40"
                             : order.status === "DISPATCHED"
-                            ? "text-cyan-400 border-cyan-500/40"
+                            ? "text-white border-obsidian-700"
                             : order.status === "PAID"
                             ? "text-blue-400 border-blue-500/40"
                             : "text-amber-400 border-amber-500/40"

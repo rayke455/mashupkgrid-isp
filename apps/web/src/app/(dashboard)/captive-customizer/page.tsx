@@ -190,9 +190,9 @@ export default function CaptiveCustomizerPage() {
     const ok = importPluginsConfigJson(tenantSlug, importJsonText.trim());
     if (ok) {
       setState(getCaptivePortalPluginsState(tenantSlug));
-      // Loaded into the editor only — this is a draft until Save & Publish is pressed, same as
+      // Loaded into the editor only — this is a draft until Save and publish is pressed, same as
       // any other change made on this page. Saying "restored" without that would read as done.
-      setImportStatus("Import loaded — press Save & Publish to make it live.");
+      setImportStatus("Import loaded — press Save and publish to make it live.");
       portalSoundEngine.playSuccess();
     } else {
       setImportStatus("Invalid JSON configuration format.");
@@ -206,18 +206,14 @@ export default function CaptiveCustomizerPage() {
       <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-800">
         <div>
           <div className="flex items-center gap-2.5">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-600 text-white">
-              🎭
-            </span>
             <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">
-              Captive Portal Studio &amp; 30 Plugins
+              Portal designer
             </h1>
           </div>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            Visual editor, cartoon edge mascots, animations, and modular plugin suite for your Wi-Fi hotspot.
+            Appearance, text, plugins and languages for your Wi-Fi sign-in page.
           </p>
         </div>
-
         <div className="flex items-center gap-3">
           <button
             onClick={handleReset}
@@ -239,12 +235,11 @@ export default function CaptiveCustomizerPage() {
             disabled={isSaving}
             className="px-5 py-2 rounded-lg bg-brand-600 hover:bg-brand-500 text-white text-xs font-semibold transition-colors flex items-center gap-2 disabled:opacity-60"
           >
-            <span>{isSaving ? "Publishing…" : "Save & Publish"}</span>
-            {savedToast && <span className="text-emerald-300">✓</span>}
+            <span>{isSaving ? "Publishing…" : "Save and publish"}</span>
+            {savedToast && <span className="text-emerald-300">Saved</span>}
           </button>
         </div>
       </div>
-
       {saveError && (
         <p className="rounded-xl border border-rose-500/40 bg-rose-950/40 px-3.5 py-2 text-xs text-rose-300">
           {saveError}
@@ -254,15 +249,15 @@ export default function CaptiveCustomizerPage() {
       {/* Navigation Tabs */}
       <div className="flex flex-wrap gap-2 p-1.5 rounded-2xl bg-slate-950/80 border border-slate-800 text-xs font-bold">
         {[
-          { id: "appearance" as TabId, label: "🎨 Appearance & Theme" },
-          { id: "mascots" as TabId, label: "🎭 Cartoon Edge Mascots" },
-          { id: "switchboard" as TabId, label: "🧩 30 Plugins Switchboard" },
-          { id: "content" as TabId, label: "📢 Ads & Announcements" },
-          { id: "audio" as TabId, label: "🔊 Sound FX Synthesizer" },
-          { id: "languages" as TabId, label: "🌐 English & Swahili" },
-          { id: "analytics" as TabId, label: "📊 Hotspot Analytics" },
-          { id: "code" as TabId, label: "💻 Custom CSS / JS" },
-          { id: "backup" as TabId, label: "💾 Backup & Restore" },
+          { id: "appearance" as TabId, label: "Appearance" },
+          { id: "mascots" as TabId, label: "Mascots" },
+          { id: "switchboard" as TabId, label: "Plugins" },
+          { id: "content" as TabId, label: "Ads and announcements" },
+          { id: "audio" as TabId, label: "Sound" },
+          { id: "languages" as TabId, label: "Languages" },
+          { id: "analytics" as TabId, label: "Analytics" },
+          { id: "code" as TabId, label: "Custom code" },
+          { id: "backup" as TabId, label: "Backup" },
         ].map((t) => (
           <button
             key={t.id}
@@ -277,7 +272,6 @@ export default function CaptiveCustomizerPage() {
           </button>
         ))}
       </div>
-
       {/* TAB 1: APPEARANCE & THEME */}
       {activeTab === "appearance" && (
         <div className="space-y-6">
@@ -285,16 +279,15 @@ export default function CaptiveCustomizerPage() {
           <div className="rounded-2xl border-2 border-brand-500/40 bg-slate-950 p-6 space-y-4 shadow-xl">
             <div className="flex items-center justify-between">
               <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <span>📞 Captive Portal Live Contact Numbers &amp; Branding</span>
+                <span>Contact numbers and branding</span>
               </h3>
               <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-brand-500/20 text-brand-300 border border-brand-500/40">
-                Direct Backend Sync
+                Saved to your account
               </span>
             </div>
             <p className="text-xs text-slate-400">
               Changes made here are stored in the backend and immediately updated on your live captive portal header, contact bars, and installation badges.
             </p>
-
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1">
@@ -309,7 +302,6 @@ export default function CaptiveCustomizerPage() {
                 />
                 <span className="text-[10px] text-slate-500 mt-1 block">Displays on &quot;For Installation Call:&quot;</span>
               </div>
-
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1">
                   Support / WhatsApp Phone Number
@@ -323,7 +315,6 @@ export default function CaptiveCustomizerPage() {
                 />
                 <span className="text-[10px] text-slate-500 mt-1 block">Used for customer ticket helpline</span>
               </div>
-
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1">
                   ISP Brand Name
@@ -337,7 +328,6 @@ export default function CaptiveCustomizerPage() {
                 />
                 <span className="text-[10px] text-slate-500 mt-1 block">Displayed on portal logo &amp; header</span>
               </div>
-
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1">
                   Default Portal Theme
@@ -357,7 +347,6 @@ export default function CaptiveCustomizerPage() {
                 <span className="text-[10px] text-slate-500 mt-1 block">Default theme for visitors</span>
               </div>
             </div>
-
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-1">
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1">
@@ -371,7 +360,6 @@ export default function CaptiveCustomizerPage() {
                   className="w-full px-3 py-2 bg-slate-900 border border-slate-700 focus:border-brand-500 rounded-xl text-xs text-white outline-none"
                 />
               </div>
-
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1">
                   Banner Subtitle
@@ -384,7 +372,6 @@ export default function CaptiveCustomizerPage() {
                   className="w-full px-3 py-2 bg-slate-900 border border-slate-700 focus:border-brand-500 rounded-xl text-xs text-white outline-none"
                 />
               </div>
-
               <div>
                 <label className="block text-xs font-semibold text-slate-300 mb-1">
                   Installation Fee Text
@@ -399,13 +386,11 @@ export default function CaptiveCustomizerPage() {
               </div>
             </div>
           </div>
-
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="rounded-2xl border border-slate-800 bg-slate-950 p-6 space-y-5">
               <h3 className="text-base font-bold text-white flex items-center gap-2">
-                <span>🎨 Colors &amp; Gradients</span>
+                <span>Colours</span>
               </h3>
-
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-1">Primary Color</label>
@@ -428,7 +413,6 @@ export default function CaptiveCustomizerPage() {
                   />
                 </div>
               </div>
-
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-1">Secondary Color</label>
                 <div className="flex items-center gap-2">
@@ -450,7 +434,6 @@ export default function CaptiveCustomizerPage() {
                   />
                 </div>
               </div>
-
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-1">Accent Color</label>
                 <div className="flex items-center gap-2">
@@ -473,7 +456,6 @@ export default function CaptiveCustomizerPage() {
                 </div>
               </div>
             </div>
-
             <div>
               <label className="block text-xs font-semibold text-slate-400 mb-1">Background Gradient CSS</label>
               <input
@@ -485,7 +467,6 @@ export default function CaptiveCustomizerPage() {
                 className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white font-mono"
               />
             </div>
-
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-1">Border Radius (px)</label>
@@ -504,7 +485,6 @@ export default function CaptiveCustomizerPage() {
                 />
                 <span className="text-xs text-slate-400 font-mono">{state.theme.borderRadiusPx}px</span>
               </div>
-
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-1">Shadow Style</label>
                 <select
@@ -522,18 +502,16 @@ export default function CaptiveCustomizerPage() {
                 >
                   <option value="none">None</option>
                   <option value="subtle">Subtle Soft</option>
-                  <option value="neon-glow">Neon Glow (Recommended)</option>
+                  <option value="neon-glow">Soft glow</option>
                   <option value="deep">Deep Shadow</option>
                 </select>
               </div>
             </div>
           </div>
-
           <div className="rounded-2xl border border-slate-800 bg-slate-950 p-6 space-y-5">
             <h3 className="text-base font-bold text-white flex items-center gap-2">
-              <span>✨ Background Visual FX</span>
+              <span>Background effects</span>
             </h3>
-
             <div>
               <label className="block text-xs font-semibold text-slate-400 mb-1">Animated Background Style</label>
               <select
@@ -557,7 +535,6 @@ export default function CaptiveCustomizerPage() {
                 <option value="custom-media">Custom Background Image/Video</option>
               </select>
             </div>
-
             {state.backgroundFx.effectType === "custom-media" && (
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-1">Media URL (Image or MP4)</label>
@@ -594,7 +571,6 @@ export default function CaptiveCustomizerPage() {
                 />
                 <span className="text-xs text-slate-400 font-mono">{state.backgroundFx.density}</span>
               </div>
-
               <div>
                 <label className="block text-xs font-semibold text-slate-400 mb-1">Particle Color</label>
                 <div className="flex items-center gap-2">
@@ -635,7 +611,6 @@ export default function CaptiveCustomizerPage() {
                 <span>Master Enable</span>
               </label>
             </div>
-
             <div className="space-y-2">
               {state.mascots.map((m, idx) => (
                 <div
@@ -671,7 +646,6 @@ export default function CaptiveCustomizerPage() {
               ))}
             </div>
           </div>
-
           {/* Mascot properties editor */}
           {selectedMascot && (
             <div className="lg:col-span-2 rounded-2xl border border-slate-800 bg-slate-950 p-6 space-y-5">
@@ -688,7 +662,6 @@ export default function CaptiveCustomizerPage() {
                   </div>
                 </div>
               </div>
-
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-400 mb-1">Character Model</label>
@@ -740,7 +713,6 @@ export default function CaptiveCustomizerPage() {
                     </optgroup>
                   </select>
                 </div>
-
                 {selectedMascot.characterId === "custom" && (
                   <div>
                     <label className="block text-xs font-semibold text-slate-400 mb-1">Custom Image URL</label>
@@ -769,7 +741,6 @@ export default function CaptiveCustomizerPage() {
                     <option value="bottom-right">Bottom-Right Corner</option>
                   </select>
                 </div>
-
                 <div>
                   <label className="block text-xs font-semibold text-slate-400 mb-1">Physics Animation Preset</label>
                   <select
@@ -788,7 +759,6 @@ export default function CaptiveCustomizerPage() {
                     <option value="fade">Fade (Ghostly Pulse)</option>
                   </select>
                 </div>
-
                 <div>
                   <label className="block text-xs font-semibold text-slate-400 mb-1">
                     Desktop Size ({selectedMascot.sizePx}px)
@@ -802,7 +772,6 @@ export default function CaptiveCustomizerPage() {
                     className="w-full"
                   />
                 </div>
-
                 <div>
                   <label className="block text-xs font-semibold text-slate-400 mb-1">
                     Mobile Size ({selectedMascot.mobileSizePx}px)
@@ -816,7 +785,6 @@ export default function CaptiveCustomizerPage() {
                     className="w-full"
                   />
                 </div>
-
                 <div>
                   <label className="block text-xs font-semibold text-slate-400 mb-1">
                     Rotation ({selectedMascot.rotationDeg}&deg;)
@@ -830,7 +798,6 @@ export default function CaptiveCustomizerPage() {
                     className="w-full"
                   />
                 </div>
-
                 <div>
                   <label className="block text-xs font-semibold text-slate-400 mb-1">
                     Animation Cycle ({selectedMascot.animationSpeedSec}s)
@@ -846,7 +813,6 @@ export default function CaptiveCustomizerPage() {
                   />
                 </div>
               </div>
-
               <div className="pt-2 flex items-center gap-6">
                 <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
                   <input
@@ -869,7 +835,6 @@ export default function CaptiveCustomizerPage() {
           <p className="text-xs text-slate-400">
             Every feature on your captive portal is fully modular. You can independently enable or disable any of the 30 plugins below.
           </p>
-
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {[
               { key: "theme", name: "1. Advanced Theme", desc: "Unlimited color schemes, dark/light modes & typography." },
@@ -933,8 +898,7 @@ export default function CaptiveCustomizerPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Announcements */}
           <div className="rounded-2xl border border-slate-800 bg-slate-950 p-6 space-y-4">
-            <h3 className="text-base font-bold text-white">📢 Announcement Banner</h3>
-
+            <h3 className="text-base font-bold text-white">Announcement banner</h3>
             <div>
               <label className="block text-xs font-semibold text-slate-400 mb-1">Display Style</label>
               <select
@@ -952,7 +916,6 @@ export default function CaptiveCustomizerPage() {
                 <option value="modal-alert">Popup Modal Alert</option>
               </select>
             </div>
-
             <div>
               <label className="block text-xs font-semibold text-slate-400 mb-1">Announcement Message</label>
               <textarea
@@ -969,11 +932,9 @@ export default function CaptiveCustomizerPage() {
               />
             </div>
           </div>
-
           {/* Advertisements */}
           <div className="rounded-2xl border border-slate-800 bg-slate-950 p-6 space-y-4">
-            <h3 className="text-base font-bold text-white">⚡ Sponsor &amp; Promo Ads</h3>
-
+            <h3 className="text-base font-bold text-white">Sponsor and promo ads</h3>
             <div>
               <label className="block text-xs font-semibold text-slate-400 mb-1">Ad Title</label>
               <input
@@ -989,7 +950,6 @@ export default function CaptiveCustomizerPage() {
                 className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white"
               />
             </div>
-
             <div>
               <label className="block text-xs font-semibold text-slate-400 mb-1">Ad Description</label>
               <textarea
@@ -1005,7 +965,6 @@ export default function CaptiveCustomizerPage() {
                 className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white"
               />
             </div>
-
             <div>
               <label className="block text-xs font-semibold text-slate-400 mb-1">Target Click URL</label>
               <input
@@ -1028,11 +987,10 @@ export default function CaptiveCustomizerPage() {
       {/* TAB 5: SOUND FX */}
       {activeTab === "audio" && (
         <div className="rounded-2xl border border-slate-800 bg-slate-950 p-6 space-y-6 max-w-2xl">
-          <h3 className="text-base font-bold text-white">🔊 Web Audio Sound FX Synthesizer</h3>
+          <h3 className="text-base font-bold text-white">Sound effects</h3>
           <p className="text-xs text-slate-400">
             Procedurally synthesized audio cues for interactive user feedback. Zero file downloads required.
           </p>
-
           <div className="space-y-4">
             <div>
               <label className="block text-xs font-semibold text-slate-400 mb-1">
@@ -1053,7 +1011,6 @@ export default function CaptiveCustomizerPage() {
                 className="w-full"
               />
             </div>
-
             <div className="grid grid-cols-1 gap-3 pt-2 sm:grid-cols-2">
               <button
                 type="button"
@@ -1062,7 +1019,6 @@ export default function CaptiveCustomizerPage() {
               >
                 ▶ Test Click Sound
               </button>
-
               <button
                 type="button"
                 onClick={() => portalSoundEngine.playSuccess(state.sound.masterVolume)}
@@ -1070,7 +1026,6 @@ export default function CaptiveCustomizerPage() {
               >
                 ▶ Test Success Chime
               </button>
-
               <button
                 type="button"
                 onClick={() => portalSoundEngine.playError(state.sound.masterVolume)}
@@ -1078,7 +1033,6 @@ export default function CaptiveCustomizerPage() {
               >
                 ▶ Test Error Buzz
               </button>
-
               <button
                 type="button"
                 onClick={() => portalSoundEngine.playMascotGreeting(state.sound.masterVolume)}
@@ -1094,11 +1048,10 @@ export default function CaptiveCustomizerPage() {
       {/* TAB 6: LANGUAGES */}
       {activeTab === "languages" && (
         <div className="rounded-2xl border border-slate-800 bg-slate-950 p-6 space-y-5 max-w-2xl">
-          <h3 className="text-base font-bold text-white">🌐 Multi-Language (English &amp; Swahili)</h3>
+          <h3 className="text-base font-bold text-white">Languages (English and Swahili)</h3>
           <p className="text-xs text-slate-400">
             Allow hotspot subscribers to switch between English and Kiswahili seamlessly.
           </p>
-
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="block text-xs font-semibold text-slate-400 mb-1">Default Language</label>
@@ -1116,7 +1069,6 @@ export default function CaptiveCustomizerPage() {
                 <option value="sw">Kiswahili (Swahili)</option>
               </select>
             </div>
-
             <div className="flex items-center pt-5">
               <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
                 <input
@@ -1141,12 +1093,11 @@ export default function CaptiveCustomizerPage() {
       {activeTab === "analytics" && (
         <div className="rounded-2xl border border-slate-800 bg-slate-950 p-6 space-y-6">
           <div className="flex items-center justify-between">
-            <h3 className="text-base font-bold text-white">📊 Hotspot Activity &amp; Conversion Analytics</h3>
+            <h3 className="text-base font-bold text-white">Activity and conversion analytics</h3>
             <span className="text-xs text-slate-400 font-mono">
               Total Recorded Events: {state.analytics.events?.length || 0}
             </span>
           </div>
-
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="p-4 rounded-xl bg-slate-900 border border-slate-800">
               <span className="text-[11px] text-slate-400">Portal Visits</span>
@@ -1154,21 +1105,18 @@ export default function CaptiveCustomizerPage() {
                 {(state.analytics.events || []).filter((e) => e.type === "impression").length}
               </p>
             </div>
-
             <div className="p-4 rounded-xl bg-slate-900 border border-slate-800">
               <span className="text-[11px] text-slate-400">Voucher Logins</span>
               <p className="text-xl font-semibold text-emerald-400 mt-1">
                 {(state.analytics.events || []).filter((e) => e.type === "voucher_success").length}
               </p>
             </div>
-
             <div className="p-4 rounded-xl bg-slate-900 border border-slate-800">
               <span className="text-[11px] text-slate-400">Package Selections</span>
               <p className="text-xl font-semibold text-indigo-400 mt-1">
                 {(state.analytics.events || []).filter((e) => e.type === "package_click").length}
               </p>
             </div>
-
             <div className="p-4 rounded-xl bg-slate-900 border border-slate-800">
               <span className="text-[11px] text-slate-400">Ad Clicks</span>
               <p className="text-xl font-semibold text-amber-400 mt-1">
@@ -1202,7 +1150,6 @@ export default function CaptiveCustomizerPage() {
               className="w-full px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white font-mono"
             />
           </div>
-
           <div className="rounded-2xl border border-slate-800 bg-slate-950 p-6 space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-bold text-white">Custom JavaScript (Sandboxed)</h3>
@@ -1229,11 +1176,10 @@ export default function CaptiveCustomizerPage() {
       {/* TAB 9: BACKUP & RESTORE */}
       {activeTab === "backup" && (
         <div className="rounded-2xl border border-slate-800 bg-slate-950 p-6 space-y-5 max-w-2xl">
-          <h3 className="text-base font-bold text-white">💾 Backup, Export &amp; Import Customizations</h3>
+          <h3 className="text-base font-bold text-white">Backup, export and import</h3>
           <p className="text-xs text-slate-400">
             Export your entire mascot layout, theme colors, and 30-plugin configurations to a JSON file.
           </p>
-
           <div className="flex gap-3">
             <button
               onClick={() => {
@@ -1247,10 +1193,9 @@ export default function CaptiveCustomizerPage() {
               }}
               className="px-4 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold shadow-lg transition-all"
             >
-              📥 Download Backup JSON
+              Download backup (JSON)
             </button>
           </div>
-
           <div className="pt-4 border-t border-slate-800 space-y-3">
             <h4 className="text-xs font-bold text-slate-300">Restore Configuration from JSON</h4>
             <textarea

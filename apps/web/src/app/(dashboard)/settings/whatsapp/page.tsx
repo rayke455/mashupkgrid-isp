@@ -103,9 +103,7 @@ function BotTestPanel() {
       <Card className="space-y-4">
         <div>
           <h2 className="text-base font-semibold text-slate-900 dark:text-white flex items-center gap-2">
-            <span className="flex h-6 w-6 items-center justify-center rounded-md bg-violet-500/15 text-violet-600 dark:text-violet-400">
-              🤖
-            </span>
+            
             Test Bot
           </h2>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
@@ -135,7 +133,6 @@ function BotTestPanel() {
       <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3 dark:border-obsidian-800">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-lg">
-            🤖
           </div>
           <div>
             <p className="text-sm font-bold text-slate-900 dark:text-white">Bot Test</p>
@@ -152,12 +149,10 @@ function BotTestPanel() {
           {clearChat.isPending ? "Clearing..." : "New Chat"}
         </Button>
       </div>
-
       {/* Chat messages */}
       <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 bg-slate-50/50 dark:bg-obsidian-950/30">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center text-sm text-slate-400 gap-2">
-            <span className="text-3xl">💬</span>
             <p>Send a message to test the bot.</p>
             <p className="text-xs">Try &quot;hi&quot;, &quot;1&quot;, &quot;2&quot;, &quot;3&quot;, or &quot;4&quot; to navigate the menu.</p>
           </div>
@@ -187,7 +182,6 @@ function BotTestPanel() {
         ))}
         <div ref={chatEndRef} />
       </div>
-
       {/* Chat input */}
       <form
         onSubmit={handleSend}
@@ -292,7 +286,6 @@ export default function WhatsappSettingsPage() {
           <span>{meta.label}</span>
         </Badge>
       </div>
-
       {connection?.deliveringOnPlatformLine && (
         <Card className="border-amber-500/40 bg-amber-50/40 dark:bg-amber-950/20">
           <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
@@ -327,7 +320,6 @@ export default function WhatsappSettingsPage() {
               </p>
             )}
           </div>
-
           <div className="rounded-xl border border-slate-200 p-3.5 text-sm dark:border-obsidian-800">
             <p className="font-semibold text-slate-800 dark:text-slate-100">What this number now does</p>
             <ul className="mt-1.5 space-y-1 text-xs text-slate-500 dark:text-slate-400">
@@ -335,7 +327,6 @@ export default function WhatsappSettingsPage() {
               <li>• Answers customers with a self-service menu (balance, buy Wi-Fi, report an outage, support)</li>
             </ul>
           </div>
-
           <div className="flex items-center gap-2">
             <Button variant="secondary" onClick={() => disconnect.mutate()} disabled={disconnect.isPending}>
               {disconnect.isPending ? "Disconnecting..." : "Disconnect"}
@@ -390,7 +381,6 @@ export default function WhatsappSettingsPage() {
               <Button onClick={() => connect.mutate()} disabled={connect.isPending}>
                 {connect.isPending ? "Starting..." : "Connect WhatsApp"}
               </Button>
-
               <div className="border-t border-slate-100 pt-3 dark:border-obsidian-800">
                 <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
                   Or link with a phone number

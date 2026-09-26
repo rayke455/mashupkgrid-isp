@@ -165,7 +165,6 @@ export default function InvoiceDetailPage() {
           {emailInvoice.isPending ? c.sending : t.emailInvoice}
         </Button>
       </div>
-
       {/* Invoice Breakdown Card */}
       <Card className="divide-y divide-slate-200/80 dark:divide-obsidian-800">
         <div className="pb-4">
@@ -185,7 +184,6 @@ export default function InvoiceDetailPage() {
             ))}
           </div>
         </div>
-
         <div className="py-4 space-y-2 text-sm font-mono">
           <div className="flex justify-between text-slate-600 dark:text-slate-400">
             <span>{t.subtotal}</span>
@@ -209,7 +207,6 @@ export default function InvoiceDetailPage() {
           </div>
         </div>
       </Card>
-
       {/* Online Gateway Payment Card (M-Pesa STK + Paystack Card/Bank) */}
       {remainingMinor > 0 && (invoice.status === "PENDING" || invoice.status === "PARTIALLY_PAID" || invoice.status === "OVERDUE") && (
         <Card className="border-emerald-500/40 bg-emerald-50/20 dark:bg-emerald-950/20 space-y-4">
@@ -222,7 +219,6 @@ export default function InvoiceDetailPage() {
               {t.onlinePaymentHint}
             </p>
           </div>
-
           <div className="flex flex-wrap items-end gap-3 pt-2 border-t border-emerald-500/20">
             <div className="flex-1 min-w-[200px]">
               <Label htmlFor="mpesaPhone">{t.mpesaPhone}</Label>
@@ -257,12 +253,11 @@ export default function InvoiceDetailPage() {
               {initiatePaystack.isPending ? t.connecting : t.payViaPaystack}
             </Button>
           </div>
-
           {checkoutRequestId && stkStatus && (
             <div className="mt-4 rounded-lg p-3 text-xs font-mono border border-slate-200 dark:border-obsidian-800 bg-white dark:bg-obsidian-950">
               {stkStatus.status === "PENDING" && (
                 <p className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
-                  <span className="h-2 w-2 rounded-full bg-amber-500 animate-ping" />
+                  <span className="h-2 w-2 rounded-full bg-amber-500" />
                   {t.promptDispatched}
                 </p>
               )}

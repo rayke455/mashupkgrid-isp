@@ -130,16 +130,12 @@ export default function PlatformMpesaPage() {
           </Badge>
         )}
       </div>
-
       {/* ------------------------------------------------------------------- */}
       {/* 1. Donate / Buy Me a Coffee Gateway Configuration                   */}
       {/* ------------------------------------------------------------------- */}
       <Card className="border-amber-500/20">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
           <div className="flex items-center gap-3">
-            <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/15 text-amber-600 dark:text-amber-400 text-xl font-bold">
-              ☕
-            </span>
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="font-semibold text-slate-900 dark:text-white">
@@ -161,10 +157,9 @@ export default function PlatformMpesaPage() {
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 text-xs text-brand-600 hover:text-brand-700 dark:text-brand-400 hover:underline font-medium self-start sm:self-center"
           >
-            Preview Live /donate ↗
+            Preview Live /donate 
           </a>
         </div>
-
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -193,7 +188,6 @@ export default function PlatformMpesaPage() {
               <div className="h-6 w-11 rounded-full bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-brand-500 dark:bg-obsidian-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all dark:border-obsidian-600 peer-checked:bg-emerald-500"></div>
             </label>
           </div>
-
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <Label htmlFor="donatePaybill">Donate Paybill / Till Number</Label>
@@ -207,7 +201,6 @@ export default function PlatformMpesaPage() {
                 Leave blank to automatically use the platform shortcode ({status?.shortcode ?? "not set yet"}).
               </HintText>
             </div>
-
             <div>
               <Label htmlFor="donateAccountReference">M-Pesa Account Reference</Label>
               <Input
@@ -219,7 +212,6 @@ export default function PlatformMpesaPage() {
               <HintText>The reference shown on donor&apos;s phone (e.g. COFFEE, DONATE, TIP).</HintText>
             </div>
           </div>
-
           {/* Live Preview Box */}
           <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3.5 text-xs space-y-1.5">
             <div className="flex items-center justify-between font-semibold text-amber-800 dark:text-amber-300">
@@ -249,7 +241,6 @@ export default function PlatformMpesaPage() {
               </div>
             </div>
           </div>
-
           <div className="flex items-center justify-between pt-1">
             <Button type="submit" disabled={saveDonateConfig.isPending}>
               {saveDonateConfig.isPending ? "Saving..." : "Save Donate Configuration"}
@@ -263,7 +254,6 @@ export default function PlatformMpesaPage() {
           {donateError && <ErrorText>{donateError}</ErrorText>}
         </form>
       </Card>
-
       {/* ------------------------------------------------------------------- */}
       {/* 2. Platform Daraja Credentials                                      */}
       {/* ------------------------------------------------------------------- */}
@@ -276,7 +266,6 @@ export default function PlatformMpesaPage() {
           This is a single, platform-wide config — not per-tenant. Every new tenant&apos;s onboarding
           fee STK push and public donation STK push goes through this gateway.
         </p>
-
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -340,7 +329,6 @@ export default function PlatformMpesaPage() {
             </select>
             <HintText>Onboarding fees will not be collectable until this is configured and active.</HintText>
           </div>
-
           {/* Tenant payouts (B2B) */}
           <div className="sm:col-span-2 rounded-xl border border-slate-200 p-4 dark:border-obsidian-800">
             <div className="mb-3 flex items-center justify-between">
@@ -356,7 +344,6 @@ export default function PlatformMpesaPage() {
                 {status?.b2b?.configured ? "Ready" : "Not configured"}
               </Badge>
             </div>
-
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
                 <Label htmlFor="initiatorName">Initiator name</Label>
@@ -384,7 +371,6 @@ export default function PlatformMpesaPage() {
               blank to keep what is saved.
             </HintText>
           </div>
-
           <div className="sm:col-span-2 pt-2">
             <Button type="submit" disabled={saveConfig.isPending}>
               {saveConfig.isPending ? "Encrypting & saving..." : "Save Platform Configuration"}

@@ -125,12 +125,11 @@ export function PortalTab({ tenantSlug }: { tenantSlug: string }) {
                 {copied ? "Copied" : "Copy"}
               </button>
               <a href={portalUrl} target="_blank" rel="noopener noreferrer" className={darkButton("secondary", "sm")}>
-                Open ↗
+                Open 
               </a>
             </div>
           </div>
         </Panel>
-
         <form onSubmit={save} className="space-y-6">
           <Panel title="Branding and contact" description="Shown to every customer on the Wi-Fi sign-in page.">
             {isLoading ? (
@@ -173,7 +172,6 @@ export function PortalTab({ tenantSlug }: { tenantSlug: string }) {
               .
             </p>
           </Panel>
-
           <Panel title="Design" description="How the sign-in page looks. MashupHost Clean loads fastest on phones.">
             <div className="grid gap-3 sm:grid-cols-2">
               {THEME_CATALOG.map((t) => {
@@ -198,7 +196,6 @@ export function PortalTab({ tenantSlug }: { tenantSlug: string }) {
               })}
             </div>
           </Panel>
-
           {error && <Notice tone="bad">{error}</Notice>}
           <div className="sticky bottom-4 z-10 flex items-center justify-end gap-3 rounded-xl border border-obsidian-800 bg-obsidian-900/95 px-4 py-3">
             <span className="mr-auto text-sm text-slate-400">
@@ -210,13 +207,12 @@ export function PortalTab({ tenantSlug }: { tenantSlug: string }) {
           </div>
         </form>
       </div>
-
       {/* Live phone preview of the real portal */}
       <div className="xl:sticky xl:top-20 xl:self-start">
         <p className="mb-2 text-sm text-slate-400">
           Preview{dirty ? " · text changes show after you publish" : ""}
         </p>
-        <div className="mx-auto w-[340px] max-w-full rounded-[2.2rem] border border-obsidian-700 bg-obsidian-950 p-2.5 shadow-2xl">
+        <div className="mx-auto w-[340px] max-w-full rounded-2xl border border-obsidian-700 bg-obsidian-950 p-2.5 shadow-lg">
           <iframe key={previewSrc} src={previewSrc} title="Portal preview" className="h-[640px] w-full rounded-[1.7rem] bg-white" />
         </div>
       </div>

@@ -267,13 +267,12 @@ export default function ReportsPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 print:hidden">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-white flex items-center gap-2">
-            Reports & Financial Center
+            Reports
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-            Track client registrations, spending history, generated receipts, and export verified financial revenue.
+            Revenue, customer spending and bandwidth, with receipts and exports.
           </p>
         </div>
-
         {/* Tab Navigation */}
         <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-obsidian-900 p-1.5 rounded-xl border border-slate-200 dark:border-obsidian-800 text-xs font-semibold">
           <button
@@ -285,7 +284,7 @@ export default function ReportsPage() {
                 : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
             }`}
           >
-            <span>💰</span> Revenue & Financials
+            Revenue & Financials
           </button>
           <button
             type="button"
@@ -296,7 +295,7 @@ export default function ReportsPage() {
                 : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
             }`}
           >
-            <span>👥</span> Clients & Spends
+            Clients & Spends
           </button>
           <button
             type="button"
@@ -307,11 +306,10 @@ export default function ReportsPage() {
                 : "text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white"
             }`}
           >
-            <span>📶</span> Bandwidth Usage
+            Bandwidth Usage
           </button>
         </div>
       </div>
-
       {/* ========================================================================= */}
       {/* TAB 1: REVENUE & FINANCIALS */}
       {/* ========================================================================= */}
@@ -366,7 +364,6 @@ export default function ReportsPage() {
               >
                 Custom Range
               </button>
-
               {revenuePeriod === "custom" && (
                 <div className="flex items-center gap-1.5 ml-2">
                   <input
@@ -385,14 +382,13 @@ export default function ReportsPage() {
                 </div>
               )}
             </div>
-
             {/* Action Buttons: Export CSV & Print PDF */}
             <div className="flex items-center gap-2.5">
               <Button
                 size="sm"
                 onClick={handleExportRevenueCsv}
                 disabled={revLoading || !revData}
-                className="gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-sm shadow-emerald-600/20"
+                className="gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -412,7 +408,6 @@ export default function ReportsPage() {
               </Button>
             </div>
           </div>
-
           {/* Stamped Banner (Visible in UI & Printed PDF) */}
           {revData && (
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border border-brand-500/30 bg-brand-50/20 dark:bg-brand-950/20 text-xs">
@@ -423,7 +418,7 @@ export default function ReportsPage() {
                     {revData.tenant.name} — {revData.periodLabel}
                   </p>
                   <p className="text-slate-500 dark:text-slate-400">
-                    Official Revenue Report · Certified by {revData.certifiedBy}
+                    Revenue report · Prepared by {revData.certifiedBy}
                   </p>
                 </div>
               </div>
@@ -433,7 +428,7 @@ export default function ReportsPage() {
                     Stamped: {revData.stampedAt}
                   </p>
                   <p className="font-mono text-[10px] text-slate-400">
-                    Verification Seal: {revData.stampHash}
+                    Reference: {revData.stampHash}
                   </p>
                 </div>
               </div>
@@ -444,7 +439,7 @@ export default function ReportsPage() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <Card className="p-5 space-y-1">
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Revenue</span>
-              <div className="text-2xl font-bold tabular-nums text-emerald-400 font-mono">
+              <div className="text-2xl font-semibold tabular-nums text-white">
                 {revLoading
                   ? "..."
                   : `KES ${(revData?.summary.totalRevenueMinor ?? 0 / 100).toLocaleString("en-KE", {
@@ -453,7 +448,6 @@ export default function ReportsPage() {
               </div>
               <span className="text-[11px] text-slate-400">Gross completed payments</span>
             </Card>
-
             <Card className="p-5 space-y-1">
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Transactions</span>
               <div className="text-2xl font-bold tabular-nums text-white">
@@ -461,18 +455,16 @@ export default function ReportsPage() {
               </div>
               <span className="text-[11px] text-slate-400">Receipts generated</span>
             </Card>
-
             <Card className="p-5 space-y-1">
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Paying Clients</span>
-              <div className="text-2xl font-bold tabular-nums text-cyan-400">
+              <div className="text-2xl font-semibold tabular-nums text-white">
                 {revLoading ? "..." : revData?.summary.uniqueClientsCount ?? 0}
               </div>
               <span className="text-[11px] text-slate-400">Unique subscribers & guests</span>
             </Card>
-
             <Card className="p-5 space-y-1">
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Avg Spend / Client</span>
-              <div className="text-2xl font-bold tabular-nums text-amber-400 font-mono">
+              <div className="text-2xl font-semibold tabular-nums text-white">
                 {revLoading
                   ? "..."
                   : `KES ${(revData?.summary.averageSpendMinor ?? 0 / 100).toLocaleString("en-KE", {
@@ -482,7 +474,6 @@ export default function ReportsPage() {
               <span className="text-[11px] text-slate-400">Average spend in period</span>
             </Card>
           </div>
-
           {/* Payment Methods Breakdown */}
           {revData && Object.keys(revData.summary.byMethod).length > 0 && (
             <Card className="p-5 border-slate-200 dark:border-obsidian-800 space-y-3">
@@ -519,7 +510,6 @@ export default function ReportsPage() {
                   Detailed payment records with receipt numbers, client details, and M-Pesa references.
                 </p>
               </div>
-
               <div className="w-full sm:w-72 print:hidden">
                 <Input
                   placeholder="Search receipt, client or M-Pesa ref..."
@@ -529,7 +519,6 @@ export default function ReportsPage() {
                 />
               </div>
             </div>
-
             {revLoading && <p className="text-xs text-slate-400 py-6 text-center">Loading transactions ledger...</p>}
 
             {filteredRecords.length > 0 && (
@@ -653,14 +642,13 @@ export default function ReportsPage() {
                 Joined This Month
               </button>
             </div>
-
             {/* Actions: Export Clients CSV */}
             <div className="flex items-center gap-2.5">
               <Button
                 size="sm"
                 onClick={handleExportClientsCsv}
                 disabled={clientsLoading || !clientsData}
-                className="gap-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-sm shadow-emerald-600/20"
+                className="gap-1.5 text-xs font-medium px-3 py-1.5 rounded-lg"
               >
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -680,7 +668,6 @@ export default function ReportsPage() {
               </Button>
             </div>
           </div>
-
           {/* 4 Clients KPI Summary Cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <Card className="p-5 space-y-1">
@@ -690,18 +677,16 @@ export default function ReportsPage() {
               </div>
               <span className="text-[11px] text-slate-400">Subscribers in view</span>
             </Card>
-
             <Card className="p-5 space-y-1">
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Active Subscribers</span>
-              <div className="text-2xl font-bold tabular-nums text-emerald-400">
+              <div className="text-2xl font-semibold tabular-nums text-white">
                 {clientsLoading ? "..." : clientsData?.summary.activeClients ?? 0}
               </div>
               <span className="text-[11px] text-slate-400">Active internet access</span>
             </Card>
-
             <Card className="p-5 space-y-1">
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Total Client Spend</span>
-              <div className="text-2xl font-bold tabular-nums text-emerald-400 font-mono">
+              <div className="text-2xl font-semibold tabular-nums text-white">
                 {clientsLoading
                   ? "..."
                   : `KES ${(clientsData?.summary.totalSpendAllClientsMinor ?? 0 / 100).toLocaleString("en-KE", {
@@ -710,10 +695,9 @@ export default function ReportsPage() {
               </div>
               <span className="text-[11px] text-slate-400">Cumulative customer LTV</span>
             </Card>
-
             <Card className="p-5 space-y-1">
               <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">Average Spend / User</span>
-              <div className="text-2xl font-bold tabular-nums text-amber-400 font-mono">
+              <div className="text-2xl font-semibold tabular-nums text-white">
                 {clientsLoading
                   ? "..."
                   : `KES ${(clientsData?.summary.averageSpendPerClientMinor ?? 0 / 100).toLocaleString("en-KE", {
@@ -723,7 +707,6 @@ export default function ReportsPage() {
               <span className="text-[11px] text-slate-400">Average lifetime spend</span>
             </Card>
           </div>
-
           {/* Clients List & Spends Table */}
           <Card className="p-6 border-slate-200 dark:border-obsidian-800 space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 dark:border-obsidian-800">
@@ -735,7 +718,6 @@ export default function ReportsPage() {
                   Track when subscribers joined, their lifetime spending, and view receipts.
                 </p>
               </div>
-
               <div className="w-full sm:w-72 print:hidden">
                 <Input
                   placeholder="Search client name, phone or #..."
@@ -745,7 +727,6 @@ export default function ReportsPage() {
                 />
               </div>
             </div>
-
             {clientsLoading && <p className="text-xs text-slate-400 py-6 text-center">Loading client tracker...</p>}
 
             {clientsData && clientsData.clients.length > 0 && (
@@ -789,7 +770,7 @@ export default function ReportsPage() {
                         <td className="px-4 py-3 text-slate-600 dark:text-slate-400 max-w-xs truncate">
                           {c.activePackages}
                         </td>
-                        <td className="px-4 py-3 text-right font-mono font-bold text-emerald-600 dark:text-emerald-400">
+                        <td className="px-4 py-3 text-right font-semibold text-slate-900 dark:text-white">
                           KES {(c.totalSpendMinor / 100).toLocaleString("en-KE", { minimumFractionDigits: 2 })}
                         </td>
                         <td className="px-4 py-3 text-center font-mono text-slate-600 dark:text-slate-300">
@@ -875,7 +856,6 @@ export default function ReportsPage() {
               </button>
             </div>
           </div>
-
           {/* 4 KPI SUMMARY CARDS */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
             <Card className="p-4 space-y-1 bg-slate-900/60 border-slate-800">
@@ -883,7 +863,6 @@ export default function ReportsPage() {
               <div className="text-xl font-semibold tabular-nums text-white sm:text-2xl">{formatBytes(totalBytes)}</div>
               <span className="text-xs text-slate-500">Download and upload</span>
             </Card>
-
             <Card className="p-4 space-y-1 bg-slate-900/60 border-slate-800">
               <span className="block text-sm text-slate-400">Downloaded</span>
               <div className="text-xl font-semibold tabular-nums text-white sm:text-2xl">{formatBytes(totalDownload)}</div>
@@ -891,7 +870,6 @@ export default function ReportsPage() {
                 {totalBytes > 0 ? `${Math.round((totalDownload / totalBytes) * 100)}% of total` : "0%"}
               </span>
             </Card>
-
             <Card className="p-4 space-y-1 bg-slate-900/60 border-slate-800">
               <span className="block text-sm text-slate-400">Uploaded</span>
               <div className="text-xl font-semibold tabular-nums text-white sm:text-2xl">{formatBytes(totalUpload)}</div>
@@ -899,14 +877,12 @@ export default function ReportsPage() {
                 {totalBytes > 0 ? `${Math.round((totalUpload / totalBytes) * 100)}% of total` : "0%"}
               </span>
             </Card>
-
             <Card className="p-4 space-y-1 bg-slate-900/60 border-slate-800">
               <span className="block text-sm text-slate-400">Sessions</span>
               <div className="text-xl font-semibold tabular-nums text-white sm:text-2xl">{totalSessions.toLocaleString()}</div>
               <span className="text-xs text-slate-500">Recorded by RADIUS</span>
             </Card>
           </div>
-
           {/* DAILY TRAFFIC HISTOGRAM */}
           <Card className="p-6 space-y-4 border-slate-800">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-800">
@@ -918,7 +894,6 @@ export default function ReportsPage() {
                 Average: {formatBytes(totalBytes / (bwDays?.length || 1))} / day
               </span>
             </div>
-
             {bwDaysLoading && <p className="text-xs text-slate-400 py-4">Loading daily telemetry...</p>}
 
             {bwDays && bwDays.length > 0 && (
@@ -938,7 +913,7 @@ export default function ReportsPage() {
                           title={`Download: ${formatBytes(day.downloadBytes)}`}
                         />
                         <div
-                          className="h-full bg-cyan-400 opacity-90"
+                          className="h-full bg-brand-500"
                           style={{ width: `${widthPct * ((100 - dlPct) / 100)}%` }}
                           title={`Upload: ${formatBytes(day.uploadBytes)}`}
                         />
@@ -950,7 +925,6 @@ export default function ReportsPage() {
               </div>
             )}
           </Card>
-
           {/* TOP CONSUMERS TABLE */}
           <Card className="p-6 space-y-4 border-slate-800">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-800">
@@ -960,7 +934,6 @@ export default function ReportsPage() {
                 </h2>
                 <p className="text-xs text-slate-400">Subscribers who used the most data, PPPoE and hotspot.</p>
               </div>
-
               <div className="w-full sm:w-64">
                 <Input
                   placeholder="Search subscriber username..."
@@ -970,7 +943,6 @@ export default function ReportsPage() {
                 />
               </div>
             </div>
-
             {topLoading && <p className="text-xs text-slate-400 py-4">Querying top consumers...</p>}
 
             {filteredConsumers.length > 0 && (
@@ -993,8 +965,8 @@ export default function ReportsPage() {
                           <span className="h-2 w-2 rounded-full bg-emerald-400" />
                           <span>{c.username}</span>
                         </td>
-                        <td className="px-4 py-3 text-emerald-400">{formatBytes(c.uploadBytes)}</td>
-                        <td className="px-4 py-3 text-cyan-400">{formatBytes(c.downloadBytes)}</td>
+                        <td className="px-4 py-3 text-slate-300">{formatBytes(c.uploadBytes)}</td>
+                        <td className="px-4 py-3 text-slate-300">{formatBytes(c.downloadBytes)}</td>
                         <td className="px-4 py-3 font-medium text-white">{formatBytes(c.totalBytes)}</td>
                         <td className="px-4 py-3 text-slate-400">{c.sessionCount}</td>
                         <td className="px-4 py-3">

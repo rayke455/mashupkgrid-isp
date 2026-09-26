@@ -228,7 +228,6 @@ export default function SettingsPage() {
         <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">{t.organization}</h1>
         <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{t.organizationDesc}</p>
       </div>
-
       <Card className="space-y-5 p-6">
         <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
           <div>
@@ -249,7 +248,6 @@ export default function SettingsPage() {
             <span>{t.renewWithMpesa}</span>
           </Button>
         </div>
-
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {usageRows.map((row) => (
             <div key={row.label} className="space-y-2 rounded-lg border border-obsidian-800 bg-obsidian-950 p-4">
@@ -272,7 +270,6 @@ export default function SettingsPage() {
           ))}
         </div>
       </Card>
-
       <Card className="space-y-4 p-6">
         <div>
           <p className="text-sm text-slate-400">{t.webAddress}</p>
@@ -302,7 +299,6 @@ export default function SettingsPage() {
           .
         </p>
       </Card>
-
       {/* 3. BUSINESS BRANDING FORM */}
       <Card className="p-6">
         <form
@@ -317,13 +313,11 @@ export default function SettingsPage() {
             <Label htmlFor="name">{t.businessName}</Label>
             <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required />
           </div>
-
           <div>
             <Label htmlFor="slug">{t.tenantSlug}</Label>
             <Input id="slug" value={settings?.slug ?? ""} disabled />
             <HintText>{t.slugHint}</HintText>
           </div>
-
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <Label htmlFor="timezone">{t.timezone}</Label>
@@ -363,7 +357,6 @@ export default function SettingsPage() {
               <HintText>{t.currencyHint}</HintText>
             </div>
           </div>
-
           <div className="border-t border-slate-100 pt-4 dark:border-obsidian-800">
             <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">{t.brandingSection}</p>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -399,7 +392,6 @@ export default function SettingsPage() {
               </div>
             </div>
           </div>
-
           {/* Captive Portal Hotspot Contact & Banner Settings */}
           <div className="border-t border-slate-100 pt-4 dark:border-obsidian-800 space-y-4">
             <div>
@@ -408,7 +400,6 @@ export default function SettingsPage() {
               </p>
               <HintText>{t.portalSectionHint}</HintText>
             </div>
-
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <Label htmlFor="contactPhone">{t.helplinePhone}</Label>
@@ -421,7 +412,6 @@ export default function SettingsPage() {
                 />
                 <HintText>{t.helplineHint}</HintText>
               </div>
-
               <div>
                 <Label htmlFor="supportPhone">{t.supportPhone}</Label>
                 <Input
@@ -433,7 +423,6 @@ export default function SettingsPage() {
                 />
                 <HintText>{t.supportHint}</HintText>
               </div>
-
               <div>
                 <Label htmlFor="welcomeTitle">{t.welcomeTitle}</Label>
                 <Input
@@ -443,7 +432,6 @@ export default function SettingsPage() {
                   placeholder="FAST &amp; SECURE WI-FI"
                 />
               </div>
-
               <div>
                 <Label htmlFor="bannerSubtitle">{t.bannerSubtitle}</Label>
                 <Input
@@ -455,7 +443,6 @@ export default function SettingsPage() {
               </div>
             </div>
           </div>
-
           <div className="flex items-center gap-3 pt-2">
             <Button type="submit" disabled={save.isPending}>
               {save.isPending ? c.saving : c.saveChanges}
@@ -465,11 +452,10 @@ export default function SettingsPage() {
           {error && <ErrorText>{error}</ErrorText>}
         </form>
       </Card>
-
       {/* RENEW / UPGRADE M-PESA MODAL */}
       {showRenewModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70">
-          <div className="w-full max-w-md rounded-3xl border border-slate-800 bg-slate-950 p-6 space-y-5 shadow-2xl text-left font-sans">
+          <div className="w-full max-w-md rounded-xl border border-slate-800 bg-slate-950 p-6 space-y-5 shadow-lg text-left font-sans">
             <div className="flex items-center justify-between pb-2 border-b border-slate-800">
               <div>
                 <Badge variant="info">{t.renewBadge}</Badge>
@@ -482,12 +468,10 @@ export default function SettingsPage() {
                 ✕
               </button>
             </div>
-
             <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 text-xs font-mono space-y-1">
               <div className="text-slate-400">{t.plan}: <strong className="text-white">{billing?.subscription?.plan?.name ?? "Starter WISP"}</strong></div>
               <div className="text-slate-400">{t.amount}: <strong className="text-emerald-400">KES {billing?.subscription?.plan?.monthlyPriceMinor ? (billing.subscription.plan.monthlyPriceMinor / 100).toLocaleString() : "4,500"}</strong></div>
             </div>
-
             <div className="space-y-2">
               <Label htmlFor="stk-phone">{t.mpesaPhone}</Label>
               <Input
@@ -499,7 +483,6 @@ export default function SettingsPage() {
               />
               <HintText>{t.stkHint}</HintText>
             </div>
-
             {stkSent && (
               <div role="status" className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-200">
                 {t.stkSent}

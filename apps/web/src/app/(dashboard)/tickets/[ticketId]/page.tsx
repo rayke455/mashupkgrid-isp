@@ -100,7 +100,6 @@ export default function TicketDetailPage() {
         </div>
         <Badge variant={statusVariant(ticket.status)}>{ticket.status.replace("_", " ")}</Badge>
       </div>
-
       <Card className="flex flex-wrap items-center gap-3">
         <div className="flex items-center gap-1.5">
           <span className="text-xs font-semibold text-slate-500 uppercase">Status</span>
@@ -131,7 +130,6 @@ export default function TicketDetailPage() {
           </select>
         </div>
       </Card>
-
       <div className="space-y-3">
         {ticket.messages.map((msg) => (
           <Card
@@ -146,7 +144,7 @@ export default function TicketDetailPage() {
           >
             <div className="mb-1 flex items-center justify-between text-xs text-slate-500">
               <span className="font-semibold">
-                {msg.isInternalNote ? "🔒 Internal note" : msg.authorUserId ? "Staff" : msg.authorLabel ?? "Customer"}
+                {msg.isInternalNote ? "Internal note" : msg.authorUserId ? "Staff" : msg.authorLabel ?? "Customer"}
               </span>
               <span>{new Date(msg.createdAt).toLocaleString()}</span>
             </div>
@@ -154,7 +152,6 @@ export default function TicketDetailPage() {
           </Card>
         ))}
       </div>
-
       <Card>
         <form
           onSubmit={(e) => {

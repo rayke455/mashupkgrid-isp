@@ -310,9 +310,6 @@ export default function AdminProductsPage() {
   if (!isSuperAdmin) {
     return (
       <div className="max-w-3xl mx-auto py-12 px-4 text-center space-y-4">
-        <div className="w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-2xl flex items-center justify-center mx-auto">
-          🔒
-        </div>
         <h2 className="text-2xl font-bold text-white">Super Administrator Access Required</h2>
         <p className="text-sm text-slate-400 max-w-lg mx-auto">
           You are signed in as a tenant account. Only platform Super Administrators are authorized to update product prices and configure inventory.
@@ -320,9 +317,9 @@ export default function AdminProductsPage() {
         <div className="pt-2">
           <Link
             href="/shop"
-            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-sm transition-colors"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl bg-brand-600 hover:bg-brand-500 text-slate-950 font-bold text-sm transition-colors"
           >
-            <span>🛒</span> Go to Hardware Store
+            Go to Hardware Store
           </Link>
         </div>
       </div>
@@ -335,26 +332,24 @@ export default function AdminProductsPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-800">
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="px-2 py-0.5 rounded text-[11px] font-extrabold uppercase tracking-wider bg-rose-500/20 text-rose-400 border border-rose-500/30">
-              Super Admin Exclusive
+            <span className="px-2 py-0.5 rounded text-[11px] font-semibold uppercase tracking-wider bg-rose-500/20 text-rose-400 border border-rose-500/30">
+              Super admin only
             </span>
-            <span className="text-xs text-slate-400">• Store Inventory Authority</span>
           </div>
           <h1 className="text-2xl font-semibold tracking-tight text-white">
-            Hardware Products & Catalog Management
+            Hardware and pricing
           </h1>
           <p className="text-xs text-slate-400 mt-0.5">
-            Configure networking equipment, update selling prices in KES, manage stock quantities, and select authentic images.
+            Products in the store, their prices in KES, stock and images.
           </p>
         </div>
-
         <div className="flex items-center gap-2.5">
           <Link
             href="/shop"
             target="_blank"
             className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-200 text-xs font-semibold transition-colors flex items-center gap-1.5"
           >
-            <span>👁️</span> Preview Live Shop
+            Preview Live Shop
           </Link>
           <button
             onClick={() => setShowAddModal(true)}
@@ -364,16 +359,15 @@ export default function AdminProductsPage() {
           </button>
         </div>
       </div>
-
       {/* Notifications */}
       {successMsg && (
-        <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs flex items-center gap-2 animate-in fade-in">
-          <span>✓</span> {successMsg}
+        <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs flex items-center gap-2">
+          {successMsg}
         </div>
       )}
       {errorMsg && (
-        <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs flex items-center gap-2 animate-in fade-in">
-          <span>⚠️</span> {errorMsg}
+        <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-400 text-xs flex items-center gap-2">
+          {errorMsg}
         </div>
       )}
 
@@ -382,7 +376,7 @@ export default function AdminProductsPage() {
         <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800">
           <div className="text-[11px] font-bold text-slate-400 uppercase">Total Catalog Items</div>
           <div className="text-2xl font-semibold text-white mt-1">{stats.totalCount}</div>
-          <div className="text-[10px] text-cyan-400 mt-0.5">Across 6 hardware categories</div>
+          <div className="text-[10px] text-white mt-0.5">Across 6 hardware categories</div>
         </div>
         <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800">
           <div className="text-[11px] font-bold text-slate-400 uppercase">In-Stock Products</div>
@@ -398,31 +392,28 @@ export default function AdminProductsPage() {
         </div>
         <div className="p-4 rounded-2xl bg-slate-900/60 border border-slate-800">
           <div className="text-[11px] font-bold text-slate-400 uppercase">Total Warehouse Value</div>
-          <div className="text-2xl font-semibold text-cyan-300 mt-1">
+          <div className="text-2xl font-semibold text-white mt-1">
             KES {stats.totalInventoryValue.toLocaleString()}
           </div>
           <div className="text-[10px] text-slate-400 mt-0.5">Evaluated at current retail prices</div>
         </div>
       </div>
-
       {/* Search & Filter Toolbar */}
       <div className="p-4 rounded-2xl bg-slate-950 border border-slate-800 flex flex-col md:flex-row items-center justify-between gap-3">
         <div className="relative w-full md:w-80">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs">🔍</span>
           <input
             type="text"
             placeholder="Search products by model, brand, or code..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+            className="w-full pl-9 pr-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-brand-500"
           />
         </div>
-
         <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
           <select
             value={selectedCategory}
             onChange={(e) => setSelectedCategory(e.target.value)}
-            className="px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-300 focus:outline-none focus:border-cyan-500"
+            className="px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-300 focus:outline-none focus:border-brand-500"
           >
             <option value="all">All Categories</option>
             <option value="routers">Routers & ONUs</option>
@@ -432,17 +423,15 @@ export default function AdminProductsPage() {
             <option value="solar">Solar & Power</option>
             <option value="cctv">CCTV & Surveillance</option>
           </select>
-
           <select
             value={stockFilter}
             onChange={(e) => setStockFilter(e.target.value as "all" | "in" | "out")}
-            className="px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-300 focus:outline-none focus:border-cyan-500"
+            className="px-3 py-2 bg-slate-900 border border-slate-800 rounded-xl text-xs text-slate-300 focus:outline-none focus:border-brand-500"
           >
             <option value="all">All Stock Status</option>
             <option value="in">In Stock Only</option>
             <option value="out">Out of Stock Only</option>
           </select>
-
           {(searchQuery || selectedCategory !== "all" || stockFilter !== "all") && (
             <button
               onClick={() => {
@@ -457,7 +446,6 @@ export default function AdminProductsPage() {
           )}
         </div>
       </div>
-
       {/* Products Table */}
       <div className="rounded-2xl bg-slate-950 border border-slate-800/80 overflow-hidden shadow-xl">
         <div className="overflow-x-auto">
@@ -466,7 +454,7 @@ export default function AdminProductsPage() {
               <tr>
                 <th className="py-3.5 px-4">Product Details</th>
                 <th className="py-3.5 px-3">Category</th>
-                <th className="py-3.5 px-4 font-bold text-cyan-300">Price (KES)</th>
+                <th className="py-3.5 px-4 font-bold text-white">Price (KES)</th>
                 <th className="py-3.5 px-3">Inventory</th>
                 <th className="py-3.5 px-3">Status</th>
                 <th className="py-3.5 px-4 text-right">Actions</th>
@@ -501,7 +489,7 @@ export default function AdminProductsPage() {
                         </div>
                         <div>
                           <div className="flex items-center gap-1.5">
-                            <span className="px-1.5 py-0.2 rounded bg-slate-900 border border-slate-700 text-[10px] font-bold text-cyan-400 uppercase">
+                            <span className="px-1.5 py-0.2 rounded bg-slate-900 border border-slate-700 text-[10px] font-bold text-white uppercase">
                               {product.brand}
                             </span>
                             {product.badge && (
@@ -515,14 +503,12 @@ export default function AdminProductsPage() {
                         </div>
                       </div>
                     </td>
-
                     {/* Category */}
                     <td className="py-3.5 px-3">
                       <span className="capitalize px-2 py-0.5 rounded-full bg-slate-900 border border-slate-800 text-[11px] text-slate-300">
                         {product.category}
                       </span>
                     </td>
-
                     {/* Price with Quick Super Admin Edit */}
                     <td className="py-3.5 px-4 font-mono">
                       {editingPriceId === product.id ? (
@@ -531,14 +517,14 @@ export default function AdminProductsPage() {
                             type="number"
                             value={newPriceValue}
                             onChange={(e) => setNewPriceValue(e.target.value)}
-                            className="w-24 px-2 py-1 bg-slate-900 border border-cyan-500 rounded text-xs text-cyan-300 focus:outline-none"
+                            className="w-24 px-2 py-1 bg-slate-900 border border-brand-500 rounded text-xs text-white focus:outline-none"
                             placeholder="Price"
                             autoFocus
                           />
                           <button
                             onClick={() => handleSavePrice(product.id)}
                             disabled={saveLoading}
-                            className="px-2 py-1 rounded bg-cyan-500 text-slate-950 font-bold text-[11px] hover:bg-cyan-400"
+                            className="px-2 py-1 rounded bg-brand-600 text-slate-950 font-bold text-[11px] hover:bg-brand-500"
                           >
                             Save
                           </button>
@@ -551,12 +537,12 @@ export default function AdminProductsPage() {
                         </div>
                       ) : (
                         <div className="flex items-center gap-2 group/price">
-                          <span className="text-sm font-bold text-cyan-300">
+                          <span className="text-sm font-bold text-white">
                             KES {product.price.toLocaleString()}
                           </span>
                           <button
                             onClick={() => handleStartEditPrice(product)}
-                            className="opacity-60 group-hover/price:opacity-100 text-[11px] text-cyan-400 hover:underline"
+                            className="opacity-60 group-hover/price:opacity-100 text-[11px] text-white hover:underline"
                             title="Quick Edit Price"
                           >
                             ✎ Price
@@ -564,12 +550,10 @@ export default function AdminProductsPage() {
                         </div>
                       )}
                     </td>
-
                     {/* Inventory */}
                     <td className="py-3.5 px-3">
                       <span className="font-semibold text-slate-200">{product.stock} units</span>
                     </td>
-
                     {/* Status Toggle */}
                     <td className="py-3.5 px-3">
                       <button
@@ -583,12 +567,11 @@ export default function AdminProductsPage() {
                         {product.inStock ? "● In Stock" : "○ Out of Stock"}
                       </button>
                     </td>
-
                     {/* Actions */}
                     <td className="py-3.5 px-4 text-right space-x-2">
                       <button
                         onClick={() => handleStartEditProduct(product)}
-                        className="text-[11px] text-cyan-400 hover:text-cyan-300 hover:underline font-bold"
+                        className="text-[11px] text-white hover:text-white hover:underline font-bold"
                       >
                         Edit Details
                       </button>
@@ -606,11 +589,10 @@ export default function AdminProductsPage() {
           </table>
         </div>
       </div>
-
       {/* Edit Product Modal */}
       {editingProduct && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
-          <div className="w-full max-w-2xl bg-[#090D16] border border-cyan-500/30 rounded-3xl p-6 text-slate-100 shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80">
+          <div className="w-full max-w-2xl bg-obsidian-900 border border-obsidian-700 rounded-xl p-6 text-slate-100 shadow-lg max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <div>
                 <h3 className="text-lg font-bold text-white">Edit Product Details</h3>
@@ -623,7 +605,6 @@ export default function AdminProductsPage() {
                 ✕
               </button>
             </div>
-
             <form onSubmit={handleSaveEditedProduct} className="space-y-4 pt-4 text-xs">
               <div>
                 <label className="block text-slate-300 font-medium mb-1">Product Title *</label>
@@ -632,10 +613,9 @@ export default function AdminProductsPage() {
                   required
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white focus:outline-none focus:border-brand-500"
                 />
               </div>
-
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-slate-300 font-medium mb-1">Brand *</label>
@@ -644,7 +624,7 @@ export default function AdminProductsPage() {
                     required
                     value={editBrand}
                     onChange={(e) => setEditBrand(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white focus:outline-none focus:border-brand-500"
                   />
                 </div>
                 <div>
@@ -652,7 +632,7 @@ export default function AdminProductsPage() {
                   <select
                     value={editCategory}
                     onChange={(e) => setEditCategory(e.target.value as HardwareProduct["category"])}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white focus:outline-none focus:border-brand-500"
                   >
                     <option value="routers">Routers & ONUs</option>
                     <option value="switches">Switches & Cloud Routers</option>
@@ -663,16 +643,15 @@ export default function AdminProductsPage() {
                   </select>
                 </div>
               </div>
-
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-cyan-300 font-bold mb-1">Selling Price (KES) *</label>
+                  <label className="block text-white font-bold mb-1">Selling Price (KES) *</label>
                   <input
                     type="number"
                     required
                     value={editPrice}
                     onChange={(e) => setEditPrice(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-950 border border-cyan-500/50 rounded-lg text-white focus:outline-none focus:border-cyan-400 font-bold"
+                    className="w-full px-3 py-2 bg-slate-950 border border-obsidian-700 rounded-lg text-white focus:outline-none focus:border-cyan-400 font-bold"
                   />
                 </div>
                 <div>
@@ -695,12 +674,11 @@ export default function AdminProductsPage() {
                   />
                 </div>
               </div>
-
               {/* Image Preset Picker */}
               <div className="space-y-2 p-3 rounded-2xl bg-slate-950 border border-slate-800">
                 <div className="flex items-center justify-between">
                   <label className="block text-slate-300 font-bold">Select Authentic Image Preset</label>
-                  <span className="text-[10px] text-cyan-400">Quick 1-Click Catalog</span>
+                  <span className="text-[10px] text-white">Quick 1-Click Catalog</span>
                 </div>
                 <select
                   onChange={(e) => {
@@ -715,7 +693,6 @@ export default function AdminProductsPage() {
                     </option>
                   ))}
                 </select>
-
                 <div className="flex items-center gap-3 pt-1">
                   <input
                     type="text"
@@ -733,7 +710,6 @@ export default function AdminProductsPage() {
                   )}
                 </div>
               </div>
-
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-slate-300 font-medium mb-1">Badge (Optional)</label>
@@ -756,7 +732,6 @@ export default function AdminProductsPage() {
                   />
                 </div>
               </div>
-
               <div>
                 <label className="block text-slate-300 font-medium mb-1">Full Description</label>
                 <textarea
@@ -766,7 +741,6 @@ export default function AdminProductsPage() {
                   className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white focus:outline-none"
                 />
               </div>
-
               <div>
                 <label className="block text-slate-300 font-medium mb-1">
                   Bullet Specifications (1 per line)
@@ -778,7 +752,6 @@ export default function AdminProductsPage() {
                   className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white focus:outline-none font-mono text-[11px]"
                 />
               </div>
-
               <div className="flex justify-end gap-3 pt-3 border-t border-slate-800">
                 <button
                   type="button"
@@ -790,7 +763,7 @@ export default function AdminProductsPage() {
                 <button
                   type="submit"
                   disabled={saveLoading}
-                  className="px-5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold"
+                  className="px-5 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-slate-950 font-bold"
                 >
                   {saveLoading ? "Saving..." : "Update Product"}
                 </button>
@@ -802,8 +775,8 @@ export default function AdminProductsPage() {
 
       {/* Add Product Modal */}
       {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
-          <div className="w-full max-w-xl bg-[#090D16] border border-cyan-500/30 rounded-2xl p-6 text-slate-100 shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80">
+          <div className="w-full max-w-xl bg-obsidian-900 border border-obsidian-700 rounded-2xl p-6 text-slate-100 shadow-lg max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-800">
               <div>
                 <h3 className="text-lg font-bold text-white">Add New Hardware Product</h3>
@@ -816,7 +789,6 @@ export default function AdminProductsPage() {
                 ✕
               </button>
             </div>
-
             <form onSubmit={handleCreateProduct} className="space-y-4 pt-4 text-xs">
               <div>
                 <label className="block text-slate-300 font-medium mb-1">Product Title</label>
@@ -826,10 +798,9 @@ export default function AdminProductsPage() {
                   placeholder="e.g. MikroTik hEX S Gigabit Router"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                  className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white focus:outline-none focus:border-brand-500"
                 />
               </div>
-
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-slate-300 font-medium mb-1">Brand</label>
@@ -839,7 +810,7 @@ export default function AdminProductsPage() {
                     placeholder="MikroTik, Ubiquiti, HSGQ, etc."
                     value={newBrand}
                     onChange={(e) => setNewBrand(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white focus:outline-none focus:border-brand-500"
                   />
                 </div>
                 <div>
@@ -847,7 +818,7 @@ export default function AdminProductsPage() {
                   <select
                     value={newCategory}
                     onChange={(e) => setNewCategory(e.target.value as HardwareProduct["category"])}
-                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white focus:outline-none focus:border-cyan-500"
+                    className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white focus:outline-none focus:border-brand-500"
                   >
                     <option value="routers">Routers & ONUs</option>
                     <option value="switches">Switches & Cloud Routers</option>
@@ -858,17 +829,16 @@ export default function AdminProductsPage() {
                   </select>
                 </div>
               </div>
-
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-cyan-300 font-bold mb-1">Selling Price (KES) *</label>
+                  <label className="block text-white font-bold mb-1">Selling Price (KES) *</label>
                   <input
                     type="number"
                     required
                     placeholder="8500"
                     value={newPrice}
                     onChange={(e) => setNewPrice(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-950 border border-cyan-500/50 rounded-lg text-white focus:outline-none focus:border-cyan-400 font-bold"
+                    className="w-full px-3 py-2 bg-slate-950 border border-obsidian-700 rounded-lg text-white focus:outline-none focus:border-cyan-400 font-bold"
                   />
                 </div>
                 <div>
@@ -892,12 +862,11 @@ export default function AdminProductsPage() {
                   />
                 </div>
               </div>
-
               {/* Image Preset Picker */}
               <div className="space-y-2 p-3 rounded-2xl bg-slate-950 border border-slate-800">
                 <div className="flex items-center justify-between">
                   <label className="block text-slate-300 font-bold">Select Authentic Image Preset</label>
-                  <span className="text-[10px] text-cyan-400">Genuine Hardware</span>
+                  <span className="text-[10px] text-white">Genuine Hardware</span>
                 </div>
                 <select
                   onChange={(e) => {
@@ -912,7 +881,6 @@ export default function AdminProductsPage() {
                     </option>
                   ))}
                 </select>
-
                 <div className="flex items-center gap-3 pt-1">
                   <input
                     type="text"
@@ -930,7 +898,6 @@ export default function AdminProductsPage() {
                   )}
                 </div>
               </div>
-
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-slate-300 font-medium mb-1">Badge (Optional)</label>
@@ -954,7 +921,6 @@ export default function AdminProductsPage() {
                   />
                 </div>
               </div>
-
               <div>
                 <label className="block text-slate-300 font-medium mb-1">
                   Bullet Specifications (1 per line)
@@ -966,7 +932,6 @@ export default function AdminProductsPage() {
                   className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-lg text-white focus:outline-none font-mono text-[11px]"
                 />
               </div>
-
               <div className="flex justify-end gap-3 pt-3 border-t border-slate-800">
                 <button
                   type="button"
@@ -978,7 +943,7 @@ export default function AdminProductsPage() {
                 <button
                   type="submit"
                   disabled={saveLoading}
-                  className="px-5 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold"
+                  className="px-5 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-slate-950 font-bold"
                 >
                   {saveLoading ? "Saving..." : "Create Product"}
                 </button>

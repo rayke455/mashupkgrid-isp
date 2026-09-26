@@ -239,8 +239,8 @@ export function QuickRenewModal({ isOpen, onClose, initialQuery = "" }: QuickRen
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/80 backdrop-blur-md animate-in fade-in">
-      <div className="relative w-full max-w-xl bg-gradient-to-b from-slate-900 to-slate-950 border border-emerald-500/30 rounded-3xl shadow-2xl overflow-hidden text-slate-100 flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-black/80">
+      <div className="relative w-full max-w-xl bg-gradient-to-b from-slate-900 to-slate-950 border border-emerald-500/30 rounded-xl shadow-lg overflow-hidden text-slate-100 flex flex-col max-h-[90vh]">
         {/* Modal Header */}
         <div className="p-5 sm:p-6 border-b border-slate-800/80 bg-slate-950/60 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -249,7 +249,7 @@ export function QuickRenewModal({ isOpen, onClose, initialQuery = "" }: QuickRen
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-lg font-black text-white tracking-tight">Lipa Internet &bull; Quick Renew</h2>
+                <h2 className="text-lg font-bold text-white tracking-tight">Lipa Internet &bull; Quick Renew</h2>
                 <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-[10px] font-mono font-bold uppercase">
                   10s M-Pesa
                 </span>
@@ -266,7 +266,6 @@ export function QuickRenewModal({ isOpen, onClose, initialQuery = "" }: QuickRen
             <IconClose size={16} />
           </button>
         </div>
-
         {/* Modal Body */}
         <div className="p-5 sm:p-6 overflow-y-auto space-y-6">
           {/* STEP 1: PAYMENT SUCCESS SCREEN */}
@@ -275,9 +274,8 @@ export function QuickRenewModal({ isOpen, onClose, initialQuery = "" }: QuickRen
               <div className="w-16 h-16 rounded-full bg-emerald-500/20 border-2 border-emerald-500/40 text-emerald-400 text-3xl flex items-center justify-center mx-auto">
                 <IconCheck size={32} />
               </div>
-
               <div className="space-y-1.5">
-                <h3 className="text-xl font-black text-white">Internet Reconnected &amp; Renewed!</h3>
+                <h3 className="text-xl font-bold text-white">Internet Reconnected &amp; Renewed!</h3>
                 <p className="text-xs text-emerald-400 font-mono font-bold">
                   M-Pesa Receipt: {completedPayment.receiptNumber}
                 </p>
@@ -285,7 +283,6 @@ export function QuickRenewModal({ isOpen, onClose, initialQuery = "" }: QuickRen
                   Your MikroTik router has been updated automatically via RADIUS.
                 </p>
               </div>
-
               {/* Receipt Summary Card */}
               <div className="p-4 rounded-2xl bg-slate-950/90 border border-emerald-500/30 text-left space-y-2.5 font-mono text-xs shadow-xl">
                 <div className="flex justify-between items-center text-slate-300">
@@ -302,7 +299,7 @@ export function QuickRenewModal({ isOpen, onClose, initialQuery = "" }: QuickRen
                 </div>
                 <div className="flex justify-between items-center text-slate-300">
                   <span className="text-slate-400">Amount Paid:</span>
-                  <span className="text-emerald-400 font-black text-sm">
+                  <span className="text-emerald-400 font-bold text-sm">
                     KES {completedPayment.amount.toLocaleString()}
                   </span>
                 </div>
@@ -311,7 +308,6 @@ export function QuickRenewModal({ isOpen, onClose, initialQuery = "" }: QuickRen
                   <span className="text-emerald-300 font-bold">{completedPayment.newExpiryDate} (+30 Days)</span>
                 </div>
               </div>
-
               {/* Action Buttons */}
               <div className="space-y-2 pt-2">
                 <div className="grid grid-cols-2 gap-2">
@@ -321,7 +317,6 @@ export function QuickRenewModal({ isOpen, onClose, initialQuery = "" }: QuickRen
                     }}
                     className="py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors"
                   >
-                    <span>🖨️</span>
                     <span>Print Tax Receipt</span>
                   </button>
                   <a
@@ -336,15 +331,13 @@ export function QuickRenewModal({ isOpen, onClose, initialQuery = "" }: QuickRen
                     <span>Send to WhatsApp</span>
                   </a>
                 </div>
-
                 <Link
                   href="/app"
                   onClick={onClose}
-                  className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-black text-xs uppercase tracking-wide transition-all shadow-md flex items-center justify-center gap-2"
+                  className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-500 via-amber-400 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 font-bold text-xs uppercase tracking-wide transition-all shadow-md flex items-center justify-center gap-2"
                 >
-                  <span>🚀 Open Subscriber Dashboard</span>
+                  <span>Open Subscriber Dashboard</span>
                 </Link>
-
                 <button
                   onClick={handleReset}
                   className="w-full py-2 text-xs font-bold text-slate-400 hover:text-white transition-colors"
@@ -355,20 +348,18 @@ export function QuickRenewModal({ isOpen, onClose, initialQuery = "" }: QuickRen
             </div>
           ) : isPrompting ? (
             /* STEP 2: STK PUSH PROMPT IN PROGRESS */
-            <div className="py-10 text-center space-y-6 animate-in fade-in">
+            <div className="py-10 text-center space-y-6">
               <div className="w-20 h-20 mx-auto rounded-full bg-emerald-500/10 border-2 border-emerald-500/40 flex items-center justify-center relative">
-                <span className="text-3xl animate-bounce">📱</span>
-                <span className="absolute inset-0 rounded-full border-2 border-emerald-400 animate-ping opacity-25" />
+                <span className="absolute inset-0 rounded-full border-2 border-emerald-400 opacity-25" />
               </div>
               <div className="space-y-2">
-                <h3 className="text-lg font-black text-white">Safaricom STK Push Sent!</h3>
+                <h3 className="text-lg font-bold text-white">Safaricom STK Push Sent!</h3>
                 <p className="text-xs text-slate-300 max-w-sm mx-auto leading-relaxed">
                   A payment prompt of{" "}
                   <strong className="text-emerald-400 font-mono">KES {currentSelectedPlan.price.toLocaleString()}</strong>{" "}
                   has been sent to your phone <strong className="text-cyan-300 font-mono">{paymentPhone}</strong>.
                 </p>
               </div>
-
               <div className="p-4 rounded-2xl bg-slate-950/80 border border-slate-800 text-left space-y-2 max-w-sm mx-auto text-xs text-slate-300">
                 <p className="font-bold text-amber-300">Quick Instructions:</p>
                 <ol className="list-decimal list-inside space-y-1 text-slate-400">
@@ -377,7 +368,6 @@ export function QuickRenewModal({ isOpen, onClose, initialQuery = "" }: QuickRen
                   <li>Enter your 4-digit <strong>M-Pesa PIN</strong> and press OK.</li>
                 </ol>
               </div>
-
               <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-950 border border-slate-800 font-mono text-xs text-slate-400">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                 <span>Waiting for M-Pesa authorization... ({countdown}s)</span>
@@ -385,12 +375,12 @@ export function QuickRenewModal({ isOpen, onClose, initialQuery = "" }: QuickRen
             </div>
           ) : subscriber ? (
             /* STEP 3: SUBSCRIBER CONFIRMED -> SELECT TIER & PAY */
-            <div className="space-y-5 animate-in fade-in">
+            <div className="space-y-5">
               {/* Subscriber Summary Banner */}
               <div className="p-4 rounded-2xl bg-slate-950/90 border border-slate-800 flex items-start justify-between gap-4">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-black text-white">{subscriber.customerName}</span>
+                    <span className="text-sm font-bold text-white">{subscriber.customerName}</span>
                     <span
                       className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
                         subscriber.status === "ACTIVE"
@@ -416,7 +406,6 @@ export function QuickRenewModal({ isOpen, onClose, initialQuery = "" }: QuickRen
                   Change Account
                 </button>
               </div>
-
               {/* Renewal Form */}
               <form onSubmit={handlePayRenewal} className="space-y-4">
                 <div>
@@ -436,7 +425,7 @@ export function QuickRenewModal({ isOpen, onClose, initialQuery = "" }: QuickRen
                         }`}
                       >
                         <div className="flex items-center justify-between w-full">
-                          <span className="text-xs font-black text-white">{plan.name}</span>
+                          <span className="text-xs font-bold text-white">{plan.name}</span>
                           <span className="text-[11px] font-mono font-bold text-amber-400">{plan.speed}</span>
                         </div>
                         <div className="flex items-baseline justify-between w-full mt-2 pt-2 border-t border-slate-800/80">
@@ -449,7 +438,6 @@ export function QuickRenewModal({ isOpen, onClose, initialQuery = "" }: QuickRen
                     ))}
                   </div>
                 </div>
-
                 {/* M-Pesa Phone Input */}
                 <div>
                   <label className="block text-xs font-bold text-slate-300 mb-1 uppercase tracking-wider">
@@ -472,12 +460,11 @@ export function QuickRenewModal({ isOpen, onClose, initialQuery = "" }: QuickRen
                     An automated STK push prompt will be sent to this phone.
                   </p>
                 </div>
-
                 {/* Total and Submit Button */}
                 <div className="pt-2">
                   <button
                     type="submit"
-                    className="w-full py-4 rounded-xl bg-gradient-to-r from-emerald-500 via-emerald-400 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-black text-xs sm:text-sm uppercase tracking-wider transition-all shadow-xl shadow-emerald-500/20 active:scale-95 flex items-center justify-center gap-2"
+                    className="w-full py-4 rounded-xl bg-gradient-to-r from-emerald-500 via-emerald-400 to-teal-400 hover:from-emerald-400 hover:to-teal-300 text-slate-950 font-bold text-xs sm:text-sm uppercase tracking-wider transition-all shadow-xl shadow-emerald-500/20 active:scale-95 flex items-center justify-center gap-2"
                   >
                     <IconMpesa size={18} />
                     <span>Lipa KES {currentSelectedPlan.price.toLocaleString()} na M-Pesa</span>
@@ -494,7 +481,6 @@ export function QuickRenewModal({ isOpen, onClose, initialQuery = "" }: QuickRen
                   <code className="px-1.5 py-0.5 rounded bg-slate-800 text-amber-300 font-mono">ACC-88921</code>) or your registered M-Pesa phone number to pull up your subscription.
                 </p>
               </div>
-
               {searchError && (
                 <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs text-center">
                   {searchError}
@@ -514,7 +500,7 @@ export function QuickRenewModal({ isOpen, onClose, initialQuery = "" }: QuickRen
                   <button
                     type="submit"
                     disabled={isSearching}
-                    className="px-5 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-black text-xs uppercase tracking-wider transition-all shadow-md active:scale-95 disabled:opacity-50 shrink-0 flex items-center gap-1.5"
+                    className="px-5 py-3 rounded-xl bg-gradient-to-r from-amber-500 to-yellow-400 hover:from-amber-400 hover:to-yellow-300 text-slate-950 font-bold text-xs uppercase tracking-wider transition-all shadow-md active:scale-95 disabled:opacity-50 shrink-0 flex items-center gap-1.5"
                   >
                     {isSearching ? (
                       <>
@@ -527,7 +513,6 @@ export function QuickRenewModal({ isOpen, onClose, initialQuery = "" }: QuickRen
                   </button>
                 </div>
               </form>
-
               {/* Sample Quick-Fill Chips for Instant Testing */}
               <div className="pt-2 border-t border-slate-800/80 space-y-2">
                 <span className="text-[11px] text-slate-400 font-medium block">
@@ -562,23 +547,18 @@ export function QuickRenewModal({ isOpen, onClose, initialQuery = "" }: QuickRen
                   </button>
                 </div>
               </div>
-
               {/* Security & Authenticity Guarantees */}
               <div className="grid grid-cols-2 gap-3 pt-3 text-[11px] text-slate-400 border-t border-slate-800/80">
                 <div className="flex items-center gap-2">
-                  <span className="text-emerald-400 font-bold">✓</span>
                   <span>Instant M-Pesa STK Push</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-emerald-400 font-bold">✓</span>
                   <span>Automated RADIUS Unlocking</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-emerald-400 font-bold">✓</span>
                   <span>Zero Login Required</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-emerald-400 font-bold">✓</span>
                   <span>Instant SMS Tax Receipt</span>
                 </div>
               </div>

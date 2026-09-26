@@ -119,7 +119,6 @@ export default function PackagesPage() {
           {showForm ? "Cancel" : "+ New Package"}
         </Button>
       </div>
-
       {showForm && (
         <Card className="border-brand-500/40 bg-brand-50/20 dark:bg-brand-950/20">
           <h2 className="font-semibold text-slate-900 dark:text-white mb-3">Create Broadband Plan</h2>
@@ -210,13 +209,11 @@ export default function PackagesPage() {
                   <span>{pkg.isActive ? "Active" : "Archived"}</span>
                 </Badge>
               </div>
-
               <div className="flex items-center gap-2 text-xs font-mono text-slate-600 dark:text-slate-400 mb-4">
                 <IconSpeed size={16} className="text-brand-600" />
                 <span>↓ {pkg.downloadKbps / 1000} Mbps · ↑ {pkg.uploadKbps / 1000} Mbps</span>
               </div>
             </div>
-
             <div className="border-t border-slate-100 dark:border-obsidian-800 pt-3 flex items-baseline justify-between">
               <span className="text-xs text-slate-500 uppercase tracking-wider font-semibold">
                 {pkg.billingCycle}
@@ -225,14 +222,13 @@ export default function PackagesPage() {
                 {formatMoney(pkg.priceMinor, pkg.currency)}
               </span>
             </div>
-
             <div className="mt-3 flex items-center gap-2">
               <Button
                 variant="secondary"
                 className="w-1/2 py-1.5 text-xs font-semibold"
                 onClick={() => openEditModal(pkg)}
               >
-                ✏️ Edit
+                Edit
               </Button>
               <button
                 type="button"
@@ -268,15 +264,14 @@ export default function PackagesPage() {
           </div>
         )}
       </div>
-
       {/* EDIT BROADBAND PACKAGE MODAL */}
       {editingPackage && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 overflow-y-auto">
-          <Card className="w-full max-w-lg bg-white dark:bg-obsidian-900 border-brand-500/40 shadow-2xl p-6 relative">
+          <Card className="w-full max-w-lg bg-white dark:bg-obsidian-900 border-brand-500/40 shadow-lg p-6 relative">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-obsidian-800 pb-4 mb-4">
               <div>
                 <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                  <span>✏️</span> Edit Broadband Plan: {editingPackage.name}
+                  Edit Broadband Plan: {editingPackage.name}
                 </h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400">
                   Update speed tiers and monthly pricing.
@@ -290,7 +285,6 @@ export default function PackagesPage() {
                 ✕
               </button>
             </div>
-
             <form
               onSubmit={(e) => {
                 e.preventDefault();
@@ -309,7 +303,6 @@ export default function PackagesPage() {
                   required
                 />
               </div>
-
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="editDownloadKbps">Download Speed (Kbps)</Label>
@@ -325,7 +318,6 @@ export default function PackagesPage() {
                     {editDownloadKbps ? `${Math.round(Number(editDownloadKbps) / 1000)} Mbps` : ""}
                   </span>
                 </div>
-
                 <div>
                   <Label htmlFor="editUploadKbps">Upload Speed (Kbps)</Label>
                   <Input
@@ -341,7 +333,6 @@ export default function PackagesPage() {
                   </span>
                 </div>
               </div>
-
               <div>
                 <Label htmlFor="editPrice">Price (KES)</Label>
                 <Input
@@ -354,7 +345,6 @@ export default function PackagesPage() {
                   required
                 />
               </div>
-
               {editError && <ErrorText>{editError}</ErrorText>}
 
               <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100 dark:border-obsidian-800">

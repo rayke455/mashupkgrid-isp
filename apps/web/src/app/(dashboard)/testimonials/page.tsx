@@ -113,7 +113,6 @@ export default function TestimonialsManagerPage() {
             Update operator quotes, subscriber metrics, company names, and engineer credentials displayed on the public landing page.
           </p>
         </div>
-
         <div className="flex items-center gap-2.5">
           <Link
             href="/#testimonials"
@@ -123,7 +122,6 @@ export default function TestimonialsManagerPage() {
             <span>View on Landing Page</span>
             <IconArrowRight size={13} />
           </Link>
-
           <Button
             onClick={handleSave}
             className="px-4 py-2 text-xs font-bold shadow-glow flex items-center gap-1.5"
@@ -133,9 +131,8 @@ export default function TestimonialsManagerPage() {
           </Button>
         </div>
       </div>
-
       {savedSuccess && (
-        <div className="p-3.5 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-xs flex items-center gap-2 animate-in fade-in duration-200">
+        <div className="p-3.5 rounded-xl bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 text-xs flex items-center gap-2 duration-200">
           <IconCheck size={16} className="text-emerald-400" />
           <span className="font-bold">
             Testimonials successfully updated! Changes are now live on your landing page.
@@ -150,7 +147,6 @@ export default function TestimonialsManagerPage() {
           <h2 className="text-sm font-bold text-white uppercase font-mono tracking-wider">
             1. Section Header &amp; Subtitle
           </h2>
-
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
             <div>
               <Label htmlFor="badge-text" className="text-slate-300">
@@ -164,7 +160,6 @@ export default function TestimonialsManagerPage() {
                 className="mt-1 bg-slate-950 border-slate-800 text-white"
               />
             </div>
-
             <div className="md:col-span-2">
               <Label htmlFor="title-text" className="text-slate-300">
                 Main Heading
@@ -177,7 +172,6 @@ export default function TestimonialsManagerPage() {
                 className="mt-1 bg-slate-950 border-slate-800 text-white font-bold"
               />
             </div>
-
             <div className="md:col-span-3">
               <Label htmlFor="subtitle-text" className="text-slate-300">
                 Supporting Subtitle
@@ -192,14 +186,12 @@ export default function TestimonialsManagerPage() {
             </div>
           </div>
         </Card>
-
         {/* Testimonials List Card */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-sm font-bold text-white uppercase font-mono tracking-wider">
               2. Operator Testimonials ({config.items.length})
             </h2>
-
             <button
               type="button"
               onClick={handleAddItem}
@@ -208,7 +200,6 @@ export default function TestimonialsManagerPage() {
               <span>+ Add Testimonial</span>
             </button>
           </div>
-
           <div className="space-y-5">
             {config.items.map((item, index) => (
               <Card
@@ -234,7 +225,6 @@ export default function TestimonialsManagerPage() {
                       </span>
                     </div>
                   </div>
-
                   <div className="flex items-center gap-1 text-xs font-mono">
                     <button
                       type="button"
@@ -263,7 +253,6 @@ export default function TestimonialsManagerPage() {
                     </button>
                   </div>
                 </div>
-
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
                   <div>
                     <Label className="text-slate-300">Operator Name</Label>
@@ -274,7 +263,6 @@ export default function TestimonialsManagerPage() {
                       className="mt-1 bg-slate-950 border-slate-800 text-white font-bold"
                     />
                   </div>
-
                   <div>
                     <Label className="text-slate-300">Role / Title</Label>
                     <Input
@@ -284,7 +272,6 @@ export default function TestimonialsManagerPage() {
                       className="mt-1 bg-slate-950 border-slate-800 text-white"
                     />
                   </div>
-
                   <div>
                     <Label className="text-slate-300">ISP / Company Name</Label>
                     <Input
@@ -294,7 +281,6 @@ export default function TestimonialsManagerPage() {
                       className="mt-1 bg-slate-950 border-slate-800 text-white"
                     />
                   </div>
-
                   <div>
                     <Label className="text-slate-300">Subscribers / Region</Label>
                     <Input
@@ -304,7 +290,6 @@ export default function TestimonialsManagerPage() {
                       className="mt-1 bg-slate-950 border-slate-800 text-white font-mono"
                     />
                   </div>
-
                   <div className="sm:col-span-2 md:col-span-3">
                     <Label className="text-slate-300">Review / Quote</Label>
                     <textarea
@@ -315,7 +300,6 @@ export default function TestimonialsManagerPage() {
                       className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs text-slate-200 focus:outline-none focus:border-brand-500 leading-relaxed"
                     />
                   </div>
-
                   <div>
                     <Label className="text-slate-300">Avatar Badge Color</Label>
                     <select
@@ -329,7 +313,6 @@ export default function TestimonialsManagerPage() {
                         </option>
                       ))}
                     </select>
-
                     <label className="flex items-center gap-2 mt-3 cursor-pointer text-slate-300">
                       <input
                         type="checkbox"
@@ -345,7 +328,6 @@ export default function TestimonialsManagerPage() {
             ))}
           </div>
         </div>
-
         {/* Buttons footer */}
         <div className="flex items-center justify-between pt-4 border-t border-slate-800">
           <button
@@ -355,7 +337,6 @@ export default function TestimonialsManagerPage() {
           >
             Reset to default testimonials
           </button>
-
           <div className="flex items-center gap-3">
             <Button
               type="submit"
@@ -367,7 +348,6 @@ export default function TestimonialsManagerPage() {
           </div>
         </div>
       </form>
-
       {/* Live Preview Section */}
       <div className="border-t border-slate-800 pt-8 space-y-4">
         <div className="flex items-center justify-between">
@@ -381,8 +361,7 @@ export default function TestimonialsManagerPage() {
             Direct real-time simulation
           </span>
         </div>
-
-        <div className="rounded-3xl border border-slate-800 bg-slate-950/90 p-6 sm:p-10 space-y-10">
+        <div className="rounded-xl border border-slate-800 bg-slate-950/90 p-6 sm:p-10 space-y-10">
           <div className="text-center max-w-3xl mx-auto space-y-3">
             <Badge variant="info">{config.badge}</Badge>
             <h2 className="text-2xl sm:text-3xl font-semibold text-white tracking-tight">
@@ -392,7 +371,6 @@ export default function TestimonialsManagerPage() {
               {config.subtitle}
             </p>
           </div>
-
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {config.items.map((item) => (
               <div
@@ -402,7 +380,6 @@ export default function TestimonialsManagerPage() {
                 <p className="text-xs text-slate-300 leading-relaxed italic">
                   &ldquo;{item.quote}&rdquo;
                 </p>
-
                 <div className="pt-3 border-t border-slate-800 flex items-center gap-3">
                   <div
                     className={`h-10 w-10 shrink-0 rounded-full ${item.color} font-bold text-white flex items-center justify-center text-sm`}

@@ -59,7 +59,7 @@ export function LiveNetworkDiagnostics() {
   };
 
   return (
-    <Card className="p-6 lg:p-8 space-y-6 border-slate-800 bg-slate-950/90 shadow-2xl font-sans text-left">
+    <Card className="p-6 lg:p-8 space-y-6 border-slate-800 bg-slate-950/90 shadow-lg font-sans text-left">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
@@ -69,14 +69,13 @@ export function LiveNetworkDiagnostics() {
               MikroTik RouterOS REST API
             </span>
           </div>
-          <h3 className="text-xl sm:text-2xl font-black text-white">
+          <h3 className="text-xl sm:text-2xl font-bold text-white">
             Live Ping, Traceroute &amp; Interface Traffic Monitor
           </h3>
           <p className="text-xs text-slate-400 mt-1">
             Execute real-time network tests directly from your browser against any customer CPE, gateway router, or national IXP peering.
           </p>
         </div>
-
         {/* Tab Switcher */}
         <div className="flex items-center gap-2 bg-slate-900 p-1 rounded-xl border border-slate-800 text-xs font-bold shrink-0">
           <button
@@ -85,7 +84,7 @@ export function LiveNetworkDiagnostics() {
               activeDiag === "ping" ? "bg-brand-600 text-white shadow-glow" : "text-slate-400 hover:text-white"
             }`}
           >
-            📡 ICMP Ping
+            ICMP Ping
           </button>
           <button
             onClick={() => setActiveDiag("traceroute")}
@@ -93,7 +92,7 @@ export function LiveNetworkDiagnostics() {
               activeDiag === "traceroute" ? "bg-brand-600 text-white shadow-glow" : "text-slate-400 hover:text-white"
             }`}
           >
-            🗺️ MTR Traceroute
+            MTR Traceroute
           </button>
           <button
             onClick={() => setActiveDiag("interface")}
@@ -101,11 +100,10 @@ export function LiveNetworkDiagnostics() {
               activeDiag === "interface" ? "bg-brand-600 text-white shadow-glow" : "text-slate-400 hover:text-white"
             }`}
           >
-            📊 Port Bandwidth
+            Port Bandwidth
           </button>
         </div>
       </div>
-
       {/* Target Host Input Bar */}
       <div className="flex flex-col sm:flex-row items-end gap-3 font-sans">
         <div className="flex-1 w-full">
@@ -127,7 +125,6 @@ export function LiveNetworkDiagnostics() {
           <span>{isRunning ? "Testing Pipeline..." : "Execute Test via RouterOS"}</span>
         </button>
       </div>
-
       {/* DIAGNOSTIC 1: ICMP PING */}
       {activeDiag === "ping" && (
         <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-5 space-y-4 font-mono text-xs">
@@ -140,7 +137,6 @@ export function LiveNetworkDiagnostics() {
               <span>Packet Loss: 0.0%</span>
             </span>
           </div>
-
           <div className="space-y-1.5">
             {pingResults.map((p) => (
               <div key={p.seq} className="flex justify-between items-center text-slate-300 py-0.5">
@@ -158,7 +154,6 @@ export function LiveNetworkDiagnostics() {
               </div>
             )}
           </div>
-
           <div className="pt-3 border-t border-slate-800 flex flex-wrap items-center justify-between text-[11px] text-slate-400">
             <span>Round-Trip: min/avg/max = <strong>1.4 / 1.6 / 1.9 ms</strong></span>
             <span>Jitter: <strong>0.2 ms</strong> · MTU: <strong>1500 bytes</strong></span>
@@ -172,7 +167,6 @@ export function LiveNetworkDiagnostics() {
           <div className="text-slate-400 pb-2 border-b border-slate-800">
             Traceroute to <strong className="text-white">{targetHost}</strong> (Max 30 Hops, 40 Byte Packets)
           </div>
-
           <div className="space-y-2">
             {traceHops.map((h) => (
               <div
@@ -188,7 +182,6 @@ export function LiveNetworkDiagnostics() {
                     <span className="text-slate-500 text-[10px]">{h.ip}</span>
                   </div>
                 </div>
-
                 <div className="text-right">
                   <span className="text-emerald-400 font-bold block">{h.timeMs} ms</span>
                   <span className="text-[9px] text-slate-500 uppercase">Latency</span>
@@ -222,7 +215,6 @@ export function LiveNetworkDiagnostics() {
               </div>
             </div>
           </div>
-
           <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-3">
             <div className="flex justify-between items-center">
               <span className="font-bold text-white">ether1 (WAN Internet Peering)</span>

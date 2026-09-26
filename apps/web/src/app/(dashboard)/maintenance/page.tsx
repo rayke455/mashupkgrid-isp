@@ -97,7 +97,6 @@ export default function MaintenancePage() {
       {/* Header */}
       <div>
         <div className="flex items-center gap-2 mb-1">
-          <Badge variant="warning">Super Admin Operations</Badge>
           {landingConfig.enabled && (
             <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] font-mono font-bold animate-pulse">
               LANDING PAGE LOCKED
@@ -108,10 +107,9 @@ export default function MaintenancePage() {
           System Maintenance &amp; Public Access Control
         </h1>
         <p className="text-sm text-slate-500 dark:text-slate-400">
-          Gate public website traffic, display scheduled upgrade notices, and manage emergency platform bypasses.
+          Take the public site down for planned work, show a notice, and keep a bypass for staff.
         </p>
       </div>
-
       {/* Tabs */}
       <div className="flex gap-2 border-b border-slate-200 dark:border-slate-800 pb-2">
         <button
@@ -122,13 +120,11 @@ export default function MaintenancePage() {
               : "bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:text-white"
           }`}
         >
-          <span>🌐</span>
           <span>Landing Page Maintenance Mode</span>
           {landingConfig.enabled && (
-            <span className="h-2 w-2 rounded-full bg-amber-400 animate-ping" />
+            <span className="h-2 w-2 rounded-full bg-amber-400" />
           )}
         </button>
-
         <button
           onClick={() => setActiveTab("platform")}
           className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
@@ -137,11 +133,9 @@ export default function MaintenancePage() {
               : "bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 hover:text-white"
           }`}
         >
-          <span>⚙️</span>
           <span>Core API &amp; Platform Locks</span>
         </button>
       </div>
-
       {/* TAB 1: LANDING PAGE MAINTENANCE MODE */}
       {activeTab === "landing" && (
         <div className="space-y-6">
@@ -176,7 +170,6 @@ export default function MaintenancePage() {
                 />
               </label>
             </div>
-
             {/* Notice Headline */}
             <div>
               <Label htmlFor="landing-headline">Maintenance Notice Headline</Label>
@@ -189,7 +182,6 @@ export default function MaintenancePage() {
                 placeholder="e.g. Scheduled Telecom Infrastructure Upgrade in Progress"
               />
             </div>
-
             {/* Detailed Notice Message */}
             <div>
               <Label htmlFor="landing-message">Public Explanation Notice</Label>
@@ -204,7 +196,6 @@ export default function MaintenancePage() {
                 className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-xs text-white focus:outline-none focus:ring-2 focus:ring-brand-500 leading-relaxed font-sans"
               />
             </div>
-
             {/* Grid: ETA & Emergency Contact */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
@@ -221,7 +212,6 @@ export default function MaintenancePage() {
                   placeholder="e.g. Expected completion in 45 minutes (04:30 AM EAT)"
                 />
               </div>
-
               <div>
                 <Label htmlFor="landing-contact">Emergency NOC WhatsApp / Phone</Label>
                 <Input
@@ -237,7 +227,6 @@ export default function MaintenancePage() {
                 />
               </div>
             </div>
-
             {/* Super Admin Bypass Key Configuration */}
             <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 space-y-3">
               <div className="flex items-center justify-between">
@@ -256,7 +245,6 @@ export default function MaintenancePage() {
                   <span>{copiedBypass ? "Copied URL!" : "Copy Bypass URL"}</span>
                 </button>
               </div>
-
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-1">
                 <div>
                   <Label htmlFor="landing-bypass">Secret Bypass Key</Label>
@@ -275,7 +263,6 @@ export default function MaintenancePage() {
                     Append <code className="text-cyan-400">?bypass={landingConfig.bypassSecret}</code> to any URL to view the live site.
                   </p>
                 </div>
-
                 <div className="flex items-center pt-5">
                   <label className="flex items-center gap-2.5 cursor-pointer text-xs text-slate-300">
                     <input
@@ -294,7 +281,6 @@ export default function MaintenancePage() {
                 </div>
               </div>
             </div>
-
             {/* Subsystem Telemetry Toggles */}
             <div className="space-y-2 pt-1">
               <Label>Public Telemetry Status on Maintenance Screen</Label>
@@ -327,7 +313,6 @@ export default function MaintenancePage() {
                 ))}
               </div>
             </div>
-
             {/* Action Buttons */}
             <div className="pt-3 flex flex-wrap items-center justify-between gap-3 border-t border-slate-800">
               <div className="flex items-center gap-2">
@@ -335,17 +320,14 @@ export default function MaintenancePage() {
                   {landingSaved ? <IconCheck size={16} className="text-emerald-300" /> : <IconMaintenance size={16} />}
                   <span>{landingSaved ? "Settings Applied & Saved!" : "Save Landing Maintenance Settings"}</span>
                 </Button>
-
                 <button
                   type="button"
                   onClick={() => setShowPreviewModal(true)}
                   className="px-4 py-2.5 rounded-xl border border-slate-700 hover:border-slate-500 bg-slate-800/80 hover:bg-slate-700/80 text-white font-bold text-xs transition-all flex items-center gap-2"
                 >
-                  <span>👁️</span>
                   <span>Preview Maintenance Screen</span>
                 </button>
               </div>
-
               <a
                 href="/"
                 target="_blank"
@@ -376,7 +358,6 @@ export default function MaintenancePage() {
               />
             </label>
           </div>
-
           <div>
             <Label htmlFor="level">Severity Level (1 = Low, 5 = Critical Outage)</Label>
             <Input
@@ -388,7 +369,6 @@ export default function MaintenancePage() {
               onChange={(e) => setPlatformLevel(Number(e.target.value))}
             />
           </div>
-
           <div>
             <Label htmlFor="message">Public Notification Message</Label>
             <Input
@@ -398,7 +378,6 @@ export default function MaintenancePage() {
               onChange={(e) => setPlatformMessage(e.target.value)}
             />
           </div>
-
           {platformError && <ErrorText>{platformError}</ErrorText>}
 
           <div className="pt-2">
@@ -412,7 +391,7 @@ export default function MaintenancePage() {
       {/* Full-Screen Preview Modal for Super Admin */}
       {showPreviewModal && (
         <div className="fixed inset-0 z-50 flex flex-col bg-obsidian-950 overflow-y-auto">
-          <div className="sticky top-0 z-50 bg-slate-900/90 backdrop-blur border-b border-slate-800 px-6 py-3 flex items-center justify-between">
+          <div className="sticky top-0 z-50 bg-slate-900/90 border-b border-slate-800 px-6 py-3 flex items-center justify-between">
             <div className="flex items-center gap-2 font-mono text-xs text-amber-400">
               <span className="h-2 w-2 rounded-full bg-amber-400 animate-pulse" />
               <span>SUPER ADMIN PREVIEW: Public Landing Page Under Maintenance</span>
@@ -424,7 +403,6 @@ export default function MaintenancePage() {
               Close Preview (Esc)
             </button>
           </div>
-
           <div className="flex-1">
             <LandingMaintenanceScreen
               config={landingConfig}

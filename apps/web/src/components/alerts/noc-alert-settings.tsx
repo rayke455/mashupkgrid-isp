@@ -27,7 +27,7 @@ export function NocAlertSettings() {
       id: "1",
       time: "Just now",
       type: "PAYMENT",
-      title: "💰 M-Pesa STK Payment Verified",
+      title: "M-Pesa STK Payment Verified",
       message: "KES 3,500.00 received from Brian Kimani (0712***081) for Gold Home Fiber 50M. PPPoE CoA un-throttled in 1.4s.",
       channel: "TELEGRAM",
     },
@@ -35,7 +35,7 @@ export function NocAlertSettings() {
       id: "2",
       time: "14 mins ago",
       type: "ROUTER_DOWN",
-      title: "🔴 MikroTik Gateway Down Alert",
+      title: "MikroTik Gateway Down Alert",
       message: "Core router ELD-CCR2004-RFT failed 3 consecutive ICMP probes. 148 subscribers affected. NOC engineer dispatched.",
       channel: "WHATSAPP",
     },
@@ -43,7 +43,7 @@ export function NocAlertSettings() {
       id: "3",
       time: "42 mins ago",
       type: "FIBER_CUT",
-      title: "⚡ AI Fiber Cut Detection",
+      title: "AI Fiber Cut Detection",
       message: "Optical fault localized on Trunk-B (Waiyaki Way KM 4.28). 64 ONTs dropped concurrently.",
       channel: "TELEGRAM",
     },
@@ -55,7 +55,7 @@ export function NocAlertSettings() {
       id: Date.now().toString(),
       time: "Just now",
       type: "PAYMENT",
-      title: "🔔 TEST NOC ALERT: FreeRADIUS AAA Active",
+      title: "TEST NOC ALERT: FreeRADIUS AAA Active",
       message: "Ping latency to KIXP is 1.2ms. All MikroTik API REST endpoints are healthy. Webhooks delivering at 100%.",
       channel: "TELEGRAM",
     };
@@ -64,7 +64,7 @@ export function NocAlertSettings() {
   };
 
   return (
-    <Card className="p-6 lg:p-8 space-y-6 border-slate-800 bg-slate-950/90 shadow-2xl font-sans text-left">
+    <Card className="p-6 lg:p-8 space-y-6 border-slate-800 bg-slate-950/90 shadow-lg font-sans text-left">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div>
@@ -74,38 +74,34 @@ export function NocAlertSettings() {
               Telegram &amp; WhatsApp Webhook Engine
             </span>
           </div>
-          <h3 className="text-xl sm:text-2xl font-black text-white">
+          <h3 className="text-xl sm:text-2xl font-bold text-white">
             Real-Time NOC Telegram &amp; WhatsApp Alert Dispatcher
           </h3>
           <p className="text-xs text-slate-400 mt-1">
             Receive instantaneous notifications directly to your phone when revenue lands or when core network infrastructure experiences faults.
           </p>
         </div>
-
         <button
           onClick={handleSendTestAlert}
           disabled={testSent}
           className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs font-bold text-white transition-all flex items-center gap-2 shrink-0 shadow-lg"
         >
-          {testSent ? <IconCheck size={14} className="text-emerald-400" /> : <span>🚀</span>}
+          {testSent ? <IconCheck size={14} className="text-emerald-400" /> : null}
           <span>{testSent ? "Test Alert Dispatched!" : "Dispatch Test NOC Alert"}</span>
         </button>
       </div>
-
       {/* Configuration Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
         {/* Left: Telegram Bot Configuration */}
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 space-y-4">
           <div className="flex items-center justify-between">
             <span className="font-bold text-white text-sm flex items-center gap-2">
-              <span>✈️</span>
               <span>Telegram NOC Bot Integration</span>
             </span>
             <span className="text-[10px] font-mono text-cyan-400 bg-cyan-950 px-2 py-0.5 rounded border border-cyan-800">
               Bot API 7.0
             </span>
           </div>
-
           <div className="space-y-3">
             <div>
               <Label htmlFor="tg-token">Telegram Bot API Token</Label>
@@ -127,19 +123,16 @@ export function NocAlertSettings() {
             </div>
           </div>
         </div>
-
         {/* Right: WhatsApp Notification Gateway */}
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 space-y-4">
           <div className="flex items-center justify-between">
             <span className="font-bold text-white text-sm flex items-center gap-2">
-              <span>💬</span>
               <span>WhatsApp Direct Alert Webhook</span>
             </span>
             <span className="text-[10px] font-mono text-emerald-400 bg-emerald-950 px-2 py-0.5 rounded border border-emerald-800">
               Meta Cloud API
             </span>
           </div>
-
           <div className="space-y-3">
             <div>
               <Label htmlFor="wa-phone">On-Call Engineer WhatsApp Phone</Label>
@@ -150,7 +143,6 @@ export function NocAlertSettings() {
                 className="font-mono text-xs"
               />
             </div>
-
             <div className="pt-2 space-y-2">
               <span className="text-[11px] font-mono text-slate-400 block uppercase">Trigger Events</span>
               <div className="grid grid-cols-1 gap-2 text-xs text-slate-300">
@@ -186,13 +178,11 @@ export function NocAlertSettings() {
           </div>
         </div>
       </div>
-
       {/* Live Stream of Simulated Push Alerts */}
       <div className="space-y-3 pt-2">
         <span className="text-xs font-bold text-white uppercase tracking-wider block font-mono">
           Live NOC Dispatch Stream (Simulated Push Preview)
         </span>
-
         <div className="space-y-2.5">
           {alertFeed.map((item) => (
             <div
@@ -208,7 +198,6 @@ export function NocAlertSettings() {
                 </div>
                 <p className="text-slate-300 font-sans">{item.message}</p>
               </div>
-
               <span className="text-[11px] font-mono text-slate-500 shrink-0">{item.time}</span>
             </div>
           ))}
