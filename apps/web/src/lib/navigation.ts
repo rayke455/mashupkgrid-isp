@@ -97,6 +97,7 @@ function tenantSections(has: Has): NavSection[] {
         ...(has("routers.read") ? [{ href: "/network-maintenance", label: "Planned maintenance", icon: "maintenance", keywords: "outage downtime notify customers sms scheduled work" } as NavItem] : []),
         ...(has("reports.read") ? [{ href: "/reports", label: "Bandwidth usage", icon: "speed", keywords: "reports traffic revenue export" } as NavItem] : []),
         ...(has("reports.read") ? [{ href: "/analytics", label: "Analytics", icon: "pulse", keywords: "growth revenue churn busiest hours packages sell" } as NavItem] : []),
+        ...(has("reports.read") ? [{ href: "/reports/vat", label: "VAT report", icon: "invoice", keywords: "tax kra itax vat return pin monthly" } as NavItem] : []),
       ],
     },
     {

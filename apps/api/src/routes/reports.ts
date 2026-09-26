@@ -10,6 +10,7 @@ import {
   getRevenueAnalytics,
 } from "@mashupkgrid/billing";
 import { getBandwidthByDay, getTopBandwidthConsumers } from "@mashupkgrid/radius";
+import { getVatReport, previousMonth, vatReportCsv } from "@mashupkgrid/billing";
 import { successResponse, ConflictError } from "@mashupkgrid/shared";
 import { authenticate } from "../plugins/authenticate.js";
 import { resolveTenant } from "../plugins/tenant.js";
@@ -57,6 +58,31 @@ export async function reportRoutes(app: FastifyInstance): Promise<void> {
         throw new ConflictError("That branch is not part of this account");
       }
       reply.send(successResponse(await getRevenueAnalytics(tenantId, months, branchId ?? null), request.id));
+    }
+  );
+
+  /** The month's sales and VAT for the KRA return. */
+  app.get(
+    "/vat",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("reports.read")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const { month } = z.object({ month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).default(previousMonth()) }).parse(request.query);
+      reply.send(successResponse(await getVatReport(tenantId, month), request.id));
+    }
+  );
+
+  app.get(
+    "/vat.csv",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("reports.read")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const { month } = z.object({ month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).default(previousMonth()) }).parse(request.query);
+      const [report, tenant] = await Promise.all([getVatReport(tenantId, month), prisma.tenant.findUnique({ where: { id: tenantId }, select: { timezone: true } })]);
+      reply
+        .header("content-type", "text/csv; charset=utf-8")
+        .header("content-disposition", `attachment; filename="vat-${month}.csv"`)
+        .send(vatReportCsv(report, tenant?.timezone || "Africa/Nairobi"));
     }
   );
 

@@ -15,3 +15,4 @@ export * from "./analytics.service.js";
 export * from "./upgrade.service.js";
 export * from "./network-maintenance.service.js";
 export * from "./referral.service.js";
+export * from "./vat-report.service.js";

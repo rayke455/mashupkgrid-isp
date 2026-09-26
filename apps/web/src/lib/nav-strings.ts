@@ -14,6 +14,7 @@ const LABELS_SW: Record<string, string> = {
   "Online now": "Walio mtandaoni",
   "Plan upgrades": "Kuongeza vifurushi",
   "Referrals": "Rufaa",
+  "VAT report": "Ripoti ya VAT",
   "Planned maintenance": "Matengenezo yaliyopangwa",
   "Internet plans": "Vifurushi vya intaneti",
   Invoices: "Ankara",
