@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { prisma } from "@mashupkgrid/database";
+import { renderInvoicePdf } from "@mashupkgrid/billing";
 import { voidInvoice, getInvoiceOrThrow } from "@mashupkgrid/billing";
 import {
   successResponse,
@@ -38,6 +39,21 @@ function requireTenant(tenantId: string | null): string {
 }
 
 export async function invoiceRoutes(app: FastifyInstance): Promise<void> {
+  /** The invoice as a PDF, the same document that is attached to the invoice email. */
+  app.get(
+    "/:invoiceId/pdf",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("billing.read")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const { invoiceId } = idParamsSchema.parse(request.params);
+      const pdf = await renderInvoicePdf(tenantId, invoiceId);
+      reply
+        .header("content-type", "application/pdf")
+        .header("content-disposition", `attachment; filename="${pdf.filename}"`)
+        .send(Buffer.from(pdf.bytes));
+    }
+  );
+
   /** Every invoice as a spreadsheet, for the ISP's own accounts. */
   app.get(
     "/export.csv",

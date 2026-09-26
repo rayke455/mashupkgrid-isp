@@ -7,6 +7,8 @@ import {
 } from "@mashupkgrid/billing";
 import { prisma } from "@mashupkgrid/database";
 import { sendTenantSms } from "@mashupkgrid/sms";
+import { sendWhatsAppMessage } from "@mashupkgrid/whatsapp";
+import { resolveSocket } from "../lib/whatsapp-runtime.js";
 import { sendEmail } from "../lib/email.js";
 import { renderReminderTemplate, resolveTenantPreferences, type AutomationSummary, type TenantPreferences } from "@mashupkgrid/shared";
 
@@ -73,10 +75,11 @@ async function processCandidates(
   candidates: DunningCandidate[],
   stageNumber: 1 | 2 | 3,
   stage: Stage
-): Promise<{ processed: number; emailSent: number; smsSent: number; smsFailed: number }> {
+): Promise<{ processed: number; emailSent: number; smsSent: number; smsFailed: number; whatsappSent: number }> {
   let emailSent = 0;
   let smsSent = 0;
   let smsFailed = 0;
+  let whatsappSent = 0;
   const contexts = await loadTenantContexts(candidates);
 
   for (const invoice of candidates) {
@@ -100,10 +103,24 @@ async function processCandidates(
       }
     }
 
+    // WhatsApp goes out from the ISP's own linked number. No linked number means no message,
+    // not a failure: most ISPs start with SMS only.
+    if (ctx.prefs.reminders.whatsapp) {
+      const socket = resolveSocket(invoice.tenantId);
+      if (socket) {
+        try {
+          await sendWhatsAppMessage(socket, invoice.customer.phone, sms);
+          whatsappSent += 1;
+        } catch (err) {
+          console.error(`[dunning] WhatsApp send failed for invoice ${invoice.id}`, err);
+        }
+      }
+    }
+
     await markDunningStage(invoice.id, stageNumber);
   }
 
-  return { processed: candidates.length, emailSent, smsSent, smsFailed };
+  return { processed: candidates.length, emailSent, smsSent, smsFailed, whatsappSent };
 }
 
 export async function handleSendDueSoonReminders(): Promise<AutomationSummary> {
@@ -118,7 +135,7 @@ export async function handleSendDueSoonReminders(): Promise<AutomationSummary> {
   });
   const result = await processCandidates(candidates, 1, "dueSoon");
   console.log(
-    `[dunning] due-soon-reminders: processed=${result.processed} emailSent=${result.emailSent} smsSent=${result.smsSent} smsFailed=${result.smsFailed}`
+    `[dunning] due-soon-reminders: processed=${result.processed} emailSent=${result.emailSent} smsSent=${result.smsSent} smsFailed=${result.smsFailed} whatsappSent=${result.whatsappSent}`
   );
   return result;
 }
@@ -127,7 +144,7 @@ export async function handleSendOverdueNotices(): Promise<AutomationSummary> {
   const candidates = await listOverdueInvoicesNeedingNotice();
   const result = await processCandidates(candidates, 2, "overdue");
   console.log(
-    `[dunning] overdue-notices: processed=${result.processed} emailSent=${result.emailSent} smsSent=${result.smsSent} smsFailed=${result.smsFailed}`
+    `[dunning] overdue-notices: processed=${result.processed} emailSent=${result.emailSent} smsSent=${result.smsSent} smsFailed=${result.smsFailed} whatsappSent=${result.whatsappSent}`
   );
   return result;
 }
@@ -136,7 +153,7 @@ export async function handleSendFinalDunningNotices(): Promise<AutomationSummary
   const candidates = await listInvoicesNeedingFinalNotice();
   const result = await processCandidates(candidates, 3, "final");
   console.log(
-    `[dunning] final-notices: processed=${result.processed} emailSent=${result.emailSent} smsSent=${result.smsSent} smsFailed=${result.smsFailed}`
+    `[dunning] final-notices: processed=${result.processed} emailSent=${result.emailSent} smsSent=${result.smsSent} smsFailed=${result.smsFailed} whatsappSent=${result.whatsappSent}`
   );
   return result;
 }

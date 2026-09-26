@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
+import { downloadFromApi } from "@/lib/download";
 import { useLanguage } from "@/lib/language-context";
 import { pageStrings } from "@/lib/page-strings";
 import { formatMoney } from "@/lib/money";
@@ -161,9 +162,18 @@ export default function InvoiceDetailPage() {
             {emailNote && <span className="ml-2 text-emerald-600 dark:text-emerald-400">{emailNote}</span>}
           </p>
         </div>
-        <Button variant="secondary" size="sm" disabled={emailInvoice.isPending} onClick={() => emailInvoice.mutate()}>
-          {emailInvoice.isPending ? c.sending : t.emailInvoice}
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => downloadFromApi(`/api/v1/invoices/${invoice.id}/pdf`, `${invoice.invoiceNumber}.pdf`).catch((e) => setError(e instanceof Error ? e.message : String(e)))}
+          >
+            {t.downloadPdf}
+          </Button>
+          <Button variant="secondary" size="sm" disabled={emailInvoice.isPending} onClick={() => emailInvoice.mutate()}>
+            {emailInvoice.isPending ? c.sending : t.emailInvoice}
+          </Button>
+        </div>
       </div>
       {/* Invoice Breakdown Card */}
       <Card className="divide-y divide-slate-200/80 dark:divide-obsidian-800">

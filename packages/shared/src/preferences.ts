@@ -29,6 +29,9 @@ export const tenantPreferencesSchema = z.object({
     /** Channels the reminders go out on. */
     sms: z.boolean(),
     email: z.boolean(),
+    /** Sent from the ISP's linked WhatsApp number, using the SMS wording. Skipped quietly when
+     *  no WhatsApp number is linked. */
+    whatsapp: z.boolean(),
     templates: reminderTemplatesSchema,
   }),
   tickets: z.object({
@@ -53,6 +56,7 @@ export const DEFAULT_TENANT_PREFERENCES: TenantPreferences = {
     daysBeforeDue: 3,
     sms: true,
     email: true,
+    whatsapp: true,
     templates: {
       dueSoonSms: "Reminder from {isp}: invoice {invoice} for {amount} is due {due}. Pay before then to avoid interruption.",
       dueSoonEmailSubject: "Payment reminder: {invoice} due {due}",

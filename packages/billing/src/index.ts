@@ -10,3 +10,4 @@ export * from "./payment.service.js";
 export * from "./billing-cycle.service.js";
 export * from "./dunning.service.js";
 export * from "./reports.service.js";
+export * from "./pdf.service.js";

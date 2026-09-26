@@ -35,6 +35,9 @@ export const sendPaymentConfirmationEmailJobSchema = z.object({
   customerName: z.string(),
   amountMinor: z.number().int(),
   receiptNumber: z.string(),
+  /** Lets the worker find the payment and attach a receipt PDF. Optional for jobs queued
+   *  before this existed. */
+  tenantId: z.string().uuid().optional(),
 });
 export type SendPaymentConfirmationEmailJob = z.infer<typeof sendPaymentConfirmationEmailJobSchema>;
 

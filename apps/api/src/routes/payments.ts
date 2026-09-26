@@ -8,6 +8,7 @@ import {
   topUpWallet,
   refundPaymentWithDb,
   getStampedPaymentReceipt,
+  renderReceiptPdf,
 } from "@mashupkgrid/billing";
 import {
   listPurchaseAttempts,
@@ -93,6 +94,20 @@ export async function paymentRoutes(app: FastifyInstance): Promise<void> {
         prisma.payment.count({ where }),
       ]);
       reply.send(successResponse(paginate(items, total, query), request.id));
+    }
+  );
+
+  app.get(
+    "/:paymentId/receipt.pdf",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("payments.read")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const { paymentId } = idParamsSchema.parse(request.params);
+      const pdf = await renderReceiptPdf(tenantId, paymentId);
+      reply
+        .header("content-type", "application/pdf")
+        .header("content-disposition", `attachment; filename="${pdf.filename}"`)
+        .send(Buffer.from(pdf.bytes));
     }
   );
 

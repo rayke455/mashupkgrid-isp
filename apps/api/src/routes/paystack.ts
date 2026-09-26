@@ -167,6 +167,7 @@ export async function paystackRoutes(app: FastifyInstance): Promise<void> {
             customerName: completed.customer.fullName,
             amountMinor: completed.amountMinor,
             receiptNumber: completed.reference,
+            tenantId: completed.tenantId ?? undefined,
           });
         }
         // Same anonymous-walk-in case as the M-Pesa callback: no Customer row, so the phone given

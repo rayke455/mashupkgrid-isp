@@ -103,6 +103,7 @@ export interface PageStrings {
     sortLargest: string;
     loadingInvoice: string;
     emailInvoice: string;
+    downloadPdf: string;
     billedItems: string;
     subtotal: string;
     tax: string;
@@ -400,6 +401,7 @@ const EN: PageStrings = {
     sortLargest: "Largest first",
     loadingInvoice: "Loading invoice…",
     emailInvoice: "Email invoice to customer",
+    downloadPdf: "Download PDF",
     billedItems: "Billed items",
     subtotal: "Subtotal",
     tax: "Tax (16% VAT)",
@@ -696,6 +698,7 @@ const SW: PageStrings = {
     sortLargest: "Kubwa kwanza",
     loadingInvoice: "Inapakia ankara…",
     emailInvoice: "Tuma ankara kwa barua pepe",
+    downloadPdf: "Pakua PDF",
     billedItems: "Vipengee vilivyotozwa",
     subtotal: "Jumla ndogo",
     tax: "Kodi (VAT 16%)",

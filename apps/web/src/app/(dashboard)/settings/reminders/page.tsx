@@ -22,7 +22,7 @@ interface Templates {
   finalEmailBody: string;
 }
 interface Preferences {
-  reminders: { daysBeforeDue: number; sms: boolean; email: boolean; templates: Templates };
+  reminders: { daysBeforeDue: number; sms: boolean; email: boolean; whatsapp: boolean; templates: Templates };
   tickets: { responseHours: { URGENT: number; HIGH: number; NORMAL: number; LOW: number } };
 }
 
@@ -134,7 +134,7 @@ export default function RemindersSettingsPage() {
               Three messages go out at most: before the due date, once overdue, and the day before suspension. Each is sent once per invoice.
             </p>
           </div>
-          <div className="grid gap-4 sm:grid-cols-3">
+          <div className="grid gap-4 sm:grid-cols-4">
             <div>
               <Label htmlFor="daysBeforeDue">Days before due date</Label>
               <Input
@@ -155,7 +155,12 @@ export default function RemindersSettingsPage() {
               <input type="checkbox" checked={r.email} onChange={(e) => setForm({ ...form, reminders: { ...r, email: e.target.checked } })} />
               Send by email
             </label>
+            <label className="flex items-center gap-2 pt-6 text-sm text-slate-700 dark:text-slate-300">
+              <input type="checkbox" checked={r.whatsapp} onChange={(e) => setForm({ ...form, reminders: { ...r, whatsapp: e.target.checked } })} />
+              Send by WhatsApp
+            </label>
           </div>
+          <HintText>WhatsApp messages use the SMS wording and go out from the number linked under Settings → WhatsApp. Without a linked number they are skipped.</HintText>
         </Card>
 
         <Card className="space-y-5 p-6">

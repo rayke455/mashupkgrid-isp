@@ -1,6 +1,7 @@
 import { prisma } from "@mashupkgrid/database";
 import { sendInvoiceEmailJobSchema, type AutomationSummary } from "@mashupkgrid/shared";
-import { sendEmail } from "../lib/email.js";
+import { renderInvoicePdf } from "@mashupkgrid/billing";
+import { sendEmail, type EmailAttachment } from "../lib/email.js";
 
 /**
  * The invoice itself, in the customer's inbox, the moment it exists.
@@ -96,7 +97,15 @@ export async function emailInvoice(invoiceId: string, tenantId?: string): Promis
   const invoice = await loadInvoice(invoiceId);
   if (!invoice || (tenantId && invoice.tenantId !== tenantId)) return "no-such-invoice";
   if (!invoice.customer.email) return "no-email";
-  await sendEmail({ to: invoice.customer.email, ...buildInvoiceEmail(invoice) });
+  // The PDF is a courtesy copy: if it cannot be drawn, the invoice still goes out as email.
+  let attachments: EmailAttachment[] | undefined;
+  try {
+    const pdf = await renderInvoicePdf(invoice.tenantId, invoice.id);
+    attachments = [{ filename: pdf.filename, content: pdf.bytes, contentType: "application/pdf" }];
+  } catch (err) {
+    console.warn(`[invoices] PDF for ${invoice.invoiceNumber} could not be generated`, err);
+  }
+  await sendEmail({ to: invoice.customer.email, ...buildInvoiceEmail(invoice), attachments });
   await prisma.invoice.update({ where: { id: invoice.id }, data: { emailedAt: new Date() } });
   return null;
 }
