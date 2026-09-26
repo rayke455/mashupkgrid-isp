@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
+import { useLanguage } from "@/lib/language-context";
+import { pageStrings } from "@/lib/page-strings";
 import { formatMoney } from "@/lib/money";
 import { Button, Card, ErrorText, Input, Label, Badge, StatusDot } from "@/components/ui";
 import { IconMpesa, IconCheck, IconInvoice } from "@/components/icons";
@@ -48,6 +50,9 @@ interface StkStatus {
 const METHODS = ["CASH", "BANK_TRANSFER", "WALLET", "MANUAL"] as const;
 
 export default function InvoiceDetailPage() {
+  const { lang } = useLanguage();
+  const t = pageStrings(lang).invoices;
+  const c = pageStrings(lang).common;
   const { invoiceId } = useParams<{ invoiceId: string }>();
   const queryClient = useQueryClient();
   const [amount, setAmount] = useState("");
@@ -65,7 +70,7 @@ export default function InvoiceDetailPage() {
   const emailInvoice = useMutation({
     mutationFn: () => apiFetch<{ to: string }>(`/api/v1/invoices/${invoiceId}/send`, { method: "POST" }),
     onSuccess: (res) => setEmailNote(`Invoice emailed to ${res.to}.`),
-    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Could not email the invoice"),
+    onError: (err) => setError(err instanceof ApiRequestError ? err.message : t.couldNotEmail),
   });
 
   const recordPayment = useMutation({
@@ -78,7 +83,7 @@ export default function InvoiceDetailPage() {
       setAmount("");
       queryClient.invalidateQueries({ queryKey: ["invoice", invoiceId] });
     },
-    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to record payment"),
+    onError: (err) => setError(err instanceof ApiRequestError ? err.message : t.failedRecord),
   });
 
   const initiateStkPush = useMutation({
@@ -93,7 +98,7 @@ export default function InvoiceDetailPage() {
         }),
       }),
     onSuccess: (result) => setCheckoutRequestId(result.checkoutRequestId),
-    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to initiate M-Pesa push"),
+    onError: (err) => setError(err instanceof ApiRequestError ? err.message : t.failedStk),
   });
 
   const initiatePaystack = useMutation({
@@ -109,7 +114,7 @@ export default function InvoiceDetailPage() {
     onSuccess: (result) => {
       window.location.href = result.authorizationUrl;
     },
-    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to initiate Paystack checkout"),
+    onError: (err) => setError(err instanceof ApiRequestError ? err.message : t.failedPaystack),
   });
 
   const { data: stkStatus } = useQuery({
@@ -125,7 +130,7 @@ export default function InvoiceDetailPage() {
     }
   }, [stkStatus?.status, queryClient, invoiceId]);
 
-  if (!invoice) return <p className="text-sm text-slate-500">Loading invoice...</p>;
+  if (!invoice) return <p className="text-sm text-slate-500">{t.loadingInvoice}</p>;
   const remainingMinor = invoice.totalMinor - invoice.amountPaidMinor;
 
   const badgeVariant =
@@ -152,12 +157,12 @@ export default function InvoiceDetailPage() {
             </Badge>
           </div>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-            Due {new Date(invoice.dueDate).toLocaleDateString()}
+            {c.due(new Date(invoice.dueDate).toLocaleDateString())}
             {emailNote && <span className="ml-2 text-emerald-600 dark:text-emerald-400">{emailNote}</span>}
           </p>
         </div>
         <Button variant="secondary" size="sm" disabled={emailInvoice.isPending} onClick={() => emailInvoice.mutate()}>
-          {emailInvoice.isPending ? "Sending…" : "Email invoice to customer"}
+          {emailInvoice.isPending ? c.sending : t.emailInvoice}
         </Button>
       </div>
 
@@ -165,7 +170,7 @@ export default function InvoiceDetailPage() {
       <Card className="divide-y divide-slate-200/80 dark:divide-obsidian-800">
         <div className="pb-4">
           <h2 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-3">
-            Billed Items
+            {t.billedItems}
           </h2>
           <div className="space-y-2 text-sm font-mono">
             {invoice.items.map((item) => (
@@ -183,23 +188,23 @@ export default function InvoiceDetailPage() {
 
         <div className="py-4 space-y-2 text-sm font-mono">
           <div className="flex justify-between text-slate-600 dark:text-slate-400">
-            <span>Subtotal</span>
+            <span>{t.subtotal}</span>
             <span>{formatMoney(invoice.subtotalMinor, invoice.currency)}</span>
           </div>
           <div className="flex justify-between text-slate-600 dark:text-slate-400">
-            <span>Tax (16% VAT)</span>
+            <span>{t.tax}</span>
             <span>{formatMoney(invoice.taxMinor, invoice.currency)}</span>
           </div>
           <div className="flex justify-between font-bold text-base text-slate-900 dark:text-white pt-1">
-            <span>Total Invoiced</span>
+            <span>{t.totalInvoiced}</span>
             <span>{formatMoney(invoice.totalMinor, invoice.currency)}</span>
           </div>
           <div className="flex justify-between text-emerald-600 dark:text-emerald-400">
-            <span>Amount Paid</span>
+            <span>{t.amountPaid}</span>
             <span>{formatMoney(invoice.amountPaidMinor, invoice.currency)}</span>
           </div>
           <div className="flex justify-between font-bold text-base text-rose-600 dark:text-rose-400 pt-1 border-t border-slate-200 dark:border-obsidian-800">
-            <span>Balance Due</span>
+            <span>{t.balanceDue}</span>
             <span>{formatMoney(remainingMinor, invoice.currency)}</span>
           </div>
         </div>
@@ -211,16 +216,16 @@ export default function InvoiceDetailPage() {
           <div>
             <div className="flex items-center gap-2 mb-1">
               <IconMpesa className="text-emerald-600 dark:text-emerald-400" />
-              <h2 className="font-semibold text-slate-900 dark:text-white">Instant Online Payment</h2>
+              <h2 className="font-semibold text-slate-900 dark:text-white">{t.onlinePayment}</h2>
             </div>
             <p className="text-xs text-slate-600 dark:text-slate-400">
-              Collect payment via M-Pesa STK Push or Paystack (Cards, Apple Pay, Bank Transfer).
+              {t.onlinePaymentHint}
             </p>
           </div>
 
           <div className="flex flex-wrap items-end gap-3 pt-2 border-t border-emerald-500/20">
             <div className="flex-1 min-w-[200px]">
-              <Label htmlFor="mpesaPhone">M-Pesa Phone Number</Label>
+              <Label htmlFor="mpesaPhone">{t.mpesaPhone}</Label>
               <Input
                 id="mpesaPhone"
                 placeholder="0712345678"
@@ -238,7 +243,7 @@ export default function InvoiceDetailPage() {
                 initiateStkPush.mutate();
               }}
             >
-              {initiateStkPush.isPending ? "Triggering..." : `Pay ${formatMoney(remainingMinor, invoice.currency)} via M-Pesa`}
+              {initiateStkPush.isPending ? t.triggering : t.payViaMpesa(formatMoney(remainingMinor, invoice.currency))}
             </Button>
             <Button
               variant="secondary"
@@ -249,7 +254,7 @@ export default function InvoiceDetailPage() {
                 initiatePaystack.mutate();
               }}
             >
-              {initiatePaystack.isPending ? "Connecting..." : "💳 Pay via Paystack"}
+              {initiatePaystack.isPending ? t.connecting : t.payViaPaystack}
             </Button>
           </div>
 
@@ -258,22 +263,22 @@ export default function InvoiceDetailPage() {
               {stkStatus.status === "PENDING" && (
                 <p className="flex items-center gap-2 text-slate-600 dark:text-slate-300">
                   <span className="h-2 w-2 rounded-full bg-amber-500 animate-ping" />
-                  Prompt dispatched — waiting for subscriber to enter M-Pesa PIN...
+                  {t.promptDispatched}
                 </p>
               )}
               {stkStatus.status === "COMPLETED" && (
                 <p className="flex items-center gap-2 text-emerald-600 dark:text-emerald-400 font-bold">
                   <IconCheck size={14} />
-                  Payment confirmed! Invoice reconciled and session unlocked.
+                  {t.paymentConfirmed}
                 </p>
               )}
               {stkStatus.status === "FAILED" && (
                 <p className="text-rose-600 dark:text-rose-400">
-                  Payment failed: {stkStatus.resultDesc ?? "Subscriber PIN cancelled or insufficient funds."}
+                  {t.paymentFailed(stkStatus.resultDesc ?? t.pinCancelled)}
                 </p>
               )}
               {stkStatus.status === "CANCELLED" && (
-                <p className="text-amber-600">The subscriber cancelled the prompt.</p>
+                <p className="text-amber-600">{t.subscriberCancelled}</p>
               )}
             </div>
           )}
@@ -283,10 +288,10 @@ export default function InvoiceDetailPage() {
       {/* Manual Payment Recording */}
       {remainingMinor > 0 && (invoice.status === "PENDING" || invoice.status === "PARTIALLY_PAID" || invoice.status === "OVERDUE") && (
         <Card>
-          <h2 className="mb-3 font-semibold text-slate-900 dark:text-white">Record Manual Payment</h2>
+          <h2 className="mb-3 font-semibold text-slate-900 dark:text-white">{t.recordManual}</h2>
           <div className="flex flex-wrap items-end gap-3">
             <div>
-              <Label htmlFor="amount">Amount Paid (KES)</Label>
+              <Label htmlFor="amount">{t.amountPaidKes}</Label>
               <Input
                 id="amount"
                 type="number"
@@ -298,7 +303,7 @@ export default function InvoiceDetailPage() {
               />
             </div>
             <div>
-              <Label htmlFor="method">Payment Method</Label>
+              <Label htmlFor="method">{t.paymentMethod}</Label>
               <select
                 id="method"
                 className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-brand-500 dark:border-obsidian-700 dark:bg-obsidian-950 dark:text-slate-100"
@@ -319,7 +324,7 @@ export default function InvoiceDetailPage() {
                 recordPayment.mutate();
               }}
             >
-              {recordPayment.isPending ? "Recording..." : "Record Payment"}
+              {recordPayment.isPending ? t.recording : t.recordPayment}
             </Button>
           </div>
           {error && <ErrorText>{error}</ErrorText>}
@@ -328,7 +333,7 @@ export default function InvoiceDetailPage() {
 
       {/* Payment History Table */}
       <Card>
-        <h2 className="mb-3 font-semibold text-slate-900 dark:text-white">Payment Ledger</h2>
+        <h2 className="mb-3 font-semibold text-slate-900 dark:text-white">{t.ledger}</h2>
         <div className="space-y-2">
           {invoice.payments.map((payment) => (
             <div
@@ -352,7 +357,7 @@ export default function InvoiceDetailPage() {
             </div>
           ))}
           {invoice.payments.length === 0 && (
-            <p className="text-xs text-slate-500 py-2">No payments recorded against this invoice yet.</p>
+            <p className="text-xs text-slate-500 py-2">{t.noPayments}</p>
           )}
         </div>
       </Card>

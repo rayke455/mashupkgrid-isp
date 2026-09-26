@@ -95,6 +95,9 @@ export function CaptivePortalPluginContainer({
       cancelled = true;
       window.removeEventListener("mkg_portal_plugin_change" as unknown as keyof WindowEventMap, handlePluginChange as EventListener);
     };
+    // onPublishedDefaultLanguage is read once with the published config; re-running the fetch
+    // whenever the parent re-renders would refetch the config on every keystroke.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenantSlug]);
 
   const addToast = (type: ToastMessage["type"], message: string) => {

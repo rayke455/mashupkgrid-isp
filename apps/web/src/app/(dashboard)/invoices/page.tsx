@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/api-client";
+import { useLanguage } from "@/lib/language-context";
+import { pageStrings } from "@/lib/page-strings";
 import { formatMoney } from "@/lib/money";
 import { Card, Badge, StatusDot } from "@/components/ui";
 import { IconInvoice, IconArrowRight } from "@/components/icons";
@@ -22,6 +24,9 @@ interface PaginatedInvoices {
 }
 
 export default function InvoicesPage() {
+  const { lang } = useLanguage();
+  const t = pageStrings(lang).invoices;
+  const c = pageStrings(lang).common;
   const { data, isLoading } = useQuery({
     queryKey: ["invoices", "all"],
     queryFn: () => apiFetch<PaginatedInvoices>("/api/v1/invoices?limit=50&sortBy=createdAt&sortOrder=desc"),
@@ -32,15 +37,15 @@ export default function InvoicesPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">
-            Invoices
+            {t.title}
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            Bills sent to your subscribers, and whether they&apos;re paid.
+            {t.description}
           </p>
         </div>
       </div>
 
-      {isLoading && <p className="text-sm text-slate-500">Loading invoices...</p>}
+      {isLoading && <p className="text-sm text-slate-500">{t.loadingInvoices}</p>}
 
       <div className="space-y-3">
         {data?.items.map((invoice) => {
@@ -65,7 +70,7 @@ export default function InvoicesPage() {
                       {invoice.invoiceNumber}
                     </p>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Due {new Date(invoice.dueDate).toLocaleDateString()}
+                      {c.due(new Date(invoice.dueDate).toLocaleDateString())}
                     </p>
                   </div>
                 </div>
@@ -91,8 +96,8 @@ export default function InvoicesPage() {
         {data && data.items.length === 0 && (
           <div className="rounded-xl border border-dashed border-slate-300 p-8 text-center dark:border-obsidian-800">
             <IconInvoice size={32} className="mx-auto text-slate-400 mb-2" />
-            <h3 className="font-semibold text-slate-700 dark:text-slate-300">No invoices found</h3>
-            <p className="text-xs text-slate-500 mt-1">Invoices will appear when subscribers are billed.</p>
+            <h3 className="font-semibold text-slate-700 dark:text-slate-300">{t.noInvoices}</h3>
+            <p className="text-xs text-slate-500 mt-1">{t.noInvoicesHint}</p>
           </div>
         )}
       </div>

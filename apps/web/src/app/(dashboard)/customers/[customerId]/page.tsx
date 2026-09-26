@@ -5,6 +5,8 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
+import { useLanguage } from "@/lib/language-context";
+import { pageStrings } from "@/lib/page-strings";
 import { formatMoney } from "@/lib/money";
 import { Button, Card, ErrorText, Input, Label, Badge, StatusDot } from "@/components/ui";
 import { IconUsers, IconInvoice, IconPackage, IconArrowRight, IconShield } from "@/components/icons";
@@ -57,6 +59,9 @@ export default function CustomerDetailPage() {
   const { customerId } = useParams<{ customerId: string }>();
   const queryClient = useQueryClient();
   const [error, setError] = useState<string | null>(null);
+  const { lang } = useLanguage();
+  const t = pageStrings(lang).customers;
+  const c = pageStrings(lang).common;
   const [selectedPackageId, setSelectedPackageId] = useState("");
   const [topUpAmount, setTopUpAmount] = useState("");
   const [revealed, setRevealed] = useState<Record<string, { username: string; password: string }>>({});
@@ -108,7 +113,7 @@ export default function CustomerDetailPage() {
       setSelectedPackageId("");
       invalidateAll();
     },
-    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to subscribe"),
+    onError: (err) => setError(err instanceof ApiRequestError ? err.message : t.failedSubscribe),
   });
 
   const revealPassword = useMutation({
@@ -118,7 +123,7 @@ export default function CustomerDetailPage() {
         { method: "POST" }
       ),
     onSuccess: (data, subscriptionId) => setRevealed((prev) => ({ ...prev, [subscriptionId]: data })),
-    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to reveal password"),
+    onError: (err) => setError(err instanceof ApiRequestError ? err.message : t.failedReveal),
   });
 
   const linkAccount = useMutation({
@@ -132,7 +137,7 @@ export default function CustomerDetailPage() {
       setShowLinkForm(false);
       queryClient.invalidateQueries({ queryKey: ["customer", customerId] });
     },
-    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to link account"),
+    onError: (err) => setError(err instanceof ApiRequestError ? err.message : t.failedLink),
   });
 
   // Extra days for a subscriber: pushes the billing date and any open invoice's due date, and
@@ -151,7 +156,7 @@ export default function CustomerDetailPage() {
       );
       invalidateAll();
     },
-    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to extend"),
+    onError: (err) => setError(err instanceof ApiRequestError ? err.message : t.failedExtend),
   });
   const askExtend = (subscriptionId: string) => {
     const answer = window.prompt("Extend this subscription by how many days?", "7");
@@ -181,7 +186,7 @@ export default function CustomerDetailPage() {
       setMsgSubject("");
       setMsgBody("");
     },
-    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to send"),
+    onError: (err) => setError(err instanceof ApiRequestError ? err.message : t.failedSend),
   });
 
   const topUp = useMutation({
@@ -198,10 +203,10 @@ export default function CustomerDetailPage() {
       setTopUpAmount("");
       invalidateAll();
     },
-    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to top up wallet"),
+    onError: (err) => setError(err instanceof ApiRequestError ? err.message : t.failedTopUp),
   });
 
-  if (!customer) return <p className="text-sm text-slate-500">Loading subscriber details...</p>;
+  if (!customer) return <p className="text-sm text-slate-500">{t.loadingDetails}</p>;
 
   return (
     <div className="space-y-6">
@@ -218,7 +223,7 @@ export default function CustomerDetailPage() {
             </Badge>
           </div>
           <p className="mt-1 font-mono text-xs text-slate-500 dark:text-slate-400">
-            Account #{customer.customerNumber} · {customer.phone} {customer.email ? `· ${customer.email}` : ""}
+            {t.account} #{customer.customerNumber} · {customer.phone} {customer.email ? `· ${customer.email}` : ""}
           </p>
         </div>
 
@@ -226,7 +231,7 @@ export default function CustomerDetailPage() {
           {customer.userId ? (
             <Badge variant="success">
               <StatusDot status="ACTIVE" pulse={false} />
-              <span>Self-service portal linked</span>
+              <span>{t.portalLinked}</span>
             </Badge>
           ) : showLinkForm ? (
             <form
@@ -239,14 +244,14 @@ export default function CustomerDetailPage() {
             >
               <Input
                 type="email"
-                placeholder="customer's login email"
+                placeholder={t.loginEmailPlaceholder}
                 value={linkEmail}
                 onChange={(e) => setLinkEmail(e.target.value)}
                 className="w-56"
                 required
               />
               <Button type="submit" disabled={linkAccount.isPending} className="px-3 py-1.5 text-xs">
-                {linkAccount.isPending ? "Linking..." : "Link"}
+                {linkAccount.isPending ? t.linking : t.link}
               </Button>
               <Button
                 type="button"
@@ -254,12 +259,12 @@ export default function CustomerDetailPage() {
                 className="px-3 py-1.5 text-xs"
                 onClick={() => setShowLinkForm(false)}
               >
-                Cancel
+                {c.cancel}
               </Button>
             </form>
           ) : (
             <Button variant="secondary" className="px-3 py-1.5 text-xs" onClick={() => setShowLinkForm(true)}>
-              Link self-service login
+              {t.linkLogin}
             </Button>
           )}
         </div>
@@ -271,7 +276,7 @@ export default function CustomerDetailPage() {
       <Card>
         <h2 className="mb-2 font-semibold text-slate-900 dark:text-white flex items-center gap-2">
           <IconPackage size={18} className="text-brand-600 dark:text-brand-400" />
-          Assign Broadband Subscription
+          {t.assignSubscription}
         </h2>
         <div className="flex flex-wrap items-center gap-3 mt-3">
           <select
@@ -279,7 +284,7 @@ export default function CustomerDetailPage() {
             value={selectedPackageId}
             onChange={(e) => setSelectedPackageId(e.target.value)}
           >
-            <option value="">Select an active bandwidth tier...</option>
+            <option value="">{t.selectTier}</option>
             {packages?.items.map((pkg) => (
               <option key={pkg.id} value={pkg.id}>
                 {pkg.name} — {formatMoney(pkg.priceMinor, pkg.currency)} / {pkg.billingCycle}
@@ -293,7 +298,7 @@ export default function CustomerDetailPage() {
               subscribe.mutate();
             }}
           >
-            {subscribe.isPending ? "Assigning & provisioning..." : "Subscribe Customer"}
+            {subscribe.isPending ? t.assigning : t.subscribeCustomer}
           </Button>
         </div>
       </Card>
@@ -304,30 +309,30 @@ export default function CustomerDetailPage() {
 
       {/* Message the customer */}
       <Card>
-        <h2 className="mb-1 font-semibold text-slate-900 dark:text-white">Message this customer</h2>
+        <h2 className="mb-1 font-semibold text-slate-900 dark:text-white">{t.messageCustomer}</h2>
         <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
-          Sent by email{customer.email ? ` (${customer.email})` : " (no address on file)"} and SMS ({customer.phone}). Delivery is recorded in the audit log.
+          {t.sentBy(customer.email, customer.phone)}
         </p>
         <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
           <div className="space-y-2">
-            <Input placeholder="Subject" value={msgSubject} onChange={(e) => setMsgSubject(e.target.value)} maxLength={150} />
+            <Input placeholder={c.subject} value={msgSubject} onChange={(e) => setMsgSubject(e.target.value)} maxLength={150} />
             <textarea
               value={msgBody}
               onChange={(e) => setMsgBody(e.target.value)}
               maxLength={2000}
               rows={3}
-              placeholder="Your message…"
+              placeholder={t.yourMessage}
               className="w-full rounded-lg border border-slate-300/90 bg-white px-3.5 py-2 text-sm text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 dark:border-obsidian-700 dark:bg-obsidian-950 dark:text-slate-100"
             />
           </div>
           <div className="flex flex-col gap-2 text-sm">
             <label className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
               <input type="checkbox" checked={msgChannels.EMAIL} disabled={!customer.email} onChange={(e) => setMsgChannels((c) => ({ ...c, EMAIL: e.target.checked }))} />
-              Email
+              {c.email}
             </label>
             <label className="flex items-center gap-2 text-slate-700 dark:text-slate-300">
               <input type="checkbox" checked={msgChannels.SMS} onChange={(e) => setMsgChannels((c) => ({ ...c, SMS: e.target.checked }))} />
-              SMS
+              {c.sms}
             </label>
             <Button
               disabled={sendMessage.isPending || !msgSubject.trim() || !msgBody.trim() || !((msgChannels.EMAIL && customer.email) || msgChannels.SMS)}
@@ -336,7 +341,7 @@ export default function CustomerDetailPage() {
                 sendMessage.mutate();
               }}
             >
-              {sendMessage.isPending ? "Sending…" : "Send"}
+              {sendMessage.isPending ? c.sending : c.send}
             </Button>
           </div>
         </div>
@@ -344,7 +349,7 @@ export default function CustomerDetailPage() {
 
       {/* Active Subscriptions Grid */}
       <Card>
-        <h2 className="mb-3 font-semibold text-slate-900 dark:text-white">Active PPPoE Subscriptions</h2>
+        <h2 className="mb-3 font-semibold text-slate-900 dark:text-white">{t.activeSubscriptions}</h2>
         <div className="space-y-3">
           {subscriptions?.map((sub) => (
             <div
@@ -357,7 +362,7 @@ export default function CustomerDetailPage() {
                     {sub.package.name}
                   </p>
                   <p className="text-xs text-slate-500">
-                    Next billing date: {new Date(sub.nextBillingAt).toLocaleDateString()}
+                    {t.nextBilling(new Date(sub.nextBillingAt).toLocaleDateString())}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -366,7 +371,7 @@ export default function CustomerDetailPage() {
                   </Badge>
                   {sub.status !== "CANCELLED" && (
                     <Button variant="secondary" className="px-2.5 py-1 text-xs" disabled={extend.isPending} onClick={() => askExtend(sub.id)}>
-                      Extend days
+                      {t.extendDays}
                     </Button>
                   )}
                   {!revealed[sub.id] && (
@@ -380,7 +385,7 @@ export default function CustomerDetailPage() {
                       }}
                     >
                       <IconShield size={13} />
-                      <span>Show PPPoE Credentials</span>
+                      <span>{t.showCredentials}</span>
                     </Button>
                   )}
                 </div>
@@ -388,14 +393,14 @@ export default function CustomerDetailPage() {
 
               {revealed[sub.id] && (
                 <div className="mt-3 flex items-center justify-between rounded-lg bg-slate-950 px-3 py-2.5 font-mono text-xs text-emerald-400 border border-slate-800">
-                  <span>Username: {revealed[sub.id]!.username}</span>
-                  <span>Password: {revealed[sub.id]!.password}</span>
+                  <span>{t.usernameLabel}: {revealed[sub.id]!.username}</span>
+                  <span>{t.passwordLabel}: {revealed[sub.id]!.password}</span>
                 </div>
               )}
             </div>
           ))}
           {subscriptions && subscriptions.length === 0 && (
-            <p className="text-xs text-slate-500 py-2">No active subscriptions on this subscriber account.</p>
+            <p className="text-xs text-slate-500 py-2">{t.noSubscriptions}</p>
           )}
         </div>
       </Card>
@@ -407,7 +412,7 @@ export default function CustomerDetailPage() {
           <div className="flex items-center justify-between mb-3">
             <h2 className="font-semibold text-slate-900 dark:text-white flex items-center gap-2">
               <IconInvoice size={18} className="text-brand-600" />
-              Invoices
+              {t.invoices}
             </h2>
           </div>
           <div className="space-y-2">
@@ -422,7 +427,7 @@ export default function CustomerDetailPage() {
                     {invoice.invoiceNumber}
                   </p>
                   <p className="text-slate-500">
-                    Due {new Date(invoice.dueDate).toLocaleDateString()}
+                    {c.due(new Date(invoice.dueDate).toLocaleDateString())}
                   </p>
                 </div>
                 <div className="text-right">
@@ -436,7 +441,7 @@ export default function CustomerDetailPage() {
               </Link>
             ))}
             {invoices && invoices.items.length === 0 && (
-              <p className="text-xs text-slate-500 py-2">No invoices generated yet.</p>
+              <p className="text-xs text-slate-500 py-2">{t.noInvoicesYet}</p>
             )}
           </div>
         </Card>
@@ -445,8 +450,8 @@ export default function CustomerDetailPage() {
         <Card>
           <div className="flex items-center justify-between mb-3">
             <div>
-              <h2 className="font-semibold text-slate-900 dark:text-white">Customer Wallet</h2>
-              <p className="text-xs text-slate-500">Prepaid balance for auto-renewals</p>
+              <h2 className="font-semibold text-slate-900 dark:text-white">{t.wallet}</h2>
+              <p className="text-xs text-slate-500">{t.walletHint}</p>
             </div>
             <span className="font-mono text-xl font-bold text-emerald-600 dark:text-emerald-400">
               {walletData ? formatMoney(walletData.wallet.balanceMinor, walletData.wallet.currency) : "—"}
@@ -455,7 +460,7 @@ export default function CustomerDetailPage() {
 
           <div className="mb-4 flex items-end gap-2">
             <div className="flex-1">
-              <Label htmlFor="topUpAmount">Record Cash / Manual Top-up</Label>
+              <Label htmlFor="topUpAmount">{t.recordTopUp}</Label>
               <Input
                 id="topUpAmount"
                 type="number"
@@ -472,7 +477,7 @@ export default function CustomerDetailPage() {
                 topUp.mutate();
               }}
             >
-              {topUp.isPending ? "Recording..." : "Record Top-up"}
+              {topUp.isPending ? t.recording : t.recordTopUpButton}
             </Button>
           </div>
 

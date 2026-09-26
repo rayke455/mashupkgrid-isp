@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
+import { useLanguage } from "@/lib/language-context";
+import { pageStrings } from "@/lib/page-strings";
 import { useAuth } from "@/lib/auth-context";
 import { Button, Card, ErrorText, HintText, Input, Label, Badge } from "@/components/ui";
 import { IconCopy, IconCheck, IconMpesa, IconRouter, IconShield, IconPulse } from "@/components/icons";
@@ -63,6 +65,9 @@ const COMMON_TIMEZONES = [
 const COMMON_CURRENCIES = ["KES", "UGX", "TZS", "RWF", "NGN", "ZAR", "USD"];
 
 export default function SettingsPage() {
+  const { lang } = useLanguage();
+  const t = pageStrings(lang).settings;
+  const c = pageStrings(lang).common;
   const queryClient = useQueryClient();
   const { refresh, user } = useAuth();
   const isSuperAdmin = !user?.tenantId;
@@ -159,7 +164,7 @@ export default function SettingsPage() {
       void refresh();
       setTimeout(() => setSaved(false), 3000);
     },
-    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to save settings"),
+    onError: (err) => setError(err instanceof ApiRequestError ? err.message : t.failedSave),
   });
 
   const renewSubscription = useMutation({
@@ -176,7 +181,7 @@ export default function SettingsPage() {
         setShowRenewModal(false);
       }, 3000);
     },
-    onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Failed to initiate M-Pesa renewal"),
+    onError: (err) => setError(err instanceof ApiRequestError ? err.message : t.failedRenew),
   });
 
   if (isSuperAdmin) {
@@ -200,7 +205,7 @@ export default function SettingsPage() {
     );
   }
 
-  if (isLoading) return <p className="text-sm text-slate-500">Loading settings...</p>;
+  if (isLoading) return <p className="text-sm text-slate-500">{t.loadingSettings}</p>;
 
   const custUsed = billing?.usage?.customers?.used ?? 0;
   const custLimit = billing?.usage?.customers?.limit;
@@ -213,35 +218,35 @@ export default function SettingsPage() {
   const plan = billing?.subscription;
   // Usage bars only where there is a limit to fill; "Unlimited" has nothing to measure against.
   const usageRows = [
-    { label: "Subscribers", hint: "PPPoE and hotspot accounts", used: custUsed, limit: custLimit, percent: custPercent },
-    { label: "Routers", hint: "MikroTik routers", used: routerUsed, limit: routerLimit, percent: routerPercent },
+    { label: t.subscribers, hint: t.subscribersHint, used: custUsed, limit: custLimit, percent: custPercent },
+    { label: t.routersUsage, hint: t.routersUsageHint, used: routerUsed, limit: routerLimit, percent: routerPercent },
   ];
 
   return (
     <div className="max-w-3xl space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">Organization</h1>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Your business details, branding, plan and web address.</p>
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-white">{t.organization}</h1>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{t.organizationDesc}</p>
       </div>
 
       <Card className="space-y-5 p-6">
         <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-center">
           <div>
-            <p className="text-sm text-slate-400">Plan</p>
+            <p className="text-sm text-slate-400">{t.plan}</p>
             {plan ? (
               <p className="mt-0.5 text-[15px] font-semibold text-white">
-                {plan.plan?.name ?? "Current plan"}
+                {plan.plan?.name ?? t.currentPlan}
                 <span className="ml-2 text-sm font-normal text-slate-400">
                   {[plan.billingCycle?.toLowerCase(), plan.status?.toLowerCase()].filter(Boolean).join(" · ")}
                 </span>
               </p>
             ) : (
-              <p className="mt-0.5 text-[15px] font-semibold text-white">{billingLoading ? "Loading…" : "No active plan"}</p>
+              <p className="mt-0.5 text-[15px] font-semibold text-white">{billingLoading ? c.loading : t.noActivePlan}</p>
             )}
           </div>
           <Button onClick={() => setShowRenewModal(true)} className="gap-1.5 self-start text-sm sm:self-auto">
             <IconMpesa size={14} />
-            <span>Renew with M-Pesa</span>
+            <span>{t.renewWithMpesa}</span>
           </Button>
         </div>
 
@@ -251,7 +256,7 @@ export default function SettingsPage() {
               <div className="flex justify-between text-sm">
                 <span className="text-slate-400">{row.label}</span>
                 <span className="font-medium tabular-nums text-white">
-                  {row.used} {row.limit ? `of ${row.limit}` : "· no limit"}
+                  {row.used} {row.limit ? t.of(row.limit) : t.noLimit}
                 </span>
               </div>
               {row.limit ? (
@@ -270,7 +275,7 @@ export default function SettingsPage() {
 
       <Card className="space-y-4 p-6">
         <div>
-          <p className="text-sm text-slate-400">Your web address</p>
+          <p className="text-sm text-slate-400">{t.webAddress}</p>
           <div className="mt-1 flex items-center gap-2">
             <span className="truncate font-mono text-sm text-slate-200">{settings?.platformUrl}</span>
             <button
@@ -283,16 +288,16 @@ export default function SettingsPage() {
                 }
               }}
               className="shrink-0 text-slate-400 hover:text-white"
-              title="Copy web address"
+              title={t.copyWebAddress}
             >
               {urlCopied ? <IconCheck size={14} className="text-emerald-400" /> : <IconCopy size={14} />}
             </button>
           </div>
         </div>
         <p className="border-t border-obsidian-800 pt-4 text-sm text-slate-400">
-          Want your own domain, like wifi.yourisp.co.ke? Set it up in{" "}
+          {t.ownDomain}{" "}
           <a href="/settings/domains" className="text-brand-400 hover:underline">
-            Domain management
+            {t.domainManagement}
           </a>
           .
         </p>
@@ -309,19 +314,19 @@ export default function SettingsPage() {
           className="space-y-4"
         >
           <div>
-            <Label htmlFor="name">Business name</Label>
+            <Label htmlFor="name">{t.businessName}</Label>
             <Input id="name" value={name} onChange={(e) => setName(e.target.value)} required />
           </div>
 
           <div>
-            <Label htmlFor="slug">Tenant slug</Label>
+            <Label htmlFor="slug">{t.tenantSlug}</Label>
             <Input id="slug" value={settings?.slug ?? ""} disabled />
-            <HintText>Used in login and sign-up links — cannot be changed here.</HintText>
+            <HintText>{t.slugHint}</HintText>
           </div>
 
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
-              <Label htmlFor="timezone">Timezone</Label>
+              <Label htmlFor="timezone">{t.timezone}</Label>
               <select
                 id="timezone"
                 className="w-full rounded-lg border border-slate-300/90 bg-white px-3.5 py-2 text-sm text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 dark:border-obsidian-700 dark:bg-obsidian-950 dark:text-slate-100"
@@ -339,7 +344,7 @@ export default function SettingsPage() {
               </select>
             </div>
             <div>
-              <Label htmlFor="currency">Default currency</Label>
+              <Label htmlFor="currency">{t.defaultCurrency}</Label>
               <select
                 id="currency"
                 className="w-full rounded-lg border border-slate-300/90 bg-white px-3.5 py-2 text-sm text-slate-900 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-500/20 dark:border-obsidian-700 dark:bg-obsidian-950 dark:text-slate-100"
@@ -355,15 +360,15 @@ export default function SettingsPage() {
                   </option>
                 ))}
               </select>
-              <HintText>New invoices and packages default to this currency.</HintText>
+              <HintText>{t.currencyHint}</HintText>
             </div>
           </div>
 
           <div className="border-t border-slate-100 pt-4 dark:border-obsidian-800">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">Branding</p>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-slate-400">{t.brandingSection}</p>
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
-                <Label htmlFor="brandColor">Brand color</Label>
+                <Label htmlFor="brandColor">{t.brandColor}</Label>
                 <div className="flex items-center gap-2">
                   <input
                     id="brandColor"
@@ -379,10 +384,10 @@ export default function SettingsPage() {
                     placeholder="#2563eb"
                   />
                 </div>
-                <HintText>Used for buttons, active navigation, and accents across your console.</HintText>
+                <HintText>{t.brandColorHint}</HintText>
               </div>
               <div>
-                <Label htmlFor="logoUrl">Logo URL (optional)</Label>
+                <Label htmlFor="logoUrl">{t.logoUrl}</Label>
                 <Input
                   id="logoUrl"
                   type="url"
@@ -390,7 +395,7 @@ export default function SettingsPage() {
                   value={logoUrl}
                   onChange={(e) => setLogoUrl(e.target.value)}
                 />
-                <HintText>Hosted image URL for invoices and captive portals.</HintText>
+                <HintText>{t.logoHint}</HintText>
               </div>
             </div>
           </div>
@@ -399,16 +404,14 @@ export default function SettingsPage() {
           <div className="border-t border-slate-100 pt-4 dark:border-obsidian-800 space-y-4">
             <div>
               <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
-                Wi-Fi Captive Portal Numbers &amp; Theme
+                {t.portalSection}
               </p>
-              <HintText>
-                These settings update your public Wi-Fi login screen and banner numbers for connecting subscribers.
-              </HintText>
+              <HintText>{t.portalSectionHint}</HintText>
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
-                <Label htmlFor="contactPhone">Installation / Helpline Phone</Label>
+                <Label htmlFor="contactPhone">{t.helplinePhone}</Label>
                 <Input
                   id="contactPhone"
                   value={contactPhone}
@@ -416,11 +419,11 @@ export default function SettingsPage() {
                   placeholder="07XX XXX XXX"
                   className="font-mono"
                 />
-                <HintText>Displays on the banner: &quot;For Installation Call: [Number]&quot;</HintText>
+                <HintText>{t.helplineHint}</HintText>
               </div>
 
               <div>
-                <Label htmlFor="supportPhone">Customer Support Phone</Label>
+                <Label htmlFor="supportPhone">{t.supportPhone}</Label>
                 <Input
                   id="supportPhone"
                   value={supportPhone}
@@ -428,11 +431,11 @@ export default function SettingsPage() {
                   placeholder="07XX XXX XXX"
                   className="font-mono"
                 />
-                <HintText>Used for ticket support and WhatsApp inquiries.</HintText>
+                <HintText>{t.supportHint}</HintText>
               </div>
 
               <div>
-                <Label htmlFor="welcomeTitle">Welcome Title</Label>
+                <Label htmlFor="welcomeTitle">{t.welcomeTitle}</Label>
                 <Input
                   id="welcomeTitle"
                   value={welcomeTitle}
@@ -442,7 +445,7 @@ export default function SettingsPage() {
               </div>
 
               <div>
-                <Label htmlFor="bannerSubtitle">Banner Subtitle</Label>
+                <Label htmlFor="bannerSubtitle">{t.bannerSubtitle}</Label>
                 <Input
                   id="bannerSubtitle"
                   value={bannerSubtitle}
@@ -455,9 +458,9 @@ export default function SettingsPage() {
 
           <div className="flex items-center gap-3 pt-2">
             <Button type="submit" disabled={save.isPending}>
-              {save.isPending ? "Saving..." : "Save changes"}
+              {save.isPending ? c.saving : c.saveChanges}
             </Button>
-            {saved && <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">Saved</span>}
+            {saved && <span className="text-sm font-medium text-emerald-600 dark:text-emerald-400">{c.saved}</span>}
           </div>
           {error && <ErrorText>{error}</ErrorText>}
         </form>
@@ -469,8 +472,8 @@ export default function SettingsPage() {
           <div className="w-full max-w-md rounded-3xl border border-slate-800 bg-slate-950 p-6 space-y-5 shadow-2xl text-left font-sans">
             <div className="flex items-center justify-between pb-2 border-b border-slate-800">
               <div>
-                <Badge variant="info">M-Pesa STK Push Renewal</Badge>
-                <h3 className="text-lg font-bold text-white mt-1">Renew / Upgrade Plan</h3>
+                <Badge variant="info">{t.renewBadge}</Badge>
+                <h3 className="text-lg font-bold text-white mt-1">{t.renewTitle}</h3>
               </div>
               <button
                 onClick={() => setShowRenewModal(false)}
@@ -481,12 +484,12 @@ export default function SettingsPage() {
             </div>
 
             <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 text-xs font-mono space-y-1">
-              <div className="text-slate-400">Plan: <strong className="text-white">{billing?.subscription?.plan?.name ?? "Starter WISP"}</strong></div>
-              <div className="text-slate-400">Amount: <strong className="text-emerald-400">KES {billing?.subscription?.plan?.monthlyPriceMinor ? (billing.subscription.plan.monthlyPriceMinor / 100).toLocaleString() : "4,500"}</strong></div>
+              <div className="text-slate-400">{t.plan}: <strong className="text-white">{billing?.subscription?.plan?.name ?? "Starter WISP"}</strong></div>
+              <div className="text-slate-400">{t.amount}: <strong className="text-emerald-400">KES {billing?.subscription?.plan?.monthlyPriceMinor ? (billing.subscription.plan.monthlyPriceMinor / 100).toLocaleString() : "4,500"}</strong></div>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="stk-phone">M-Pesa Phone Number</Label>
+              <Label htmlFor="stk-phone">{t.mpesaPhone}</Label>
               <Input
                 id="stk-phone"
                 value={renewPhone}
@@ -494,12 +497,12 @@ export default function SettingsPage() {
                 placeholder="0712345678"
                 className="font-mono text-xs"
               />
-              <HintText>You will receive an instant STK PIN prompt on your handset.</HintText>
+              <HintText>{t.stkHint}</HintText>
             </div>
 
             {stkSent && (
               <div role="status" className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm text-emerald-200">
-                Check your phone and enter your M-Pesa PIN to complete the renewal.
+                {t.stkSent}
               </div>
             )}
 
@@ -509,7 +512,7 @@ export default function SettingsPage() {
                 onClick={() => setShowRenewModal(false)}
                 className="px-4 py-2 rounded-xl bg-slate-900 text-slate-300 text-xs font-bold"
               >
-                Cancel
+                {c.cancel}
               </button>
               <Button
                 onClick={() => renewSubscription.mutate()}
@@ -517,7 +520,7 @@ export default function SettingsPage() {
                 className="text-xs font-medium gap-1.5"
               >
                 {renewSubscription.isPending ? <IconPulse size={14} className="animate-spin" /> : <IconMpesa size={14} />}
-                <span>{renewSubscription.isPending ? "Sending STK..." : "Send M-Pesa STK Push"}</span>
+                <span>{renewSubscription.isPending ? t.sendingStk : t.sendStk}</span>
               </Button>
             </div>
           </div>
