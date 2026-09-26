@@ -224,6 +224,7 @@ export const JOB_NAMES = {
   referralRewards: "referral-rewards",
   routerRollouts: "router-rollouts",
   routerBackups: "router-backups",
+  autoRouterUpdates: "auto-router-updates",
   expireOverdueVouchers: "expire-overdue-vouchers",
   // Dunning — escalating payment reminders ahead of suspendOverdueCustomers, not just the
   // status flip itself.

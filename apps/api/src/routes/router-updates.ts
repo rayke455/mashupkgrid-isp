@@ -58,6 +58,7 @@ export async function routerUpdateRoutes(app: FastifyInstance): Promise<void> {
         rollouts.map(({ params, ...r }) => ({
           ...r,
           hasScript: Boolean((params as { script?: string } | null)?.script),
+          automatic: Boolean((params as { automatic?: boolean } | null)?.automatic),
           counts: Object.fromEntries(counts.filter((c) => c.rolloutId === r.id).map((c) => [c.status, c._count])),
         })),
         request.id

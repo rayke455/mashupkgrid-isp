@@ -49,7 +49,7 @@ vi.mock("@mashupkgrid/network", () => ({
   backupRouter: vi.fn().mockResolvedValue({}),
   runOtaActionOnRouter: h.run,
 }));
-vi.mock("@mashupkgrid/push", () => ({ pushToUser: vi.fn().mockResolvedValue(0) }));
+vi.mock("@mashupkgrid/push", () => ({ pushToUser: vi.fn().mockResolvedValue(0), pushToTenantStaff: vi.fn().mockResolvedValue(0) }));
 
 import { handleRouterRollouts } from "../router-rollouts.js";
 

@@ -80,6 +80,15 @@ export const tenantPreferencesSchema = z.object({
     /** Standard rate used for sales with no invoice (hotspot), whose prices include VAT. */
     vatRatePercent: z.number().int().min(0).max(30),
   }),
+  /** Monthly RouterOS upgrade on every router, started by the system at a quiet hour. */
+  autoUpdate: z.object({
+    enabled: z.boolean(),
+    /** Day of the month (1-28 so it exists in every month) and hour, in the ISP's own timezone. */
+    dayOfMonth: z.number().int().min(1).max(28),
+    hour: z.number().int().min(0).max(23),
+    /** Also bring RouterBOARD firmware up to date 45 minutes later, after the upgrade reboot. */
+    includeFirmware: z.boolean(),
+  }),
 });
 
 export type TenantPreferences = z.infer<typeof tenantPreferencesSchema>;
@@ -116,6 +125,7 @@ export const DEFAULT_TENANT_PREFERENCES: TenantPreferences = {
   upgrades: { enabled: true, smsCustomer: true, thresholdPercent: 90 },
   referrals: { enabled: true, rewardType: "DAYS", rewardDays: 7, rewardCreditMinor: 50_000 },
   tax: { vatRegistered: false, kraPin: "", vatRatePercent: 16 },
+  autoUpdate: { enabled: false, dayOfMonth: 5, hour: 3, includeFirmware: true },
 };
 
 /** Merges whatever is stored with the defaults, so a partial or old record never breaks a job. */
@@ -124,6 +134,7 @@ export function resolveTenantPreferences(stored: unknown): TenantPreferences {
   const reminders = (raw.reminders && typeof raw.reminders === "object" ? raw.reminders : {}) as Record<string, unknown>;
   const tickets = (raw.tickets && typeof raw.tickets === "object" ? raw.tickets : {}) as Record<string, unknown>;
   const alerts = (raw.alerts && typeof raw.alerts === "object" ? raw.alerts : {}) as Record<string, unknown>;
+  const autoUpdate = (raw.autoUpdate && typeof raw.autoUpdate === "object" ? raw.autoUpdate : {}) as Record<string, unknown>;
   const tax = (raw.tax && typeof raw.tax === "object" ? raw.tax : {}) as Record<string, unknown>;
   const referrals = (raw.referrals && typeof raw.referrals === "object" ? raw.referrals : {}) as Record<string, unknown>;
   const upgrades = (raw.upgrades && typeof raw.upgrades === "object" ? raw.upgrades : {}) as Record<string, unknown>;
@@ -140,6 +151,7 @@ export function resolveTenantPreferences(stored: unknown): TenantPreferences {
     upgrades: { ...DEFAULT_TENANT_PREFERENCES.upgrades, ...upgrades },
     referrals: { ...DEFAULT_TENANT_PREFERENCES.referrals, ...referrals },
     tax: { ...DEFAULT_TENANT_PREFERENCES.tax, ...tax },
+    autoUpdate: { ...DEFAULT_TENANT_PREFERENCES.autoUpdate, ...autoUpdate },
   };
   const parsed = tenantPreferencesSchema.safeParse(merged);
   return parsed.success ? parsed.data : DEFAULT_TENANT_PREFERENCES;

@@ -4,7 +4,7 @@ import { backupRouter, findOtaAction, runOtaActionOnRouter, type OtaActionKey } 
 
 /** Actions that cannot change a router's configuration need no backup first. */
 const NO_BACKUP = new Set(["check-versions", "reboot"]);
-import { pushToUser } from "@mashupkgrid/push";
+import { pushToTenantStaff, pushToUser } from "@mashupkgrid/push";
 
 /**
  * Applies over-the-air router updates, one router at a time. A rollout with canaryFirst updates
@@ -82,15 +82,17 @@ export async function handleRouterRollouts(): Promise<AutomationSummary> {
     const remaining = await prisma.routerRolloutTarget.count({ where: { rolloutId: rollout.id, status: { in: ["PENDING", "RUNNING"] } } });
     if (remaining === 0) {
       const done = await prisma.routerRollout.updateMany({ where: { id: rollout.id, status: "RUNNING" }, data: { status: "COMPLETED", finishedAt: new Date() } });
-      if (done.count && rollout.createdByUserId) {
+      if (done.count) {
         const counts = await prisma.routerRolloutTarget.groupBy({ by: ["status"], where: { rolloutId: rollout.id }, _count: true });
         const n = (s: string) => counts.find((c) => c.status === s)?._count ?? 0;
-        await pushToUser(rollout.createdByUserId, {
+        const alert = {
           title: `Router update finished: ${action?.label ?? rollout.action}`,
           body: `${n("SUCCEEDED")} done, ${n("FAILED")} failed, ${n("SKIPPED")} skipped.`,
           url: "/routers/updates",
           tag: `rollout-${rollout.id}`,
-        }).catch(() => 0);
+        };
+        // Someone started it: tell them. The monthly automatic upgrade: tell the router staff.
+        await (rollout.createdByUserId ? pushToUser(rollout.createdByUserId, alert) : pushToTenantStaff(rollout.tenantId, "routers.manage", alert)).catch(() => 0);
       }
     }
     if (Date.now() - started >= BUDGET_MS) break;

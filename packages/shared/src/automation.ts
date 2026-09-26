@@ -174,6 +174,16 @@ export const AUTOMATION_JOBS: readonly AutomationJobDefinition[] = [
     tenantVisible: true,
   },
   {
+    name: JOB_NAMES.autoRouterUpdates,
+    queue: QUEUE_NAMES.network,
+    category: "network",
+    label: "Monthly router upgrades",
+    description: "Starts the RouterOS and firmware upgrade on the day and hour each ISP chose.",
+    everyMs: 15 * MINUTE,
+    counters: { tenants: "ISPs checked", started: "Upgrades started" },
+    tenantVisible: true,
+  },
+  {
     name: JOB_NAMES.routerBackups,
     queue: QUEUE_NAMES.network,
     category: "network",

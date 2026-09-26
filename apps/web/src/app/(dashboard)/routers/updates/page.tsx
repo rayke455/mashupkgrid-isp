@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ComponentType } from "react";
+import { useEffect, useMemo, useState, type ComponentType } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
 import { useAuth } from "@/lib/auth-context";
@@ -65,6 +65,7 @@ interface Rollout {
   scheduledFor: string | null;
   createdAt: string;
   finishedAt: string | null;
+  automatic?: boolean;
   counts: Partial<Record<TargetStatus, number>>;
 }
 
@@ -336,6 +337,8 @@ export default function RouterUpdatesPage() {
         </Panel>
       )}
 
+      {isOwner && <AutoUpdateSettings />}
+
       <Panel title={tr("Recent updates")} padded={false}>
         {!rollouts?.length ? (
           <EmptyState title={tr("No updates yet")}>{tr("Updates you push appear here with a result for each router.")}</EmptyState>
@@ -354,7 +357,10 @@ export default function RouterUpdatesPage() {
                         <Icon size={18} />
                       </span>
                       <span className="min-w-0">
-                        <span className="block font-medium text-white">{tr(label)}</span>
+                        <span className="block font-medium text-white">
+                          {tr(label)}
+                          {r.automatic && <span className="ml-2 rounded bg-obsidian-800 px-1.5 py-0.5 text-[11px] font-normal text-slate-300">{tr("Automatic")}</span>}
+                        </span>
                         <span className="block text-xs text-slate-400">
                           {r.status === "SCHEDULED" && r.scheduledFor
                             ? `${tr("Starts")} ${new Date(r.scheduledFor).toLocaleString([], { dateStyle: "medium", timeStyle: "short" })}`
@@ -388,6 +394,83 @@ export default function RouterUpdatesPage() {
         )}
       </Panel>
     </div>
+  );
+}
+
+interface Preferences {
+  autoUpdate: { enabled: boolean; dayOfMonth: number; hour: number; includeFirmware: boolean };
+  [key: string]: unknown;
+}
+
+function ordinal(n: number): string {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return n + (s[(v - 20) % 10] ?? s[v] ?? s[0]!);
+}
+
+/** The monthly automatic upgrade: which day and hour, and whether firmware follows. */
+function AutoUpdateSettings() {
+  const queryClient = useQueryClient();
+  const { data } = useQuery({ queryKey: ["preferences"], queryFn: () => apiFetch<Preferences>("/api/v1/settings/preferences") });
+  const [form, setForm] = useState<Preferences["autoUpdate"] | null>(null);
+  const [saved, setSaved] = useState(false);
+  useEffect(() => {
+    if (data && !form) setForm(data.autoUpdate);
+  }, [data, form]);
+  const save = useMutation({
+    mutationFn: () => apiFetch("/api/v1/settings/preferences", { method: "PUT", body: JSON.stringify({ ...data, autoUpdate: form }) }),
+    onSuccess: () => {
+      setSaved(true);
+      queryClient.invalidateQueries({ queryKey: ["preferences"] });
+    },
+  });
+  if (!form) return null;
+  const select = "rounded-lg border border-obsidian-700 bg-obsidian-950 px-2 py-1 text-sm text-slate-100";
+  return (
+    <Panel title={tr("Automatic monthly upgrade")} description={tr("Upgrades RouterOS on every router once a month at a quiet hour: the first router alone, then the rest if it worked. You get an alert when it is done.")}>
+      <form
+        className="space-y-4 text-sm text-slate-200"
+        onSubmit={(e) => {
+          e.preventDefault();
+          setSaved(false);
+          save.mutate();
+        }}
+      >
+        <label className="flex items-center gap-2">
+          <input type="checkbox" className="h-4 w-4 accent-brand-600" checked={form.enabled} onChange={(e) => setForm({ ...form, enabled: e.target.checked })} />
+          {tr("Upgrade my routers automatically every month")}
+        </label>
+        <div className="flex flex-wrap items-center gap-2">
+          <span>{tr("On the")}</span>
+          <select aria-label={tr("Day of the month")} className={select} value={form.dayOfMonth} onChange={(e) => setForm({ ...form, dayOfMonth: Number(e.target.value) })}>
+            {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+              <option key={d} value={d}>
+                {ordinal(d)}
+              </option>
+            ))}
+          </select>
+          <span>{tr("of each month at")}</span>
+          <select aria-label={tr("Hour")} className={select} value={form.hour} onChange={(e) => setForm({ ...form, hour: Number(e.target.value) })}>
+            {Array.from({ length: 24 }, (_, h) => h).map((h) => (
+              <option key={h} value={h}>
+                {String(h).padStart(2, "0")}:00
+              </option>
+            ))}
+          </select>
+        </div>
+        <label className="flex items-center gap-2">
+          <input type="checkbox" className="h-4 w-4 accent-brand-600" checked={form.includeFirmware} onChange={(e) => setForm({ ...form, includeFirmware: e.target.checked })} />
+          {tr("Also upgrade RouterBOARD firmware 45 minutes later")}
+        </label>
+        <p className="text-xs text-slate-400">{tr("Every router is backed up just before it is upgraded, so any router can be put back from Router backups.")}</p>
+        <div className="flex items-center gap-3">
+          <button type="submit" className={darkButton("primary")} disabled={save.isPending}>
+            {save.isPending ? tr("Saving…") : tr("Save")}
+          </button>
+          {saved && <span className="text-emerald-400">{tr("Saved")}</span>}
+        </div>
+      </form>
+    </Panel>
   );
 }
 
