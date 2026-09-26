@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
 import { HintText, Input, Label } from "@/components/ui";
@@ -46,7 +46,15 @@ export default function AdminNotificationsPage() {
     queryFn: () => apiFetch<{ items: TenantOption[] }>("/api/v1/platform/tenants?limit=100"),
   });
 
+  const { data: pushConfig } = useQuery({
+    queryKey: ["push-config"],
+    queryFn: () => apiFetch<{ configured: boolean }>("/api/v1/push/config"),
+  });
+  const pushReady = pushConfig?.configured ?? false;
+
   const [audience, setAudience] = useState<"all" | "one">("all");
+  const [pushAlert, setPushAlert] = useState(false);
+  const [rowNotice, setRowNotice] = useState<{ tone: "good" | "bad"; text: string } | null>(null);
   const [tenantId, setTenantId] = useState("");
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
@@ -55,9 +63,18 @@ export default function AdminNotificationsPage() {
   const [error, setError] = useState<string | null>(null);
   const [sentOk, setSentOk] = useState<string | null>(null);
 
+  // The "Send alert" shortcut on the platform dashboard opens this page with ?alert=1.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("alert") === "1") {
+      setPushAlert(true);
+      setLevel("WARNING");
+      document.getElementById("n-title")?.focus();
+    }
+  }, []);
+
   const send = useMutation({
     mutationFn: () =>
-      apiFetch("/api/v1/announcements", {
+      apiFetch<{ pushed: number | null }>("/api/v1/announcements", {
         method: "POST",
         body: JSON.stringify({
           tenantId: audience === "all" ? null : tenantId,
@@ -65,11 +82,13 @@ export default function AdminNotificationsPage() {
           body: body.trim(),
           severity: level,
           expiresAt: expiryDays ? new Date(Date.now() + Number(expiryDays) * 86_400_000).toISOString() : null,
+          push: pushAlert && pushReady,
         }),
       }),
-    onSuccess: () => {
+    onSuccess: (result) => {
       const who = audience === "all" ? "every ISP" : tenants?.items.find((t) => t.id === tenantId)?.name ?? "the ISP";
-      setSentOk(`Sent to ${who}.`);
+      const alert = result.pushed === null ? "" : ` Push alert reached ${result.pushed} device${result.pushed === 1 ? "" : "s"}.`;
+      setSentOk(`Sent to ${who}.${alert}`);
       setTitle("");
       setBody("");
       setLevel("INFO");
@@ -78,6 +97,12 @@ export default function AdminNotificationsPage() {
       setTimeout(() => setSentOk(null), 4000);
     },
     onError: (err) => setError(err instanceof ApiRequestError ? err.message : "Couldn't send the notification."),
+  });
+
+  const pushExisting = useMutation({
+    mutationFn: (id: string) => apiFetch<{ pushed: number }>(`/api/v1/announcements/${id}/push`, { method: "POST", body: "{}" }),
+    onSuccess: (r) => setRowNotice({ tone: "good", text: `Push alert reached ${r.pushed} device${r.pushed === 1 ? "" : "s"}.` }),
+    onError: (err) => setRowNotice({ tone: "bad", text: err instanceof ApiRequestError ? err.message : "Couldn't send the alert." }),
   });
 
   const remove = useMutation({
@@ -166,17 +191,40 @@ export default function AdminNotificationsPage() {
             </div>
           </div>
 
+          <div>
+            <label className={`flex items-center gap-2 text-sm ${pushReady ? "text-slate-200" : "text-slate-500"}`}>
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-brand-600"
+                checked={pushAlert && pushReady}
+                disabled={!pushReady}
+                onChange={(e) => setPushAlert(e.target.checked)}
+              />
+              Also send as a push alert to their phones
+            </label>
+            <HintText>
+              {pushReady
+                ? "Reaches ISP staff who turned on alerts under Settings, Alerts on this device. Use it for things they must see now."
+                : "Push alerts are off on this server. Add VAPID_PUBLIC_KEY and VAPID_PRIVATE_KEY to the server environment to turn them on."}
+            </HintText>
+          </div>
+
           {error && <Notice tone="bad">{error}</Notice>}
           {sentOk && <Notice tone="good">{sentOk}</Notice>}
           <div className="flex justify-end">
             <button type="submit" className={darkButton("primary")} disabled={send.isPending}>
-              {send.isPending ? "Sending…" : "Send notification"}
+              {send.isPending ? "Sending…" : pushAlert && pushReady ? "Send notification and alert" : "Send notification"}
             </button>
           </div>
         </form>
       </Panel>
 
-      <Panel title="Sent" description="The latest 100. Deleting one removes it from every dashboard." padded={false}>
+      <Panel title="Sent" description="The latest 100. Send alert pushes one again to phones; Delete removes it from every dashboard." padded={false}>
+        {rowNotice && (
+          <div className="px-5 pt-4">
+            <Notice tone={rowNotice.tone}>{rowNotice.text}</Notice>
+          </div>
+        )}
         {isLoading ? (
           <p className="px-5 py-8 text-sm text-slate-400">Loading…</p>
         ) : !sent?.length ? (
@@ -213,7 +261,20 @@ export default function AdminNotificationsPage() {
                       {timeAgo(n.createdAt)}
                       {expired && <span className="block text-xs text-slate-500">Expired</span>}
                     </td>
-                    <td className={`${td} text-right`}>
+                    <td className={`${td} whitespace-nowrap text-right`}>
+                      {pushReady && (
+                        <button
+                          type="button"
+                          className={darkButton("ghost", "sm")}
+                          disabled={pushExisting.isPending}
+                          onClick={() => {
+                            setRowNotice(null);
+                            if (confirm(`Send "${n.title}" as a push alert to ${n.tenant ? n.tenant.name : "every ISP"} now?`)) pushExisting.mutate(n.id);
+                          }}
+                        >
+                          Send alert
+                        </button>
+                      )}
                       <button
                         type="button"
                         className={`${darkButton("ghost", "sm")} text-rose-300 hover:text-rose-200`}

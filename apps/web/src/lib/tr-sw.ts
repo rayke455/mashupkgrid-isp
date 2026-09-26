@@ -479,4 +479,5 @@ export const SW: Record<string, string> = {
   "Thursday": "Alhamisi",
   "Friday": "Ijumaa",
   "Saturday": "Jumamosi",
+  "Send alert": "Tuma arifa",
 };

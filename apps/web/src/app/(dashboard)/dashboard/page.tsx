@@ -357,6 +357,11 @@ export default function DashboardHomePage() {
               <Link href="/tenants" className={darkButton("primary")}>
                 {tr("Manage tenants")}
               </Link>
+              {user?.permissions.includes("tenants.update") && (
+                <Link href="/admin/notifications?alert=1" className={darkButton("secondary")}>
+                  {tr("Send alert")}
+                </Link>
+              )}
               <Link href="/admin/products" className={darkButton("secondary")}>
                 {tr("Store prices")}
               </Link>
