@@ -1,3 +1,4 @@
+import { effectiveRateFor } from "./rate.service.js";
 import {
   prisma,
   type ProvisioningJob,
@@ -97,8 +98,8 @@ export async function buildProvisioningPlan(customerServiceId: string): Promise<
     );
   }
 
-  const download = pkg.downloadKbps;
-  const upload = pkg.uploadKbps;
+  // A running speed boost (a paid add-on) outlasts any re-provisioning while it runs.
+  const { downloadKbps: download, uploadKbps: upload } = await effectiveRateFor(service.id, pkg);
 
   return {
     customerServiceId: service.id,

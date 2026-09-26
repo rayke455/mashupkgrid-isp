@@ -224,6 +224,16 @@ export const AUTOMATION_JOBS: readonly AutomationJobDefinition[] = [
     tenantVisible: true,
   },
   {
+    name: JOB_NAMES.sweepAddOns,
+    queue: QUEUE_NAMES.billing,
+    category: "billing",
+    label: "Prepaid add-ons",
+    description: "Starts speed boosts and data add-ons once paid, ends them when their time is up, and cancels ones left unpaid.",
+    everyMs: MINUTE,
+    counters: { activated: "Started", expired: "Ended", cancelled: "Cancelled unpaid" },
+    tenantVisible: true,
+  },
+  {
     name: JOB_NAMES.referralRewards,
     queue: QUEUE_NAMES.billing,
     category: "billing",

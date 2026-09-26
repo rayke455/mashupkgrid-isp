@@ -44,3 +44,14 @@ export function taxAmountMinor(subtotalMinor: number, taxPercent: number | null)
   if (!taxPercent) return 0;
   return Math.round((subtotalMinor * taxPercent) / 100);
 }
+
+/** The pre-tax amount whose total with tax comes to `grossMinor`, for prices quoted tax
+ *  included. Exact when some amount rounds to it; otherwise the nearest below. */
+export function netFromGrossMinor(grossMinor: number, taxPercent: number | null): number {
+  if (!taxPercent) return grossMinor;
+  const guess = Math.round((grossMinor * 100) / (100 + taxPercent));
+  for (const net of [guess, guess - 1, guess + 1, guess - 2, guess + 2]) {
+    if (net >= 0 && net + taxAmountMinor(net, taxPercent) === grossMinor) return net;
+  }
+  return Math.floor((grossMinor * 100) / (100 + taxPercent));
+}

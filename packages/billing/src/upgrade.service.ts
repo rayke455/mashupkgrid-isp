@@ -1,4 +1,5 @@
 import { prisma, type UpgradeSuggestion } from "@mashupkgrid/database";
+import { activeDataBonusMb } from "./addon.service.js";
 import { ConflictError, NotFoundError, resolveTenantPreferences } from "@mashupkgrid/shared";
 import { changeSubscriptionPackage } from "./subscription.service.js";
 
@@ -75,9 +76,12 @@ export async function findUpgradeSuggestions(
     select: { id: true, name: true, priceMinor: true, dataCapMb: true, downloadKbps: true, billingCycle: true, isActive: true, currency: true },
   });
 
+  // Data add-ons running now raise the cap, so a customer who topped up isn't told to upgrade.
+  const bonusMb = await activeDataBonusMb(services.map((s) => s.id));
+
   const created: (UpgradeSuggestion & { customer: { fullName: string; phone: string } })[] = [];
   for (const service of services) {
-    const cap = service.package.dataCapMb!;
+    const cap = service.package.dataCapMb! + (bonusMb.get(service.id) ?? 0);
     const usedMb = usedMbByUser.get(service.radiusUser!.username) ?? 0;
     if (usedMb < (cap * prefs.thresholdPercent) / 100) continue;
     if (suggestedRecently.has(service.id)) continue;

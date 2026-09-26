@@ -20,6 +20,7 @@ const LABELS_SW: Record<string, string> = {
   "Router health": "Afya ya ruta",
   "Planned maintenance": "Matengenezo yaliyopangwa",
   "Internet plans": "Vifurushi vya intaneti",
+  "Add-ons": "Nyongeza",
   Invoices: "Ankara",
   "Support tickets": "Tiketi za msaada",
   Hotspot: "Hotspot",

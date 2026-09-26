@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { cycleLengthDays, addDays, proRataAmountMinor, taxAmountMinor } from "../money.js";
+import { cycleLengthDays, addDays, netFromGrossMinor, proRataAmountMinor, taxAmountMinor } from "../money.js";
 import { ValidationError } from "@mashupkgrid/shared";
 
 describe("cycleLengthDays", () => {
@@ -72,5 +72,24 @@ describe("taxAmountMinor", () => {
 
   it("rounds fractional results", () => {
     expect(taxAmountMinor(333, 16)).toBe(53); // 333 * 0.16 = 53.28 -> 53
+  });
+});
+
+describe("netFromGrossMinor", () => {
+  it("finds the pre-tax amount that totals the quoted price", () => {
+    for (const gross of [15000, 20000, 9999, 1]) {
+      const net = netFromGrossMinor(gross, 16);
+      expect(net + taxAmountMinor(net, 16)).toBe(gross);
+    }
+  });
+  it("comes as close as it can, never above, when no amount rounds to the price", () => {
+    const net = netFromGrossMinor(123457, 16);
+    const total = net + taxAmountMinor(net, 16);
+    expect(total).toBeLessThanOrEqual(123457);
+    expect(123457 - total).toBeLessThanOrEqual(1);
+  });
+  it("is the price itself with no tax", () => {
+    expect(netFromGrossMinor(15000, null)).toBe(15000);
+    expect(netFromGrossMinor(15000, 0)).toBe(15000);
   });
 });

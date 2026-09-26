@@ -17,3 +17,4 @@ export * from "./network-maintenance.service.js";
 export * from "./referral.service.js";
 export * from "./vat-report.service.js";
 export * from "./pause.service.js";
+export * from "./addon.service.js";

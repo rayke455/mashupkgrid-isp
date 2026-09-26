@@ -204,6 +204,34 @@ export default function CustomerDetailPage() {
     pause.mutate({ subscriptionId, days });
   };
 
+  // Staff can give an add-on (speed boost or extra data) for free, e.g. after an outage.
+  const { data: addOns } = useQuery({
+    queryKey: ["addons"],
+    queryFn: () => apiFetch<{ id: string; name: string; isActive: boolean }[]>("/api/v1/addons"),
+  });
+  const grant = useMutation({
+    mutationFn: ({ subscriptionId, addOnId }: { subscriptionId: string; addOnId: string }) =>
+      apiFetch<{ name: string; endsAt: string }>(`/api/v1/addons/${addOnId}/grant`, { method: "POST", body: JSON.stringify({ subscriptionId }) }),
+    onSuccess: (res) => setNotice(`${res.name} ${tr("is on until")} ${new Date(res.endsAt).toLocaleString()}.`),
+    onError: (err) => setError(err instanceof ApiRequestError ? err.message : tr("Something went wrong.")),
+  });
+  const askGrant = (subscriptionId: string) => {
+    const list = (addOns ?? []).filter((a) => a.isActive);
+    if (!list.length) {
+      setError(tr("Create an add-on first, under Add-ons."));
+      return;
+    }
+    const answer = window.prompt(`${tr("Give which add-on for free? Enter its number:")}\n${list.map((a, i) => `${i + 1}. ${a.name}`).join("\n")}`, "1");
+    if (answer === null) return;
+    const chosen = list[Number(answer) - 1];
+    if (!chosen) {
+      setError(tr("Enter one of the numbers shown."));
+      return;
+    }
+    setError(null);
+    grant.mutate({ subscriptionId, addOnId: chosen.id });
+  };
+
   const sendMessage = useMutation({
     mutationFn: () =>
       apiFetch<{ note: string }>(`/api/v1/customers/${customerId}/message`, {
@@ -442,6 +470,11 @@ export default function CustomerDetailPage() {
                         {tr("Pause")}
                       </Button>
                     )
+                  )}
+                  {sub.status === "ACTIVE" && (addOns?.length ?? 0) > 0 && (
+                    <Button variant="secondary" className="px-2.5 py-1 text-xs" disabled={grant.isPending} onClick={() => askGrant(sub.id)}>
+                      {tr("Give add-on")}
+                    </Button>
                   )}
                   {sub.status !== "CANCELLED" && (
                     <Button variant="secondary" className="px-2.5 py-1 text-xs" disabled={extend.isPending} onClick={() => askExtend(sub.id)}>

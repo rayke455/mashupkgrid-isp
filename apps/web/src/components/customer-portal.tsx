@@ -11,6 +11,7 @@ import { customerStrings } from "@/lib/customer-strings";
 import { MyReferralPanel } from "@/components/my-referral-panel";
 import { PausePlan } from "@/components/pause-plan";
 import { AccountMembers } from "@/components/account-members";
+import { BuyAddOn } from "@/components/buy-addon";
 import { useLanguage } from "@/lib/language-context";
 
 /**
@@ -281,6 +282,8 @@ export function CustomerPortal({ view = "all", onPay }: { view?: PortalView; onP
         />
         <Metric label={t.wallet} value={walletData ? formatMoney(walletData.wallet.balanceMinor, walletData.wallet.currency) : "—"} hint={t.walletHint} />
       </MetricGrid>}
+
+      {show("home") && primary && serviceOn && <BuyAddOn subscriptionId={primary.id} phone={customer.phone} canPay={canPay} />}
 
       {/* Pay sheet: the phone to prompt and the live result of the push. */}
       {payingInvoice && (

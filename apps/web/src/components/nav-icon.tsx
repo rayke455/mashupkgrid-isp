@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
+  Zap,
   BadgePercent,
   Banknote,
   Bell,
@@ -70,6 +71,7 @@ const GLYPHS: Record<NavIcon, LucideIcon> = {
   "dashboard": LayoutDashboard,
   "file-text": FileText,
   "gauge": Gauge,
+  "zap": Zap,
   "gift": Gift,
   "globe": Globe,
   "hand-coins": HandCoins,

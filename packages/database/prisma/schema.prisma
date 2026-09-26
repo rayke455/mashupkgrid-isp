@@ -136,6 +136,8 @@ model Tenant {
   networkSyncTasks NetworkSyncTask[]
   provisioningJobs ProvisioningJob[]
   customerMembers  CustomerMember[]
+  addOns           AddOn[]
+  addOnPurchases   AddOnPurchase[]
 
   @@index([status])
   @@map("tenants")
@@ -484,6 +486,7 @@ model Customer {
 
   radiusUsers      RadiusUser[]
   provisioningJobs ProvisioningJob[]
+  addOnPurchases   AddOnPurchase[]
 
   @@unique([tenantId, customerNumber])
   @@unique([tenantId, referralCode])
@@ -593,6 +596,7 @@ model CustomerService {
   invoices         Invoice[]
   radiusUser       RadiusUser?
   provisioningJobs ProvisioningJob[]
+  addOnPurchases   AddOnPurchase[]
 
   @@index([tenantId, status])
   @@index([nextBillingAt])
@@ -648,6 +652,7 @@ model Invoice {
   payments             Payment[]
   mpesaStkRequests     MpesaStkRequest[]
   paystackTransactions PaystackTransaction[]
+  addOnPurchase        AddOnPurchase?
 
   @@unique([tenantId, invoiceNumber])
   @@index([tenantId, status])
@@ -2883,4 +2888,75 @@ model CustomerMember {
 
   @@index([customerId])
   @@map("customer_members")
+}
+
+enum AddOnKind {
+  /// A faster speed for a while, e.g. 20 Mbps for 24 hours.
+  SPEED
+  /// Extra data on top of the plan's data cap for a while.
+  DATA
+}
+
+/// Something a PPPoE customer can buy on top of their plan: a speed boost or extra data, for a
+/// set number of hours. Applied as soon as it is paid and removed when the time is up.
+model AddOn {
+  id            String          @id @default(uuid())
+  tenantId      String
+  tenant        Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name          String
+  kind          AddOnKind
+  downloadKbps  Int?
+  uploadKbps    Int?
+  dataMb        Int?
+  durationHours Int
+  priceMinor    Int
+  currency      String          @default("KES")
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  deletedAt     DateTime?
+  purchases     AddOnPurchase[]
+
+  @@index([tenantId])
+  @@map("addons")
+}
+
+enum AddOnPurchaseStatus {
+  AWAITING_PAYMENT
+  ACTIVE
+  EXPIRED
+  CANCELLED
+}
+
+/// One purchase of an add-on for one plan. Copies what was bought so later catalogue edits don't
+/// change it. Its invoice is paid by M-Pesa; unpaid purchases are cancelled after a short while.
+model AddOnPurchase {
+  id                String              @id @default(uuid())
+  tenantId          String
+  tenant            Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customerId        String
+  customer          Customer            @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  customerServiceId String
+  customerService   CustomerService     @relation(fields: [customerServiceId], references: [id], onDelete: Cascade)
+  addOnId           String?
+  addOn             AddOn?              @relation(fields: [addOnId], references: [id], onDelete: SetNull)
+  invoiceId         String?             @unique
+  invoice           Invoice?            @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  status            AddOnPurchaseStatus @default(AWAITING_PAYMENT)
+  name              String
+  kind              AddOnKind
+  downloadKbps      Int?
+  uploadKbps        Int?
+  dataMb            Int?
+  durationHours     Int
+  priceMinor        Int
+  currency          String              @default("KES")
+  requestedBy       String              @default("customer")
+  startsAt          DateTime?
+  endsAt            DateTime?
+  createdAt         DateTime            @default(now())
+
+  @@index([customerServiceId, status])
+  @@index([status, endsAt])
+  @@map("addon_purchases")
 }

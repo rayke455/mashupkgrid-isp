@@ -16,12 +16,13 @@ const h = vi.hoisted(() => ({
     getStkRequestOrThrow: vi.fn(),
     queryAndReconcileStkRequest: vi.fn(),
   },
+  activatePaidAddOns: vi.fn().mockResolvedValue([]),
   auditEntries: [] as Array<Record<string, unknown>>,
 }));
 
 vi.mock("@mashupkgrid/database", () => ({ prisma: h.prisma }));
 vi.mock("@mashupkgrid/payments", () => h.payments);
-vi.mock("@mashupkgrid/billing", () => ({ getOrCreateWallet: vi.fn(), listWalletTransactions: vi.fn() }));
+vi.mock("@mashupkgrid/billing", () => ({ getOrCreateWallet: vi.fn(), listWalletTransactions: vi.fn(), activatePaidAddOns: h.activatePaidAddOns }));
 vi.mock("@mashupkgrid/auth", async (orig) => ({ ...(await orig<Record<string, unknown>>()), revokeAllSessionsForUser: vi.fn() }));
 vi.mock("@mashupkgrid/support", () => ({ createTicket: vi.fn(), listTickets: vi.fn(), getCustomerVisibleMessages: vi.fn(), addTicketMessage: vi.fn() }));
 vi.mock("../../lib/redis.js", () => ({ redis: { get: vi.fn(), set: vi.fn(), del: vi.fn() } }));
@@ -101,5 +102,7 @@ describe("customer self-pay", () => {
     const ok = await app.inject({ method: "GET", url: "/api/v1/me/payments/ws_CO_1", headers: await auth() });
     expect(ok.json().data).toMatchObject({ status: "COMPLETED", mpesaReceiptNumber: "QWE123" });
     expect(h.payments.queryAndReconcileStkRequest).not.toHaveBeenCalled();
+    // A completed payment starts any add-on it paid for straight away.
+    expect(h.activatePaidAddOns).toHaveBeenCalledWith({ customerId: CUSTOMER_ID });
   });
 });

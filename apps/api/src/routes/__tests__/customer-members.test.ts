@@ -22,7 +22,7 @@ const h = vi.hoisted(() => ({
 
 vi.mock("@mashupkgrid/database", () => ({ prisma: h.prisma }));
 vi.mock("@mashupkgrid/payments", () => h.payments);
-vi.mock("@mashupkgrid/billing", () => ({ getOrCreateWallet: vi.fn(), listWalletTransactions: vi.fn() }));
+vi.mock("@mashupkgrid/billing", () => ({ getOrCreateWallet: vi.fn(), listWalletTransactions: vi.fn(), activatePaidAddOns: vi.fn().mockResolvedValue([]) }));
 vi.mock("@mashupkgrid/radius", () => ({ getRadiusUserByCustomerServiceOrThrow: vi.fn(), getDecryptedRadiusPassword: vi.fn() }));
 vi.mock("@mashupkgrid/sms", () => ({ sendTenantSms: vi.fn() }));
 vi.mock("@mashupkgrid/auth", async (orig) => ({ ...(await orig<Record<string, unknown>>()), revokeAllSessionsForUser: vi.fn(), createSession: h.createSession }));

@@ -24,7 +24,7 @@ import { checkMaintenance } from "../plugins/maintenance.js";
 import { writeAuditLog } from "../lib/audit.js";
 import { resolveAccountHolderOrThrow, resolveMyAccountOrThrow, resolveMyCustomerOrThrow, resolvePayingCustomerOrThrow } from "../lib/my-account.js";
 import { initiateStkPushForCustomer, getStkRequestOrThrow, queryAndReconcileStkRequest } from "@mashupkgrid/payments";
-import { getReferralSummary, getPauseAllowance, pauseSubscription, resumeSubscription } from "@mashupkgrid/billing";
+import { getReferralSummary, getPauseAllowance, pauseSubscription, resumeSubscription, listAddOns, listPurchasesForCustomer, buyAddOn, activatePaidAddOns, cancelUnstartedPurchase } from "@mashupkgrid/billing";
 
 const preHandler = [authenticate, resolveTenant, checkMaintenance] as const;
 
@@ -126,6 +126,50 @@ export async function meRoutes(app: FastifyInstance): Promise<void> {
     reply.send(successResponse(updated, request.id));
   });
 
+  /** Add-ons on offer, and the ones this account bought. Only PPPoE plans can take them. */
+  app.get("/addons", { config: { audience: "customer" }, preHandler: [...preHandler] }, async (request, reply) => {
+    const customer = await resolveMyCustomerOrThrow(request);
+    const eligible = await prisma.customerService.count({ where: { customerId: customer.id, status: "ACTIVE", radiusUser: { isNot: null } } });
+    const [catalog, purchases] = await Promise.all([eligible ? listAddOns(customer.tenantId, true) : [], listPurchasesForCustomer(customer.id)]);
+    reply.send(successResponse({ catalog, purchases }, request.id));
+  });
+
+  /** Buys an add-on for one of the account's plans: makes its invoice and sends the M-Pesa
+   *  prompt in one step. The add-on starts as soon as the payment lands. */
+  app.post(
+    "/subscriptions/:subscriptionId/addons",
+    { config: { audience: "customer", maintenanceCategory: "payment" }, preHandler: [...preHandler] },
+    async (request, reply) => {
+      const customer = await resolvePayingCustomerOrThrow(request);
+      const { subscriptionId } = subscriptionIdParamsSchema.parse(request.params);
+      const body = z.object({ addOnId: z.string().uuid(), phone: z.string().trim().min(9).max(15).optional() }).parse(request.body);
+      if (!(await prisma.customerService.findFirst({ where: { id: subscriptionId, customerId: customer.id } }))) throw new NotFoundError("Subscription");
+      const { purchase, invoice } = await buyAddOn(customer.tenantId, subscriptionId, body.addOnId, "customer");
+      const amountMinor = invoice.totalMinor - invoice.amountPaidMinor;
+      const stkRequest = await initiateStkPushForCustomer(customer.tenantId, {
+        customerId: customer.id,
+        invoiceId: invoice.id,
+        phone: body.phone || customer.phone,
+        amountMinor,
+        initiatedByUserId: request.user!.id,
+      }).catch(async (err) => {
+        await cancelUnstartedPurchase(purchase.id);
+        throw err;
+      });
+      await writeAuditLog({
+        tenantId: customer.tenantId,
+        actorUserId: request.user!.id,
+        action: "addon.purchase_started",
+        resourceType: "AddOnPurchase",
+        resourceId: purchase.id,
+        after: { addOnId: body.addOnId, invoiceId: invoice.id, amountMinor },
+        ipAddress: request.ip,
+        userAgent: request.headers["user-agent"] ?? null,
+      });
+      reply.status(201).send(successResponse({ purchaseId: purchase.id, checkoutRequestId: stkRequest.checkoutRequestId, amountMinor }, request.id));
+    }
+  );
+
   /** The signed-in customer's own referral code and what it has earned them. */
   app.get("/referral", { config: { audience: "customer" }, preHandler: [...preHandler] }, async (request, reply) => {
     const customer = await resolveMyCustomerOrThrow(request);
@@ -146,6 +190,8 @@ export async function meRoutes(app: FastifyInstance): Promise<void> {
     const current = await getStkRequestOrThrow(customer.tenantId, checkoutRequestId);
     if (current.customerId !== customer.id) throw new NotFoundError("Payment request");
     const latest = current.status === "PENDING" ? (await queryAndReconcileStkRequest(customer.tenantId, checkoutRequestId)).request : current;
+    // A paid add-on starts right away rather than waiting for the worker's next sweep.
+    if (latest.status === "COMPLETED") await activatePaidAddOns({ customerId: customer.id }).catch(() => []);
     reply.send(
       successResponse(
         { checkoutRequestId, status: latest.status, resultDesc: latest.resultDesc, mpesaReceiptNumber: latest.mpesaReceiptNumber, amountMinor: latest.amountMinor },
