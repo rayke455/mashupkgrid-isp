@@ -16,6 +16,7 @@ const LABELS_SW: Record<string, string> = {
   "Referrals": "Rufaa",
   "VAT report": "Ripoti ya VAT",
   "Router updates": "Masasisho ya ruta",
+  "Router backups": "Nakala za ruta",
   "Planned maintenance": "Matengenezo yaliyopangwa",
   "Internet plans": "Vifurushi vya intaneti",
   Invoices: "Ankara",

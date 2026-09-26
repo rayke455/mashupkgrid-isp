@@ -28,6 +28,7 @@ enum UserStatus {
 
 model Tenant {
   id                     String                  @id @default(uuid())
+  routerBackups          RouterBackup[]
   routerRollouts         RouterRollout[]
   jobCards               JobCard[]
   referralRewards        ReferralReward[]
@@ -1915,6 +1916,7 @@ enum RouterStatus {
 /// apps/api / apps/worker, never sent to apps/web (docs/architecture/06).
 model Router {
   id                   String                @id @default(uuid())
+  backups              RouterBackup[]
   /// Last seen by the Router updates page: RouterOS version, board model and bootloader firmware.
   routerOsVersion      String?
   boardName            String?
@@ -2782,4 +2784,29 @@ model RouterRolloutTarget {
 
   @@index([rolloutId, position])
   @@map("router_rollout_targets")
+}
+
+/// A router's full configuration export, taken before every over-the-air change and nightly.
+/// The export carries passwords and keys, so it is encrypted at rest and only owners can
+/// download or restore it. Restoring hands the router a one-time link to fetch it from.
+model RouterBackup {
+  id                    String    @id @default(uuid())
+  tenantId              String
+  tenant                Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  routerId              String
+  router                Router    @relation(fields: [routerId], references: [id], onDelete: Cascade)
+  reason                String
+  contentEncrypted      String
+  sizeBytes             Int
+  sha256                String
+  routerOsVersion       String?
+  createdByUserId       String?
+  createdAt             DateTime  @default(now())
+  restoreTokenHash      String?   @unique
+  restoreTokenExpiresAt DateTime?
+  restoredAt            DateTime?
+
+  @@index([routerId, createdAt])
+  @@index([tenantId, createdAt])
+  @@map("router_backups")
 }

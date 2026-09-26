@@ -174,6 +174,16 @@ export const AUTOMATION_JOBS: readonly AutomationJobDefinition[] = [
     tenantVisible: true,
   },
   {
+    name: JOB_NAMES.routerBackups,
+    queue: QUEUE_NAMES.network,
+    category: "network",
+    label: "Router backups",
+    description: "Saves each online router's full configuration once a day, keeping the newest 20.",
+    everyMs: HOUR,
+    counters: { due: "Routers due", saved: "Backups saved", failed: "Backups failed" },
+    tenantVisible: true,
+  },
+  {
     name: JOB_NAMES.routerRollouts,
     queue: QUEUE_NAMES.network,
     category: "network",

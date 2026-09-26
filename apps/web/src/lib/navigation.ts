@@ -27,6 +27,7 @@ export type NavIcon =
   | "gift"
   | "globe"
   | "hand-coins"
+  | "hard-drive"
   | "hard-hat"
   | "history"
   | "key"
@@ -118,6 +119,7 @@ function tenantSections(has: Has): NavSection[] {
       items: [
         ...(has("routers.read") ? [{ href: "/routers", label: "Routers", icon: "router", keywords: "mikrotik nas" } as NavItem] : []),
         ...(has("routers.manage") ? [{ href: "/routers/updates", label: "Router updates", icon: "cloud-download", keywords: "ota firmware routeros upgrade push script features fleet reboot" } as NavItem] : []),
+        ...(has("routers.read") ? [{ href: "/routers/backups", label: "Router backups", icon: "hard-drive", keywords: "backup restore export config rollback" } as NavItem] : []),
         ...(has("vlans.read") ? [{ href: "/vlans", label: "VLANs", icon: "layers", keywords: "segments tagging" } as NavItem] : []),
         ...(has("routers.read") ? [{ href: "/ip-pools", label: "IP pools", icon: "network", keywords: "addresses dhcp" } as NavItem] : []),
         ...(has("routers.read") ? [{ href: "/network-map", label: "Network map", icon: "map", keywords: "sites map coverage where routers are" } as NavItem] : []),

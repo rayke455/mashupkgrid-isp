@@ -34,6 +34,7 @@ import { handlePushLargePayments } from "./jobs/push-large-payments.js";
 import { handleSuggestUpgrades } from "./jobs/suggest-upgrades.js";
 import { handleReferralRewards } from "./jobs/referral-rewards.js";
 import { handleRouterRollouts } from "./jobs/router-rollouts.js";
+import { handleRouterBackups } from "./jobs/router-backups.js";
 import { handleNetworkMaintenanceNotices } from "./jobs/network-maintenance-notices.js";
 import { handleRunTenantPayouts } from "./jobs/tenant-payouts.js";
 import { handleSendWhatsappOtp } from "./jobs/send-whatsapp-otp.js";
@@ -177,6 +178,8 @@ async function main() {
           return run(handleNetworkMaintenanceNotices);
         case JOB_NAMES.routerRollouts:
           return run(handleRouterRollouts);
+        case JOB_NAMES.routerBackups:
+          return run(handleRouterBackups);
         default:
           throw new Error(`Unknown job in queue "${QUEUE_NAMES.network}": ${job.name}`);
       }

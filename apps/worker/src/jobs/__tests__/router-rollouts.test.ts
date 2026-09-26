@@ -46,6 +46,7 @@ vi.mock("@mashupkgrid/database", () => ({
 }));
 vi.mock("@mashupkgrid/network", () => ({
   findOtaAction: (key: string) => ({ key, label: key }),
+  backupRouter: vi.fn().mockResolvedValue({}),
   runOtaActionOnRouter: h.run,
 }));
 vi.mock("@mashupkgrid/push", () => ({ pushToUser: vi.fn().mockResolvedValue(0) }));

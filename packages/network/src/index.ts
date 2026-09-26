@@ -13,3 +13,4 @@ export * from "./anti-tunnel.js";
 export * from "./hotspot-device.service.js";
 export * from "./walled-garden.js";
 export * from "./ota.service.js";
+export * from "./backup.service.js";

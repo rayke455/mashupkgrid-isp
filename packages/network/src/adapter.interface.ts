@@ -158,6 +158,11 @@ export interface NetworkDeviceAdapter {
   reboot?(): Promise<void>;
   /** Runs a RouterOS script and returns what it printed. */
   runScript?(source: string): Promise<string>;
+  /** The router's full configuration as a RouterOS script (/export), secrets included. */
+  exportConfig?(): Promise<string>;
+  /** Replaces the router's configuration with the script at `url`: the router downloads it, then
+   *  resets its configuration and runs the script as it boots. The router reboots. */
+  restoreConfigFromUrl?(url: string): Promise<void>;
 }
 
 /** Thrown by every not-yet-implemented vendor adapter — never pretend an unsupported

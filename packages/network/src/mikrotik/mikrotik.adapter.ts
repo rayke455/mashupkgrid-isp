@@ -743,6 +743,61 @@ export class MikroTikAdapter implements NetworkDeviceAdapter {
     return replies.map((r) => r.attributes["ret"]).find((v) => v !== undefined) ?? "";
   }
 
+  async exportConfig(): Promise<string> {
+    const client = this.requireClient();
+    const name = "mkg-backup.rsc";
+    await client.print(["/file/print", `?name=${name}`]).then((rows) => (rows[0]?.[".id"] ? client.talk(["/file/remove", `=.id=${rows[0][".id"]}`]) : null)).catch(() => undefined);
+    // RouterOS 7 hides passwords and keys in an export unless asked; a backup without them could
+    // not bring a router back. RouterOS 6 has no such flag and includes them anyway.
+    await client.talk(["/execute", `=script=:do {/export show-sensitive file=mkg-backup} on-error={/export file=mkg-backup}`]);
+    let size = 0;
+    for (let i = 0; i < 30; i++) {
+      const [file] = await client.print(["/file/print", `?name=${name}`]).catch(() => []);
+      const now = Number(file?.["size"] ?? 0);
+      if (file && now > 0 && now === size) break;
+      size = now;
+      await new Promise((r) => setTimeout(r, 500));
+    }
+    if (!size) throw new Error("The router did not produce an export file");
+    let content = "";
+    try {
+      // RouterOS 7.13+ reads a file in chunks; the only way to read a large export.
+      for (let offset = 0; offset < size; ) {
+        const replies = await client.talk(["/file/read", `=file=${name}`, "=chunk-size=32768", `=offset=${offset}`]);
+        const data = replies.map((r) => r.attributes["data"]).find((d) => d !== undefined) ?? "";
+        if (!data) break;
+        content += data;
+        offset += Buffer.byteLength(data);
+      }
+    } catch {
+      content = "";
+    }
+    if (!content) {
+      const [file] = await client.print(["/file/print", `?name=${name}`, "=.proplist=contents,size"]);
+      content = file?.["contents"] ?? "";
+      if (Buffer.byteLength(content) < size) throw new Error("This RouterOS version cannot hand over a large export; upgrade to RouterOS 7.13 or newer");
+    }
+    await client.print(["/file/print", `?name=${name}`]).then((rows) => (rows[0]?.[".id"] ? client.talk(["/file/remove", `=.id=${rows[0][".id"]}`]) : null)).catch(() => undefined);
+    return content;
+  }
+
+  async restoreConfigFromUrl(url: string): Promise<void> {
+    const client = this.requireClient();
+    const name = "mkg-restore.rsc";
+    // Download first and confirm the file arrived; only then reset. A failed download must never
+    // reach the reset, or the router would come back empty.
+    await client.talk(["/execute", `=script=/tool fetch url="${url}" dst-path=${name} check-certificate=no`]).catch(() => undefined);
+    let size = 0;
+    for (let i = 0; i < 40 && !size; i++) {
+      await new Promise((r) => setTimeout(r, 500));
+      const [file] = await client.print(["/file/print", `?name=${name}`]).catch(() => []);
+      size = Number(file?.["size"] ?? 0);
+    }
+    if (!size) throw new Error("The router could not download the backup, so nothing was changed");
+    // The reset reboots the router and drops this connection; that is the expected end.
+    await client.talk(["/execute", `=script=/system reset-configuration no-defaults=yes skip-backup=yes run-after-reset=${name}`]).catch(() => undefined);
+  }
+
   // --- VLAN and addressing (spec section 9) ---------------------------------------------------
   // Every method here reports what the DEVICE said. None of them assume a topology: the parent
   // interface a VLAN stacks on is always supplied by the caller, because it is the ISP's network

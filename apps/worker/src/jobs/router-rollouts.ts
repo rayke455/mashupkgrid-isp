@@ -1,6 +1,9 @@
 import { prisma } from "@mashupkgrid/database";
 import type { AutomationSummary } from "@mashupkgrid/shared";
-import { findOtaAction, runOtaActionOnRouter, type OtaActionKey } from "@mashupkgrid/network";
+import { backupRouter, findOtaAction, runOtaActionOnRouter, type OtaActionKey } from "@mashupkgrid/network";
+
+/** Actions that cannot change a router's configuration need no backup first. */
+const NO_BACKUP = new Set(["check-versions", "reboot"]);
 import { pushToUser } from "@mashupkgrid/push";
 
 /**
@@ -56,11 +59,21 @@ export async function handleRouterRollouts(): Promise<AutomationSummary> {
       if (claimed.count === 0) continue;
 
       const router = next.routerId ? await prisma.router.findFirst({ where: { id: next.routerId, tenantId: rollout.tenantId, deletedAt: null } }) : null;
-      const result = !router
-        ? { status: "SKIPPED" as const, message: "The router was removed" }
-        : !action
-          ? { status: "FAILED" as const, message: `Unknown action ${rollout.action}` }
+      let result: { status: "SUCCEEDED" | "FAILED" | "SKIPPED"; message: string };
+      if (!router) result = { status: "SKIPPED", message: "The router was removed" };
+      else if (!action) result = { status: "FAILED", message: `Unknown action ${rollout.action}` };
+      else {
+        // A backup first, so any change can be undone from Router backups. No backup, no change.
+        let backupError: string | null = null;
+        if (!NO_BACKUP.has(action.key) && router.status !== "DOWN" && (router.host || router.vpnIp)) {
+          await backupRouter(router.id, `Before: ${action.label}`, rollout.createdByUserId).catch((err: unknown) => {
+            backupError = err instanceof Error ? err.message : String(err);
+          });
+        }
+        result = backupError
+          ? { status: "FAILED", message: `Could not back up the router first, so nothing was changed: ${backupError}` }
           : await runOtaActionOnRouter(router, action.key as OtaActionKey, params);
+      }
       await prisma.routerRolloutTarget.update({ where: { id: next.id }, data: { status: result.status, message: result.message, finishedAt: new Date() } });
       if (result.status === "SUCCEEDED") updated += 1;
       if (result.status === "FAILED") failed += 1;
