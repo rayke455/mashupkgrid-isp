@@ -30,6 +30,7 @@ import {
   handleSendFinalDunningNotices,
 } from "./jobs/dunning.js";
 import { handleDeliverWebhook } from "./jobs/deliver-webhook.js";
+import { handlePushLargePayments } from "./jobs/push-large-payments.js";
 import { handleRunTenantPayouts } from "./jobs/tenant-payouts.js";
 import { handleSendWhatsappOtp } from "./jobs/send-whatsapp-otp.js";
 import {
@@ -142,6 +143,9 @@ async function main() {
     async (job) => {
       if (job.name === JOB_NAMES.pollPendingStkRequests) {
         return scheduled(job.name, job.data, handlePollPendingStkRequests);
+      }
+      if (job.name === JOB_NAMES.pushLargePayments) {
+        return scheduled(job.name, job.data, handlePushLargePayments);
       }
       throw new Error(`Unknown job in queue "${QUEUE_NAMES.mpesa}": ${job.name}`);
     },

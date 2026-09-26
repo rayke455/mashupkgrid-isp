@@ -174,6 +174,16 @@ export const AUTOMATION_JOBS: readonly AutomationJobDefinition[] = [
     tenantVisible: true,
   },
   {
+    name: JOB_NAMES.pushLargePayments,
+    queue: QUEUE_NAMES.mpesa,
+    category: "payments",
+    label: "Alert on large payments",
+    description: "Sends a push alert to staff devices when a payment at or above the ISP's alert amount arrives.",
+    everyMs: MINUTE,
+    counters: { checked: "Payments checked", alerted: "Alerts sent" },
+    tenantVisible: true,
+  },
+  {
     name: JOB_NAMES.runTenantPayouts,
     queue: QUEUE_NAMES.billing,
     category: "payments",

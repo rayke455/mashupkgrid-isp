@@ -157,6 +157,14 @@ const envSchema = z.object({
   RESEND_API_KEY: z.string().optional().default(""),
   RESEND_FROM: z.string().optional().default(""),
 
+  /** Web push (alerts to staff phones and computers). Generate a pair once with
+   *  `npx web-push generate-vapid-keys`; changing them later makes every device turn alerts on
+   *  again. Empty means push is off and the dashboard says so. */
+  VAPID_PUBLIC_KEY: z.string().optional().default(""),
+  VAPID_PRIVATE_KEY: z.string().optional().default(""),
+  /** Contact the push services can reach if the alerts misbehave: a mailto: or https: URL. */
+  VAPID_SUBJECT: z.string().optional().default("mailto:alerts@mashuphost.tech"),
+
   // M-Pesa credentials are configured per-tenant, encrypted, in the PaymentProviderConfig
   // table (docs/architecture/10-phase3-plan.md) — set via the admin UI/API, not here. These
   // env vars are unused by application code; kept only as the seed script's optional default

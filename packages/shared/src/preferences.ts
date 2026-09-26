@@ -43,6 +43,18 @@ export const tenantPreferencesSchema = z.object({
       LOW: z.number().int().min(1).max(720),
     }),
   }),
+  /** Push alerts to staff phones and computers that turned them on. */
+  alerts: z.object({
+    /** Alert staff who manage routers when one stops reporting, and when it is back. */
+    routerDown: z.boolean(),
+    /** Alert staff who see payments when one at least this large arrives. 0 turns it off. */
+    largePaymentMinor: z
+      .number()
+      .int()
+      .min(0)
+      .max(1_000_000_000)
+      .refine((v) => v === 0 || v >= 10_000, "Use at least 100, or 0 to turn payment alerts off"),
+  }),
 });
 
 export type TenantPreferences = z.infer<typeof tenantPreferencesSchema>;
@@ -75,6 +87,7 @@ export const DEFAULT_TENANT_PREFERENCES: TenantPreferences = {
   tickets: {
     responseHours: { URGENT: 2, HIGH: 8, NORMAL: 24, LOW: 72 },
   },
+  alerts: { routerDown: true, largePaymentMinor: 500_000 },
 };
 
 /** Merges whatever is stored with the defaults, so a partial or old record never breaks a job. */
@@ -82,6 +95,7 @@ export function resolveTenantPreferences(stored: unknown): TenantPreferences {
   const raw = (stored && typeof stored === "object" ? stored : {}) as Record<string, unknown>;
   const reminders = (raw.reminders && typeof raw.reminders === "object" ? raw.reminders : {}) as Record<string, unknown>;
   const tickets = (raw.tickets && typeof raw.tickets === "object" ? raw.tickets : {}) as Record<string, unknown>;
+  const alerts = (raw.alerts && typeof raw.alerts === "object" ? raw.alerts : {}) as Record<string, unknown>;
   const merged = {
     reminders: {
       ...DEFAULT_TENANT_PREFERENCES.reminders,
@@ -91,6 +105,7 @@ export function resolveTenantPreferences(stored: unknown): TenantPreferences {
     tickets: {
       responseHours: { ...DEFAULT_TENANT_PREFERENCES.tickets.responseHours, ...((tickets.responseHours as object) ?? {}) },
     },
+    alerts: { ...DEFAULT_TENANT_PREFERENCES.alerts, ...alerts },
   };
   const parsed = tenantPreferencesSchema.safeParse(merged);
   return parsed.success ? parsed.data : DEFAULT_TENANT_PREFERENCES;

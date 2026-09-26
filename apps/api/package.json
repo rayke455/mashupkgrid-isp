@@ -19,6 +19,7 @@
     "@mashupkgrid/payments": "workspace:*",
     "@mashupkgrid/network": "workspace:*",
     "@mashupkgrid/radius": "workspace:*",
+    "@mashupkgrid/push": "workspace:*",
     "@mashupkgrid/sms": "workspace:*",
     "@mashupkgrid/ai": "workspace:*",
     "@mashupkgrid/support": "workspace:*",

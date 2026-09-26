@@ -250,6 +250,8 @@ export interface PageStrings {
     reminders: string;
     remindersHint: string;
     branches: string;
+    alerts: string;
+    alertsHint: string;
     branchesHint: string;
     staff: string;
     staffHint: string;
@@ -552,6 +554,8 @@ const EN: PageStrings = {
     groupAccount: "Account",
     reminders: "Reminders and tickets",
     branches: "Branches",
+    alerts: "Alerts on this device",
+    alertsHint: "Router down, large payments",
     branchesHint: "Towns or areas you run",
     remindersHint: "Payment reminders, response targets",
     staff: "Staff and roles",
@@ -854,6 +858,8 @@ const SW: PageStrings = {
     groupAccount: "Akaunti",
     reminders: "Vikumbusho na tiketi",
     branches: "Matawi",
+    alerts: "Arifa kwenye kifaa hiki",
+    alertsHint: "Ruta kuzimika, malipo makubwa",
     branchesHint: "Miji au maeneo mnayohudumia",
     remindersHint: "Vikumbusho vya malipo, muda wa majibu",
     staff: "Wafanyakazi na majukumu",

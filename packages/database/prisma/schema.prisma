@@ -155,6 +155,7 @@ model User {
   deletedAt           DateTime?
 
   sessions                Session[]
+  pushSubscriptions       PushSubscription[]
   userRoles               UserRole[]
   emailVerificationTokens EmailVerificationToken[]
   passwordResetTokens     PasswordResetToken[]
@@ -2506,4 +2507,23 @@ model Branch {
   @@unique([tenantId, name])
   @@index([tenantId])
   @@map("branches")
+}
+
+/// One browser or installed dashboard that agreed to receive push alerts for a staff user.
+/// The endpoint is unique per device; a gone endpoint (404/410 from the push service) is deleted.
+model PushSubscription {
+  id            String    @id @default(uuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenantId      String?
+  endpoint      String    @unique
+  p256dh        String
+  auth          String
+  userAgent     String?
+  createdAt     DateTime  @default(now())
+  lastSuccessAt DateTime?
+
+  @@index([userId])
+  @@index([tenantId])
+  @@map("push_subscriptions")
 }

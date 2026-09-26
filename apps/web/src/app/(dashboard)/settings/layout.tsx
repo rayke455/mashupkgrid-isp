@@ -21,6 +21,7 @@ import {
   IconChat,
   IconGlobe,
   IconLayers,
+  IconBell,
 } from "@/components/icons";
 
 interface SettingsNavItem {
@@ -67,6 +68,13 @@ export default function SettingsLayout({ children }: { children: ReactNode }) {
           hint: t.branchesHint,
           icon: <IconGlobe size={16} />,
           show: has("settings.manage"),
+        },
+        {
+          href: "/settings/alerts",
+          label: t.alerts,
+          hint: t.alertsHint,
+          icon: <IconBell size={16} />,
+          show: true,
         },
         {
           href: "/settings/reminders",
