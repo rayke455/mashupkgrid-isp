@@ -94,6 +94,19 @@ export const tenantPreferencesSchema = z.object({
     /** Staff must use two-step login; those who haven't set it up do so at their next sign-in. */
     requireStaffMfa: z.boolean(),
   }),
+  /** Codes the accounting exports put on every invoice line, as named in the ISP's books. */
+  accounting: z.object({
+    /** Xero sales account code, e.g. "200". */
+    salesAccountCode: z.string().max(20),
+    /** Xero tax rate name for taxed lines, e.g. "16% VAT" or "Tax on Sales". */
+    taxType: z.string().max(60),
+    /** Xero tax rate name for untaxed lines, e.g. "Tax Exempt" or "No VAT". */
+    noTaxType: z.string().max(60),
+    /** QuickBooks product/service the lines are booked to. */
+    itemName: z.string().max(100),
+    /** QuickBooks tax code for taxed lines, e.g. "VAT 16%" or "TAX". */
+    taxCode: z.string().max(60),
+  }),
   /** VAT details for the monthly tax report. */
   tax: z.object({
     vatRegistered: z.boolean(),
@@ -159,6 +172,7 @@ export const DEFAULT_TENANT_PREFERENCES: TenantPreferences = {
   winBack: { enabled: false, discountPercent: 20, validDays: 7, minDaysBetween: 60 },
   coverage: { enabled: true, radiusKm: 3 },
   security: { requireStaffMfa: false },
+  accounting: { salesAccountCode: "200", taxType: "16% VAT", noTaxType: "Tax Exempt", itemName: "Internet service", taxCode: "VAT 16%" },
 };
 
 /** Merges whatever is stored with the defaults, so a partial or old record never breaks a job. */
@@ -172,6 +186,7 @@ export function resolveTenantPreferences(stored: unknown): TenantPreferences {
   const tax = (raw.tax && typeof raw.tax === "object" ? raw.tax : {}) as Record<string, unknown>;
   const referrals = (raw.referrals && typeof raw.referrals === "object" ? raw.referrals : {}) as Record<string, unknown>;
   const upgrades = (raw.upgrades && typeof raw.upgrades === "object" ? raw.upgrades : {}) as Record<string, unknown>;
+  const accounting = (raw.accounting && typeof raw.accounting === "object" ? raw.accounting : {}) as Record<string, unknown>;
   const security = (raw.security && typeof raw.security === "object" ? raw.security : {}) as Record<string, unknown>;
   const coverage = (raw.coverage && typeof raw.coverage === "object" ? raw.coverage : {}) as Record<string, unknown>;
   const winBack = (raw.winBack && typeof raw.winBack === "object" ? raw.winBack : {}) as Record<string, unknown>;
@@ -193,6 +208,7 @@ export function resolveTenantPreferences(stored: unknown): TenantPreferences {
     winBack: { ...DEFAULT_TENANT_PREFERENCES.winBack, ...winBack },
     coverage: { ...DEFAULT_TENANT_PREFERENCES.coverage, ...coverage },
     security: { ...DEFAULT_TENANT_PREFERENCES.security, ...security },
+    accounting: { ...DEFAULT_TENANT_PREFERENCES.accounting, ...accounting },
   };
   const parsed = tenantPreferencesSchema.safeParse(merged);
   return parsed.success ? parsed.data : DEFAULT_TENANT_PREFERENCES;

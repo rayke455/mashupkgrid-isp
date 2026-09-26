@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import type { LucideIcon } from "lucide-react";
 import {
+  FileSpreadsheet,
   UserPlus,
   Megaphone,
   Handshake,
@@ -74,6 +75,7 @@ const GLYPHS: Record<NavIcon, LucideIcon> = {
   "dashboard": LayoutDashboard,
   "file-text": FileText,
   "gauge": Gauge,
+  "sheet": FileSpreadsheet,
   "user-plus": UserPlus,
   "megaphone": Megaphone,
   "handshake": Handshake,

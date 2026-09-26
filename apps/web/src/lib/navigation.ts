@@ -24,6 +24,7 @@ export type NavIcon =
   | "dashboard"
   | "file-text"
   | "gauge"
+  | "sheet"
   | "user-plus"
   | "megaphone"
   | "handshake"
@@ -152,6 +153,7 @@ function tenantSections(has: Has): NavSection[] {
               { href: "/payments/settlements", label: "Settlements", icon: "landmark", keywords: "payouts withdraw" },
             ] as NavItem[])
           : []),
+        ...(has("billing.read") ? [{ href: "/accounting", label: "Accounting export", icon: "sheet", keywords: "xero quickbooks accountant csv books import" } as NavItem] : []),
         ...(has("payments.read") ? [{ href: "/agents", label: "Agents", icon: "handshake", keywords: "shops resellers vouchers commission cash collect" } as NavItem] : []),
         ...(has("payments.reconcile") ? [{ href: "/payments/reconciliation", label: "Reconciliation", icon: "scale", keywords: "unmatched payments apply invoice m-pesa" } as NavItem] : []),
         ...(has("settings.manage") || has("payments.reconcile")

@@ -115,5 +115,8 @@ export async function registerSecurity(app: FastifyInstance): Promise<void> {
     // on a default that has already changed once.
     methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     credentials: true,
+    // Lets the web app read a download's file name; without it every export saved under a
+    // generic fallback name.
+    exposedHeaders: ["Content-Disposition"],
   });
 }

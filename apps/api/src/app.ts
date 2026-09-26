@@ -59,6 +59,7 @@ import { agentRoutes } from "./routes/agents.js";
 import { campaignRoutes } from "./routes/campaigns.js";
 import { leadRoutes } from "./routes/leads.js";
 import { mfaRoutes } from "./routes/mfa.js";
+import { accountingRoutes } from "./routes/accounting.js";
 import { planRoutes } from "./routes/plans.js";
 import { tenantBillingRoutes } from "./routes/tenant-billing.js";
 import { landingContentRoutes } from "./routes/landing-content.js";
@@ -160,6 +161,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(campaignRoutes, { prefix: "/api/v1/campaigns" });
   await app.register(leadRoutes, { prefix: "/api/v1" });
   await app.register(mfaRoutes, { prefix: "/api/v1/auth/mfa" });
+  await app.register(accountingRoutes, { prefix: "/api/v1/accounting" });
   await app.register(planRoutes, { prefix: "/api/v1/platform/plans" });
   await app.register(tenantBillingRoutes, { prefix: "/api/v1/billing" });
   await app.register(landingContentRoutes, { prefix: "/api/v1/landing-content" });
