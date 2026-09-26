@@ -47,6 +47,7 @@ import { pushRoutes } from "./routes/push.js";
 import { upgradeRoutes } from "./routes/upgrades.js";
 import { networkMaintenanceRoutes } from "./routes/network-maintenance.js";
 import { referralRoutes } from "./routes/referrals.js";
+import { jobRoutes } from "./routes/jobs.js";
 import { planRoutes } from "./routes/plans.js";
 import { tenantBillingRoutes } from "./routes/tenant-billing.js";
 import { landingContentRoutes } from "./routes/landing-content.js";
@@ -136,6 +137,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(upgradeRoutes, { prefix: "/api/v1/upgrades" });
   await app.register(networkMaintenanceRoutes, { prefix: "/api/v1/network-maintenance" });
   await app.register(referralRoutes, { prefix: "/api/v1/referrals" });
+  await app.register(jobRoutes, { prefix: "/api/v1/jobs" });
   await app.register(planRoutes, { prefix: "/api/v1/platform/plans" });
   await app.register(tenantBillingRoutes, { prefix: "/api/v1/billing" });
   await app.register(landingContentRoutes, { prefix: "/api/v1/landing-content" });

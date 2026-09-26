@@ -28,6 +28,7 @@ enum UserStatus {
 
 model Tenant {
   id                     String                  @id @default(uuid())
+  jobCards               JobCard[]
   referralRewards        ReferralReward[]
   networkMaintenance     NetworkMaintenance[]
   upgradeSuggestions     UpgradeSuggestion[]
@@ -138,6 +139,7 @@ model Tenant {
 
 model User {
   id                  String     @id @default(uuid())
+  assignedJobs        JobCard[]  @relation("JobCardAssignee")
   tenantId            String?
   tenant              Tenant?    @relation(fields: [tenantId], references: [id])
   /// Staff member's home branch: the branch their lists open on. Null means all branches.
@@ -423,6 +425,7 @@ enum CustomerStatus {
 
 model Customer {
   id                    String              @id @default(uuid())
+  jobCards              JobCard[]
   /// Short code this customer shares with neighbours; created the first time it is shown.
   referralCode          String?
   /// Who referred this customer. Their reward is granted once this customer first pays.
@@ -2641,4 +2644,79 @@ model ReferralReward {
 
   @@index([tenantId, createdAt])
   @@map("referral_rewards")
+}
+
+enum JobCardType {
+  INSTALLATION
+  REPAIR
+  SURVEY
+  RELOCATION
+  REMOVAL
+}
+
+enum JobCardStatus {
+  OPEN
+  IN_PROGRESS
+  DONE
+  CANCELLED
+}
+
+/// A visit by a field technician: an installation, a repair, a site survey. The technician
+/// starts it on site, adds photos and the equipment fitted, and closes it with the customer's
+/// signature, all from a phone.
+model JobCard {
+  id               String              @id @default(uuid())
+  tenantId         String
+  tenant           Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  number           String
+  type             JobCardType
+  status           JobCardStatus       @default(OPEN)
+  title            String
+  notes            String?
+  customerId       String?
+  customer         Customer?           @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  /// Where to go, for a job with no customer yet (a survey) or a different site.
+  address          String?
+  contactPhone     String?
+  assignedToUserId String?
+  assignedTo       User?               @relation("JobCardAssignee", fields: [assignedToUserId], references: [id], onDelete: SetNull)
+  scheduledFor     DateTime?
+  startedAt        DateTime?
+  completedAt      DateTime?
+  /// GPS where the technician started or closed the job.
+  latitude         Float?
+  longitude        Float?
+  equipment        String?
+  completionNotes  String?
+  signedByName     String?
+  createdByUserId  String?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  attachments      JobCardAttachment[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, status])
+  @@index([assignedToUserId, status])
+  @@map("job_cards")
+}
+
+enum JobCardAttachmentKind {
+  PHOTO
+  SIGNATURE
+}
+
+/// A photo or the customer's signature, resized on the phone before upload and kept small.
+model JobCardAttachment {
+  id               String                @id @default(uuid())
+  jobCardId        String
+  jobCard          JobCard               @relation(fields: [jobCardId], references: [id], onDelete: Cascade)
+  kind             JobCardAttachmentKind
+  mimeType         String
+  sizeBytes        Int
+  data             Bytes
+  uploadedByUserId String?
+  createdAt        DateTime              @default(now())
+
+  @@index([jobCardId])
+  @@map("job_card_attachments")
 }
