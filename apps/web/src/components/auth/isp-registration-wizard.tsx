@@ -598,21 +598,19 @@ export function IspRegistrationWizard() {
             <form onSubmit={handleStep1Submit} className="space-y-4">
               <div className="text-left space-y-1">
                 <h1 className="text-xl sm:text-2xl font-semibold text-slate-950 tracking-tight">
-                  Tenant Account Setup
+                  Create your ISP account
                 </h1>
                 <p className="text-xs text-slate-600 leading-relaxed">
-                  Verify your account credentials and access your ISP tenant subdomain.
+                  Tell us who you are, verify your number, and choose your ISP&rsquo;s address. Takes about two minutes.
                 </p>
               </div>
 
-              {/* Rule 1 Badge */}
-              <div className="p-2.5 bg-amber-500/10 border border-amber-500/30 rounded-lg text-left">
-                <div className="flex items-center gap-1.5 text-amber-800 dark:text-amber-400 font-semibold text-xs">
-                  <span>🔒</span>
-                  <span>Authorized Tenants Only</span>
-                </div>
-                <p className="text-[11px] text-amber-900/80 dark:text-amber-300/80 mt-0.5">
-                  Registration is restricted to provisioned tenants in the system. Strangers cannot request OTP or register.
+              {/* Registration is open; approval is the gate. The old "authorized tenants only"
+                  notice predates that and told real applicants they could not sign up. */}
+              <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-lg text-left">
+                <p className="text-xs font-semibold text-blue-900">Reviewed before going live</p>
+                <p className="text-[11px] text-blue-900/80 mt-0.5">
+                  New ISPs are checked by our team, usually within a business day. You&rsquo;ll get an email and WhatsApp message with your sign-in link as soon as you&rsquo;re approved.
                 </p>
               </div>
 

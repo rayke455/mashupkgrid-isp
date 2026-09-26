@@ -202,7 +202,7 @@ function LoginContent() {
                 <GoogleSignInButton onCredential={handleGoogleCredential} />
               ) : (
                 <p className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2.5 text-center text-xs text-slate-500">
-                  Enter your organization above to sign in with Google.
+                  Google sign-in works on your ISP&rsquo;s own address (yourisp.mashuphost.tech). Use your email and password here.
                 </p>
               )}
               {googlePending && (
