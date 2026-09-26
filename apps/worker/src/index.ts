@@ -32,6 +32,7 @@ import {
 import { handleDeliverWebhook } from "./jobs/deliver-webhook.js";
 import { handlePushLargePayments } from "./jobs/push-large-payments.js";
 import { handleSuggestUpgrades } from "./jobs/suggest-upgrades.js";
+import { handleReferralRewards } from "./jobs/referral-rewards.js";
 import { handleNetworkMaintenanceNotices } from "./jobs/network-maintenance-notices.js";
 import { handleRunTenantPayouts } from "./jobs/tenant-payouts.js";
 import { handleSendWhatsappOtp } from "./jobs/send-whatsapp-otp.js";
@@ -132,6 +133,8 @@ async function main() {
           return run(handleExpireTrials);
         case JOB_NAMES.suggestUpgrades:
           return run(handleSuggestUpgrades);
+        case JOB_NAMES.referralRewards:
+          return run(handleReferralRewards);
         default:
           throw new Error(`Unknown job in queue "${QUEUE_NAMES.billing}": ${job.name}`);
       }

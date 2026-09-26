@@ -3,6 +3,9 @@ import { z } from "zod";
 import { prisma } from "@mashupkgrid/database";
 import {
   createCustomer,
+  findReferrerByCode,
+  getReferralSummary,
+  setReferrer,
   updateCustomer,
   changeCustomerStatus,
   getCustomerOrThrow,
@@ -47,9 +50,11 @@ const createCustomerSchema = z.object({
   gpsLng: z.number().optional(),
   connectionType: z.string().optional(),
   branchId: z.string().uuid().nullable().optional(),
+  /** Code of the existing customer who referred this one. */
+  referralCode: z.string().trim().max(20).optional(),
 });
 
-const updateCustomerSchema = createCustomerSchema.partial().extend({ notes: z.string().optional() });
+const updateCustomerSchema = createCustomerSchema.omit({ referralCode: true }).partial().extend({ notes: z.string().optional() });
 
 const statusSchema = z.object({
   status: z.enum([
@@ -215,10 +220,14 @@ export async function customerRoutes(app: FastifyInstance): Promise<void> {
     { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("customers.create")] },
     async (request, reply) => {
       const tenantId = requireTenant(request.user!.tenantId);
-      const body = createCustomerSchema.parse(request.body);
+      const { referralCode, ...body } = createCustomerSchema.parse(request.body);
       await assertBranchInTenant(tenantId, body.branchId);
+      // Checked before creating, so a mistyped code is fixed rather than silently dropped.
+      const referrer = referralCode ? await findReferrerByCode(tenantId, referralCode) : null;
+      if (referralCode && !referrer) throw new NotFoundError("Referral code");
       await assertWithinPlanLimit(tenantId, "customers");
       const customer = await createCustomer(tenantId, body);
+      if (referrer) await prisma.customer.update({ where: { id: customer.id }, data: { referredById: referrer.id } });
 
       await writeAuditLog({
         tenantId,
@@ -327,6 +336,33 @@ export async function customerRoutes(app: FastifyInstance): Promise<void> {
       });
 
       reply.send(successResponse(after, request.id));
+    }
+  );
+
+  /** The customer's referral code, who they referred, and what they earned. */
+  app.get(
+    "/:customerId/referral",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("customers.read")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const { customerId } = idParamsSchema.parse(request.params);
+      const summary = await getReferralSummary(tenantId, customerId);
+      const self = await prisma.customer.findFirst({ where: { id: customerId, tenantId }, select: { referredBy: { select: { id: true, fullName: true } } } });
+      reply.send(successResponse({ ...summary, referredBy: self?.referredBy ?? null }, request.id));
+    }
+  );
+
+  /** Adds the referrer after the fact, for a customer who has not paid yet. */
+  app.post(
+    "/:customerId/referrer",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("customers.update")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const { customerId } = idParamsSchema.parse(request.params);
+      const { code } = z.object({ code: z.string().trim().min(3).max(20) }).parse(request.body);
+      const result = await setReferrer(tenantId, customerId, code);
+      await writeAuditLog({ tenantId, actorUserId: request.user!.id, action: "customer.referrer_set", resourceType: "Customer", resourceId: customerId, after: { referrerId: result.referrerId }, ipAddress: request.ip, userAgent: request.headers["user-agent"] ?? null });
+      reply.send(successResponse(result, request.id));
     }
   );
 }

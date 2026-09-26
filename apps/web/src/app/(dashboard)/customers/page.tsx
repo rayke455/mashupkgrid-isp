@@ -8,6 +8,7 @@ import { useLanguage } from "@/lib/language-context";
 import { pageStrings } from "@/lib/page-strings";
 import { downloadFromApi } from "@/lib/download";
 import { useBranches } from "@/lib/use-branches";
+import { tr } from "@/lib/tr";
 import { Button, Card, ErrorText, Input, Label, Badge, StatusDot } from "@/components/ui";
 import { IconUsers, IconArrowRight } from "@/components/icons";
 
@@ -35,6 +36,7 @@ export default function CustomersPage() {
   const c = pageStrings(lang).common;
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
+  const [referralCode, setReferralCode] = useState("");
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -62,12 +64,13 @@ export default function CustomersPage() {
     mutationFn: () =>
       apiFetch("/api/v1/customers", {
         method: "POST",
-        body: JSON.stringify({ fullName, phone, email: email || undefined }),
+        body: JSON.stringify({ fullName, phone, email: email || undefined, referralCode: referralCode.trim() || undefined }),
       }),
     onSuccess: () => {
       setFullName("");
       setPhone("");
       setEmail("");
+      setReferralCode("");
       setShowForm(false);
       queryClient.invalidateQueries({ queryKey: ["customers"] });
     },
@@ -135,6 +138,10 @@ export default function CustomersPage() {
             <div>
               <Label htmlFor="email">{t.emailOptional}</Label>
               <Input id="email" type="email" placeholder="jane@example.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+            </div>
+            <div>
+              <Label htmlFor="referralCode">{tr("Referral code (optional)")}</Label>
+              <Input id="referralCode" placeholder="e.g. K7M2QX" value={referralCode} onChange={(e) => setReferralCode(e.target.value.toUpperCase())} maxLength={20} />
             </div>
             <div className="sm:col-span-3 pt-2">
               <Button type="submit" disabled={createCustomer.isPending}>

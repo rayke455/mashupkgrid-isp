@@ -23,6 +23,7 @@ import { resolveTenant } from "../plugins/tenant.js";
 import { checkMaintenance } from "../plugins/maintenance.js";
 import { writeAuditLog } from "../lib/audit.js";
 import { initiateStkPushForCustomer, getStkRequestOrThrow, queryAndReconcileStkRequest } from "@mashupkgrid/payments";
+import { getReferralSummary } from "@mashupkgrid/billing";
 
 const preHandler = [authenticate, resolveTenant, checkMaintenance] as const;
 
@@ -118,6 +119,19 @@ export async function meRoutes(app: FastifyInstance): Promise<void> {
       reply.status(201).send(successResponse({ checkoutRequestId: stkRequest.checkoutRequestId, amountMinor: remaining }, request.id));
     }
   );
+
+  /** The signed-in customer's own referral code and what it has earned them. */
+  app.get("/referral", { config: { audience: "customer" }, preHandler: [...preHandler] }, async (request, reply) => {
+    const customer = await resolveMyCustomerOrThrow(request);
+    const [summary, tenant] = await Promise.all([
+      getReferralSummary(customer.tenantId, customer.id),
+      prisma.tenant.findUnique({ where: { id: customer.tenantId }, select: { name: true } }),
+    ]);
+    // Names of people they referred stay first-name-only: the referrer knows who they are.
+    reply.send(
+      successResponse({ ...summary, isp: tenant?.name ?? "", referred: summary.referred.map((r) => ({ ...r, fullName: r.fullName.split(/\s+/)[0] ?? r.fullName, id: undefined })) }, request.id)
+    );
+  });
 
   /** Where that prompt got to. Only the customer's own requests are visible. */
   app.get("/payments/:checkoutRequestId", { config: { audience: "customer" }, preHandler: [...preHandler] }, async (request, reply) => {

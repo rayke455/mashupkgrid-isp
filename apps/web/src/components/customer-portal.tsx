@@ -8,6 +8,7 @@ import { Badge, Button, ErrorText, Input, Label } from "@/components/ui";
 import { IconMpesa, IconShield } from "@/components/icons";
 import { EmptyState, Metric, MetricGrid, Notice, PageHeader, Panel, Pill, TableShell, darkButton, td, th } from "@/components/dashboard/surface";
 import { customerStrings } from "@/lib/customer-strings";
+import { MyReferralPanel } from "@/components/my-referral-panel";
 import { useLanguage } from "@/lib/language-context";
 
 /**
@@ -405,6 +406,8 @@ export function CustomerPortal() {
           )}
         </Panel>
       </div>
+
+      <MyReferralPanel />
 
       {/* Support */}
       <Panel

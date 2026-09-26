@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useParams } from "next/navigation";
+import { ReferralCard } from "@/components/referral-card";
 import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
@@ -522,6 +523,8 @@ export default function CustomerDetailPage() {
           </div>
         </Card>
       </div>
+
+      <ReferralCard customerId={customerId} />
     </div>
   );
 }

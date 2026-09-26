@@ -221,6 +221,7 @@ export const JOB_NAMES = {
   pushLargePayments: "push-large-payments",
   suggestUpgrades: "suggest-upgrades",
   networkMaintenanceNotices: "network-maintenance-notices",
+  referralRewards: "referral-rewards",
   expireOverdueVouchers: "expire-overdue-vouchers",
   // Dunning — escalating payment reminders ahead of suspendOverdueCustomers, not just the
   // status flip itself.

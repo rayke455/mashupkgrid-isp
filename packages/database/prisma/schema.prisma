@@ -28,6 +28,7 @@ enum UserStatus {
 
 model Tenant {
   id                     String                  @id @default(uuid())
+  referralRewards        ReferralReward[]
   networkMaintenance     NetworkMaintenance[]
   upgradeSuggestions     UpgradeSuggestion[]
   name                   String
@@ -421,29 +422,38 @@ enum CustomerStatus {
 }
 
 model Customer {
-  id                 String              @id @default(uuid())
-  upgradeSuggestions UpgradeSuggestion[]
-  tenantId           String
-  tenant             Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  branchId           String?
-  branch             Branch?             @relation(fields: [branchId], references: [id], onDelete: SetNull)
-  userId             String?             @unique
-  user               User?               @relation(fields: [userId], references: [id])
-  customerNumber     String
-  fullName           String
-  email              String?
-  phone              String
-  idNumber           String?
-  address            String?
-  gpsLat             Float?
-  gpsLng             Float?
-  connectionType     String?
-  installationDate   DateTime?
-  status             CustomerStatus      @default(PENDING)
-  notes              String?
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  deletedAt          DateTime?
+  id                    String              @id @default(uuid())
+  /// Short code this customer shares with neighbours; created the first time it is shown.
+  referralCode          String?
+  /// Who referred this customer. Their reward is granted once this customer first pays.
+  referredById          String?
+  referredBy            Customer?           @relation("CustomerReferrals", fields: [referredById], references: [id], onDelete: SetNull)
+  referrals             Customer[]          @relation("CustomerReferrals")
+  referralRewardedAt    DateTime?
+  referralRewardsEarned ReferralReward[]    @relation("ReferralRewardReferrer")
+  referralRewardFor     ReferralReward?     @relation("ReferralRewardReferred")
+  upgradeSuggestions    UpgradeSuggestion[]
+  tenantId              String
+  tenant                Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branchId              String?
+  branch                Branch?             @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  userId                String?             @unique
+  user                  User?               @relation(fields: [userId], references: [id])
+  customerNumber        String
+  fullName              String
+  email                 String?
+  phone                 String
+  idNumber              String?
+  address               String?
+  gpsLat                Float?
+  gpsLng                Float?
+  connectionType        String?
+  installationDate      DateTime?
+  status                CustomerStatus      @default(PENDING)
+  notes                 String?
+  createdAt             DateTime            @default(now())
+  updatedAt             DateTime            @updatedAt
+  deletedAt             DateTime?
 
   services CustomerService[]
   invoices Invoice[]
@@ -462,6 +472,7 @@ model Customer {
   provisioningJobs ProvisioningJob[]
 
   @@unique([tenantId, customerNumber])
+  @@unique([tenantId, referralCode])
   @@index([tenantId, status])
   @@map("customers")
 }
@@ -2607,4 +2618,27 @@ model NetworkMaintenance {
   @@index([tenantId, startsAt])
   @@index([status, startsAt])
   @@map("network_maintenance")
+}
+
+enum ReferralRewardType {
+  DAYS
+  CREDIT
+}
+
+/// A reward given to a customer because someone they referred paid for the first time.
+model ReferralReward {
+  id          String             @id @default(uuid())
+  tenantId    String
+  tenant      Tenant             @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  referrerId  String
+  referrer    Customer           @relation("ReferralRewardReferrer", fields: [referrerId], references: [id], onDelete: Cascade)
+  referredId  String             @unique
+  referred    Customer           @relation("ReferralRewardReferred", fields: [referredId], references: [id], onDelete: Cascade)
+  type        ReferralRewardType
+  days        Int?
+  amountMinor Int?
+  createdAt   DateTime           @default(now())
+
+  @@index([tenantId, createdAt])
+  @@map("referral_rewards")
 }

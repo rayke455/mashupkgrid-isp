@@ -184,6 +184,16 @@ export const AUTOMATION_JOBS: readonly AutomationJobDefinition[] = [
     tenantVisible: true,
   },
   {
+    name: JOB_NAMES.referralRewards,
+    queue: QUEUE_NAMES.billing,
+    category: "billing",
+    label: "Referral rewards",
+    description: "Gives free days or credit to customers whose referred neighbour has made their first payment.",
+    everyMs: HOUR,
+    counters: { tenants: "ISPs checked", rewarded: "Rewards given", errors: "Errors" },
+    tenantVisible: true,
+  },
+  {
     name: JOB_NAMES.suggestUpgrades,
     queue: QUEUE_NAMES.billing,
     category: "billing",

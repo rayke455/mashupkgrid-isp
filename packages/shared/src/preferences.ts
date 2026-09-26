@@ -63,6 +63,15 @@ export const tenantPreferencesSchema = z.object({
     /** Share of the data cap used in the last 30 days that counts as "running into it". */
     thresholdPercent: z.number().int().min(50).max(100),
   }),
+  /** Refer-a-neighbour: the referrer is rewarded once the person they referred first pays. */
+  referrals: z.object({
+    enabled: z.boolean(),
+    rewardType: z.enum(["DAYS", "CREDIT"]),
+    /** Free days added to the referrer's subscription. */
+    rewardDays: z.number().int().min(1).max(90),
+    /** Account credit for the referrer, and the fallback when they have no active plan to extend. */
+    rewardCreditMinor: z.number().int().min(0).max(100_000_000),
+  }),
 });
 
 export type TenantPreferences = z.infer<typeof tenantPreferencesSchema>;
@@ -97,6 +106,7 @@ export const DEFAULT_TENANT_PREFERENCES: TenantPreferences = {
   },
   alerts: { routerDown: true, largePaymentMinor: 500_000 },
   upgrades: { enabled: true, smsCustomer: true, thresholdPercent: 90 },
+  referrals: { enabled: true, rewardType: "DAYS", rewardDays: 7, rewardCreditMinor: 50_000 },
 };
 
 /** Merges whatever is stored with the defaults, so a partial or old record never breaks a job. */
@@ -105,6 +115,7 @@ export function resolveTenantPreferences(stored: unknown): TenantPreferences {
   const reminders = (raw.reminders && typeof raw.reminders === "object" ? raw.reminders : {}) as Record<string, unknown>;
   const tickets = (raw.tickets && typeof raw.tickets === "object" ? raw.tickets : {}) as Record<string, unknown>;
   const alerts = (raw.alerts && typeof raw.alerts === "object" ? raw.alerts : {}) as Record<string, unknown>;
+  const referrals = (raw.referrals && typeof raw.referrals === "object" ? raw.referrals : {}) as Record<string, unknown>;
   const upgrades = (raw.upgrades && typeof raw.upgrades === "object" ? raw.upgrades : {}) as Record<string, unknown>;
   const merged = {
     reminders: {
@@ -117,6 +128,7 @@ export function resolveTenantPreferences(stored: unknown): TenantPreferences {
     },
     alerts: { ...DEFAULT_TENANT_PREFERENCES.alerts, ...alerts },
     upgrades: { ...DEFAULT_TENANT_PREFERENCES.upgrades, ...upgrades },
+    referrals: { ...DEFAULT_TENANT_PREFERENCES.referrals, ...referrals },
   };
   const parsed = tenantPreferencesSchema.safeParse(merged);
   return parsed.success ? parsed.data : DEFAULT_TENANT_PREFERENCES;
