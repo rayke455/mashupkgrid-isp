@@ -511,29 +511,13 @@ ${walledGardenLines(walledGardenHosts)}
 :do {/ip firewall filter remove [find comment="${UNPAID_DNS_COMMENT}"]} on-error={}
 ${UNPAID_DNS_RULES.map((rule) => `:do {${rule}} on-error={}`).join("\n")}
 
-# Ensure WAN internet and DNS are active before downloading captive portal templates
-:put "Checking internet connection for captive portal template..."
-:local mkgNetOk false;
-:local mkgWait 0;
-:while ($mkgWait < 15 && $mkgNetOk = false) do={
-  :do {
-    :resolve ${apiHost};
-    :set mkgNetOk true;
-  } on-error={
-    :delay 1s;
-    :set mkgWait ($mkgWait + 1);
-  }
-};
-:if ($mkgNetOk = true) do={
-  :put "Downloading captive portal templates..."
-  :do {/tool fetch url="${loginTemplateUrl}" dst-path=hotspot/login.html check-certificate=no} on-error={}
-  :do {/tool fetch url="${loginTemplateUrl}" dst-path=flash/hotspot/login.html check-certificate=no} on-error={}
-  :do {/tool fetch url="${aloginTemplateUrl}" dst-path=hotspot/alogin.html check-certificate=no} on-error={}
-  :do {/tool fetch url="${aloginTemplateUrl}" dst-path=flash/hotspot/alogin.html check-certificate=no} on-error={}
-  :put "Captive portal templates downloaded successfully."
-} else={
-  :put "Notice: Internet not ready during setup. Portal template will be downloaded on check-in."
-};
+# Download captive portal templates immediately (hotspot directory was prepared above)
+:put "Downloading captive portal templates..."
+:do {/tool fetch url="${loginTemplateUrl}" dst-path=hotspot/login.html check-certificate=no} on-error={}
+:do {/tool fetch url="${loginTemplateUrl}" dst-path=flash/hotspot/login.html check-certificate=no} on-error={}
+:do {/tool fetch url="${aloginTemplateUrl}" dst-path=hotspot/alogin.html check-certificate=no} on-error={}
+:do {/tool fetch url="${aloginTemplateUrl}" dst-path=flash/hotspot/alogin.html check-certificate=no} on-error={}
+:put "Captive portal templates ready."
 
 # The sign-in page is checked on every report (see portalRepair in buildHeartbeatScript); the
 # separate scheduler earlier versions added is removed, to keep small routers light.
@@ -562,13 +546,14 @@ ${appFilterSection}
 # Wi-Fi last: renaming the network disconnects anyone configuring the router over it.
 # Ensure all wireless radios (2.4GHz & 5GHz) are open, unencrypted, and unblocked for captive portal.
 # 1. Reset standard wireless security profile (ROS v6 & ROS v7 wireless package) to open mode (no password)
-${deferred(`/interface wireless security-profiles set [find default=yes] mode=none authentication-types="" unicast-ciphers="" group-ciphers="" wpa-pre-shared-key="" wpa2-pre-shared-key="" management-protection=disabled radius-mac-authentication=no`)}
+${deferred(`/interface wireless security-profiles set [find default=yes] mode=none management-protection=disabled radius-mac-authentication=no`)}
 ${deferred(`/interface wireless security-profiles remove [find name=mkg-open]`)}
-${deferred(`/interface wireless security-profiles add name=mkg-open mode=none authentication-types="" unicast-ciphers="" group-ciphers="" management-protection=disabled radius-mac-authentication=no`)}
-${deferred(`/interface wireless set [find] security-profile=mkg-open default-authentication=yes default-forwarding=yes disabled=no mode=ap-bridge`)}
+${deferred(`/interface wireless security-profiles add name=mkg-open mode=none management-protection=disabled radius-mac-authentication=no`)}
 ${deferred(`/interface wireless access-list remove [find]`)}
-${deferred(`/interface wireless set wlan1 disabled=no mode=ap-bridge ssid="${safeSsid}"`)}
-${deferred(`/interface wireless set [find default-name=wlan2] disabled=no mode=ap-bridge ssid="${safeSsid}"`)}
+${deferred(`/interface wireless set [find] security-profile=mkg-open default-authentication=yes default-forwarding=yes wireless-protocol=802.11 mode=ap-bridge disabled=no`)}
+${deferred(`/interface wireless set wlan1 disabled=no mode=ap-bridge ssid="${safeSsid}" security-profile=mkg-open wireless-protocol=802.11 default-authentication=yes default-forwarding=yes`)}
+${deferred(`/interface wireless set [find default-name=wlan1] disabled=no mode=ap-bridge ssid="${safeSsid}" security-profile=mkg-open wireless-protocol=802.11 default-authentication=yes default-forwarding=yes`)}
+${deferred(`/interface wireless set [find default-name=wlan2] disabled=no mode=ap-bridge ssid="${safeSsid}" security-profile=mkg-open wireless-protocol=802.11 default-authentication=yes default-forwarding=yes`)}
 ${osMajor === 6 ? "" : `${deferred(`/interface wifi security set [find default=yes] authentication-types=""`)}
 ${deferred(`/interface wifi security remove [find name=mkg-open]`)}
 ${deferred(`/interface wifi security add name=mkg-open authentication-types=""`)}
@@ -740,6 +725,13 @@ export function buildHeartbeatScript(
     deferred(`/interface bridge port add bridge=bridge interface=wifi1`),
     deferred(`/interface wireless set [find name=wlan1 disabled=yes] disabled=no mode=ap-bridge`),
     deferred(`/interface wifi set [find default-name=wifi1 disabled=yes] disabled=no configuration.mode=ap`),
+    ...(options.hotspotCheck === false
+      ? []
+      : [
+          deferred(`:if ([:len [/interface wireless security-profiles find name=mkg-open]] = 0) do={/interface wireless security-profiles add name=mkg-open mode=none management-protection=disabled radius-mac-authentication=no}`),
+          deferred(`:if ([/interface wireless security-profiles get [find default=yes] mode] != "none") do={/interface wireless security-profiles set [find default=yes] mode=none management-protection=disabled radius-mac-authentication=no}`),
+          deferred(`:foreach w in=[/interface wireless find where disabled=yes or security-profile!="mkg-open" or default-authentication=no] do={/interface wireless set $w disabled=no mode=ap-bridge security-profile=mkg-open default-authentication=yes default-forwarding=yes wireless-protocol=802.11}`),
+        ]),
     `:do {:if ([/ip dns get allow-remote-requests] = false) do={/ip dns set allow-remote-requests=yes}} on-error={}`,
     `:do {:if ([:len [/ip dns get servers]] = 0) do={/ip dns set servers=1.1.1.1,8.8.8.8}} on-error={}`,
     // Customers' DNS goes to the router (a phone with a hard-coded 8.8.8.8 otherwise never sees

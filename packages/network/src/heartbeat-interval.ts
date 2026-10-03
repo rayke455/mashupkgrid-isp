@@ -9,7 +9,7 @@
  * and every "is it online?" decision allows 2.5 intervals.
  */
 
-type RouterSize = { memoryTotalBytes?: bigint | number | null; boardName?: string | null };
+type RouterSize = { memoryTotalBytes?: bigint | number | null; boardName?: string | null; name?: string | null };
 
 const SMALL_MEMORY_BYTES = 64 * 1024 * 1024;
 /** Boards with 64 MB or less, for a router that hasn't reported its memory yet. */
@@ -19,7 +19,8 @@ export function isSmallRouter(router: RouterSize): boolean {
   if (router.memoryTotalBytes !== null && router.memoryTotalBytes !== undefined) {
     return Number(router.memoryTotalBytes) <= SMALL_MEMORY_BYTES;
   }
-  return Boolean(router.boardName && SMALL_BOARDS.test(router.boardName));
+  const boardOrName = [router.boardName, router.name].filter(Boolean).join(" ");
+  return SMALL_BOARDS.test(boardOrName);
 }
 
 /** Seconds between check-ins. */

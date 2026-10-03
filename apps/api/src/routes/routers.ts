@@ -42,6 +42,7 @@ import {
   heartbeatOnlineWindowMs,
   heartbeatLateWindowMs,
   heartbeatIntervalRouterOs,
+  isSmallRouter,
 } from "@mashupkgrid/network";
 import {
   buildMikrotikProvisioningScript,
@@ -464,7 +465,7 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
         hotspotPorts: router.hotspotPorts,
         lanPort: router.lanPort,
         routerOsMajor: router.routerOsMajor,
-        appFilter: await tenantSellsAppPackages(tenantId),
+        appFilter: !isSmallRouter({ ...router, name: router.name }) && (await tenantSellsAppPackages(tenantId)),
         ssid: request.tenantCtx?.name ? `${request.tenantCtx.name} WiFi` : undefined,
         checkInEvery: heartbeatIntervalRouterOs(router),
       });
@@ -1057,7 +1058,7 @@ function getClientIp(request: { headers: Record<string, string | string[] | unde
       hotspotPorts: router.hotspotPorts,
       lanPort: router.lanPort,
       routerOsMajor: router.routerOsMajor,
-      appFilter: await tenantSellsAppPackages(router.tenantId),
+      appFilter: !isSmallRouter({ ...router, name: router.name }) && (await tenantSellsAppPackages(router.tenantId)),
       ssid: router.tenant?.name ? `${router.tenant.name} WiFi` : undefined,
       checkInEvery: heartbeatIntervalRouterOs(router),
     });
