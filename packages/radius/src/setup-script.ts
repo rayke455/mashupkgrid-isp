@@ -11,6 +11,15 @@ function sanitizeForScript(value: string): string {
   return value.replace(/[^\w .-]/g, "").trim() || "router";
 }
 
+function provisioningValue(name: string, value: string | undefined, developmentFallback: string): string {
+  const clean = value?.trim();
+  if (clean) return clean;
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(`${name} is required when generating a production router setup script`);
+  }
+  return developmentFallback;
+}
+
 /** Card-payment hosts an unpaid customer must reach to pay by card, by gateway. Only ISPs that
  *  switched that gateway on get them (see hotspotWalledGardenHosts): every walled-garden name is a
  *  hole a "free browsing" app can claim to be visiting, so a hotspot that only takes M-Pesa, whose
@@ -328,7 +337,7 @@ export function buildMikrotikProvisioningScript(
 
   const safeName = sanitizeForScript(router.name);
   const safeSsid = options.ssid?.trim() ? sanitizeForScript(options.ssid) : "MASHUPKGRID";
-  const radiusHost = options.radiusHost || "68.210.187.104";
+  const radiusHost = provisioningValue("radiusHost", options.radiusHost, "127.0.0.1");
   // Defaults to the router's own generated password, and completeRouterProvisioning (in
   // @mashupkgrid/network) registers the RadiusNas row with exactly this value when the callback
   // below lands. The embedded RADIUS server matches a NAS by source IP and verifies with that
@@ -338,7 +347,7 @@ export function buildMikrotikProvisioningScript(
   const radiusSecret = options.radiusSecret || credentials.password;
   const managementSource = options.managementSource?.trim();
   const vpnSubnet = options.vpnSubnet?.trim() || DEFAULT_VPN_SUBNET;
-  const serverHost = options.serverHost || "68.210.187.104";
+  const serverHost = provisioningValue("serverHost", options.serverHost, radiusHost);
   const serverPort = options.serverPort || 51820;
   const serverPublicKey = options.serverPublicKey || "";
   const vpnIp = options.vpnIp || "10.90.0.2";
@@ -374,7 +383,11 @@ ${deferred(`/interface wireguard remove [find name=mkg-wg]
     options.pppoeGatewayIp,
     options.pppoePoolRange
   );
-  const loginTemplateUrl = options.loginTemplateUrl || "https://api.mashuphost.tech/api/v1/hotspot/demo-isp/mikrotik-login-template";
+  const loginTemplateUrl = provisioningValue(
+    "loginTemplateUrl",
+    options.loginTemplateUrl,
+    "http://127.0.0.1:4000/api/v1/hotspot/local/mikrotik-login-template"
+  );
   // The "you're online" page shown after a successful sign-in, served next to the login page.
   const aloginTemplateUrl = aloginUrlFor(loginTemplateUrl);
   const apiHost = hostFromUrl(loginTemplateUrl);
@@ -511,12 +524,11 @@ ${walledGardenLines(walledGardenHosts)}
 :do {/ip firewall filter remove [find comment="${UNPAID_DNS_COMMENT}"]} on-error={}
 ${UNPAID_DNS_RULES.map((rule) => `:do {${rule}} on-error={}`).join("\n")}
 
-# Download captive portal templates immediately (hotspot directory was prepared above)
+# Download captive portal templates into the exact directory each hotspot profile serves.
+# This matters on flash-based boards: the served directory may be flash/hotspot rather than
+# hotspot, and writing the other path leaves the router showing MikroTik's stock login page.
 :put "Downloading captive portal templates..."
-:do {/tool fetch url="${loginTemplateUrl}" dst-path=hotspot/login.html check-certificate=no} on-error={}
-:do {/tool fetch url="${loginTemplateUrl}" dst-path=flash/hotspot/login.html check-certificate=no} on-error={}
-:do {/tool fetch url="${aloginTemplateUrl}" dst-path=hotspot/alogin.html check-certificate=no} on-error={}
-:do {/tool fetch url="${aloginTemplateUrl}" dst-path=flash/hotspot/alogin.html check-certificate=no} on-error={}
+${portalRepair(loginTemplateUrl, aloginTemplateUrl)}
 :put "Captive portal templates ready."
 
 # The sign-in page is checked on every report (see portalRepair in buildHeartbeatScript); the
@@ -545,15 +557,19 @@ ${appFilterSection}
 
 # Wi-Fi last: renaming the network disconnects anyone configuring the router over it.
 # Ensure all wireless radios (2.4GHz & 5GHz) are open, unencrypted, and unblocked for captive portal.
-# 1. Reset standard wireless security profile (ROS v6 & ROS v7 wireless package) to open mode (no password)
-${deferred(`/interface wireless security-profiles set [find default=yes] mode=none management-protection=disabled radius-mac-authentication=no`)}
-${deferred(`/interface wireless security-profiles remove [find name=mkg-open]`)}
-${deferred(`/interface wireless security-profiles add name=mkg-open mode=none management-protection=disabled radius-mac-authentication=no`)}
+# 1. Reset the built-in wireless security profile (ROS v6 & ROS v7 wireless package) to open
+# mode. Reusing the built-in profile is intentional: some small RouterOS builds reject creating
+# a second profile or reject optional profile properties. Those failures used to leave the SSID
+# visible but reject every client association. Clear both association lists too: an old
+# access/connect-list entry can be reported by Android as an "Authentication problem" even when
+# the beacon says Security=None.
+${deferred(`/interface wireless security-profiles set [find default=yes] mode=none`)}
 ${deferred(`/interface wireless access-list remove [find]`)}
-${deferred(`/interface wireless set [find] security-profile=mkg-open default-authentication=yes default-forwarding=yes wireless-protocol=802.11 mode=ap-bridge disabled=no`)}
-${deferred(`/interface wireless set wlan1 disabled=no mode=ap-bridge ssid="${safeSsid}" security-profile=mkg-open wireless-protocol=802.11 default-authentication=yes default-forwarding=yes`)}
-${deferred(`/interface wireless set [find default-name=wlan1] disabled=no mode=ap-bridge ssid="${safeSsid}" security-profile=mkg-open wireless-protocol=802.11 default-authentication=yes default-forwarding=yes`)}
-${deferred(`/interface wireless set [find default-name=wlan2] disabled=no mode=ap-bridge ssid="${safeSsid}" security-profile=mkg-open wireless-protocol=802.11 default-authentication=yes default-forwarding=yes`)}
+${deferred(`/interface wireless connect-list remove [find]`)}
+${deferred(`/interface wireless set [find] security-profile=default default-authentication=yes default-forwarding=yes mode=ap-bridge disabled=no`)}
+${deferred(`/interface wireless set wlan1 disabled=no mode=ap-bridge ssid="${safeSsid}" security-profile=default default-authentication=yes default-forwarding=yes`)}
+${deferred(`/interface wireless set [find default-name=wlan1] disabled=no mode=ap-bridge ssid="${safeSsid}" security-profile=default default-authentication=yes default-forwarding=yes`)}
+${deferred(`/interface wireless set [find default-name=wlan2] disabled=no mode=ap-bridge ssid="${safeSsid}" security-profile=default default-authentication=yes default-forwarding=yes`)}
 ${osMajor === 6 ? "" : `${deferred(`/interface wifi security set [find default=yes] authentication-types=""`)}
 ${deferred(`/interface wifi security remove [find name=mkg-open]`)}
 ${deferred(`/interface wifi security add name=mkg-open authentication-types=""`)}
@@ -679,6 +695,7 @@ export function vpnRepair(vpn: VpnPeerSettings): string {
       `:if ([:len [/interface wireguard find name=mkg-wg]] = 0) do={/interface wireguard add name=mkg-wg listen-port=${vpn.endpointPort}}`,
       `:if ([:len [/ip address find interface=mkg-wg address="${vpn.vpnIp}/32"]] = 0) do={/ip address remove [find interface=mkg-wg]; /ip address add address=${vpn.vpnIp}/32 interface=mkg-wg}`,
       `:if ([:len [/interface wireguard peers find interface=mkg-wg ${peer}]] = 0) do={/interface wireguard peers remove [find interface=mkg-wg]; /interface wireguard peers add interface=mkg-wg ${peer} endpoint-address=${vpn.endpointHost} endpoint-port=${vpn.endpointPort} allowed-address=${vpn.subnet} persistent-keepalive=25s}`,
+      `:if ([:len [/ip route find dst-address=${vpn.subnet} gateway=mkg-wg]] = 0) do={/ip route add dst-address=${vpn.subnet} gateway=mkg-wg comment="MASHUPKGRID MANAGEMENT VPN"}`,
     ].join("\n")
   );
 }
@@ -728,9 +745,10 @@ export function buildHeartbeatScript(
     ...(options.hotspotCheck === false
       ? []
       : [
-          deferred(`:if ([:len [/interface wireless security-profiles find name=mkg-open]] = 0) do={/interface wireless security-profiles add name=mkg-open mode=none management-protection=disabled radius-mac-authentication=no}`),
-          deferred(`:if ([/interface wireless security-profiles get [find default=yes] mode] != "none") do={/interface wireless security-profiles set [find default=yes] mode=none management-protection=disabled radius-mac-authentication=no}`),
-          deferred(`:foreach w in=[/interface wireless find where disabled=yes or security-profile!="mkg-open" or default-authentication=no] do={/interface wireless set $w disabled=no mode=ap-bridge security-profile=mkg-open default-authentication=yes default-forwarding=yes wireless-protocol=802.11}`),
+          deferred(`:if ([/interface wireless security-profiles get [find default=yes] mode] != "none") do={/interface wireless security-profiles set [find default=yes] mode=none}`),
+          deferred(`:foreach w in=[/interface wireless find where disabled=yes or security-profile!="default" or default-authentication=no] do={/interface wireless set $w disabled=no mode=ap-bridge security-profile=default default-authentication=yes default-forwarding=yes}`),
+          deferred(`/interface wireless access-list remove [find]`),
+          deferred(`/interface wireless connect-list remove [find]`),
         ]),
     `:do {:if ([/ip dns get allow-remote-requests] = false) do={/ip dns set allow-remote-requests=yes}} on-error={}`,
     `:do {:if ([:len [/ip dns get servers]] = 0) do={/ip dns set servers=1.1.1.1,8.8.8.8}} on-error={}`,
@@ -972,6 +990,8 @@ export function buildMikrotikVpnCompleteScript(input: VpnCompleteScriptInput): s
 
 /ip address remove [find interface=mkg-wg]
 /ip address add address=${input.assignedVpnIp}/32 interface=mkg-wg
+/ip route remove [find comment="MASHUPKGRID MANAGEMENT VPN"]
+/ip route add dst-address=${tunnelSubnet} gateway=mkg-wg comment="MASHUPKGRID MANAGEMENT VPN"
 
 :put "========================================================="
 :put "  SUCCESS! WireGuard tunnel active at ${input.assignedVpnIp} "

@@ -7,11 +7,12 @@ type Row = Record<string, string>;
 /** The anti-tethering rules a correctly set-up router has (packages that ask for it only). */
 const LIST_RULES: Row[] = ["63", "127", "254"].map((t, i) => ({ ".id": `*M${i}`, comment: "MASHUPKGRID ANTI-TETHER", "src-address-list": "mashup-anti-tether", ttl: `equal:${t}` }));
 
-function fakeRouter(state: { files: string[]; radius: Row[]; walledIp?: Row[]; walledHttp?: Row[]; filters?: Row[]; mangles?: Row[] }) {
+function fakeRouter(state: { files: string[]; radius: Row[]; profiles?: Row[]; walledIp?: Row[]; walledHttp?: Row[]; filters?: Row[]; mangles?: Row[] }) {
   const writes: string[][] = [];
   const client = {
     print: vi.fn(async (words: string[]) => {
       if (words[0] === "/file/print") return state.files.filter((f) => words[1] === `?name=${f}`).map((name) => ({ name }));
+      if (words[0] === "/ip/hotspot/profile/print") return state.profiles ?? [];
       if (words[0] === "/radius/print") return state.radius;
       if (words[0] === "/ip/hotspot/walled-garden/ip/print") return state.walledIp ?? [];
       if (words[0] === "/ip/hotspot/walled-garden/print") return state.walledHttp ?? [];
@@ -55,6 +56,24 @@ describe("router hotspot self-repair", () => {
     expect(writes[1]!.some((w) => w.includes("mikrotik-alogin-template"))).toBe(true);
     expect(writes[2]).toEqual(["/radius/remove", "=.id=*1"]);
     expect(writes[3]).toEqual(expect.arrayContaining(["/radius/add", "=address=192.168.1.183", "=secret=router-secret", "=comment=MASHUPKGRID"]));
+  });
+
+  it("repairs the stock profile and downloads pages into its configured directory", async () => {
+    const { adapter, writes } = fakeRouter({
+      files: [],
+      radius: [],
+      profiles: [{ ".id": "*P", name: "default", "use-radius": "false", "login-by": "cookie,http-chap", "html-directory": "flash/hotspot" }],
+    });
+    const changes = await adapter.ensureHotspotProvisioning(opts);
+    expect(changes).toContain("repaired RADIUS hotspot profile default");
+    expect(writes).toContainEqual(expect.arrayContaining([
+      "/ip/hotspot/profile/set",
+      "=.id=*P",
+      "=use-radius=yes",
+      "=radius-accounting=yes",
+    ]));
+    expect(writes).toContainEqual(expect.arrayContaining(["/tool/fetch", "=dst-path=flash/hotspot/login.html"]));
+    expect(writes).toContainEqual(expect.arrayContaining(["/tool/fetch", "=dst-path=flash/hotspot/alogin.html"]));
   });
 
   it("lets customers reach the portal and API before login (walled garden)", async () => {

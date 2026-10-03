@@ -647,6 +647,11 @@ export async function platformPublicAddress(): Promise<string> {
       console.warn(`[routers] could not resolve ${host} to an IPv4 address:`, err instanceof Error ? err.message : err);
     }
   }
+  if (env.NODE_ENV === "production") {
+    throw new Error(
+      "RADIUS_SERVER_HOST is required in production when ROUTER_API_BASE_URL/APP_API_PUBLIC_URL does not resolve to a public IPv4 address"
+    );
+  }
   if (!warnedAboutFallback) {
     warnedAboutFallback = true;
     console.warn(

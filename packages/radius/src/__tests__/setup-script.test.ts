@@ -178,7 +178,7 @@ describe("router setup script — RouterOS version chosen when adding the router
     expect(script).toContain('!= "7") do={');
     expect(script).toContain("/interface wifi set [find default-name=wifi1]");
     expect(script).toContain("/interface wireless set wlan1");
-    expect(script).toContain("name=mkg-open mode=none");
+    expect(script).toContain("security-profile=default");
     expect(script).toContain("lease-time=1h");
   });
 
@@ -190,8 +190,7 @@ describe("router setup script — RouterOS version chosen when adding the router
     expect(script).toContain('ssid="SunTech WiFi"');
     expect(script).toContain("/interface wireless security-profiles");
     expect(script).toContain("mode=none");
-    expect(script).toContain("management-protection=disabled");
-    expect(script).toContain("radius-mac-authentication=no");
+    expect(script).toContain("connect-list remove");
     expect(script).toContain("default-authentication=yes");
   });
 
@@ -332,7 +331,7 @@ describe("router setup script — RouterOS version chosen when adding the router
 describe("router setup script — the 'you're online' page", () => {
   it("downloads alogin.html next to login.html and repairs both", () => {
     const script = buildMikrotikProvisioningScript(router, credentials, callbackUrl, { loginTemplateUrl: "https://api.example.com/api/v1/hotspot/demo-isp/mikrotik-login-template" });
-    expect(script).toContain('url="https://api.example.com/api/v1/hotspot/demo-isp/mikrotik-alogin-template" dst-path=hotspot/alogin.html');
+    expect(script).toContain('url="https://api.example.com/api/v1/hotspot/demo-isp/mikrotik-alogin-template" dst-path=($dir . "/alogin.html")');
     // The report repairs both (portalRepair); the separate scheduler is removed, for small routers.
     expect(script).toContain(":do {/system scheduler remove [find name=mkg-portal-page]} on-error={}");
     expect(script).not.toContain("scheduler add name=mkg-portal-page");

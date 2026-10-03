@@ -34,8 +34,11 @@ async function main() {
 
   console.log("Seeding super admin...");
 
-  const superAdminEmail = process.env["SEED_SUPER_ADMIN_EMAIL"] ?? "superadmin@mashupkgrid.local";
-  const superAdminPassword = process.env["SEED_SUPER_ADMIN_PASSWORD"] ?? "ChangeMe123!";
+  const superAdminEmail = process.env["SEED_SUPER_ADMIN_EMAIL"] ?? (process.env["NODE_ENV"] === "production" ? "" : "superadmin@localhost");
+  const superAdminPassword = process.env["SEED_SUPER_ADMIN_PASSWORD"] ?? (process.env["NODE_ENV"] === "production" ? "" : "local-development-only");
+  if (!superAdminEmail || !superAdminPassword) {
+    throw new Error("SEED_SUPER_ADMIN_EMAIL and SEED_SUPER_ADMIN_PASSWORD are required in production");
+  }
   const superAdminRole = await prisma.role.findFirstOrThrow({
     where: { name: "SUPER_ADMIN", tenantId: null },
   });
@@ -102,8 +105,11 @@ async function seedDemoTenant() {
     },
   });
 
-  const ownerEmail = "owner@demo-isp.local";
-  const ownerPassword = process.env["SEED_TENANT_OWNER_PASSWORD"] ?? "ChangeMe123!";
+  const ownerEmail = process.env["SEED_TENANT_OWNER_EMAIL"] ?? (process.env["NODE_ENV"] === "production" ? "" : "owner@demo.local");
+  const ownerPassword = process.env["SEED_TENANT_OWNER_PASSWORD"] ?? (process.env["NODE_ENV"] === "production" ? "" : "local-development-only");
+  if (!ownerEmail || !ownerPassword) {
+    throw new Error("SEED_TENANT_OWNER_EMAIL and SEED_TENANT_OWNER_PASSWORD are required when seeding a demo tenant");
+  }
   const ownerRole = await prisma.role.findFirstOrThrow({
     where: { name: "ISP_OWNER", tenantId: null },
   });

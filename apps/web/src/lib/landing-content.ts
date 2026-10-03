@@ -88,8 +88,9 @@ export const DEFAULT_LANDING_CONTENT: LandingContent = {
     title: "Deploy to Any MikroTik Router in 30 Seconds",
     subtitle:
       "Paste these production-hardened commands directly into Winbox or SSH. Works with RouterOS v6.48+ and v7.12+.",
-    defaultHost: "197.248.42.10",
-    defaultSecret: "mkg_radius_secret_x91",
+    // Router address and RADIUS secret are generated per router, never shared landing defaults.
+    defaultHost: "",
+    defaultSecret: "",
   },
   pricing: {
     title: "Predictable Plans Engineered for ISP Profitability",

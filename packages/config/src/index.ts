@@ -69,7 +69,7 @@ const envSchema = z.object({
    *  making `{slug}.{this}` resolve to the tenant's dashboard is a separate, not-yet-built
    *  hostname-routing layer (see the multi-tenant-domains plan) — this var only powers the
    *  platform-URL value shown to staff today. */
-  PLATFORM_BASE_DOMAIN: z.string().default("billing.example.com"),
+  PLATFORM_BASE_DOMAIN: z.string().default("localhost"),
 
   WORKER_CONCURRENCY: z.coerce.number().int().positive().default(5),
 
@@ -151,7 +151,7 @@ const envSchema = z.object({
   SMTP_PORT: z.coerce.number().int().positive().default(587),
   SMTP_USER: z.string().optional().default(""),
   SMTP_PASSWORD: z.string().optional().default(""),
-  SMTP_FROM: z.string().default("no-reply@mashupkgrid.local"),
+  SMTP_FROM: z.string().default("no-reply@localhost"),
 
   /** Resend API integration for high-deliverability transactional email (resend.com) */
   RESEND_API_KEY: z.string().optional().default(""),
@@ -219,7 +219,23 @@ function loadEnv(): Env {
         `See .env.example for the full list of required variables.`
     );
   }
-  return parsed.data;
+  const value = parsed.data;
+  if (value.NODE_ENV === "production") {
+    const invalidProductionDefaults = [
+      value.APP_API_PUBLIC_URL.startsWith("http://localhost") && "APP_API_PUBLIC_URL",
+      value.NEXT_PUBLIC_API_URL.startsWith("http://localhost") && "NEXT_PUBLIC_API_URL",
+      value.APP_WEB_URL.startsWith("http://localhost") && "APP_WEB_URL",
+      value.PLATFORM_BASE_DOMAIN === "localhost" && "PLATFORM_BASE_DOMAIN",
+      value.SMTP_FROM.endsWith("@localhost") && "SMTP_FROM",
+    ].filter((name): name is string => Boolean(name));
+    if (invalidProductionDefaults.length > 0) {
+      throw new Error(
+        `Invalid environment configuration. Production values are still placeholders: ${invalidProductionDefaults.join(", ")}. ` +
+          "Set real deployment values before starting the service."
+      );
+    }
+  }
+  return value;
 }
 
 /** Validated once at first import. A missing/malformed secret throws immediately. */

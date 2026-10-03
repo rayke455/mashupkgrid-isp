@@ -577,12 +577,30 @@ export class MikroTikAdapter implements NetworkDeviceAdapter {
     // Login by MAC, so a phone that has paid is logged back in when it reconnects. Added to the
     // RADIUS hotspot profiles of routers set up before this existed.
     const profiles = await client.print(["/ip/hotspot/profile/print"]).catch(() => []);
+    const htmlDirectories = new Set<string>();
     for (const profile of profiles) {
+      if (!profile[".id"]) continue;
+      const directory = String(profile["html-directory"] ?? "").trim();
+      if (directory) htmlDirectories.add(directory);
+
       const loginBy = (profile["login-by"] ?? "").split(",").filter(Boolean);
-      if (profile["use-radius"] !== "true" || loginBy.includes("mac") || !profile[".id"]) continue;
-      await client.talk(["/ip/hotspot/profile/set", `=.id=${profile[".id"]}`, `=login-by=${["mac", ...loginBy].join(",")}`]);
-      changes.push(`turned on login by MAC for hotspot profile ${profile["name"] ?? profile[".id"]}`);
+      const repairedLoginBy = loginBy.includes("mac") ? loginBy : ["mac", ...loginBy];
+      // Older routers can still have the stock profile (use-radius=no). Repair the complete
+      // profile, not only login-by: otherwise the router accepts the phone at Wi-Fi level but
+      // never asks the platform RADIUS server and billing/vouchers can never authenticate.
+      if (profile["use-radius"] !== "true" || !loginBy.includes("mac")) {
+        await client.talk([
+          "/ip/hotspot/profile/set",
+          `=.id=${profile[".id"]}`,
+          "=use-radius=yes",
+          `=login-by=${repairedLoginBy.join(",")}`,
+          "=radius-accounting=yes",
+          "=radius-interim-update=1m",
+        ]);
+        changes.push(`repaired RADIUS hotspot profile ${profile["name"] ?? profile[".id"]}`);
+      }
     }
+    if (htmlDirectories.size === 0) htmlDirectories.add("hotspot");
 
     if (opts.appFilter) {
       const rules = await client.print(["/ip/firewall/filter/print", `?comment=${opts.appFilter.tag}`]).catch(() => null);
@@ -639,24 +657,28 @@ export class MikroTikAdapter implements NetworkDeviceAdapter {
       }
     }
 
-    const loginPage = await client.print(["/file/print", "?name=hotspot/login.html"]);
-    if (loginPage.length === 0) {
-      assertNoTrap(
-        await client.talk(["/tool/fetch", `=url=${opts.loginTemplateUrl}`, "=dst-path=hotspot/login.html", "=check-certificate=no"]),
-        "/tool/fetch login.html"
-      );
-      changes.push("downloaded hotspot/login.html");
-    }
+    for (const directory of htmlDirectories) {
+      const loginPath = `${directory}/login.html`;
+      const loginPage = await client.print(["/file/print", `?name=${loginPath}`]);
+      if (loginPage.length === 0) {
+        assertNoTrap(
+          await client.talk(["/tool/fetch", `=url=${opts.loginTemplateUrl}`, `=dst-path=${loginPath}`, "=check-certificate=no"]),
+          "/tool/fetch login.html"
+        );
+        changes.push(`downloaded ${loginPath}`);
+      }
 
-    // The branded "you're online" page (routers set up before it existed don't have it).
-    const aloginPage = await client.print(["/file/print", "?name=hotspot/alogin.html"]);
-    if (aloginPage.length === 0) {
-      const aloginUrl = opts.loginTemplateUrl.replace(/mikrotik-login-template(\?|$)/, "mikrotik-alogin-template$1");
-      assertNoTrap(
-        await client.talk(["/tool/fetch", `=url=${aloginUrl}`, "=dst-path=hotspot/alogin.html", "=check-certificate=no"]),
-        "/tool/fetch alogin.html"
-      );
-      changes.push("downloaded hotspot/alogin.html");
+      // The branded "you're online" page (routers set up before it existed don't have it).
+      const aloginPath = `${directory}/alogin.html`;
+      const aloginPage = await client.print(["/file/print", `?name=${aloginPath}`]);
+      if (aloginPage.length === 0) {
+        const aloginUrl = opts.loginTemplateUrl.replace(/mikrotik-login-template(\?|$)/, "mikrotik-alogin-template$1");
+        assertNoTrap(
+          await client.talk(["/tool/fetch", `=url=${aloginUrl}`, `=dst-path=${aloginPath}`, "=check-certificate=no"]),
+          "/tool/fetch alogin.html"
+        );
+        changes.push(`downloaded ${aloginPath}`);
+      }
     }
 
     // Anti-tethering: kept to exactly the rules the setup script writes (antiTetheringRules),
