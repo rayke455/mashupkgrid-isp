@@ -207,14 +207,27 @@ describe("router setup script — RouterOS version chosen when adding the router
     }
   });
 
-  it("hands every command to :parse, so no line can make RouterOS reject the whole file", () => {
+  it("protects every command while keeping standard commands lightweight to avoid router CPU/memory saturation", () => {
     for (const routerOsMajor of [6, 7, null]) {
       const script = buildRawScript(router, credentials, callbackUrl, { ...base, routerOsMajor, blockTethering: true, pppoeInterface: "ether5" });
       const commands = script.split("\n").filter((l) => l.includes("/") && !l.startsWith("#") && !l.startsWith(":put"));
       expect(commands.length).toBeGreaterThan(100);
       for (const line of commands) {
-        expect(line.startsWith(":do {:local mkgCmd [:parse \"") || line.startsWith(":if ([:pick [/system resource get version]")).toBe(true);
+        const trimmed = line.trim();
+        expect(
+          trimmed.startsWith(":do {") ||
+          trimmed.startsWith(":if (") ||
+          trimmed.startsWith(":while (") ||
+          trimmed.startsWith(":foreach ") ||
+          trimmed.startsWith(":local ") ||
+          trimmed.startsWith(":set ") ||
+          trimmed.startsWith(":delay ") ||
+          trimmed.startsWith("}")
+        ).toBe(true);
       }
+      // Standard commands run natively without :parse to keep script lightweight for 32MB/64MB routers
+      const parseCommands = commands.filter((l) => l.startsWith(':do {:local mkgCmd [:parse "'));
+      expect(parseCommands.length).toBeLessThan(30);
       // The check-in still comes before anything that could drop the connection.
       expect(plainCommands(script).indexOf("/callback\" http-method=post keep-result=no")).toBeLessThan(plainCommands(script).indexOf("/user add"));
     }
@@ -324,7 +337,7 @@ describe("router setup script — the 'you're online' page", () => {
     expect(script).toContain(":do {/system scheduler remove [find name=mkg-portal-page]} on-error={}");
     expect(script).not.toContain("scheduler add name=mkg-portal-page");
     // A re-run never swaps the ISP's page for MikroTik's stock one.
-    expect(plainCommands(script)).toContain(':do {:if ([:len [/file find name="hotspot/login.html"]] = 0) do={/ip hotspot reset-html}} on-error={}');
+    expect(plainCommands(script)).toContain(':do {:if ([:len [/file find name=($hsDir . "/login.html")]] = 0 && [:len [/file find name="hotspot/login.html"]] = 0) do={/ip hotspot reset-html [find]}} on-error={}');
   });
 });
 

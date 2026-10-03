@@ -466,6 +466,7 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
         routerOsMajor: router.routerOsMajor,
         appFilter: await tenantSellsAppPackages(tenantId),
         ssid: request.tenantCtx?.name ? `${request.tenantCtx.name} WiFi` : undefined,
+        checkInEvery: heartbeatIntervalRouterOs(router),
       });
 
       await writeAuditLog({
@@ -1058,6 +1059,7 @@ function getClientIp(request: { headers: Record<string, string | string[] | unde
       routerOsMajor: router.routerOsMajor,
       appFilter: await tenantSellsAppPackages(router.tenantId),
       ssid: router.tenant?.name ? `${router.tenant.name} WiFi` : undefined,
+      checkInEvery: heartbeatIntervalRouterOs(router),
     });
 
     reply.header("Content-Type", "text/plain; charset=utf-8").send(script);

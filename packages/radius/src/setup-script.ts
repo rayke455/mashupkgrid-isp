@@ -318,6 +318,8 @@ export function buildMikrotikProvisioningScript(
     routerOsMajor?: number | null;
     /** Wi-Fi SSID broadcast by the router's wireless interfaces. Defaults to "MASHUPKGRID". */
     ssid?: string | null;
+    /** Heartbeat reporting interval ("5m" on small routers like hAP lite, "1m" otherwise). */
+    checkInEvery?: "1m" | "5m" | null;
   } = {}
 ): string {
   const apiLine = router.useTls
@@ -493,32 +495,56 @@ ${buildManagementAccessSection(managementSources({ managementSource, vpnSubnet }
 :do {/ppp aaa set use-radius=yes accounting=yes interim-update=1m} on-error={}
 # login-by=mac first: a phone that has paid is logged straight back in by the RADIUS server
 # (findMacLogin) when it reconnects, without seeing the sign-in page at all.
-:do {/ip hotspot profile set [find] use-radius=yes login-by=mac,http-chap,http-pap,cookie mac-auth-mode=mac-as-username trial=no radius-accounting=yes radius-interim-update=1m html-directory=hotspot} on-error={}
+# Detect storage directory: "flash/hotspot" on flash boards (hAP lite), "hotspot" on others
+:local hsDir "hotspot";
+:if ([:len [/file find name="flash"]] > 0) do={:set hsDir "flash/hotspot"};
+:do {/ip hotspot profile set [find] use-radius=yes login-by=mac,http-chap,http-pap,cookie mac-auth-mode=mac-as-username trial=no radius-accounting=yes radius-interim-update=1m html-directory=$hsDir} on-error={}
 :do {/ip hotspot set [find interface=bridge] profile=default disabled=no} on-error={}
-${deferred(`:if ([:len [/file find name="hotspot/login.html"]] = 0) do={/ip hotspot reset-html}`)}
 :do {/ip hotspot user profile set [find default=yes] shared-users=1} on-error={}
 :do {/ip hotspot remove [find name=mkg-hotspot]} on-error={}
 :do {/ip hotspot add name=mkg-hotspot interface=bridge address-pool=default-dhcp profile=default disabled=no} on-error={}
+:do {:if ([:len [/file find name=($hsDir . "/login.html")]] = 0 && [:len [/file find name="hotspot/login.html"]] = 0) do={/ip hotspot reset-html [find]}} on-error={}
+:delay 1s;
 :do {/ip hotspot walled-garden remove [find comment="MASHUPKGRID"]} on-error={}
 :do {/ip hotspot walled-garden ip remove [find comment="MASHUPKGRID"]} on-error={}
 ${walledGardenLines(walledGardenHosts)}
 :do {/ip firewall filter remove [find comment="${UNPAID_DNS_COMMENT}"]} on-error={}
 ${UNPAID_DNS_RULES.map((rule) => `:do {${rule}} on-error={}`).join("\n")}
-:do {/tool fetch url="${loginTemplateUrl}" dst-path=hotspot/login.html check-certificate=no} on-error={}
-:do {/tool fetch url="${loginTemplateUrl}" dst-path=flash/hotspot/login.html check-certificate=no} on-error={}
-:do {/tool fetch url="${aloginTemplateUrl}" dst-path=hotspot/alogin.html check-certificate=no} on-error={}
-:do {/tool fetch url="${aloginTemplateUrl}" dst-path=flash/hotspot/alogin.html check-certificate=no} on-error={}
+
+# Ensure WAN internet and DNS are active before downloading captive portal templates
+:put "Checking internet connection for captive portal template..."
+:local mkgNetOk false;
+:local mkgWait 0;
+:while ($mkgWait < 15 && $mkgNetOk = false) do={
+  :do {
+    :resolve ${apiHost};
+    :set mkgNetOk true;
+  } on-error={
+    :delay 1s;
+    :set mkgWait ($mkgWait + 1);
+  }
+};
+:if ($mkgNetOk = true) do={
+  :put "Downloading captive portal templates..."
+  :do {/tool fetch url="${loginTemplateUrl}" dst-path=hotspot/login.html check-certificate=no} on-error={}
+  :do {/tool fetch url="${loginTemplateUrl}" dst-path=flash/hotspot/login.html check-certificate=no} on-error={}
+  :do {/tool fetch url="${aloginTemplateUrl}" dst-path=hotspot/alogin.html check-certificate=no} on-error={}
+  :do {/tool fetch url="${aloginTemplateUrl}" dst-path=flash/hotspot/alogin.html check-certificate=no} on-error={}
+  :put "Captive portal templates downloaded successfully."
+} else={
+  :put "Notice: Internet not ready during setup. Portal template will be downloaded on check-in."
+};
 
 # The sign-in page is checked on every report (see portalRepair in buildHeartbeatScript); the
 # separate scheduler earlier versions added is removed, to keep small routers light.
 :do {/system scheduler remove [find name=mkg-portal-page]} on-error={}
 
-# Persistent check-in, once a minute. It fetches the platform's small report script into memory
+# Persistent check-in. It fetches the platform's small report script into memory
 # (never onto flash) and runs it: CPU, memory, disk, temperature, uptime, users — see
 # buildHeartbeatScript. If that fails for any reason, it still checks in plainly, so the router
 # never shows Offline because of the report. Survives reboots and is safe to re-run.
 :do {/system scheduler remove [find name=mkg-heartbeat]} on-error={}
-:do {/system scheduler add name=mkg-heartbeat interval=1m on-event="${heartbeatOnEvent(callbackUrl)}"} on-error={}
+:do {/system scheduler add name=mkg-heartbeat interval=${options.checkInEvery || "1m"} on-event="${heartbeatOnEvent(callbackUrl)}"} on-error={}
 
 # Automated NTP Time Synchronization
 :do {/system clock set time-zone-autodetect=yes time-zone-name=Africa/Nairobi} on-error={}
@@ -792,7 +818,7 @@ function portalRepair(
     `:do {/tool fetch url="${url}" dst-path=($dir . "/${file}") check-certificate=no} on-error={}; `;
   return (
     `:do {:foreach p in=[/ip hotspot profile find] do={:local dir [/ip hotspot profile get $p html-directory]; ` +
-    `:if ([:len $dir] = 0) do={:set dir "hotspot"; /ip hotspot profile set $p html-directory=hotspot}; ` +
+    `:if ([:len $dir] = 0) do={:if ([:len [/file find name="flash"]] > 0) do={:set dir "flash/hotspot"} else={:set dir "hotspot"}; /ip hotspot profile set $p html-directory=$dir}; ` +
     `:if ([:len [/file find name=$dir]] = 0) do={:foreach h in=[/ip hotspot find profile=[/ip hotspot profile get $p name]] do={:do {:local r [:parse ("/ip hotspot reset-html " . $h)]; $r} on-error={}}}; ` +
     `:local ok false; :local f [/file find name=($dir . "/login.html")]; ` +
     `:if ([:len $f] > 0) do={:if (${sizeOk("f", sizes.login)}) do={:set ok true}}; ` +
@@ -848,17 +874,23 @@ export function deferred(commands: string): string {
   return `:do {:local mkgCmd [:parse "${source}"]; $mkgCmd} on-error={}`;
 }
 
-/** The setup script goes through `/import`, which checks the whole file before running any of it.
- *  `on-error` only catches failures while running, so one command or parameter a router doesn't
- *  know — a v7-only DNS option on v6, a menu from a package it lacks — would still reject the
- *  entire file, check-in included. Every single-line command is therefore handed to `:parse`
- *  (see deferred()): the file is always accepted, and an unknown command only skips itself. */
+/** Commands that depend on optional RouterOS packages or differ fundamentally by version
+ *  (e.g. wifi-qcom, wireguard on v7 vs v6, v7 NTP syntax). These would fail RouterOS's syntax check
+ *  at /import time on a router that lacks them, rejecting the entire file. They are executed via
+ *  deferred() (:parse). All standard RouterOS commands (ip, interface bridge, user, radius, hotspot)
+ *  remain lightweight native :do { ... } on-error={} blocks so the router's CPU and memory are not
+ *  overloaded by compiling 150+ scripts at runtime. */
+export const VERSION_OR_PACKAGE_COMMANDS = /\/interface (wifi|wireless|wireguard)\b|\/system ntp client servers/;
+
 export function isolateEveryCommand(script: string): string {
   return script
     .split("\n")
     .map((line) => {
       const inner = /^:do \{(\/.*)\} on-error=\{\}$/.exec(line)?.[1];
-      return inner ? deferred(inner) : line;
+      if (inner && VERSION_OR_PACKAGE_COMMANDS.test(inner)) {
+        return deferred(inner);
+      }
+      return line;
     })
     .join("\n");
 }
