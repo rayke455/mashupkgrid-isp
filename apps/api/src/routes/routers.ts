@@ -465,6 +465,7 @@ export async function routerRoutes(app: FastifyInstance): Promise<void> {
         lanPort: router.lanPort,
         routerOsMajor: router.routerOsMajor,
         appFilter: await tenantSellsAppPackages(tenantId),
+        ssid: request.tenantCtx?.name ? `${request.tenantCtx.name} WiFi` : undefined,
       });
 
       await writeAuditLog({
@@ -1056,6 +1057,7 @@ function getClientIp(request: { headers: Record<string, string | string[] | unde
       lanPort: router.lanPort,
       routerOsMajor: router.routerOsMajor,
       appFilter: await tenantSellsAppPackages(router.tenantId),
+      ssid: router.tenant?.name ? `${router.tenant.name} WiFi` : undefined,
     });
 
     reply.header("Content-Type", "text/plain; charset=utf-8").send(script);

@@ -178,6 +178,21 @@ describe("router setup script — RouterOS version chosen when adding the router
     expect(script).toContain('!= "7") do={');
     expect(script).toContain("/interface wifi set [find default-name=wifi1]");
     expect(script).toContain("/interface wireless set wlan1");
+    expect(script).toContain("name=mkg-open mode=none");
+    expect(script).toContain("lease-time=1h");
+  });
+
+  it("configures open Wi-Fi security profile and custom SSID for all wireless radios", () => {
+    const script = buildMikrotikProvisioningScript(router, credentials, callbackUrl, {
+      ...base,
+      ssid: "SunTech WiFi",
+    });
+    expect(script).toContain('ssid="SunTech WiFi"');
+    expect(script).toContain("/interface wireless security-profiles");
+    expect(script).toContain("mode=none");
+    expect(script).toContain("management-protection=disabled");
+    expect(script).toContain("radius-mac-authentication=no");
+    expect(script).toContain("default-authentication=yes");
   });
 
   it("hands every version- or package-only command to :parse, so a router without it still runs the rest", () => {

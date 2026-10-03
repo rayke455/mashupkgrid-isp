@@ -316,6 +316,8 @@ export function buildMikrotikProvisioningScript(
      *  v6 gets no WireGuard section and its own NTP syntax; either way the script warns in the
      *  router's log if the router turns out to run the other version. */
     routerOsMajor?: number | null;
+    /** Wi-Fi SSID broadcast by the router's wireless interfaces. Defaults to "MASHUPKGRID". */
+    ssid?: string | null;
   } = {}
 ): string {
   const apiLine = router.useTls
@@ -323,6 +325,7 @@ export function buildMikrotikProvisioningScript(
     : `/ip service set api disabled=no port=${router.apiPort}`;
 
   const safeName = sanitizeForScript(router.name);
+  const safeSsid = options.ssid?.trim() ? sanitizeForScript(options.ssid) : "MASHUPKGRID";
   const radiusHost = options.radiusHost || "68.210.187.104";
   // Defaults to the router's own generated password, and completeRouterProvisioning (in
   // @mashupkgrid/network) registers the RadiusNas row with exactly this value when the callback
@@ -406,8 +409,8 @@ ${deferred(`/interface wireguard remove [find name=mkg-wg]
     activeHotspotPorts = ["ether2", "ether3"];
   }
 
-  // Always bridge wireless radios (wlan1, wifi1) if present and not assigned to LAN / PPPoE
-  const wirelessInterfaces = ["wlan1", "wifi1"].filter(
+  // Always bridge wireless radios (wlan1, wlan2, wifi1, wifi2) if present and not assigned to LAN / PPPoE
+  const wirelessInterfaces = ["wlan1", "wlan2", "wifi1", "wifi2"].filter(
     (w) => w !== lanPort && !pppoePorts.includes(w) && !activeHotspotPorts.includes(w)
   );
 
@@ -460,10 +463,15 @@ ${versionSection}
 # LAN, Wi-Fi and WAN baseline. Existing configurations are preserved when present.
 :do {/interface bridge add name=bridge} on-error={}
 ${cleanupExcludedPorts ? `${cleanupExcludedPorts}\n` : ""}${bridgePortLines}
+${deferred(`:foreach w in=[/interface wireless find] do={:local n [/interface wireless get $w name]; :if ([:len [/interface bridge port find interface=$n]] = 0) do={/interface bridge port add bridge=bridge interface=$n}}`)}
+${osMajor === 6 ? "" : `${deferred(`:foreach w in=[/interface wifi find] do={:local n [/interface wifi get $w name]; :if ([:len [/interface bridge port find interface=$n]] = 0) do={/interface bridge port add bridge=bridge interface=$n}}`)}
+`}
 :do {/ip dhcp-client add interface=ether1 disabled=no add-default-route=yes use-peer-dns=yes} on-error={}
 :do {/ip address add address=192.168.88.1/24 interface=bridge} on-error={}
 :do {/ip pool add name=default-dhcp ranges=192.168.88.10-192.168.88.254} on-error={}
-:do {/ip dhcp-server add name=mkg-dhcp interface=bridge address-pool=default-dhcp disabled=no} on-error={}
+:do {/ip pool set [find name=default-dhcp] ranges=192.168.88.10-192.168.88.254} on-error={}
+:do {/ip dhcp-server add name=mkg-dhcp interface=bridge address-pool=default-dhcp lease-time=1h disabled=no} on-error={}
+:do {/ip dhcp-server set [find name=mkg-dhcp] lease-time=1h address-pool=default-dhcp} on-error={}
 :do {/ip dhcp-server network add address=192.168.88.0/24 gateway=192.168.88.1 dns-server=192.168.88.1} on-error={}
 :do {/ip dns set allow-remote-requests=yes} on-error={}
 :do {/ip firewall nat add chain=srcnat out-interface=ether1 action=masquerade comment="MASHUPKGRID"} on-error={}
@@ -526,11 +534,22 @@ ${wireguardSection}
 ${appFilterSection}
 
 # Wi-Fi last: renaming the network disconnects anyone configuring the router over it.
-# Older radios (every v6 router, and v7 ones like the hAP lite) use the "wireless" package and
-# name the radio wlan1; v7 ax models use the newer "wifi" package and name it wifi1. A router has
-# one or the other, so both lines are deferred — see deferred().
-${deferred(`/interface wireless set wlan1 disabled=no mode=ap-bridge ssid="MASHUPKGRID"`)}
-${osMajor === 6 ? "" : `${deferred(`/interface wifi set [find default-name=wifi1] disabled=no configuration.mode=ap configuration.ssid="MASHUPKGRID"`)}
+# Ensure all wireless radios (2.4GHz & 5GHz) are open, unencrypted, and unblocked for captive portal.
+# 1. Reset standard wireless security profile (ROS v6 & ROS v7 wireless package) to open mode (no password)
+${deferred(`/interface wireless security-profiles set [find default=yes] mode=none authentication-types="" unicast-ciphers="" group-ciphers="" wpa-pre-shared-key="" wpa2-pre-shared-key="" management-protection=disabled radius-mac-authentication=no`)}
+${deferred(`/interface wireless security-profiles remove [find name=mkg-open]`)}
+${deferred(`/interface wireless security-profiles add name=mkg-open mode=none authentication-types="" unicast-ciphers="" group-ciphers="" management-protection=disabled radius-mac-authentication=no`)}
+${deferred(`/interface wireless set [find] security-profile=mkg-open default-authentication=yes default-forwarding=yes disabled=no mode=ap-bridge`)}
+${deferred(`/interface wireless access-list remove [find]`)}
+${deferred(`/interface wireless set wlan1 disabled=no mode=ap-bridge ssid="${safeSsid}"`)}
+${deferred(`/interface wireless set [find default-name=wlan2] disabled=no mode=ap-bridge ssid="${safeSsid}"`)}
+${osMajor === 6 ? "" : `${deferred(`/interface wifi security set [find default=yes] authentication-types=""`)}
+${deferred(`/interface wifi security remove [find name=mkg-open]`)}
+${deferred(`/interface wifi security add name=mkg-open authentication-types=""`)}
+${deferred(`/interface wifi configuration set [find] security=mkg-open`)}
+${deferred(`/interface wifi set [find] configuration.mode=ap disabled=no security=mkg-open security.authentication-types=""`)}
+${deferred(`/interface wifi set [find default-name=wifi1] disabled=no configuration.mode=ap configuration.ssid="${safeSsid}"`)}
+${deferred(`/interface wifi set [find default-name=wifi2] disabled=no configuration.mode=ap configuration.ssid="${safeSsid}"`)}
 `}
 :put "========================================================="
 :put "  SUCCESS! Router & Hotspot captive portal are ONLINE!  "
