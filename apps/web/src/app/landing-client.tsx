@@ -139,6 +139,48 @@ function NetworkDiagram() {
   );
 }
 
+function ProductPreview() {
+  return (
+    <div className="relative mx-auto w-full max-w-[560px] lg:ml-auto" aria-label="Illustration of the MashupHost operator dashboard">
+      <div className="absolute -inset-6 rounded-[2rem] bg-blue-200/50 blur-3xl" aria-hidden="true" />
+      <div className="relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-[0_24px_70px_-28px_rgba(15,23,42,0.45)]">
+        <div className="flex items-center justify-between border-b border-slate-200 bg-slate-950 px-4 py-3 text-white">
+          <div className="flex items-center gap-2 text-sm font-semibold"><span className="grid h-6 w-6 place-items-center rounded-md bg-blue-600 text-xs">M</span>MashupHost</div>
+          <span className="rounded-full bg-emerald-400/15 px-2 py-1 text-[10px] font-semibold text-emerald-300">Network centre</span>
+        </div>
+        <div className="grid grid-cols-2 gap-3 bg-slate-50 p-4 sm:grid-cols-4">
+          {[{ label: "Collected", value: "M-Pesa", tone: "text-emerald-700" }, { label: "Routers", value: "Online", tone: "text-blue-700" }, { label: "Sessions", value: "Live", tone: "text-violet-700" }, { label: "Usage", value: "Tracked", tone: "text-amber-700" }].map((metric) => (
+            <div key={metric.label} className="rounded-xl border border-slate-200 bg-white p-3">
+              <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-slate-400">{metric.label}</p>
+              <p className={`mt-1 text-sm font-bold ${metric.tone}`}>{metric.value}</p>
+            </div>
+          ))}
+        </div>
+        <div className="grid gap-3 p-4 sm:grid-cols-[1.15fr_0.85fr]">
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <div className="flex items-center justify-between"><p className="text-xs font-semibold text-slate-800">Live network flow</p><span className="flex items-center gap-1 text-[10px] text-emerald-600"><i className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> Monitoring</span></div>
+            <div className="mt-5 flex items-center justify-between gap-2 text-center text-[10px] font-semibold text-slate-500">
+              <div><span className="mx-auto grid h-10 w-10 place-items-center rounded-xl bg-blue-50 text-blue-700">ISP</span><span className="mt-1 block">Workspace</span></div>
+              <span className="h-px flex-1 bg-gradient-to-r from-blue-300 via-emerald-300 to-violet-300" />
+              <div><span className="mx-auto grid h-10 w-10 place-items-center rounded-xl bg-violet-50 text-violet-700">RT</span><span className="mt-1 block">Router</span></div>
+              <span className="h-px flex-1 bg-gradient-to-r from-violet-300 to-emerald-300" />
+              <div><span className="mx-auto grid h-10 w-10 place-items-center rounded-xl bg-emerald-50 text-emerald-700">Wi-Fi</span><span className="mt-1 block">Users</span></div>
+            </div>
+          </div>
+          <div className="rounded-xl border border-slate-200 bg-white p-4">
+            <p className="text-xs font-semibold text-slate-800">Bandwidth usage</p>
+            <div className="mt-5 flex h-20 items-end gap-1.5">
+              {[32, 48, 38, 65, 54, 78, 62, 92, 70, 84, 58, 72].map((height, index) => <span key={index} className="flex-1 rounded-t bg-blue-500/80" style={{ height: `${height}%` }} />)}
+            </div>
+            <div className="mt-2 flex justify-between text-[10px] text-slate-400"><span>Upload</span><span>Download</span></div>
+          </div>
+        </div>
+        <div className="border-t border-slate-200 bg-white px-4 py-3 text-[11px] text-slate-500">One view for billing, RADIUS sessions, router health and customer service.</div>
+      </div>
+    </div>
+  );
+}
+
 function SectionHeading({
   eyebrow,
   title,
@@ -258,8 +300,8 @@ export function LandingClient({
             aria-hidden="true"
             className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,#f1f5f9_1px,transparent_1px),linear-gradient(to_bottom,#f1f5f9_1px,transparent_1px)] bg-[size:48px_48px] [mask-image:linear-gradient(to_bottom,black,transparent_75%)]"
           />
-          <div className="relative mx-auto max-w-4xl px-4 pt-14 pb-16 sm:px-6 sm:pt-20 sm:pb-24 lg:px-8">
-            <div className="max-w-xl">
+          <div className="relative mx-auto grid max-w-7xl items-center gap-14 px-4 pt-14 pb-16 sm:px-6 sm:pt-20 sm:pb-24 lg:grid-cols-[0.9fr_1.1fr] lg:px-8 lg:pt-24 lg:pb-28">
+            <div className="max-w-2xl">
               {/* The hero is the copy the landing editor (Website › Landing page) edits; it used
                   to be hardcoded here, so edits saved but never showed. */}
               <p className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-700 shadow-sm">
@@ -287,7 +329,7 @@ export function LandingClient({
                 ))}
               </ul>
             </div>
-
+            <ProductPreview />
           </div>
         </section>
 
