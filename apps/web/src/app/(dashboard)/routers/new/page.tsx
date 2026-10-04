@@ -457,6 +457,10 @@ export default function LinkRouterWizardPage() {
 
           <CodeBlock code={oneLiner || null} label="Setup command — use it once, for this router only" maxHeight="8rem" />
 
+          <p className="mt-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs leading-5 text-blue-900 dark:border-blue-900/60 dark:bg-blue-950/30 dark:text-blue-200">
+            This command first enables DHCP and DNS on <span className="font-mono">ether1</span>, the internet/WAN port on a reset hAP, then downloads the full setup. If your ISP uses PPPoE or a static WAN address, configure that connection in WinBox first.
+          </p>
+
           <div className="my-4">
             <Notice tone="warn">
               <span className="flex items-center gap-2">

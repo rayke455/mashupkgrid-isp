@@ -322,7 +322,11 @@ export function parseAccessPointReport(raw: string): ConnectedAccessPoint[] {
  *  route — with its output in mkg-setup.txt on the router. */
 function setupFetchCommand(provisionToken: string): string {
   const provisionBase = `${routerApiBase()}/api/v1/routers/provision/${provisionToken}`;
-  return `/tool fetch url="${provisionBase}/setup.rsc" dst-path=setup.rsc; :do {/tool fetch url="${provisionBase}/callback" http-method=post keep-result=no} on-error={}; :delay 2s; :execute script="/import setup.rsc" file=mkg-setup.txt; :put "Setup is running on the router. It shows Online in MashupHost within a minute."`;
+  // A factory-reset hAP has no address, default route, or DNS client. Bootstrap DHCP on the
+  // documented WAN port before the first HTTPS fetch; otherwise the command fails with the
+  // misleading RouterOS "resolving error" before our provisioning script can run.
+  const wanBootstrap = `:do {:if ([:len [/ip dhcp-client find where interface=ether1]] = 0) do={/ip dhcp-client add interface=ether1 use-peer-dns=yes add-default-route=yes disabled=no comment="MashupHost WAN"} else={/ip dhcp-client enable [find where interface=ether1]}} on-error={}; :delay 8s; `;
+  return `${wanBootstrap}/tool fetch url="${provisionBase}/setup.rsc" dst-path=setup.rsc; :do {/tool fetch url="${provisionBase}/callback" http-method=post keep-result=no} on-error={}; :delay 2s; :execute script="/import setup.rsc" file=mkg-setup.txt; :put "Setup is running on the router. It shows Online in MashupHost within a minute."`;
 }
 
 export async function routerRoutes(app: FastifyInstance): Promise<void> {
