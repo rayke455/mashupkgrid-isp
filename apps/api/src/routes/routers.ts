@@ -1104,10 +1104,15 @@ function getClientIp(request: { headers: Record<string, string | string[] | unde
       : undefined;
     // RouterOS 6's fetch returns at most 4 KB, too little for the hotspot self-check as well.
     const isV6 = Boolean(router.routerOsVersion?.startsWith("6"));
+    // A hAP lite has 32 MB and one slow CPU. Its heartbeat is already every 5 minutes, but a
+    // large report can still freeze WinBox while it scans hotspot hosts, pings the internet,
+    // monitors RADIUS, syncs the walled garden and repairs portal files. The setup script remains
+    // full-featured; only the recurring report is reduced to health + callback + VPN repair.
+    const lightweight = isSmallRouter({ ...router, name: router.name });
     reply.header("Content-Type", "text/plain; charset=utf-8").send(
-      buildHeartbeatScript(callbackUrl, loginTemplateUrl, {
-        hotspotCheck: !isV6,
-        walledGarden: isV6 ? [] : await tenantWalledGarden(router.tenantId),
+      buildHeartbeatScript(callbackUrl, lightweight ? undefined : loginTemplateUrl, {
+        hotspotCheck: !isV6 && !lightweight,
+        walledGarden: isV6 || lightweight ? [] : await tenantWalledGarden(router.tenantId),
         // Every 5 minutes on a small router (hAP lite and the like), every minute otherwise.
         checkInEvery: heartbeatIntervalRouterOs(router),
         vpn: isV6 ? null : await routerVpnSettings(router),
