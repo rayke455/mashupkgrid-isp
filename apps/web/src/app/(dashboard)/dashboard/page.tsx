@@ -238,7 +238,7 @@ function OperationalAlerts({
       {alerts.length ? (
         <div className="grid gap-2 sm:grid-cols-2">
           {alerts.map((alert) => (
-            <Link key={alert.label} href={alert.href} className={`flex items-center gap-3 rounded-xl border px-3 py-3 text-sm transition hover:bg-white/5 ${alert.tone === "bad" ? "border-rose-500/30 bg-rose-500/10 text-rose-100" : "border-amber-500/30 bg-amber-500/10 text-amber-100"}`}>
+            <Link key={alert.label} href={alert.href} className={`flex items-center gap-3 rounded-xl border px-3 py-3 text-sm transition hover:bg-white/5 ${alert.tone === "bad" ? "border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-100" : "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-100"}`}>
               <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${alert.tone === "bad" ? "bg-rose-400" : "bg-amber-400"}`} />
               <span className="flex-1">{alert.label}</span>
               <span className="text-xs opacity-70">Open →</span>
@@ -248,7 +248,7 @@ function OperationalAlerts({
       ) : (
         <div className="flex items-center gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-3 text-sm text-emerald-100">
           <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
-          Everything is within the latest health and billing checks.
+          <span className="text-emerald-700 dark:text-emerald-100">Everything is within the latest health and billing checks.</span>
         </div>
       )}
     </Panel>
