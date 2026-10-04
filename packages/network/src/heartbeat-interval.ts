@@ -20,7 +20,10 @@ export function isSmallRouter(router: RouterSize): boolean {
     return Number(router.memoryTotalBytes) <= SMALL_MEMORY_BYTES;
   }
   const boardOrName = [router.boardName, router.name].filter(Boolean).join(" ");
-  return SMALL_BOARDS.test(boardOrName);
+  // A newly linked/reset router has not reported its board or memory yet. Treat it as small until
+  // it proves otherwise: the first heartbeat must not freeze a 32 MB hAP lite while we are still
+  // learning its hardware. The interval can move to 1m after a later report with >64 MB.
+  return !boardOrName || SMALL_BOARDS.test(boardOrName);
 }
 
 /** Seconds between check-ins. */
@@ -31,7 +34,8 @@ export function heartbeatIntervalSeconds(router: RouterSize): number {
 /** The interval as RouterOS writes it, for the scheduler; null while the router's size is unknown. */
 export function heartbeatIntervalRouterOs(router: RouterSize): "1m" | "5m" | null {
   const known = (router.memoryTotalBytes !== null && router.memoryTotalBytes !== undefined) || Boolean(router.boardName);
-  if (!known) return null;
+  // Unknown hardware gets the conservative interval for the same reason as isSmallRouter().
+  if (!known) return "5m";
   return isSmallRouter(router) ? "5m" : "1m";
 }
 

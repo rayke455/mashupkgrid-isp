@@ -23,16 +23,17 @@ describe("how often a router checks in", () => {
     expect(isSmallRouter({ memoryTotalBytes: BigInt(256 * MB), boardName: "hAP lite" })).toBe(false);
   });
 
-  it("tells the router its interval only once its size is known", () => {
-    expect(heartbeatIntervalRouterOs({})).toBeNull();
+  it("uses the conservative interval until the router proves its size", () => {
+    expect(isSmallRouter({})).toBe(true);
+    expect(heartbeatIntervalRouterOs({})).toBe("5m");
     expect(heartbeatIntervalRouterOs({ memoryTotalBytes: BigInt(32 * MB) })).toBe("5m");
     expect(heartbeatIntervalRouterOs({ memoryTotalBytes: BigInt(256 * MB) })).toBe("1m");
     expect(heartbeatIntervalRouterOs({ boardName: "hAP lite" })).toBe("5m");
   });
 
   it("counts a router online for 2.5 check-ins and late up to 4", () => {
-    expect(heartbeatOnlineWindowMs({})).toBe(150_000);
-    expect(heartbeatLateWindowMs({})).toBe(240_000);
+    expect(heartbeatOnlineWindowMs({})).toBe(750_000);
+    expect(heartbeatLateWindowMs({})).toBe(1_200_000);
     const small = { memoryTotalBytes: BigInt(32 * MB) };
     expect(heartbeatOnlineWindowMs(small)).toBe(750_000);
     expect(heartbeatLateWindowMs(small)).toBe(1_200_000);
