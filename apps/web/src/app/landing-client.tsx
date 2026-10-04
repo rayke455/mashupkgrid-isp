@@ -47,8 +47,8 @@ const iconFor = (name: string): Icon => ICONS[name as LandingIcon] ?? IconCheck;
 
 /** Primary integrations (the hero strip). */
 const INTEGRATIONS = [
-  { name: "MikroTik", note: "RouterOS API" }, // packages/network/src/mikrotik
-  { name: "M-Pesa", note: "Daraja STK & C2B", accent: true }, // packages/payments/src/mpesa
+  { name: "MikroTik", note: "RouterOS API", image: "/products/mikrotik-hap-ax3.jpg" }, // packages/network/src/mikrotik
+  { name: "M-Pesa", note: "Daraja STK & C2B", accent: true, image: "/brands/mpesa-logo.svg" }, // packages/payments/src/mpesa
   { name: "FreeRADIUS", note: "AAA & accounting" }, // packages/radius, infrastructure/freeradius
   { name: "PPPoE", note: "Subscriber sessions" }, // router_pppoe_server migration
   { name: "WhatsApp", note: "OTP & notifications" }, // packages/whatsapp
@@ -342,6 +342,11 @@ export function LandingClient({
             <ul className="mt-8 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-slate-200 bg-slate-200 sm:grid-cols-3 lg:grid-cols-5">
               {INTEGRATIONS.map((item) => (
                 <li key={item.name} className="flex flex-col items-center justify-center bg-white px-4 py-6 text-center last:col-span-2 sm:last:col-span-1">
+                  {item.image && (
+                    <span className="mb-3 flex h-12 w-28 items-center justify-center rounded-lg border border-slate-100 bg-white p-2">
+                      <img src={item.image} alt={`${item.name} logo`} className="max-h-9 max-w-full object-contain" />
+                    </span>
+                  )}
                   <span className={`text-lg font-semibold tracking-tight ${item.accent ? "text-emerald-700" : "text-slate-900"}`}>
                     {item.name}
                   </span>
