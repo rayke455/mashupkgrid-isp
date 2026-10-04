@@ -325,8 +325,13 @@ function setupFetchCommand(provisionToken: string): string {
   // A factory-reset hAP has no address, default route, or DNS client. Bootstrap DHCP on the
   // documented WAN port before the first HTTPS fetch; otherwise the command fails with the
   // misleading RouterOS "resolving error" before our provisioning script can run.
-  const wanBootstrap = `:do {:if ([:len [/ip dhcp-client find where interface=ether1]] = 0) do={/ip dhcp-client add interface=ether1 use-peer-dns=yes add-default-route=yes disabled=no comment="MashupHost WAN"} else={/ip dhcp-client enable [find where interface=ether1]}} on-error={}; :delay 8s; `;
-  return `${wanBootstrap}/tool fetch url="${provisionBase}/setup.rsc" dst-path=setup.rsc; :do {/tool fetch url="${provisionBase}/callback" http-method=post keep-result=no} on-error={}; :delay 2s; :execute script="/import setup.rsc" file=mkg-setup.txt; :put "Setup is running on the router. It shows Online in MashupHost within a minute."`;
+  const wanBootstrap = `:do {:if ([:len [/ip dhcp-client find where interface=ether1]] = 0) do={/ip dhcp-client add interface=ether1 use-peer-dns=yes add-default-route=yes disabled=no comment="MashupHost WAN"} else={/ip dhcp-client enable [find where interface=ether1]}; /ip dns set servers=1.1.1.1,8.8.8.8} on-error={}; `;
+  // Fetch can race the DHCP lease on a reset router. Retry instead of silently stopping after
+  // the first failed fetch, and print the actual WAN state when the router needs PPPoE/static WAN
+  // configuration. This makes a failed bootstrap actionable rather than looking like Wi-Fi was
+  // skipped: the full setup (including the open SSID) only runs after setup.rsc is downloaded.
+  const fetchWithRetry = `:local mkgSetupReady false; :for i from=1 to=6 do={:do {/tool fetch url="${provisionBase}/setup.rsc" dst-path=setup.rsc; :set mkgSetupReady true} on-error={:delay 5s}; :if ($mkgSetupReady) do={:break}}; :if ($mkgSetupReady) do={:do {/tool fetch url="${provisionBase}/callback" http-method=post keep-result=no} on-error={}; :delay 2s; :execute script="/import setup.rsc" file=mkg-setup.txt; :put "Setup is running on the router. It shows Online in MashupHost within a minute."} else={:put "MashupHost setup stopped: ether1 did not obtain internet. Configure DHCP, PPPoE, or a static WAN on ether1, then run this command again."; /ip dhcp-client print detail; /ip address print; /ip route print}`;
+  return `${wanBootstrap}:delay 8s; ${fetchWithRetry}`;
 }
 
 export async function routerRoutes(app: FastifyInstance): Promise<void> {
