@@ -570,6 +570,7 @@ ${deferred(`/interface wireless set [find] security-profile=default default-auth
 ${deferred(`/interface wireless set wlan1 disabled=no mode=ap-bridge ssid="${safeSsid}" security-profile=default default-authentication=yes default-forwarding=yes`)}
 ${deferred(`/interface wireless set [find default-name=wlan1] disabled=no mode=ap-bridge ssid="${safeSsid}" security-profile=default default-authentication=yes default-forwarding=yes`)}
 ${deferred(`/interface wireless set [find default-name=wlan2] disabled=no mode=ap-bridge ssid="${safeSsid}" security-profile=default default-authentication=yes default-forwarding=yes`)}
+${deferred(`:foreach w in=[/interface wireless find] do={/interface wireless set $w disabled=no mode=ap-bridge ssid="${safeSsid}" security-profile=default default-authentication=yes default-forwarding=yes}`)}
 ${osMajor === 6 ? "" : `${deferred(`/interface wifi security set [find default=yes] authentication-types=""`)}
 ${deferred(`/interface wifi security remove [find name=mkg-open]`)}
 ${deferred(`/interface wifi security add name=mkg-open authentication-types=""`)}
@@ -577,6 +578,7 @@ ${deferred(`/interface wifi configuration set [find] security=mkg-open`)}
 ${deferred(`/interface wifi set [find] configuration.mode=ap disabled=no security=mkg-open security.authentication-types=""`)}
 ${deferred(`/interface wifi set [find default-name=wifi1] disabled=no configuration.mode=ap configuration.ssid="${safeSsid}"`)}
 ${deferred(`/interface wifi set [find default-name=wifi2] disabled=no configuration.mode=ap configuration.ssid="${safeSsid}"`)}
+${deferred(`:foreach w in=[/interface wifi find] do={/interface wifi set $w disabled=no configuration.mode=ap configuration.ssid="${safeSsid}" security=mkg-open}`)}
 `}
 :put "========================================================="
 :put "  SUCCESS! Router & Hotspot captive portal are ONLINE!  "
