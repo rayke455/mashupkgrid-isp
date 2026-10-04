@@ -330,8 +330,12 @@ function setupFetchCommand(provisionToken: string): string {
   // the first failed fetch, and print the actual WAN state when the router needs PPPoE/static WAN
   // configuration. This makes a failed bootstrap actionable rather than looking like Wi-Fi was
   // skipped: the full setup (including the open SSID) only runs after setup.rsc is downloaded.
-  const fetchWithRetry = `:local mkgSetupReady false; :for i from=1 to=6 do={:do {/tool fetch url="${provisionBase}/setup.rsc" dst-path=setup.rsc; :set mkgSetupReady true} on-error={:delay 5s}; :if ($mkgSetupReady) do={:break}}; :if ($mkgSetupReady) do={:do {/tool fetch url="${provisionBase}/callback" http-method=post keep-result=no} on-error={}; :delay 2s; :execute script="/import setup.rsc" file=mkg-setup.txt; :put "Setup is running on the router. It shows Online in MashupHost within a minute."} else={:put "MashupHost setup stopped: ether1 did not obtain internet. Configure DHCP, PPPoE, or a static WAN on ether1, then run this command again."; /ip dhcp-client print detail; /ip address print; /ip route print}`;
-  return `${wanBootstrap}:delay 8s; ${fetchWithRetry}`;
+  // The downloaded setup script calls the callback itself before it changes the bridge/Wi-Fi.
+  // Do not make a second callback request here: on a hAP lite it adds another TLS handshake and
+  // delays the actual import. A short DHCP grace period plus three quick retries is enough for a
+  // factory-reset router and caps a failed bootstrap at roughly 12 seconds instead of 30+.
+  const fetchWithRetry = `:local mkgSetupReady false; :for i from=1 to=3 do={:do {/tool fetch url="${provisionBase}/setup.rsc" dst-path=setup.rsc; :set mkgSetupReady true} on-error={:delay 3s}; :if ($mkgSetupReady) do={:break}}; :if ($mkgSetupReady) do={:execute script="/import setup.rsc" file=mkg-setup.txt; :put "Setup is running on the router. It shows Online in MashupHost within a minute."} else={:put "MashupHost setup stopped: ether1 did not obtain internet. Configure DHCP, PPPoE, or a static WAN on ether1, then run this command again."; /ip dhcp-client print detail; /ip address print; /ip route print}`;
+  return `${wanBootstrap}:delay 3s; ${fetchWithRetry}`;
 }
 
 export async function routerRoutes(app: FastifyInstance): Promise<void> {
