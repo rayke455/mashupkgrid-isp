@@ -143,8 +143,10 @@ export default function LinkRouterWizardPage() {
 
   const [name, setName] = useState("");
   const [use, setUse] = useState<Use>("hotspot");
-  const [portCount, setPortCount] = useState<number>(5);
-  const [roles, setRoles] = useState<Record<string, PortRole>>(() => defaultRoles("hotspot", 5));
+  // hAP lite is the most common small hotspot router in the field and has four Ethernet
+  // sockets. Keep the first screen accurate for it; larger models can be selected explicitly.
+  const [portCount, setPortCount] = useState<number>(4);
+  const [roles, setRoles] = useState<Record<string, PortRole>>(() => defaultRoles("hotspot", 4));
 
   // Advanced — safe defaults for a normal setup.
   const [routerOsMajor, setRouterOsMajor] = useState<6 | 7 | null>(null);
@@ -299,7 +301,7 @@ export default function LinkRouterWizardPage() {
             <HintText>Any name you&apos;ll recognise. Only you see it.</HintText>
 
             <div className="mt-5">
-              <Label>2. What is this router for?</Label>
+              <Label>2. How will customers connect?</Label>
               <div className="mt-1 flex flex-col gap-2 sm:flex-row" role="radiogroup" aria-label="What is this router for?">
                 <Choice
                   selected={use === "hotspot"}
@@ -318,7 +320,7 @@ export default function LinkRouterWizardPage() {
             </div>
 
             <div className="mt-5">
-              <Label>3. How many ports does your router have?</Label>
+              <Label>3. How many Ethernet sockets are on the router?</Label>
               <div className="mt-1 flex flex-wrap gap-2">
                 {PORT_COUNTS.map((n) => (
                   <Chip key={n} selected={portCount === n} onClick={() => choosePortCount(n)}>
@@ -414,11 +416,11 @@ export default function LinkRouterWizardPage() {
                 {hasPppoe && (
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div>
-                      <Label htmlFor="pppoeGatewayIp">PPPoE gateway address</Label>
+                      <Label htmlFor="pppoeGatewayIp">PPPoE router address</Label>
                       <Input id="pppoeGatewayIp" value={pppoeGatewayIp} onChange={(e) => setPppoeGatewayIp(e.target.value)} />
                     </div>
                     <div>
-                      <Label htmlFor="pppoePoolRange">PPPoE customer addresses</Label>
+                      <Label htmlFor="pppoePoolRange">PPPoE customer address range</Label>
                       <Input id="pppoePoolRange" value={pppoePoolRange} onChange={(e) => setPppoePoolRange(e.target.value)} />
                     </div>
                     <p className="text-xs text-slate-500 dark:text-slate-400 sm:col-span-2">
