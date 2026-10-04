@@ -57,21 +57,20 @@ export function OnboardingChecklist() {
         </Link>
       )}
 
-      {doneCount > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          <span className="text-[11px] font-medium text-slate-400">{tr("Already done:")}</span>
-          {steps
-            .filter((s) => s.done)
-            .map((s) => (
-              <span
-                key={s.key}
-                className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400"
-              >
-                <IconCheck size={10} /> {s.label}
-              </span>
-            ))}
-        </div>
-      )}
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {steps.map((step) => (
+          <Link
+            key={step.key}
+            href={step.href}
+            className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-xs transition-colors ${step.done ? "border-emerald-500/20 bg-emerald-500/5 text-emerald-700 dark:text-emerald-400" : "border-slate-200 bg-white text-slate-600 hover:border-brand-500/60 dark:border-obsidian-800 dark:bg-obsidian-950 dark:text-slate-300"}`}
+          >
+            <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${step.done ? "bg-emerald-500 text-white" : "border border-slate-300 dark:border-obsidian-700"}`}>
+              {step.done ? <IconCheck size={11} /> : <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />}
+            </span>
+            <span className={step.done ? "line-through opacity-75" : "font-medium"}>{step.label}</span>
+          </Link>
+        ))}
+      </div>
     </Card>
   );
 }

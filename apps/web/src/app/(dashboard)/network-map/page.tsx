@@ -6,6 +6,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, ApiRequestError } from "@/lib/api-client";
 import { EmptyState, Metric, MetricGrid, Notice, PageHeader, Panel, Pill, darkButton } from "@/components/dashboard/surface";
 import { tr } from "@/lib/tr";
+import { NetworkFlow } from "@/components/dashboard/network-flow";
 
 /**
  * Every router on a map, coloured by whether it is reporting. Routers without coordinates are
@@ -21,6 +22,15 @@ interface RouterRow {
   longitude: number | null;
   status: "ONLINE" | "WARNING" | "DOWN" | "UNKNOWN";
   lastSeenAt: string | null;
+  activeUsers?: number | null;
+}
+
+interface MapSession {
+  username: string;
+  router: { id: string; name: string } | null;
+  state: "ACTIVE" | "STALE" | "ENDED";
+  downloadBytes: number;
+  uploadBytes: number;
 }
 
 const LEAFLET_CSS = "https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.min.css";
@@ -71,6 +81,11 @@ export default function NetworkMapPage() {
   const [error, setError] = useState<string | null>(null);
 
   const { data: routers, isLoading } = useQuery({ queryKey: ["routers"], queryFn: () => apiFetch<RouterRow[]>("/api/v1/routers"), refetchInterval: 30_000 });
+  const { data: liveSessions } = useQuery({
+    queryKey: ["network-map-live-sessions"],
+    queryFn: () => apiFetch<{ items: MapSession[] }>("/api/v1/radius/sessions?scope=active&limit=100"),
+    refetchInterval: 20_000,
+  });
   const place = useMutation({
     mutationFn: ({ id, latitude, longitude, siteName }: { id: string; latitude: number | null; longitude: number | null; siteName?: string | null }) =>
       apiFetch(`/api/v1/routers/${id}`, { method: "PATCH", body: JSON.stringify({ latitude, longitude, ...(siteName !== undefined ? { siteName } : {}) }) }),
@@ -183,6 +198,8 @@ export default function NetworkMapPage() {
           )}
         </Panel>
       </div>
+
+      <NetworkFlow routers={routers ?? []} sessions={liveSessions?.items ?? []} />
     </div>
   );
 }

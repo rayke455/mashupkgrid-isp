@@ -14,6 +14,8 @@ import { ChartTable } from "@/components/charts/chart-table";
 import { formatMoney } from "@/lib/money";
 import { OnboardingChecklist } from "@/components/onboarding-checklist";
 import { CustomerPortal } from "@/components/customer-portal";
+import { NetworkFlow, PlatformPulse } from "@/components/dashboard/network-flow";
+import { BandwidthHeatmap } from "@/components/dashboard/bandwidth-heatmap";
 import { useAgentRedirect } from "@/lib/use-agent-redirect";
 import {
   EmptyState,
@@ -85,6 +87,23 @@ interface RecentPayment {
 interface PaginatedPayments {
   items: RecentPayment[];
   pagination: { total: number };
+}
+
+interface DashboardSession {
+  username: string;
+  router: { id: string; name: string } | null;
+  state: "ACTIVE" | "STALE" | "ENDED";
+  downloadBytes: number;
+  uploadBytes: number;
+}
+
+interface UpgradeSuggestionSummary {
+  id: string;
+  fromPackageName: string;
+  toPackageName: string;
+  usedMb: number;
+  capMb: number;
+  customer: { id: string; fullName: string };
 }
 
 interface PaginatedTenants {
@@ -184,6 +203,78 @@ const METHOD_LABEL: Record<string, string> = {
   BANK_TRANSFER: "Bank transfer",
 };
 
+function OperationalAlerts({
+  isPlatform,
+  pendingApprovals,
+  maintenance,
+  downRouters,
+  overdueInvoices,
+  overdueTickets,
+  automationTrouble,
+}: {
+  isPlatform: boolean;
+  pendingApprovals: number;
+  maintenance: boolean;
+  downRouters: number;
+  overdueInvoices: number;
+  overdueTickets: number;
+  automationTrouble: number;
+}) {
+  const alerts = isPlatform
+    ? [
+        ...(pendingApprovals > 0 ? [{ label: `${pendingApprovals} tenant approval${pendingApprovals === 1 ? "" : "s"} waiting`, href: "/tenants", tone: "warn" as const }] : []),
+        ...(maintenance ? [{ label: "Platform maintenance is enabled", href: "/maintenance", tone: "warn" as const }] : []),
+        ...(automationTrouble > 0 ? [{ label: `${automationTrouble} automation job${automationTrouble === 1 ? "" : "s"} need attention`, href: "/automation", tone: "bad" as const }] : []),
+      ]
+    : [
+        ...(downRouters > 0 ? [{ label: `${downRouters} router${downRouters === 1 ? " is" : "s are"} offline`, href: "/routers/health", tone: "bad" as const }] : []),
+        ...(overdueInvoices > 0 ? [{ label: `${overdueInvoices} overdue invoice${overdueInvoices === 1 ? "" : "s"}`, href: "/invoices?status=OVERDUE", tone: "warn" as const }] : []),
+        ...(overdueTickets > 0 ? [{ label: `${overdueTickets} support ticket${overdueTickets === 1 ? " is" : "s are"} past response target`, href: "/tickets", tone: "bad" as const }] : []),
+        ...(automationTrouble > 0 ? [{ label: `${automationTrouble} background job${automationTrouble === 1 ? "" : "s"} need attention`, href: "/automation", tone: "warn" as const }] : []),
+      ];
+
+  return (
+    <Panel title="Operational alerts" description={alerts.length ? "Issues worth acting on now." : "No active issues detected from the latest checks."}>
+      {alerts.length ? (
+        <div className="grid gap-2 sm:grid-cols-2">
+          {alerts.map((alert) => (
+            <Link key={alert.label} href={alert.href} className={`flex items-center gap-3 rounded-xl border px-3 py-3 text-sm transition hover:bg-white/5 ${alert.tone === "bad" ? "border-rose-500/30 bg-rose-500/10 text-rose-100" : "border-amber-500/30 bg-amber-500/10 text-amber-100"}`}>
+              <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${alert.tone === "bad" ? "bg-rose-400" : "bg-amber-400"}`} />
+              <span className="flex-1">{alert.label}</span>
+              <span className="text-xs opacity-70">Open →</span>
+            </Link>
+          ))}
+        </div>
+      ) : (
+        <div className="flex items-center gap-3 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-3 text-sm text-emerald-100">
+          <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
+          Everything is within the latest health and billing checks.
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+function UpgradePulse({ suggestions }: { suggestions: UpgradeSuggestionSummary[] }) {
+  if (!suggestions.length) return null;
+  return (
+    <Panel title="Usage-based recommendations" description="Customers approaching their data cap, based on the last 30 days of RADIUS accounting." actions={<Link href="/customers/upgrades" className={darkButton("ghost", "sm")}>Review all</Link>}>
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {suggestions.slice(0, 6).map((suggestion) => {
+          const percent = Math.min(999, Math.round((suggestion.usedMb / Math.max(suggestion.capMb, 1)) * 100));
+          return (
+            <Link key={suggestion.id} href={`/customers/${suggestion.customer.id}`} className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 px-3 py-3 transition hover:bg-cyan-500/10">
+              <div className="flex items-center justify-between gap-2 text-sm"><span className="truncate font-semibold text-white">{suggestion.customer.fullName}</span><span className="font-mono text-cyan-300">{percent}%</span></div>
+              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-obsidian-800"><div className={`h-full rounded-full ${percent >= 100 ? "bg-rose-400" : "bg-cyan-400"}`} style={{ width: `${Math.min(percent, 100)}%` }} /></div>
+              <p className="mt-2 text-xs text-slate-400">{suggestion.fromPackageName} → <span className="text-cyan-200">{suggestion.toPackageName}</span></p>
+            </Link>
+          );
+        })}
+      </div>
+    </Panel>
+  );
+}
+
 export default function DashboardHomePage() {
   const { user } = useAuth();
   const { lang } = useLanguage();
@@ -263,6 +354,20 @@ export default function DashboardHomePage() {
     queryFn: () => apiFetch<RouterRow[]>("/api/v1/routers"),
     enabled: canReadRouters,
     refetchInterval: 15_000,
+  });
+
+  const { data: upgradeSuggestions } = useQuery({
+    queryKey: ["dashboard-upgrade-suggestions"],
+    queryFn: () => apiFetch<UpgradeSuggestionSummary[]>("/api/v1/upgrades?status=PENDING"),
+    enabled: isStaff && Boolean(user?.permissions.includes("customers.read")),
+    refetchInterval: 60_000,
+  });
+
+  const { data: liveSessions } = useQuery({
+    queryKey: ["dashboard-live-sessions"],
+    queryFn: () => apiFetch<{ items: DashboardSession[] }>("/api/v1/radius/sessions?scope=active&limit=100"),
+    enabled: canReadRouters,
+    refetchInterval: 20_000,
   });
 
   const { data: recentPayments } = useQuery({
@@ -388,9 +493,45 @@ export default function DashboardHomePage() {
         }
       />
 
+      {isStaff && (
+        <section className="relative overflow-hidden rounded-2xl border border-brand-500/25 bg-gradient-to-br from-brand-600/20 via-obsidian-900 to-obsidian-900 p-5 sm:p-6">
+          <div className="pointer-events-none absolute -right-16 -top-20 h-48 w-48 rounded-full bg-brand-500/10 blur-3xl" aria-hidden="true" />
+          <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-2xl">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-300">{tr("Tenant control centre")}</p>
+              <h2 className="mt-2 text-xl font-semibold tracking-tight text-white sm:text-2xl">{tr("Keep your network and collections moving")}</h2>
+              <p className="mt-2 max-w-xl text-sm leading-6 text-slate-300">
+                {tr("See what needs attention, then jump straight into the work that keeps customers online.")}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-wrap lg:justify-end">
+              <div className="rounded-xl border border-white/10 bg-black/10 px-3 py-2.5">
+                <p className="text-[11px] uppercase tracking-wide text-slate-400">{t.routersOnline}</p>
+                <p className="mt-1 text-lg font-semibold text-white">{routers ? `${onlineRouters}/${totalRouters}` : "—"}</p>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-black/10 px-3 py-2.5">
+                <p className="text-[11px] uppercase tracking-wide text-slate-400">{t.customers}</p>
+                <p className="mt-1 text-lg font-semibold text-white">{customers?.pagination.total ?? "—"}</p>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-black/10 px-3 py-2.5">
+                <p className="text-[11px] uppercase tracking-wide text-slate-400">{t.collected30}</p>
+                <p className="mt-1 text-lg font-semibold text-white">{revenue30dMinor !== null ? formatMoney(revenue30dMinor) : "—"}</p>
+              </div>
+            </div>
+          </div>
+          <div className="relative mt-6 flex flex-wrap gap-2 border-t border-white/10 pt-4">
+            {user?.permissions.includes("customers.read") && <Link href="/customers" className={darkButton("primary", "sm")}>{tr("Add customer")}</Link>}
+            {user?.permissions.includes("payments.read") && <Link href="/payments" className={darkButton("secondary", "sm")}>{tr("Review payments")}</Link>}
+            {canReadRouters && <Link href="/routers" className={darkButton("secondary", "sm")}>{tr("Check routers")}</Link>}
+            {canReadTickets && <Link href="/tickets" className={darkButton("secondary", "sm")}>{tr("Open support")}</Link>}
+          </div>
+        </section>
+      )}
+
       {/* Super admin */}
       {isPlatform && (
         <>
+          <OperationalAlerts isPlatform pendingApprovals={pendingTenants?.pagination.total ?? 0} maintenance={Boolean(platformMaintenance?.enabled)} downRouters={0} overdueInvoices={0} overdueTickets={0} automationTrouble={automationTrouble.length} />
           <MetricGrid columns={5}>
             <Metric
               label={tr("ISPs on the platform")}
@@ -415,6 +556,8 @@ export default function DashboardHomePage() {
             <Metric label={tr("Payments")} value="Gateway" hint={tr("Collections, settlements and reconciliation")} href="/admin/payments" />
             <Metric label={tr("Automation")} value={automationMetric.value} hint={automationMetric.hint} tone={automationMetric.tone} href="/automation" />
           </MetricGrid>
+
+          <PlatformPulse tenants={platformTenants?.items ?? []} />
 
           <Panel
             title={tr("ISPs")}
@@ -459,6 +602,20 @@ export default function DashboardHomePage() {
       )}
 
       {isStaff && <OnboardingChecklist />}
+
+      {isStaff && (
+        <OperationalAlerts
+          isPlatform={false}
+          pendingApprovals={0}
+          maintenance={false}
+          downRouters={downRouters}
+          overdueInvoices={outstanding?.overdueCount ?? 0}
+          overdueTickets={overdueTickets}
+          automationTrouble={automationTrouble.length}
+        />
+      )}
+
+      {isStaff && <UpgradePulse suggestions={upgradeSuggestions ?? []} />}
 
       {/* Tenant staff */}
       {isStaff && (
@@ -569,6 +726,8 @@ export default function DashboardHomePage() {
               )}
             </Panel>
           )}
+
+          {canReadRouters && <NetworkFlow routers={routers ?? []} sessions={liveSessions?.items ?? []} />}
 
           {/* VLANs */}
           {canReadVlans && (
@@ -690,6 +849,7 @@ export default function DashboardHomePage() {
                       secondaryLabel={t.upload}
                       format={formatBytes}
                     />
+                    <BandwidthHeatmap days={bandwidth} />
                     <div className="mt-3 flex items-center justify-between border-t border-obsidian-800 pt-3 text-sm text-slate-400">
                       <span>
                         {formatBytes(totalDownloadBytes)} down · {formatBytes(totalUploadBytes)} up

@@ -262,6 +262,102 @@ export async function customerRoutes(app: FastifyInstance): Promise<void> {
     }
   );
 
+  /** A single, tenant-scoped activity stream for the customer detail view. */
+  app.get(
+    "/:customerId/timeline",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("customers.read")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const { customerId } = idParamsSchema.parse(request.params);
+      await getCustomerOrThrow(tenantId, customerId);
+
+      const [payments, invoices, services, audit] = await Promise.all([
+        prisma.payment.findMany({
+          where: { tenantId, customerId },
+          orderBy: { createdAt: "desc" },
+          take: 20,
+          select: { id: true, amountMinor: true, currency: true, method: true, status: true, reference: true, createdAt: true },
+        }),
+        prisma.invoice.findMany({
+          where: { tenantId, customerId },
+          orderBy: { createdAt: "desc" },
+          take: 20,
+          select: { id: true, invoiceNumber: true, status: true, totalMinor: true, amountPaidMinor: true, currency: true, createdAt: true, dueDate: true },
+        }),
+        prisma.customerService.findMany({
+          where: { tenantId, customerId },
+          orderBy: { updatedAt: "desc" },
+          take: 20,
+          select: { id: true, status: true, provisioningStatus: true, createdAt: true, updatedAt: true, package: { select: { name: true } } },
+        }),
+        prisma.auditLog.findMany({
+          where: { tenantId, resourceType: "Customer", resourceId: customerId },
+          orderBy: { createdAt: "desc" },
+          take: 30,
+          select: { id: true, action: true, createdAt: true, actor: { select: { name: true, email: true } } },
+        }),
+      ]);
+
+      const events = [
+        ...payments.map((p) => ({ id: `payment:${p.id}`, kind: "payment", title: `Payment ${p.status.toLowerCase()}`, detail: `${p.method}${p.reference ? ` · ${p.reference}` : ""}`, at: p.createdAt, amountMinor: p.amountMinor, currency: p.currency, tone: p.status === "COMPLETED" ? "success" : "warning" })),
+        ...invoices.map((i) => ({ id: `invoice:${i.id}`, kind: "invoice", title: `Invoice ${i.status.toLowerCase()}`, detail: `${i.invoiceNumber} · due ${i.dueDate.toISOString().slice(0, 10)}`, at: i.createdAt, amountMinor: i.totalMinor - i.amountPaidMinor, currency: i.currency, tone: i.status === "OVERDUE" ? "danger" : i.status === "PAID" ? "success" : "neutral" })),
+        ...services.map((s) => ({ id: `service:${s.id}`, kind: "service", title: `${s.package.name} · ${s.status.toLowerCase()}`, detail: `Provisioning ${s.provisioningStatus.toLowerCase()}`, at: s.updatedAt, tone: s.provisioningStatus === "FAILED" ? "danger" : s.status === "ACTIVE" ? "success" : "warning" })),
+        ...audit.map((a) => ({ id: `audit:${a.id}`, kind: "activity", title: a.action.replace(/[._]/g, " "), detail: a.actor?.name ?? a.actor?.email ?? "System", at: a.createdAt, tone: "neutral" })),
+      ].sort((a, b) => b.at.getTime() - a.at.getTime()).slice(0, 50);
+
+      reply.send(successResponse(events, request.id));
+    }
+  );
+
+  app.get(
+    "/:customerId/usage",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("customers.read")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const { customerId } = idParamsSchema.parse(request.params);
+      const { days } = z.object({ days: z.coerce.number().int().min(7).max(90).default(30) }).parse(request.query);
+      await getCustomerOrThrow(tenantId, customerId);
+      const users = await prisma.radiusUser.findMany({ where: { tenantId, customerId }, select: { username: true } });
+      const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+      const sessions = users.length
+        ? await prisma.radAcct.findMany({ where: { tenantId, username: { in: users.map((u) => u.username) }, acctStartTime: { gte: since } }, select: { acctStartTime: true, acctInputOctets: true, acctOutputOctets: true, acctSessionTime: true } })
+        : [];
+      const byDay = new Map<string, { date: string; uploadBytes: number; downloadBytes: number; sessions: number; sessionSeconds: number }>();
+      for (const session of sessions) {
+        if (!session.acctStartTime) continue;
+        const date = session.acctStartTime.toISOString().slice(0, 10);
+        const day = byDay.get(date) ?? { date, uploadBytes: 0, downloadBytes: 0, sessions: 0, sessionSeconds: 0 };
+        day.uploadBytes += Number(session.acctInputOctets ?? 0n);
+        day.downloadBytes += Number(session.acctOutputOctets ?? 0n);
+        day.sessions += 1;
+        day.sessionSeconds += session.acctSessionTime ?? 0;
+        byDay.set(date, day);
+      }
+      reply.send(successResponse([...byDay.values()].sort((a, b) => a.date.localeCompare(b.date)), request.id));
+    }
+  );
+
+  app.get(
+    "/:customerId/diagnose",
+    { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("customers.read")] },
+    async (request, reply) => {
+      const tenantId = requireTenant(request.user!.tenantId);
+      const { customerId } = idParamsSchema.parse(request.params);
+      const customer = await prisma.customer.findFirst({ where: { id: customerId, tenantId, deletedAt: null }, select: { id: true, status: true, services: { where: { status: { not: "CANCELLED" } }, select: { status: true, provisioningStatus: true, package: { select: { name: true } }, radiusUser: { select: { username: true, status: true } } } } } });
+      if (!customer) throw new NotFoundError("Customer");
+      const usernames = customer.services.flatMap((service) => service.radiusUser ? [service.radiusUser.username] : []);
+      const activeSessions = usernames.length ? await prisma.radAcct.findMany({ where: { tenantId, username: { in: usernames }, acctStopTime: null }, orderBy: { acctStartTime: "desc" }, take: 10, select: { username: true, nasIpAddress: true, framedIpAddress: true, acctStartTime: true } }) : [];
+      const routers = activeSessions.length ? await prisma.router.findMany({ where: { tenantId, deletedAt: null, OR: [{ host: { in: activeSessions.map((session) => session.nasIpAddress) } }, { vpnIp: { in: activeSessions.map((session) => session.nasIpAddress) } }] }, select: { id: true, name: true, status: true, lastSeenAt: true, lastError: true } }) : [];
+      const checks = [
+        { key: "customer", label: "Customer account", ok: customer.status === "ACTIVE", detail: customer.status === "ACTIVE" ? "Account is active" : `Account is ${customer.status.toLowerCase()}` },
+        { key: "service", label: "Service provisioning", ok: customer.services.some((service) => service.status === "ACTIVE" && service.provisioningStatus === "ACTIVE"), detail: customer.services.length ? customer.services.map((service) => `${service.package.name}: ${service.status.toLowerCase()} / ${service.provisioningStatus.toLowerCase()}`).join("; ") : "No active service" },
+        { key: "radius", label: "RADIUS session", ok: activeSessions.length > 0, detail: activeSessions.length ? `${activeSessions.length} active session${activeSessions.length === 1 ? "" : "s"}` : "No active accounting session" },
+        { key: "router", label: "Router health", ok: routers.some((router) => router.status === "ONLINE"), detail: routers[0]?.name ? `${routers[0].name}: ${routers[0].status.toLowerCase()}` : "No matching router found from the session" },
+      ];
+      reply.send(successResponse({ checks, activeSessions, routers }, request.id));
+    }
+  );
+
   app.patch(
     "/:customerId",
     { config: { audience: "staff" }, preHandler: [...preHandler, requirePermission("customers.update")] },
